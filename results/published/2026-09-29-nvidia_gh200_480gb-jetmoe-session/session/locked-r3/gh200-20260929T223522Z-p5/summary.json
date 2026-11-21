@@ -1,0 +1,199 @@
+{
+ "schema": 1,
+ "utc_start": "2026-09-29T23:12:52Z",
+ "utc_end": "2026-09-29T23:27:08Z",
+ "session_tag": "gh200-20260929T223522Z-p5",
+ "locks_asked": [
+  1710
+ ],
+ "groups": [
+  3
+ ],
+ "r3_args": [
+  "--model",
+  "jetmoe-8b",
+  "--block-m",
+  "32",
+  "--repeats",
+  "9",
+  "--duty",
+  "0.25",
+  "--seed",
+  "0",
+  "--declared-copies",
+  "9",
+  "--treads",
+  "8"
+ ],
+ "python": "/home/ubuntu/moe/venvs/vllm/bin/python",
+ "results_dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb",
+ "card": "NVIDIA GH200 480GB, GPU-2ffd21ff-af06-3b59-baff-81967dca4dec, Enabled, 700.00 W, 1980 MHz",
+ "attempts": [
+  {
+   "lock": 1710,
+   "G": 3,
+   "tag": "gh200-20260929T223522Z-p5-lock1710",
+   "state": "held",
+   "rc": 1,
+   "cells": 216,
+   "worst_mhz": 1710.0,
+   "slip_mhz": null,
+   "over_mhz": null,
+   "dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g3-l2flushtrue-modeljetmoe_8b-n64-p-593be327",
+   "why": "",
+   "utc_start": "2026-09-29T23:13:07Z",
+   "seconds": 841.0,
+   "log": "/home/ubuntu/moe/session/locked-r3/gh200-20260929T223522Z-p5/r3-g3-lock1710.log",
+   "argv": [
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "/home/ubuntu/moe/repo/scripts/private_weight_reference.py",
+    "--model",
+    "jetmoe-8b",
+    "--block-m",
+    "32",
+    "--repeats",
+    "9",
+    "--duty",
+    "0.25",
+    "--seed",
+    "0",
+    "--declared-copies",
+    "9",
+    "--treads",
+    "8",
+    "--group-m",
+    "3",
+    "--session-tag",
+    "gh200-20260929T223522Z-p5-lock1710"
+   ]
+  }
+ ],
+ "lock": 1710,
+ "pages": [
+  {
+   "lock": 1710,
+   "G": 3,
+   "tag": "gh200-20260929T223522Z-p5-lock1710",
+   "state": "held",
+   "rc": 1,
+   "cells": 216,
+   "worst_mhz": 1710.0,
+   "slip_mhz": null,
+   "over_mhz": null,
+   "dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g3-l2flushtrue-modeljetmoe_8b-n64-p-593be327",
+   "why": "",
+   "utc_start": "2026-09-29T23:13:07Z",
+   "seconds": 841.0,
+   "log": "/home/ubuntu/moe/session/locked-r3/gh200-20260929T223522Z-p5/r3-g3-lock1710.log",
+   "argv": [
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "/home/ubuntu/moe/repo/scripts/private_weight_reference.py",
+    "--model",
+    "jetmoe-8b",
+    "--block-m",
+    "32",
+    "--repeats",
+    "9",
+    "--duty",
+    "0.25",
+    "--seed",
+    "0",
+    "--declared-copies",
+    "9",
+    "--treads",
+    "8",
+    "--group-m",
+    "3",
+    "--session-tag",
+    "gh200-20260929T223522Z-p5-lock1710"
+   ]
+  }
+ ],
+ "outcome": {
+  "held": 1710,
+  "all_slipped": false,
+  "stopped": "",
+  "refused": ""
+ },
+ "stopped_by": "",
+ "gates": [
+  {
+   "kind": "VALIDITY",
+   "number": "1",
+   "claim": "every attempt read only the run directory its own R3 named",
+   "verdict": "PASS",
+   "measured": "1 of 1 attempts",
+   "threshold": "the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag",
+   "invalidates": "the lock search: an attempt scored another run's cells, or R3 would have resumed one"
+  },
+  {
+   "kind": "VALIDITY",
+   "number": "2",
+   "claim": "the lock search reached a verdict",
+   "verdict": "PASS",
+   "measured": "lock 1710 MHz held at every G",
+   "threshold": "a lock held at every G, or every lock on the ladder slipped",
+   "invalidates": "the verdict: the ladder stopped for a reason a lower lock would not fix"
+  },
+  {
+   "kind": "CLAIM",
+   "number": "1",
+   "claim": "a lock on the ladder held at every G",
+   "verdict": "PASS",
+   "measured": "1710 MHz held at G = 3",
+   "threshold": "no timed cell more than 15 MHz under the lock at any G",
+   "invalidates": ""
+  }
+ ],
+ "exit": 0,
+ "reset": {
+  "command": "sudo -n nvidia-smi -rgc",
+  "rc": 0,
+  "output": "All done.",
+  "held": 1710
+ },
+ "smi_log": [
+  {
+   "utc": "2026-09-29T23:12:52Z",
+   "command": "nvidia-smi --query-gpu=name,uuid,persistence_mode,power.limit,clocks.max.sm --format=csv,noheader",
+   "rc": 0,
+   "output": "NVIDIA GH200 480GB, GPU-2ffd21ff-af06-3b59-baff-81967dca4dec, Enabled, 700.00 W, 1980 MHz"
+  },
+  {
+   "utc": "2026-09-29T23:12:52Z",
+   "command": "nvidia-smi -q -d SUPPORTED_CLOCKS",
+   "rc": 0,
+   "output": "phics                      : 450 MHz\n            Graphics                      : 435 MHz\n            Graphics                      : 420 MHz\n            Graphics                      : 405 MHz\n            Graphics                      : 390 MHz\n            Graphics                      : 375 MHz\n            Graphics                      : 360 MHz\n            Graphics                      : 345 MHz"
+  },
+  {
+   "utc": "2026-09-29T23:12:52Z",
+   "command": "nvidia-smi --query-compute-apps=pid --format=csv,noheader",
+   "rc": 0,
+   "output": ""
+  },
+  {
+   "utc": "2026-09-29T23:13:07Z",
+   "command": "sudo -n nvidia-smi -lgc 1710,1710",
+   "rc": 0,
+   "output": "GPU clocks set to \"(gpuClkMin 1710, gpuClkMax 1710)\" for GPU 00000000:DD:00.0\nAll done."
+  },
+  {
+   "utc": "2026-09-29T23:13:07Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "345 MHz, 1980 MHz, 0x0000000000000001, 88.31 W, 700.00 W"
+  },
+  {
+   "utc": "2026-09-29T23:27:08Z",
+   "command": "sudo -n nvidia-smi -rgc",
+   "rc": 0,
+   "output": "All done."
+  },
+  {
+   "utc": "2026-09-29T23:27:08Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "1830 MHz, 1980 MHz, 0x0000000000000024, 139.61 W, 700.00 W"
+  }
+ ]
+}

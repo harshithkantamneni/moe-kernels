@@ -1,0 +1,409 @@
+experiment  block_m_crossing / mixtral-8x7b-bf16-r1024-c0ee82
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+grid        69 rows-per-expert x 4 block sizes = 276 cells
+            r in [28, 1056], tokens step 4, T in [112, 4224]
+bandwidth   4373.9 GB/s, this machine's calibration (NVIDIA H200 (measured))
+WRITES TO   /workspace/session/20260901T214218Z/block_m/block_m_crossing/mixtral-8x7b-bf16-r1024-c0ee82
+            cells.csv (appended per cell), report.txt, report.json, triton-cache/
+override hook: vllm.model_executor.layers.fused_moe.override_config
+triton cache: /workspace/session/20260901T214218Z/block_m/block_m_crossing/mixtral-8x7b-bf16-r1024-c0ee82/triton-cache (fresh for this run)
+  BM= 32 T=   112 r=    28 n=  1 waves    27.2    0.9084 ms     86.9 TFLOP/s
+  BM= 32 T=   128 r=    32 n=  1 waves    27.2    0.8582 ms    105.1 TFLOP/s
+  BM= 32 T=   144 r=    36 n=  2 waves    54.3    1.4410 ms     70.4 TFLOP/s
+  BM= 32 T=   224 r=    56 n=  2 waves    54.3    1.4787 ms    106.7 TFLOP/s
+  BM= 32 T=   240 r=    60 n=  2 waves    54.3    1.4667 ms    115.3 TFLOP/s
+  BM= 32 T=   256 r=    64 n=  2 waves    54.3    1.4909 ms    121.0 TFLOP/s
+  BM= 32 T=   272 r=    68 n=  3 waves    81.5    2.1315 ms     89.9 TFLOP/s
+  BM= 32 T=   288 r=    72 n=  3 waves    81.5    2.3086 ms     87.9 TFLOP/s
+  BM= 32 T=   368 r=    92 n=  3 waves    81.5    2.2836 ms    113.6 TFLOP/s
+  BM= 32 T=   384 r=    96 n=  3 waves    81.5    2.2304 ms    121.3 TFLOP/s
+  BM= 32 T=   400 r=   100 n=  4 waves   108.6    2.8651 ms     98.4 TFLOP/s
+  BM= 32 T=   448 r=   112 n=  4 waves   108.6    2.8924 ms    109.1 TFLOP/s
+  BM= 32 T=   480 r=   120 n=  4 waves   108.6    3.0230 ms    111.9 TFLOP/s
+  BM= 32 T=   496 r=   124 n=  4 waves   108.6    3.0101 ms    116.1 TFLOP/s
+  BM= 32 T=   512 r=   128 n=  4 waves   108.6    2.8864 ms    125.0 TFLOP/s
+  BM= 32 T=   528 r=   132 n=  5 waves   135.8    3.6123 ms    103.0 TFLOP/s
+  BM= 32 T=   544 r=   136 n=  5 waves   135.8    3.7078 ms    103.4 TFLOP/s
+  BM= 32 T=   576 r=   144 n=  5 waves   135.8    3.6904 ms    110.0 TFLOP/s
+  BM= 32 T=   624 r=   156 n=  5 waves   135.8    3.5690 ms    123.2 TFLOP/s
+  BM= 32 T=   640 r=   160 n=  5 waves   135.8    3.6824 ms    122.5 TFLOP/s
+  BM= 32 T=   656 r=   164 n=  6 waves   162.9    4.4078 ms    104.9 TFLOP/s
+  BM= 32 T=   736 r=   184 n=  6 waves   162.9    4.3763 ms    118.5 TFLOP/s
+  BM= 32 T=   752 r=   188 n=  6 waves   162.9    4.3987 ms    120.5 TFLOP/s
+  BM= 32 T=   768 r=   192 n=  6 waves   162.9    4.4103 ms    122.7 TFLOP/s
+  BM= 32 T=   784 r=   196 n=  7 waves   190.1    5.0807 ms    108.7 TFLOP/s
+  BM= 32 T=   800 r=   200 n=  7 waves   190.1    5.1088 ms    110.3 TFLOP/s
+  BM= 32 T=   896 r=   224 n=  7 waves   190.1    5.0823 ms    124.2 TFLOP/s
+  BM= 32 T=   960 r=   240 n=  8 waves   217.2    5.7742 ms    117.2 TFLOP/s
+  BM= 32 T=   992 r=   248 n=  8 waves   217.2    5.8159 ms    120.2 TFLOP/s
+  BM= 32 T=  1024 r=   256 n=  8 waves   217.2    5.8115 ms    124.2 TFLOP/s
+  BM= 32 T=  1056 r=   264 n=  9 waves   244.4    6.5016 ms    114.4 TFLOP/s
+  BM= 32 T=  1088 r=   272 n=  9 waves   244.4    6.4353 ms    119.1 TFLOP/s
+  BM= 32 T=  1152 r=   288 n=  9 waves   244.4    6.5466 ms    124.0 TFLOP/s
+  BM= 32 T=  1248 r=   312 n= 10 waves   271.5    7.2320 ms    121.6 TFLOP/s
+  BM= 32 T=  1280 r=   320 n= 10 waves   271.5    7.2044 ms    125.2 TFLOP/s
+  BM= 32 T=  1312 r=   328 n= 11 waves   298.7    7.9205 ms    116.7 TFLOP/s
+  BM= 32 T=  1408 r=   352 n= 11 waves   298.7    7.9103 ms    125.4 TFLOP/s
+  BM= 32 T=  1472 r=   368 n= 12 waves   325.8    8.6198 ms    120.3 TFLOP/s
+  BM= 32 T=  1504 r=   376 n= 12 waves   325.8    8.6302 ms    122.8 TFLOP/s
+  BM= 32 T=  1536 r=   384 n= 12 waves   325.8    8.6193 ms    125.6 TFLOP/s
+  BM= 32 T=  1568 r=   392 n= 13 waves   353.0    9.3159 ms    118.6 TFLOP/s
+  BM= 32 T=  1600 r=   400 n= 13 waves   353.0    9.3441 ms    120.7 TFLOP/s
+  BM= 32 T=  1664 r=   416 n= 13 waves   353.0    9.3304 ms    125.7 TFLOP/s
+  BM= 32 T=  1792 r=   448 n= 14 waves   380.1   10.0076 ms    126.2 TFLOP/s
+  BM= 32 T=  1920 r=   480 n= 15 waves   407.3   10.7146 ms    126.3 TFLOP/s
+  BM= 32 T=  1984 r=   496 n= 16 waves   434.4   11.4474 ms    122.1 TFLOP/s
+  BM= 32 T=  2048 r=   512 n= 16 waves   434.4   11.4196 ms    126.4 TFLOP/s
+  BM= 32 T=  2112 r=   528 n= 17 waves   461.6   12.1308 ms    122.7 TFLOP/s
+  BM= 32 T=  2176 r=   544 n= 17 waves   461.6   12.2516 ms    125.2 TFLOP/s
+  BM= 32 T=  2304 r=   576 n= 18 waves   488.7   12.9624 ms    125.2 TFLOP/s
+  BM= 32 T=  2432 r=   608 n= 19 waves   515.9   13.5940 ms    126.1 TFLOP/s
+  BM= 32 T=  2496 r=   624 n= 20 waves   543.0   14.2440 ms    123.5 TFLOP/s
+  BM= 32 T=  2560 r=   640 n= 20 waves   543.0   14.2638 ms    126.5 TFLOP/s
+  BM= 32 T=  2624 r=   656 n= 21 waves   570.2   14.9051 ms    124.1 TFLOP/s
+  BM= 32 T=  2688 r=   672 n= 21 waves   570.2   15.0364 ms    126.0 TFLOP/s
+  BM= 32 T=  2816 r=   704 n= 22 waves   597.3   15.8051 ms    125.5 TFLOP/s
+  BM= 32 T=  2944 r=   736 n= 23 waves   624.5   16.5810 ms    125.1 TFLOP/s
+  BM= 32 T=  3008 r=   752 n= 24 waves   651.6   17.0655 ms    124.2 TFLOP/s
+  BM= 32 T=  3072 r=   768 n= 24 waves   651.6   17.0608 ms    126.9 TFLOP/s
+  BM= 32 T=  3136 r=   784 n= 25 waves   678.8   17.9745 ms    122.9 TFLOP/s
+  BM= 32 T=  3200 r=   800 n= 25 waves   678.8   17.9756 ms    125.4 TFLOP/s
+  BM= 32 T=  3328 r=   832 n= 26 waves   705.9   18.6371 ms    125.8 TFLOP/s
+  BM= 32 T=  3456 r=   864 n= 27 waves   733.1   19.3990 ms    125.5 TFLOP/s
+  BM= 32 T=  3584 r=   896 n= 28 waves   760.2   20.1066 ms    125.6 TFLOP/s
+  BM= 32 T=  3712 r=   928 n= 29 waves   787.4   20.7875 ms    125.8 TFLOP/s
+  BM= 32 T=  3840 r=   960 n= 30 waves   814.5   21.7646 ms    124.3 TFLOP/s
+  BM= 32 T=  3968 r=   992 n= 31 waves   841.7   22.4793 ms    124.4 TFLOP/s
+  BM= 32 T=  4096 r=  1024 n= 32 waves   868.8   22.9775 ms    125.6 TFLOP/s
+  BM= 32 T=  4224 r=  1056 n= 33 waves   896.0   24.3223 ms    122.4 TFLOP/s
+  BM= 64 T=   112 r=    28 n=  1 waves    27.2    0.9657 ms     81.7 TFLOP/s
+  BM= 64 T=   128 r=    32 n=  1 waves    27.2    0.9145 ms     98.6 TFLOP/s
+  BM= 64 T=   144 r=    36 n=  1 waves    27.2    0.9227 ms    110.0 TFLOP/s
+  BM= 64 T=   224 r=    56 n=  1 waves    27.2    0.9276 ms    170.2 TFLOP/s
+  BM= 64 T=   240 r=    60 n=  1 waves    27.2    0.9319 ms    181.5 TFLOP/s
+  BM= 64 T=   256 r=    64 n=  1 waves    27.2    0.9301 ms    193.9 TFLOP/s
+  BM= 64 T=   272 r=    68 n=  2 waves    54.3    1.6237 ms    118.0 TFLOP/s
+  BM= 64 T=   288 r=    72 n=  2 waves    54.3    1.6102 ms    126.0 TFLOP/s
+  BM= 64 T=   368 r=    92 n=  2 waves    54.3    1.5965 ms    162.4 TFLOP/s
+  BM= 64 T=   384 r=    96 n=  2 waves    54.3    1.6997 ms    159.2 TFLOP/s
+  BM= 64 T=   400 r=   100 n=  2 waves    54.3    1.6749 ms    168.3 TFLOP/s
+  BM= 64 T=   448 r=   112 n=  2 waves    54.3    1.5818 ms    199.6 TFLOP/s
+  BM= 64 T=   480 r=   120 n=  2 waves    54.3    1.5739 ms    214.9 TFLOP/s
+  BM= 64 T=   496 r=   124 n=  2 waves    54.3    1.6634 ms    210.1 TFLOP/s
+  BM= 64 T=   512 r=   128 n=  2 waves    54.3    1.5505 ms    232.7 TFLOP/s
+  BM= 64 T=   528 r=   132 n=  3 waves    81.5    2.3272 ms    159.9 TFLOP/s
+  BM= 64 T=   544 r=   136 n=  3 waves    81.5    2.3903 ms    160.4 TFLOP/s
+  BM= 64 T=   576 r=   144 n=  3 waves    81.5    2.5015 ms    162.3 TFLOP/s
+  BM= 64 T=   624 r=   156 n=  3 waves    81.5    2.4621 ms    178.6 TFLOP/s
+  BM= 64 T=   640 r=   160 n=  3 waves    81.5    2.3794 ms    189.5 TFLOP/s
+  BM= 64 T=   656 r=   164 n=  3 waves    81.5    2.3526 ms    196.5 TFLOP/s
+  BM= 64 T=   736 r=   184 n=  3 waves    81.5    2.3533 ms    220.4 TFLOP/s
+  BM= 64 T=   752 r=   188 n=  3 waves    81.5    2.4928 ms    212.6 TFLOP/s
+  BM= 64 T=   768 r=   192 n=  3 waves    81.5    2.4827 ms    218.0 TFLOP/s
+  BM= 64 T=   784 r=   196 n=  4 waves   108.6    3.2563 ms    169.7 TFLOP/s
+  BM= 64 T=   800 r=   200 n=  4 waves   108.6    3.1506 ms    178.9 TFLOP/s
+  BM= 64 T=   896 r=   224 n=  4 waves   108.6    3.3167 ms    190.4 TFLOP/s
+  BM= 64 T=   960 r=   240 n=  4 waves   108.6    3.2949 ms    205.3 TFLOP/s
+  BM= 64 T=   992 r=   248 n=  4 waves   108.6    3.2556 ms    214.7 TFLOP/s
+  BM= 64 T=  1024 r=   256 n=  4 waves   108.6    3.0972 ms    233.0 TFLOP/s
+  BM= 64 T=  1056 r=   264 n=  5 waves   135.8    3.9380 ms    189.0 TFLOP/s
+  BM= 64 T=  1088 r=   272 n=  5 waves   135.8    3.9471 ms    194.2 TFLOP/s
+  BM= 64 T=  1152 r=   288 n=  5 waves   135.8    3.9334 ms    206.4 TFLOP/s
+  BM= 64 T=  1248 r=   312 n=  5 waves   135.8    3.9244 ms    224.1 TFLOP/s
+  BM= 64 T=  1280 r=   320 n=  5 waves   135.8    3.9238 ms    229.9 TFLOP/s
+  BM= 64 T=  1312 r=   328 n=  6 waves   162.9    4.6868 ms    197.3 TFLOP/s
+  BM= 64 T=  1408 r=   352 n=  6 waves   162.9    4.7853 ms    207.3 TFLOP/s
+  BM= 64 T=  1472 r=   368 n=  6 waves   162.9    4.7267 ms    219.4 TFLOP/s
+  BM= 64 T=  1504 r=   376 n=  6 waves   162.9    4.7493 ms    223.1 TFLOP/s
+  BM= 64 T=  1536 r=   384 n=  6 waves   162.9    4.6552 ms    232.5 TFLOP/s
+  BM= 64 T=  1568 r=   392 n=  7 waves   190.1    5.5675 ms    198.5 TFLOP/s
+  BM= 64 T=  1600 r=   400 n=  7 waves   190.1    5.4314 ms    207.6 TFLOP/s
+  BM= 64 T=  1664 r=   416 n=  7 waves   190.1    5.4853 ms    213.8 TFLOP/s
+  BM= 64 T=  1792 r=   448 n=  7 waves   190.1    5.4012 ms    233.8 TFLOP/s
+  BM= 64 T=  1920 r=   480 n=  8 waves   217.2    6.2588 ms    216.2 TFLOP/s
+  BM= 64 T=  1984 r=   496 n=  8 waves   217.2    6.3263 ms    221.0 TFLOP/s
+  BM= 64 T=  2048 r=   512 n=  8 waves   217.2    6.1978 ms    232.8 TFLOP/s
+  BM= 64 T=  2112 r=   528 n=  9 waves   244.4    7.0672 ms    210.6 TFLOP/s
+  BM= 64 T=  2176 r=   544 n=  9 waves   244.4    7.1633 ms    214.0 TFLOP/s
+  BM= 64 T=  2304 r=   576 n=  9 waves   244.4    7.0134 ms    231.5 TFLOP/s
+  BM= 64 T=  2432 r=   608 n= 10 waves   271.5    7.9696 ms    215.0 TFLOP/s
+  BM= 64 T=  2496 r=   624 n= 10 waves   271.5    7.8348 ms    224.5 TFLOP/s
+  BM= 64 T=  2560 r=   640 n= 10 waves   271.5    7.7480 ms    232.8 TFLOP/s
+  BM= 64 T=  2624 r=   656 n= 11 waves   298.7    8.6773 ms    213.1 TFLOP/s
+  BM= 64 T=  2688 r=   672 n= 11 waves   298.7    8.6775 ms    218.3 TFLOP/s
+  BM= 64 T=  2816 r=   704 n= 11 waves   298.7    8.5384 ms    232.4 TFLOP/s
+  BM= 64 T=  2944 r=   736 n= 12 waves   325.8    9.4877 ms    218.6 TFLOP/s
+  BM= 64 T=  3008 r=   752 n= 12 waves   325.8    9.4150 ms    225.1 TFLOP/s
+  BM= 64 T=  3072 r=   768 n= 12 waves   325.8    9.3119 ms    232.5 TFLOP/s
+  BM= 64 T=  3136 r=   784 n= 13 waves   353.0   10.1697 ms    217.3 TFLOP/s
+  BM= 64 T=  3200 r=   800 n= 13 waves   353.0   10.1422 ms    222.3 TFLOP/s
+  BM= 64 T=  3328 r=   832 n= 13 waves   353.0   10.1227 ms    231.7 TFLOP/s
+  BM= 64 T=  3456 r=   864 n= 14 waves   380.1   10.9540 ms    222.3 TFLOP/s
+  BM= 64 T=  3584 r=   896 n= 14 waves   380.1   10.9186 ms    231.3 TFLOP/s
+  BM= 64 T=  3712 r=   928 n= 15 waves   407.3   11.7111 ms    223.3 TFLOP/s
+  BM= 64 T=  3840 r=   960 n= 15 waves   407.3   11.6988 ms    231.3 TFLOP/s
+  BM= 64 T=  3968 r=   992 n= 16 waves   434.4   12.5242 ms    223.2 TFLOP/s
+  BM= 64 T=  4096 r=  1024 n= 16 waves   434.4   12.3778 ms    233.2 TFLOP/s
+  BM= 64 T=  4224 r=  1056 n= 17 waves   461.6   13.3468 ms    223.0 TFLOP/s
+  BM=128 T=   112 r=    28 n=  1 waves    27.2    0.9863 ms     80.0 TFLOP/s
+  BM=128 T=   128 r=    32 n=  1 waves    27.2    0.9928 ms     90.8 TFLOP/s
+  BM=128 T=   144 r=    36 n=  1 waves    27.2    1.0047 ms    101.0 TFLOP/s
+  BM=128 T=   224 r=    56 n=  1 waves    27.2    1.0318 ms    153.0 TFLOP/s
+  BM=128 T=   240 r=    60 n=  1 waves    27.2    1.0705 ms    158.0 TFLOP/s
+  BM=128 T=   256 r=    64 n=  1 waves    27.2    1.0634 ms    169.6 TFLOP/s
+  BM=128 T=   272 r=    68 n=  1 waves    27.2    1.0721 ms    178.8 TFLOP/s
+  BM=128 T=   288 r=    72 n=  1 waves    27.2    1.0772 ms    188.4 TFLOP/s
+  BM=128 T=   368 r=    92 n=  1 waves    27.2    1.1061 ms    234.4 TFLOP/s
+  BM=128 T=   384 r=    96 n=  1 waves    27.2    1.0655 ms    253.9 TFLOP/s
+  BM=128 T=   400 r=   100 n=  1 waves    27.2    1.1432 ms    246.6 TFLOP/s
+  BM=128 T=   448 r=   112 n=  1 waves    27.2    1.1140 ms    283.4 TFLOP/s
+  BM=128 T=   480 r=   120 n=  1 waves    27.2    1.1672 ms    289.8 TFLOP/s
+  BM=128 T=   496 r=   124 n=  1 waves    27.2    1.1559 ms    302.4 TFLOP/s
+  BM=128 T=   512 r=   128 n=  1 waves    27.2    1.1718 ms    307.9 TFLOP/s
+  BM=128 T=   528 r=   132 n=  2 waves    54.3    2.0772 ms    179.1 TFLOP/s
+  BM=128 T=   544 r=   136 n=  2 waves    54.3    2.0614 ms    186.0 TFLOP/s
+  BM=128 T=   576 r=   144 n=  2 waves    54.3    2.1744 ms    186.7 TFLOP/s
+  BM=128 T=   624 r=   156 n=  2 waves    54.3    2.1315 ms    206.3 TFLOP/s
+  BM=128 T=   640 r=   160 n=  2 waves    54.3    2.1704 ms    207.8 TFLOP/s
+  BM=128 T=   656 r=   164 n=  2 waves    54.3    2.1845 ms    211.6 TFLOP/s
+  BM=128 T=   736 r=   184 n=  2 waves    54.3    2.1916 ms    236.6 TFLOP/s
+  BM=128 T=   752 r=   188 n=  2 waves    54.3    2.2444 ms    236.1 TFLOP/s
+  BM=128 T=   768 r=   192 n=  2 waves    54.3    2.1919 ms    246.9 TFLOP/s
+  BM=128 T=   784 r=   196 n=  2 waves    54.3    2.2476 ms    245.8 TFLOP/s
+  BM=128 T=   800 r=   200 n=  2 waves    54.3    2.2425 ms    251.4 TFLOP/s
+  BM=128 T=   896 r=   224 n=  2 waves    54.3    2.2336 ms    282.7 TFLOP/s
+  BM=128 T=   960 r=   240 n=  2 waves    54.3    2.2184 ms    304.9 TFLOP/s
+  BM=128 T=   992 r=   248 n=  2 waves    54.3    2.2331 ms    313.0 TFLOP/s
+  BM=128 T=  1024 r=   256 n=  2 waves    54.3    2.2612 ms    319.1 TFLOP/s
+  BM=128 T=  1056 r=   264 n=  3 waves    81.5    3.2451 ms    229.3 TFLOP/s
+  BM=128 T=  1088 r=   272 n=  3 waves    81.5    3.2561 ms    235.4 TFLOP/s
+  BM=128 T=  1152 r=   288 n=  3 waves    81.5    3.2198 ms    252.1 TFLOP/s
+  BM=128 T=  1248 r=   312 n=  3 waves    81.5    3.3467 ms    262.8 TFLOP/s
+  BM=128 T=  1280 r=   320 n=  3 waves    81.5    3.2455 ms    277.9 TFLOP/s
+  BM=128 T=  1312 r=   328 n=  3 waves    81.5    3.3464 ms    276.3 TFLOP/s
+  BM=128 T=  1408 r=   352 n=  3 waves    81.5    3.3242 ms    298.5 TFLOP/s
+  BM=128 T=  1472 r=   368 n=  3 waves    81.5    3.3494 ms    309.7 TFLOP/s
+  BM=128 T=  1504 r=   376 n=  3 waves    81.5    3.3432 ms    317.0 TFLOP/s
+  BM=128 T=  1536 r=   384 n=  3 waves    81.5    3.3019 ms    327.8 TFLOP/s
+  BM=128 T=  1568 r=   392 n=  4 waves   108.6    4.2728 ms    258.6 TFLOP/s
+  BM=128 T=  1600 r=   400 n=  4 waves   108.6    4.3548 ms    258.9 TFLOP/s
+  BM=128 T=  1664 r=   416 n=  4 waves   108.6    4.3851 ms    267.4 TFLOP/s
+  BM=128 T=  1792 r=   448 n=  4 waves   108.6    4.4046 ms    286.7 TFLOP/s
+  BM=128 T=  1920 r=   480 n=  4 waves   108.6    4.3853 ms    308.5 TFLOP/s
+  BM=128 T=  1984 r=   496 n=  4 waves   108.6    4.3641 ms    320.3 TFLOP/s
+  BM=128 T=  2048 r=   512 n=  4 waves   108.6    4.4472 ms    324.5 TFLOP/s
+  BM=128 T=  2112 r=   528 n=  5 waves   135.8    5.4182 ms    274.7 TFLOP/s
+  BM=128 T=  2176 r=   544 n=  5 waves   135.8    5.3869 ms    284.6 TFLOP/s
+  BM=128 T=  2304 r=   576 n=  5 waves   135.8    5.4445 ms    298.2 TFLOP/s
+  BM=128 T=  2432 r=   608 n=  5 waves   135.8    5.4183 ms    316.3 TFLOP/s
+  BM=128 T=  2496 r=   624 n=  5 waves   135.8    5.4413 ms    323.2 TFLOP/s
+  BM=128 T=  2560 r=   640 n=  5 waves   135.8    5.4872 ms    328.7 TFLOP/s
+  BM=128 T=  2624 r=   656 n=  6 waves   162.9    6.4846 ms    285.1 TFLOP/s
+  BM=128 T=  2688 r=   672 n=  6 waves   162.9    6.5594 ms    288.8 TFLOP/s
+  BM=128 T=  2816 r=   704 n=  6 waves   162.9    6.5387 ms    303.5 TFLOP/s
+  BM=128 T=  2944 r=   736 n=  6 waves   162.9    6.6153 ms    313.6 TFLOP/s
+  BM=128 T=  3008 r=   752 n=  6 waves   162.9    6.5272 ms    324.7 TFLOP/s
+  BM=128 T=  3072 r=   768 n=  6 waves   162.9    6.5584 ms    330.1 TFLOP/s
+  BM=128 T=  3136 r=   784 n=  7 waves   190.1    7.5649 ms    292.1 TFLOP/s
+  BM=128 T=  3200 r=   800 n=  7 waves   190.1    7.6639 ms    294.2 TFLOP/s
+  BM=128 T=  3328 r=   832 n=  7 waves   190.1    7.5590 ms    310.2 TFLOP/s
+  BM=128 T=  3456 r=   864 n=  7 waves   190.1    7.5925 ms    320.7 TFLOP/s
+  BM=128 T=  3584 r=   896 n=  7 waves   190.1    7.5925 ms    332.6 TFLOP/s
+  BM=128 T=  3712 r=   928 n=  8 waves   217.2    8.6290 ms    303.1 TFLOP/s
+  BM=128 T=  3840 r=   960 n=  8 waves   217.2    8.7125 ms    310.6 TFLOP/s
+  BM=128 T=  3968 r=   992 n=  8 waves   217.2    8.6677 ms    322.6 TFLOP/s
+  BM=128 T=  4096 r=  1024 n=  8 waves   217.2    8.6646 ms    333.1 TFLOP/s
+  BM=128 T=  4224 r=  1056 n=  9 waves   244.4    9.7044 ms    306.7 TFLOP/s
+  BM=256 T=   112 r=    28 n=  1 waves    27.2    1.7377 ms     45.4 TFLOP/s
+  BM=256 T=   128 r=    32 n=  1 waves    27.2    1.7358 ms     52.0 TFLOP/s
+  BM=256 T=   144 r=    36 n=  1 waves    27.2    1.7431 ms     58.2 TFLOP/s
+  BM=256 T=   224 r=    56 n=  1 waves    27.2    1.7825 ms     88.5 TFLOP/s
+  BM=256 T=   240 r=    60 n=  1 waves    27.2    1.7901 ms     94.5 TFLOP/s
+  BM=256 T=   256 r=    64 n=  1 waves    27.2    1.7952 ms    100.5 TFLOP/s
+  BM=256 T=   272 r=    68 n=  1 waves    27.2    1.8052 ms    106.2 TFLOP/s
+  BM=256 T=   288 r=    72 n=  1 waves    27.2    1.8076 ms    112.3 TFLOP/s
+  BM=256 T=   368 r=    92 n=  1 waves    27.2    1.8515 ms    140.1 TFLOP/s
+  BM=256 T=   384 r=    96 n=  1 waves    27.2    1.8544 ms    145.9 TFLOP/s
+  BM=256 T=   400 r=   100 n=  1 waves    27.2    1.8615 ms    151.4 TFLOP/s
+  BM=256 T=   448 r=   112 n=  1 waves    27.2    1.8671 ms    169.1 TFLOP/s
+  BM=256 T=   480 r=   120 n=  1 waves    27.2    1.8807 ms    179.8 TFLOP/s
+  BM=256 T=   496 r=   124 n=  1 waves    27.2    1.8844 ms    185.5 TFLOP/s
+  BM=256 T=   512 r=   128 n=  1 waves    27.2    1.8950 ms    190.4 TFLOP/s
+  BM=256 T=   528 r=   132 n=  1 waves    27.2    1.9087 ms    194.9 TFLOP/s
+  BM=256 T=   544 r=   136 n=  1 waves    27.2    1.9090 ms    200.8 TFLOP/s
+  BM=256 T=   576 r=   144 n=  1 waves    27.2    1.9310 ms    210.2 TFLOP/s
+  BM=256 T=   624 r=   156 n=  1 waves    27.2    1.9716 ms    223.0 TFLOP/s
+  BM=256 T=   640 r=   160 n=  1 waves    27.2    1.9612 ms    229.9 TFLOP/s
+  BM=256 T=   656 r=   164 n=  1 waves    27.2    1.9496 ms    237.1 TFLOP/s
+  BM=256 T=   736 r=   184 n=  1 waves    27.2    2.0454 ms    253.6 TFLOP/s
+  BM=256 T=   752 r=   188 n=  1 waves    27.2    2.0451 ms    259.1 TFLOP/s
+  BM=256 T=   768 r=   192 n=  1 waves    27.2    2.0306 ms    266.5 TFLOP/s
+  BM=256 T=   784 r=   196 n=  1 waves    27.2    2.0334 ms    271.7 TFLOP/s
+  BM=256 T=   800 r=   200 n=  1 waves    27.2    1.9781 ms    285.0 TFLOP/s
+  BM=256 T=   896 r=   224 n=  1 waves    27.2    1.9852 ms    318.0 TFLOP/s
+  BM=256 T=   960 r=   240 n=  1 waves    27.2    2.0227 ms    334.4 TFLOP/s
+  BM=256 T=   992 r=   248 n=  1 waves    27.2    2.0147 ms    347.0 TFLOP/s
+  BM=256 T=  1024 r=   256 n=  1 waves    27.2    2.0277 ms    355.9 TFLOP/s
+  BM=256 T=  1056 r=   264 n=  2 waves    54.3    3.4659 ms    214.7 TFLOP/s
+  BM=256 T=  1088 r=   272 n=  2 waves    54.3    3.5040 ms    218.8 TFLOP/s
+  BM=256 T=  1152 r=   288 n=  2 waves    54.3    3.5685 ms    227.5 TFLOP/s
+  BM=256 T=  1248 r=   312 n=  2 waves    54.3    3.6549 ms    240.6 TFLOP/s
+  BM=256 T=  1280 r=   320 n=  2 waves    54.3    3.6651 ms    246.1 TFLOP/s
+  BM=256 T=  1312 r=   328 n=  2 waves    54.3    3.7054 ms    249.5 TFLOP/s
+  BM=256 T=  1408 r=   352 n=  2 waves    54.3    3.8321 ms    258.9 TFLOP/s
+  BM=256 T=  1472 r=   368 n=  2 waves    54.3    3.8481 ms    269.5 TFLOP/s
+  BM=256 T=  1504 r=   376 n=  2 waves    54.3    3.8089 ms    278.2 TFLOP/s
+  BM=256 T=  1536 r=   384 n=  2 waves    54.3    3.8585 ms    280.5 TFLOP/s
+  BM=256 T=  1568 r=   392 n=  2 waves    54.3    3.8804 ms    284.7 TFLOP/s
+  BM=256 T=  1600 r=   400 n=  2 waves    54.3    3.8763 ms    290.9 TFLOP/s
+  BM=256 T=  1664 r=   416 n=  2 waves    54.3    3.9364 ms    297.9 TFLOP/s
+  BM=256 T=  1792 r=   448 n=  2 waves    54.3    3.9331 ms    321.1 TFLOP/s
+  BM=256 T=  1920 r=   480 n=  2 waves    54.3    3.8645 ms    350.1 TFLOP/s
+  BM=256 T=  1984 r=   496 n=  2 waves    54.3    3.9142 ms    357.2 TFLOP/s
+  BM=256 T=  2048 r=   512 n=  2 waves    54.3    3.8771 ms    372.2 TFLOP/s
+  BM=256 T=  2112 r=   528 n=  3 waves    81.5    5.4415 ms    273.5 TFLOP/s
+  BM=256 T=  2176 r=   544 n=  3 waves    81.5    5.4644 ms    280.6 TFLOP/s
+  BM=256 T=  2304 r=   576 n=  3 waves    81.5    5.6315 ms    288.3 TFLOP/s
+  BM=256 T=  2432 r=   608 n=  3 waves    81.5    5.7255 ms    299.3 TFLOP/s
+  BM=256 T=  2496 r=   624 n=  3 waves    81.5    5.8017 ms    303.2 TFLOP/s
+  BM=256 T=  2560 r=   640 n=  3 waves    81.5    5.7526 ms    313.6 TFLOP/s
+  BM=256 T=  2624 r=   656 n=  3 waves    81.5    5.8660 ms    315.2 TFLOP/s
+  BM=256 T=  2688 r=   672 n=  3 waves    81.5    5.8403 ms    324.3 TFLOP/s
+  BM=256 T=  2816 r=   704 n=  3 waves    81.5    5.8930 ms    336.7 TFLOP/s
+  BM=256 T=  2944 r=   736 n=  3 waves    81.5    5.8316 ms    355.7 TFLOP/s
+  BM=256 T=  3008 r=   752 n=  3 waves    81.5    5.7183 ms    370.7 TFLOP/s
+  BM=256 T=  3072 r=   768 n=  3 waves    81.5    5.7755 ms    374.8 TFLOP/s
+  BM=256 T=  3136 r=   784 n=  4 waves   108.6    7.3977 ms    298.7 TFLOP/s
+  BM=256 T=  3200 r=   800 n=  4 waves   108.6    7.3767 ms    305.7 TFLOP/s
+  BM=256 T=  3328 r=   832 n=  4 waves   108.6    7.6277 ms    307.4 TFLOP/s
+  BM=256 T=  3456 r=   864 n=  4 waves   108.6    7.6938 ms    316.5 TFLOP/s
+  BM=256 T=  3584 r=   896 n=  4 waves   108.6    7.8775 ms    320.6 TFLOP/s
+  BM=256 T=  3712 r=   928 n=  4 waves   108.6    7.8832 ms    331.8 TFLOP/s
+  BM=256 T=  3840 r=   960 n=  4 waves   108.6    7.8488 ms    344.7 TFLOP/s
+  BM=256 T=  3968 r=   992 n=  4 waves   108.6    7.8608 ms    355.7 TFLOP/s
+  BM=256 T=  4096 r=  1024 n=  4 waves   108.6    7.8122 ms    369.5 TFLOP/s
+  BM=256 T=  4224 r=  1056 n=  5 waves   135.8    9.3460 ms    318.5 TFLOP/s
+
+swept in 125 s
+
+PREDICTIONS, stated before the run and not adjusted after it
+  alpha 0.558 (band 0.529-0.588), bf16 at 2 bytes, ridge band 160.3-176.2 Op/B
+  BLOCK_M   AI cap   crossing @ridge 160.3      crossing @ridge 176.2
+       32     57.3   NO CROSSING EVER       NO CROSSING EVER    
+       64    114.7   NO CROSSING EVER       NO CROSSING EVER    
+      128    229.4   r=  249.7 T=     999 n=2   r=  372.8 T=    1491 n=3
+      256    458.8   r=  160.3 T=     641 n=1   r=  176.2 T=     705 n=1
+  128-over-256 crossing ratio: 1.558x at the low ridge, 2.116x at the high one; the retracted alpha=0.1 says 1.100x
+
+MEASURED  mixtral-8x7b bf16  276 cells, 61 of them exactly-full tile stacks
+  compute plateau 374.8 TFLOP/s useful, taken as the roof every roof fraction below is against
+  that plateau is 53.5% of ridge x bandwidth (701 TFLOP/s). Far below 100% means nothing in the sweep reached a roof and every roof fraction is relative to something that is not one.
+  per-cell timing spread, median 1.53%
+  compute reference: BLOCK_M=256 ladder, 4 treads, proportional to 1.5%: compute branch 1.9452 ms per tile, fixed cost 0.0602 ms
+  132 SMs (reported by the driver), one resident CTA per SM assumed for every wave count
+  up-GEMM waves run 27.2 to 896.0 across the sweep. The smallest is the smallest tile stack, and even it is many waves deep, so no cell here is a partial-wave measurement and occupancy cannot be the thing that moved between two adjacent cells.
+
+THE LADDER: milliseconds per exactly-full tile stack, which is where gates 2, 3 and 4 are read
+  alpha is a LOWER bound (the fused layer's fixed cost sits in the denominator); alpha-hi takes that cost out, and alpha-corrected also removes activation traffic
+  BLOCK_M  treads  memory-bound  alpha   alpha-corrected  alpha-hi  B ms/tile  C ms/tile  fit err
+       32      33            33  0.989           0.981     1.078     0.7201        n/a   1.23%
+       64      16            16  0.923           0.908     0.994     0.7716        n/a   1.54%
+      128       8             0    n/a             n/a       n/a        n/a        n/a  10.45%
+      256       4             0    n/a             n/a       n/a        n/a     1.9252   1.16%
+
+GATES
+GATE 0  PASS      override_config changed the kernel at every setting
+          measured fresh Triton artefacts per setting: BM=32:17, BM=64:16, BM=128:16, BM=256:16   gate >= 1 per setting
+
+GATE 1  PASS      time steps at T = n x BLOCK_M x E/k
+          measured median step minus tread +14.94%   gate >= +6.37% (half the model's step) and > 3x noise (4.60%)
+          47 boundaries bracketed, 0 where the tread moved at least as much as the step
+          median step +14.03%, median tread -0.15%, model step +12.75%
+          waves are printed on both sides of every step so occupancy can be ruled out as the cause:
+          BM= 32 n= 1 T=   128 r=    32  tread  -5.53%  STEP +67.91%  (model +55.40%)  waves   27.2/  54.3
+          BM= 32 n= 2 T=   256 r=    64  tread  +1.65%  STEP +42.97%  (model +35.47%)  waves   54.3/  81.5
+          BM= 32 n= 3 T=   384 r=    96  tread  -2.33%  STEP +28.46%  (model +26.08%)  waves   81.5/ 108.6
+          BM= 32 n= 4 T=   512 r=   128  tread  -4.11%  STEP +25.15%  (model +20.62%)  waves  108.6/ 135.8
+          BM= 32 n= 5 T=   640 r=   160  tread  +3.18%  STEP +19.70%  (model +17.06%)  waves  135.8/ 162.9
+          BM= 32 n= 6 T=   768 r=   192  tread  +0.26%  STEP +15.20%  (model +14.54%)  waves  162.9/ 190.1
+          BM= 32 n= 7 T=   896 r=   224  tread  -0.52%  STEP +13.61%  (model +12.75%)  waves  190.1/ 217.2
+          BM= 32 n= 8 T=  1024 r=   256  tread  -0.07%  STEP +11.87%  (model +11.25%)  waves  217.2/ 244.4
+          BM= 32 n= 9 T=  1152 r=   288  tread  +1.73%  STEP +10.47%  (model +10.18%)  waves  244.4/ 271.5
+          BM= 32 n=10 T=  1280 r=   320  tread  -0.38%  STEP  +9.94%  (model  +9.16%)  waves  271.5/ 298.7
+          BM= 32 n=11 T=  1408 r=   352  tread  -0.13%  STEP  +8.97%  (model  +8.42%)  waves  298.7/ 325.8
+          BM= 32 n=12 T=  1536 r=   384  tread  -0.13%  STEP  +8.08%  (model  +7.73%)  waves  325.8/ 353.0
+          BM= 32 n=13 T=  1664 r=   416  tread  -0.15%  STEP  +7.26%  (model  +7.26%)  waves  353.0/ 380.1
+          BM= 32 n=16 T=  2048 r=   512  tread  -0.24%  STEP  +6.23%  (model  +5.91%)  waves  434.4/ 461.6
+          BM= 32 n=17 T=  2176 r=   544  tread  +1.00%  STEP  +5.80%  (model  +5.62%)  waves  461.6/ 488.7
+          BM= 32 n=20 T=  2560 r=   640  tread  +0.14%  STEP  +4.50%  (model  +4.77%)  waves  543.0/ 570.2
+          BM= 32 n=21 T=  2688 r=   672  tread  +0.88%  STEP  +5.11%  (model  +4.59%)  waves  570.2/ 597.3
+          BM= 32 n=24 T=  3072 r=   768  tread  -0.03%  STEP  +5.36%  (model  +4.00%)  waves  651.6/ 678.8
+          BM= 32 n=25 T=  3200 r=   800  tread  +0.01%  STEP  +3.68%  (model  +3.88%)  waves  678.8/ 705.9
+          BM= 64 n= 1 T=   256 r=    64  tread  -0.19%  STEP +74.57%  (model +54.90%)  waves   27.2/  54.3
+          BM= 64 n= 2 T=   512 r=   128  tread  -6.78%  STEP +50.09%  (model +35.05%)  waves   54.3/  81.5
+          BM= 64 n= 3 T=   768 r=   192  tread  -0.41%  STEP +31.16%  (model +25.75%)  waves   81.5/ 108.6
+          BM= 64 n= 4 T=  1024 r=   256  tread  -4.86%  STEP +27.15%  (model +20.39%)  waves  108.6/ 135.8
+          BM= 64 n= 5 T=  1280 r=   320  tread  -0.02%  STEP +19.45%  (model +16.85%)  waves  135.8/ 162.9
+          BM= 64 n= 6 T=  1536 r=   384  tread  -1.98%  STEP +19.60%  (model +14.36%)  waves  162.9/ 190.1
+          BM= 64 n= 7 T=  1792 r=   448  tread  -1.53%  STEP +15.88%  (model +12.67%)  waves  190.1/ 217.2
+          BM= 64 n= 8 T=  2048 r=   512  tread  -2.03%  STEP +14.03%  (model +11.13%)  waves  217.2/ 244.4
+          BM= 64 n= 9 T=  2304 r=   576  tread  -2.09%  STEP +13.63%  (model +10.07%)  waves  244.4/ 271.5
+          BM= 64 n=10 T=  2560 r=   640  tread  -1.11%  STEP +11.99%  (model  +9.06%)  waves  271.5/ 298.7
+          BM= 64 n=11 T=  2816 r=   704  tread  -1.60%  STEP +11.12%  (model  +8.36%)  waves  298.7/ 325.8
+          BM= 64 n=12 T=  3072 r=   768  tread  -1.10%  STEP  +9.21%  (model  +7.64%)  waves  325.8/ 353.0
+          BM= 64 n=13 T=  3328 r=   832  tread  -0.19%  STEP  +8.21%  (model  +7.15%)  waves  353.0/ 380.1
+          BM= 64 n=14 T=  3584 r=   896  tread  -0.32%  STEP  +7.26%  (model  +6.66%)  waves  380.1/ 407.3
+          BM= 64 n=15 T=  3840 r=   960  tread  -0.11%  STEP  +7.06%  (model  +6.24%)  waves  407.3/ 434.4
+          BM= 64 n=16 T=  4096 r=  1024  tread  -1.17%  STEP  +7.83%  (model  +5.87%)  waves  434.4/ 461.6
+          BM=128 n= 1 T=   512 r=   128  tread  +1.38%  STEP +77.26%  (model +53.97%)  waves   27.2/  54.3
+          BM=128 n= 2 T=  1024 r=   256  tread  +1.26%  STEP +43.51%  (model +46.75%)  waves   54.3/  81.5
+          BM=128 n= 3 T=  1536 r=   384  tread  -1.24%  STEP +29.40%  (model +33.33%)  waves   81.5/ 108.6
+          BM=128 n= 4 T=  2048 r=   512  tread  +1.90%  STEP +21.83%  (model +25.00%)  waves  108.6/ 135.8
+          BM=128 n= 5 T=  2560 r=   640  tread  +0.84%  STEP +18.18%  (model +20.00%)  waves  135.8/ 162.9
+          BM=128 n= 6 T=  3072 r=   768  tread  +0.48%  STEP +15.35%  (model +16.67%)  waves  162.9/ 190.1
+          BM=128 n= 7 T=  3584 r=   896  tread  +0.00%  STEP +13.65%  (model +14.29%)  waves  190.1/ 217.2
+          BM=128 n= 8 T=  4096 r=  1024  tread  -0.04%  STEP +12.00%  (model +12.50%)  waves  217.2/ 244.4
+          BM=256 n= 1 T=  1024 r=   256  tread  +0.64%  STEP +70.93%  (model +100.00%)  waves   27.2/  54.3
+          BM=256 n= 2 T=  2048 r=   512  tread  -0.95%  STEP +40.35%  (model +50.00%)  waves   54.3/  81.5
+          BM=256 n= 3 T=  3072 r=   768  tread  +1.00%  STEP +28.09%  (model +33.33%)  waves   81.5/ 108.6
+          BM=256 n= 4 T=  4096 r=  1024  tread  -0.62%  STEP +19.63%  (model +25.00%)  waves  108.6/ 135.8
+
+GATE 2  PASS      time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)
+          measured ms(BM=32) / ms(BM=256) = 2.941x at 1024 rows per expert   gate >= 1.50x
+          time moves DOWN with BLOCK_M, as traffic requires
+          model at alpha=0.558: 2.911x   model at the retracted alpha=0.10: 1.000x
+          a FAIL here is the interesting answer: it says the padded arithmetic or the lost occupancy outweighs 32 weight re-reads
+          rows/expert  BM=32         BM=64         BM=128        BM=256         ms(lo)/ms(hi)
+                  256     5.8115 ms     3.0972 ms     2.2612 ms     2.0277 ms   2.866x
+                  512    11.4196 ms     6.1978 ms     4.4472 ms     3.8771 ms   2.945x
+                  768    17.0608 ms     9.3119 ms     6.5584 ms     5.7755 ms   2.954x
+                 1024    22.9775 ms    12.3778 ms     8.6646 ms     7.8122 ms   2.941x
+
+GATE 3  PASS      the BLOCK_M=128 crossing sits Q above the BLOCK_M=256 one
+          measured 1.908x   gate > 1.33x (rules out alpha=0.1)
+          measured ratio is 1 + alpha = 1 + 0.908, with alpha measured at BLOCK_M=64 over 16 memory-bound treads, activation traffic subtracted
+          model predicts ridge 160.3: 1.558x   ridge 176.2: 2.116x
+          the retracted alpha=0.1 predicts 1.100x; the gate is the midpoint of the two worlds
+          alpha is NOT identifiable at BLOCK_M=128 on this sweep (0 tread(s) stand above the compute branch, and a verdict needs 3), so the ratio is imported from a block size where enough do, which is where the re-read fraction is measurable at all. ALPHA_BY_BLOCK_M puts the cost of that import at about +/-25%, which is smaller than the gap being discriminated.
+            BLOCK_M= 32  alpha 0.989 from 33 memory-bound treads, fit error 1.23%
+            BLOCK_M= 64  alpha 0.923 from 16 memory-bound treads, fit error 1.54%
+            BLOCK_M=128  alpha not identifiable (0 memory-bound tread(s))
+            BLOCK_M=256  alpha not identifiable (0 memory-bound tread(s))
+
+GATE 4  PASS      BLOCK_M=64 never reaches the compute roof
+          measured peak roof fraction 0.624   gate <= 0.85
+          predicted ceiling is cap/ridge = 114.7/160.3 = 0.716 of the roof; the retracted alpha=0.1 predicts 1.000
+          throughput per tread as a fraction of the plateau: n=1:0.52, n=2:0.62, n=3:0.58, n=4:0.62, n=5:0.61, n=6:0.62, n=7:0.62, n=8:0.62, n=9:0.62, n=10:0.62, n=11:0.62, n=12:0.62, n=13:0.62, n=14:0.62, n=15:0.62, n=16:0.62
+          per-tile slopes: memory B=0.7716 ms against compute C=0.4863 ms (scaled from the reference by C ~ BLOCK_M). C > B is the condition for a crossing to exist at all, and it is NOT met.
+          swept to 1024 rows per expert (16 M-tiles)
+          horizon 417 rows: 2x the crossing the retracted alpha=0.1 predicts for this block size
+          positive control: BLOCK_M=256 crossed inside this same grid
+          modelled AI at the last tread is 95.3% of the ceiling, and the last tread gained 0.8% of throughput over the one before it
+
+READING IT. Every gate passed at alpha 0.558. The AI ceiling is real, it is where the refit put it, and BLOCK_M 32 and 64 cannot reach the compute roof at any batch size.
+
+cells    /workspace/session/20260901T214218Z/block_m/block_m_crossing/mixtral-8x7b-bf16-r1024-c0ee82/cells.csv
+report   /workspace/session/20260901T214218Z/block_m/block_m_crossing/mixtral-8x7b-bf16-r1024-c0ee82/report.txt
+json     /workspace/session/20260901T214218Z/block_m/block_m_crossing/mixtral-8x7b-bf16-r1024-c0ee82/report.json
+These survive pod teardown when the results root is on the network volume, which is what the WRITES TO line above says.

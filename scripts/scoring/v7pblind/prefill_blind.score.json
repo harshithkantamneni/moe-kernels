@@ -1,0 +1,2324 @@
+{
+ "what": "model v7's prefill blind score (the working-model bar per model and pooled)",
+ "registration": "2026-11-18-v7-prefill-blind-gh200",
+ "session": "results/published/2026-11-18-nvidia_gh200_480gb-v7p-session",
+ "bars": {
+  "rms_max": 0.03,
+  "max_abs": 0.08,
+  "mean_max": 0.015
+ },
+ "minimum": "MINIMUM (the decode domain blind's rule, docs/registered/2026-11-18-v7-domain-blind-gh200 'minimum', copied): a model is certifiable only when at least 10 of its cells are scored in CLEAN (valid NATIVE cells after the power check, the gates, the page checks (G5 provenance, the r7-median-run3 rebuild, the registered tile), row_drop and G3's voids). A model with fewer is reported with its statistics, labelled BELOW THE MINIMUM and NOT CERTIFIED whatever they read; its scored cells still count in the pooled bar",
+ "verdict rule": "the verdict is the working-model bar read per model, as the v7 decode blind (docs/registered/2026-11-17-v7-decode-blind-gh200.txt 'certification') and the decode domain blind read it: docs/registered/2026-10-14-decodeB-blind-gh200.txt's rule line 'a model is CERTIFIED when its own bar and the pooled bar hold', carried by addenda 5 and 6 and by both v7 decode blinds. Here each bar (pooled and per model: rms <= 3%, every cell within 8%, |mean| <= 1.5%) is read in B3's two views (ALL and CLEAN, tcommon.timed_page) and combined by rental 2's rule 3 (agreeing views give the verdict; a disagreement reads INCONCLUSIVE, which certifies nothing). A model is CERTIFIED when its combined bar HOLDS, the combined pooled bar HOLDS and the minimum is met",
+ "validity": {
+  "board": {
+   "c2_power_env": "C2_POWER_W=700",
+   "lock_probe": "LOCK_PROBE_1410=held",
+   "g_band": "PASS",
+   "g_band_which": "fallback (registered: the primary band left joint_cF None)",
+   "valid": true,
+   "why": ""
+  },
+  "gates": {
+   "census": {
+    "verdict": "PASS",
+    "why": ""
+   },
+   "sag": {
+    "verdict": "PASS",
+    "why": ""
+   }
+  },
+  "valid": true,
+  "why": ""
+ },
+ "finalised": {
+  "par": [
+   64.325,
+   612.5
+  ],
+  "per_page": {
+   "olmoe-1b-7b": {
+    "A_us": 46.37,
+    "tau_us": 550.0,
+    "rms_us": 6.66,
+    "cells": 54,
+    "sha256": "101dfec91a559040751f37ff7f6c32b37f34d00e9dfb7bb66d22ff764f29edc7"
+   },
+   "mixtral-8x7b": {
+    "A_us": 82.28,
+    "tau_us": 675.0,
+    "rms_us": 14.0,
+    "cells": 54,
+    "sha256": "eda0801aa7a262cb19f3c346b555dfd7a6f3e62973324fc1a7d213da6bdb3e90"
+   }
+  },
+  "inside_held_out_par_span (DESCRIPTIVE)": false,
+  "unpriced": [],
+  "cells": [
+   {
+    "index": 0,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 2,
+    "label": "PT",
+    "ms": 0.148981
+   },
+   {
+    "index": 1,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 2,
+    "label": "PW",
+    "ms": 0.132485
+   },
+   {
+    "index": 2,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 2,
+    "label": "PT2",
+    "ms": 0.149
+   },
+   {
+    "index": 3,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 2,
+    "label": "PW2",
+    "ms": 0.13242
+   },
+   {
+    "index": 4,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 2,
+    "label": "uniform",
+    "ms": 0.116766
+   },
+   {
+    "index": 5,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 2,
+    "label": "balanced",
+    "ms": 0.116766
+   },
+   {
+    "index": 6,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 3,
+    "label": "PT",
+    "ms": 0.172345
+   },
+   {
+    "index": 7,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 3,
+    "label": "PW",
+    "ms": 0.172371
+   },
+   {
+    "index": 8,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 3,
+    "label": "PT2",
+    "ms": 0.172355
+   },
+   {
+    "index": 9,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 3,
+    "label": "PW2",
+    "ms": 0.172372
+   },
+   {
+    "index": 10,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 3,
+    "label": "uniform",
+    "ms": 0.155404
+   },
+   {
+    "index": 11,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g1",
+    "n": 3,
+    "label": "balanced",
+    "ms": 0.155404
+   },
+   {
+    "index": 12,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g16",
+    "n": 9,
+    "label": "PT",
+    "ms": 0.418387
+   },
+   {
+    "index": 13,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g16",
+    "n": 9,
+    "label": "PW",
+    "ms": 0.418396
+   },
+   {
+    "index": 14,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g16",
+    "n": 9,
+    "label": "PT2",
+    "ms": 0.418383
+   },
+   {
+    "index": 15,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g16",
+    "n": 9,
+    "label": "PW2",
+    "ms": 0.418394
+   },
+   {
+    "index": 16,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g16",
+    "n": 9,
+    "label": "uniform",
+    "ms": 0.400819
+   },
+   {
+    "index": 17,
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-128g16",
+    "n": 9,
+    "label": "balanced",
+    "ms": 0.400819
+   },
+   {
+    "index": 18,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 1,
+    "label": "PT",
+    "ms": 0.145653
+   },
+   {
+    "index": 19,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 1,
+    "label": "PW",
+    "ms": 0.145495
+   },
+   {
+    "index": 20,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 1,
+    "label": "PT2",
+    "ms": 0.149634
+   },
+   {
+    "index": 21,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 1,
+    "label": "PW2",
+    "ms": 0.145502
+   },
+   {
+    "index": 22,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 1,
+    "label": "uniform",
+    "ms": 0.135213
+   },
+   {
+    "index": 23,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 1,
+    "label": "balanced",
+    "ms": 0.135213
+   },
+   {
+    "index": 24,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 2,
+    "label": "PT",
+    "ms": 0.222581
+   },
+   {
+    "index": 25,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 2,
+    "label": "PW",
+    "ms": 0.201517
+   },
+   {
+    "index": 26,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 2,
+    "label": "PT2",
+    "ms": 0.222578
+   },
+   {
+    "index": 27,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 2,
+    "label": "PW2",
+    "ms": 0.201373
+   },
+   {
+    "index": 28,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 2,
+    "label": "uniform",
+    "ms": 0.180662
+   },
+   {
+    "index": 29,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g1",
+    "n": 2,
+    "label": "balanced",
+    "ms": 0.180662
+   },
+   {
+    "index": 30,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g16",
+    "n": 9,
+    "label": "PT",
+    "ms": 0.710369
+   },
+   {
+    "index": 31,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g16",
+    "n": 9,
+    "label": "PW",
+    "ms": 0.69563
+   },
+   {
+    "index": 32,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g16",
+    "n": 9,
+    "label": "PT2",
+    "ms": 0.695609
+   },
+   {
+    "index": 33,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g16",
+    "n": 9,
+    "label": "PW2",
+    "ms": 0.710383
+   },
+   {
+    "index": 34,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g16",
+    "n": 9,
+    "label": "uniform",
+    "ms": 0.667182
+   },
+   {
+    "index": 35,
+    "model": "granite-3.0-3b-a800m",
+    "page": "granite-3.0-3b-a800m-128g16",
+    "n": 9,
+    "label": "balanced",
+    "ms": 0.667182
+   },
+   {
+    "index": 36,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 1,
+    "label": "PT",
+    "ms": 0.306041
+   },
+   {
+    "index": 37,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 1,
+    "label": "PW",
+    "ms": 0.30584
+   },
+   {
+    "index": 38,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 1,
+    "label": "PT2",
+    "ms": 0.306077
+   },
+   {
+    "index": 39,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 1,
+    "label": "PW2",
+    "ms": 0.307527
+   },
+   {
+    "index": 40,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 1,
+    "label": "uniform",
+    "ms": 0.276775
+   },
+   {
+    "index": 41,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 1,
+    "label": "balanced",
+    "ms": 0.276775
+   },
+   {
+    "index": 42,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 2,
+    "label": "PT",
+    "ms": 0.48601
+   },
+   {
+    "index": 43,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 2,
+    "label": "PW",
+    "ms": 0.485793
+   },
+   {
+    "index": 44,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 2,
+    "label": "PT2",
+    "ms": 0.485983
+   },
+   {
+    "index": 45,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 2,
+    "label": "PW2",
+    "ms": 0.485981
+   },
+   {
+    "index": 46,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 2,
+    "label": "uniform",
+    "ms": 0.388482
+   },
+   {
+    "index": 47,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g1",
+    "n": 2,
+    "label": "balanced",
+    "ms": 0.388482
+   },
+   {
+    "index": 48,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g16",
+    "n": 9,
+    "label": "PT",
+    "ms": 1.660427
+   },
+   {
+    "index": 49,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g16",
+    "n": 9,
+    "label": "PW",
+    "ms": 1.624872
+   },
+   {
+    "index": 50,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g16",
+    "n": 9,
+    "label": "PT2",
+    "ms": 1.624746
+   },
+   {
+    "index": 51,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g16",
+    "n": 9,
+    "label": "PW2",
+    "ms": 1.624813
+   },
+   {
+    "index": 52,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g16",
+    "n": 9,
+    "label": "uniform",
+    "ms": 1.563394
+   },
+   {
+    "index": 53,
+    "model": "qwen2-57b-a14b-tp8",
+    "page": "qwen2-57b-a14b-tp8-128g16",
+    "n": 9,
+    "label": "balanced",
+    "ms": 1.563394
+   }
+  ]
+ },
+ "verdict": "SCORED",
+ "BARS (registered: ALL and CLEAN, rule 3)": {
+  "pooled": {
+   "verdict": "FAILS",
+   "stats": {
+    "cells": 24,
+    "mean": -0.029945,
+    "rms": 0.031338,
+    "worst": -0.04716
+   }
+  },
+  "per_model": {
+   "granite-3.0-1b-a400m": {
+    "verdict": "FAILS",
+    "stats": {
+     "cells": 6,
+     "mean": -0.042406,
+     "rms": 0.042492,
+     "worst": -0.04716
+    }
+   },
+   "granite-3.0-3b-a800m": {
+    "verdict": "FAILS",
+    "stats": {
+     "cells": 6,
+     "mean": -0.029986,
+     "rms": 0.030688,
+     "worst": -0.037995
+    }
+   },
+   "qwen2-57b-a14b-tp8": {
+    "verdict": "FAILS",
+    "stats": {
+     "cells": 12,
+     "mean": -0.023694,
+     "rms": 0.024301,
+     "worst": -0.030192
+    }
+   }
+  },
+  "cells scored": {
+   "granite-3.0-1b-a400m": 6,
+   "granite-3.0-3b-a800m": 6,
+   "qwen2-57b-a14b-tp8": 12
+  }
+ },
+ "cells scored in CLEAN": {
+  "granite-3.0-1b-a400m": 6,
+  "granite-3.0-3b-a800m": 6,
+  "qwen2-57b-a14b-tp8": 12
+ },
+ "certified": {
+  "granite-3.0-1b-a400m": "NOT CERTIFIED: BELOW THE MINIMUM (6 cells scored in CLEAN, under 10; bar FAILS)",
+  "granite-3.0-3b-a800m": "NOT CERTIFIED: BELOW THE MINIMUM (6 cells scored in CLEAN, under 10; bar FAILS)",
+  "qwen2-57b-a14b-tp8": "NOT CERTIFIED (own bar FAILS; pooled bar FAILS)"
+ },
+ "B3's E1-TILE (DESCRIPTIVE)": {
+  "reading": "FAILS",
+  "certification (B3's, 2 pages in CLEAN)": {
+   "granite-3.0-1b-a400m": "NOT CERTIFIED",
+   "granite-3.0-3b-a800m": "NOT CERTIFIED",
+   "qwen2-57b-a14b-tp8": "NOT CERTIFIED"
+  }
+ },
+ "views": {
+  "pages": {
+   "granite-3.0-1b-a400m-t128g1": "counted",
+   "granite-3.0-1b-a400m-t128g16": "counted",
+   "granite-3.0-3b-a800m-t128g1": "counted",
+   "granite-3.0-3b-a800m-t128g16": "counted",
+   "qwen2-57b-a14b-tp8-t128g1": "counted",
+   "qwen2-57b-a14b-tp8-t128g16": "counted"
+  },
+  "dropped_rows": {
+   "granite-3.0-1b-a400m-t128g1": [
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/uniform/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/balanced/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/uniform/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/balanced/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "granite-3.0-1b-a400m-t128g16": [
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "granite-3.0-3b-a800m-t128g1": [
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/uniform/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/balanced/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/uniform/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/balanced/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "granite-3.0-3b-a800m-t128g16": [
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "qwen2-57b-a14b-tp8-t128g1": [
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW2/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/uniform/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/balanced/native",
+     "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "qwen2-57b-a14b-tp8-t128g16": [
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/balanced/shared",
+     "no registered prediction"
+    ]
+   ]
+  },
+  "G3": {
+   "Q": {
+    "Q": 0.055388,
+    "df": 3,
+    "p": 0.99659,
+    "sigma": 0.0018,
+    "cells": 4,
+    "heterogeneous": false
+   },
+   "pooled": {
+    "verdict": "EQUIVALENT",
+    "mean": -0.000487,
+    "se": 0.000173,
+    "ci": [
+     -0.000894,
+     -8e-05
+    ],
+    "df": 3,
+    "t": 2.353363,
+    "margin": 0.0036,
+    "clusters": 4,
+    "cells": 4,
+    "cluster_means": {
+     "granite-3.0-1b-a400m-granite-3.0-1b-a400m-128g16": -0.00069,
+     "granite-3.0-3b-a800m-granite-3.0-3b-a800m-128g16": -0.000232,
+     "qwen2-57b-a14b-tp8-qwen2-57b-a14b-tp8-128g1": -0.00016,
+     "qwen2-57b-a14b-tp8-qwen2-57b-a14b-tp8-128g16": -0.000869
+    }
+   },
+   "verdict": "PASS",
+   "void_strata": []
+  },
+  "voided_cells": [],
+  "pages_in_view": {
+   "granite-3.0-1b-a400m": [
+    "granite-3.0-1b-a400m-128g16"
+   ],
+   "granite-3.0-3b-a800m": [
+    "granite-3.0-3b-a800m-128g16"
+   ],
+   "qwen2-57b-a14b-tp8": [
+    "qwen2-57b-a14b-tp8-128g1",
+    "qwen2-57b-a14b-tp8-128g16"
+   ]
+  },
+  "cells_measured": 24,
+  "cells": [
+   {
+    "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT/native",
+    "model": "granite-3.0-1b-a400m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PT",
+    "e": -0.04159260247900287,
+    "meas": 0.4365440011024475,
+    "pred": 0.418387,
+    "e_round5": -0.04159260247900287
+   },
+   {
+    "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW/native",
+    "model": "granite-3.0-1b-a400m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PW",
+    "e": -0.04715965062357963,
+    "meas": 0.43910399079322815,
+    "pred": 0.418396,
+    "e_round5": -0.04715965062357963
+   },
+   {
+    "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT2/native",
+    "model": "granite-3.0-1b-a400m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PT2",
+    "e": -0.04118008842127574,
+    "meas": 0.436352014541626,
+    "pred": 0.418383,
+    "e_round5": -0.04118008842127574
+   },
+   {
+    "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW2/native",
+    "model": "granite-3.0-1b-a400m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PW2",
+    "e": -0.04479744467292057,
+    "meas": 0.43801599740982056,
+    "pred": 0.418394,
+    "e_round5": -0.04479744467292057
+   },
+   {
+    "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/uniform/native",
+    "model": "granite-3.0-1b-a400m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "uniform",
+    "e": -0.039521979648019956,
+    "meas": 0.41731199622154236,
+    "pred": 0.400819,
+    "e_round5": -0.039521979648019956
+   },
+   {
+    "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/balanced/native",
+    "model": "granite-3.0-1b-a400m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "balanced",
+    "e": -0.04018440045357197,
+    "meas": 0.41760000586509705,
+    "pred": 0.400819,
+    "e_round5": -0.04018440045357197
+   },
+   {
+    "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT/native",
+    "model": "granite-3.0-3b-a800m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PT",
+    "e": -0.019022475519606452,
+    "meas": 0.7241440117359161,
+    "pred": 0.710369,
+    "e_round5": -0.019022475519606452
+   },
+   {
+    "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW/native",
+    "model": "granite-3.0-3b-a800m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PW",
+    "e": -0.0379945347945444,
+    "meas": 0.7231040000915527,
+    "pred": 0.69563,
+    "e_round5": -0.0379945347945444
+   },
+   {
+    "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT2/native",
+    "model": "granite-3.0-3b-a800m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PT2",
+    "e": -0.032758697734400544,
+    "meas": 0.7191680073738098,
+    "pred": 0.695609,
+    "e_round5": -0.032758697734400544
+   },
+   {
+    "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW2/native",
+    "model": "granite-3.0-3b-a800m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PW2",
+    "e": -0.023555351430144422,
+    "meas": 0.7275199890136719,
+    "pred": 0.710383,
+    "e_round5": -0.023555351430144422
+   },
+   {
+    "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/uniform/native",
+    "model": "granite-3.0-3b-a800m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "uniform",
+    "e": -0.033181641952867436,
+    "meas": 0.6900799870491028,
+    "pred": 0.667182,
+    "e_round5": -0.033181641952867436
+   },
+   {
+    "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/balanced/native",
+    "model": "granite-3.0-3b-a800m",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "balanced",
+    "e": -0.033405807643424934,
+    "meas": 0.6902400255203247,
+    "pred": 0.667182,
+    "e_round5": -0.033405807643424934
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g1",
+    "G": 1,
+    "n": 2,
+    "label": "PT",
+    "e": -0.016397121560119965,
+    "meas": 0.4941120147705078,
+    "pred": 0.48601,
+    "e_round5": -0.014604005882875248
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g1",
+    "G": 1,
+    "n": 2,
+    "label": "PW",
+    "e": -0.015944035851361504,
+    "meas": 0.4936639964580536,
+    "pred": 0.485793,
+    "e_round5": -0.014129036162446318
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT2/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g1",
+    "G": 1,
+    "n": 2,
+    "label": "PT2",
+    "e": -0.015718673604228628,
+    "meas": 0.49374400079250336,
+    "pred": 0.485983,
+    "e_round5": -0.013899917328590528
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW2/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g1",
+    "G": 1,
+    "n": 2,
+    "label": "PW2",
+    "e": -0.026043321534151676,
+    "meas": 0.4989759922027588,
+    "pred": 0.485981,
+    "e_round5": -0.024211570078605416
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/uniform/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g1",
+    "G": 1,
+    "n": 2,
+    "label": "uniform",
+    "e": -0.030036577088706218,
+    "meas": 0.4005120098590851,
+    "pred": 0.388482,
+    "e_round5": -0.03026128945134343
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/balanced/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g1",
+    "G": 1,
+    "n": 2,
+    "label": "balanced",
+    "e": -0.030191513177939333,
+    "meas": 0.40057599544525146,
+    "pred": 0.388482,
+    "e_round5": -0.03041618964638304
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PT",
+    "e": -0.018493113144575135,
+    "meas": 1.6917120218276978,
+    "pred": 1.660427,
+    "e_round5": -0.018493113144575135
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PW",
+    "e": -0.02842831721229122,
+    "meas": 1.6724159717559814,
+    "pred": 1.624872,
+    "e_round5": -0.02842831721229122
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT2/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PT2",
+    "e": -0.026062433873416557,
+    "meas": 1.6682239770889282,
+    "pred": 1.624746,
+    "e_round5": -0.026062433873416557
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW2/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "PW2",
+    "e": -0.029076701307106934,
+    "meas": 1.6734720468521118,
+    "pred": 1.624813,
+    "e_round5": -0.029076701307106934
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/uniform/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "uniform",
+    "e": -0.02354276961692814,
+    "meas": 1.601088047027588,
+    "pred": 1.563394,
+    "e_round5": -0.02354276961692814
+   },
+   {
+    "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/balanced/native",
+    "model": "qwen2-57b-a14b-tp8",
+    "cls": "128g16",
+    "G": 16,
+    "n": 9,
+    "label": "balanced",
+    "e": -0.024390940564705033,
+    "meas": 1.6024799942970276,
+    "pred": 1.563394,
+    "e_round5": -0.024390940564705033
+   }
+  ],
+  "DESCRIPTIVE": {
+   "B2's bar (2%, 5%, 1%) on the same cells": {
+    "pooled": {
+     "stats": {
+      "cells": 24,
+      "mean": -0.029945,
+      "rms": 0.031338,
+      "worst": -0.04716
+     },
+     "reading": "FAILS"
+    },
+    "per_model": {
+     "granite-3.0-1b-a400m": {
+      "stats": {
+       "cells": 6,
+       "mean": -0.042406,
+       "rms": 0.042492,
+       "worst": -0.04716
+      },
+      "reading": "FAILS"
+     },
+     "granite-3.0-3b-a800m": {
+      "stats": {
+       "cells": 6,
+       "mean": -0.029986,
+       "rms": 0.030688,
+       "worst": -0.037995
+      },
+      "reading": "FAILS"
+     },
+     "qwen2-57b-a14b-tp8": {
+      "stats": {
+       "cells": 12,
+       "mean": -0.023694,
+       "rms": 0.024301,
+       "worst": -0.030192
+      },
+      "reading": "FAILS"
+     }
+    }
+   },
+   "the bars without G3's per-stratum voids": "no cell voided",
+   "round 5 (every switch off), the same cells": {
+    "cells": 24,
+    "mean": -0.029661,
+    "rms": 0.031186,
+    "worst": -0.04716
+   },
+   "split: 128 G 1 cells": {
+    "cells": 6,
+    "mean": -0.022389,
+    "rms": 0.023317,
+    "worst": -0.030192
+   },
+   "split: 128 G 16 cells": {
+    "cells": 18,
+    "mean": -0.032464,
+    "rms": 0.033589,
+    "worst": -0.04716
+   },
+   "per model and class": {
+    "granite-3.0-1b-a400m 128g1": {
+     "cells": 0
+    },
+    "granite-3.0-1b-a400m 128g16": {
+     "cells": 6,
+     "mean": -0.042406,
+     "rms": 0.042492,
+     "worst": -0.04716
+    },
+    "granite-3.0-3b-a800m 128g1": {
+     "cells": 0
+    },
+    "granite-3.0-3b-a800m 128g16": {
+     "cells": 6,
+     "mean": -0.029986,
+     "rms": 0.030688,
+     "worst": -0.037995
+    },
+    "qwen2-57b-a14b-tp8 128g1": {
+     "cells": 6,
+     "mean": -0.022389,
+     "rms": 0.023317,
+     "worst": -0.030192
+    },
+    "qwen2-57b-a14b-tp8 128g16": {
+     "cells": 6,
+     "mean": -0.024999,
+     "rms": 0.025246,
+     "worst": -0.029077
+    }
+   }
+  },
+  "addendum": {
+   "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+   "pages": {
+    "granite-3.0-1b-a400m-t128g1": {
+     "ALL": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+     },
+     "CLEAN": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+     }
+    },
+    "granite-3.0-1b-a400m-t128g16": {
+     "ALL": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2d-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)"
+     },
+     "CLEAN": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2d-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)"
+     }
+    },
+    "granite-3.0-3b-a800m-t128g1": {
+     "ALL": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2b-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+     },
+     "CLEAN": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2b-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+     }
+    },
+    "granite-3.0-3b-a800m-t128g16": {
+     "ALL": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2e-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)"
+     },
+     "CLEAN": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2e-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)"
+     }
+    },
+    "qwen2-57b-a14b-tp8-t128g1": {
+     "ALL": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2c-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+     },
+     "CLEAN": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2c-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+     }
+    },
+    "qwen2-57b-a14b-tp8-t128g16": {
+     "ALL": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2f-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)"
+     },
+     "CLEAN": {
+      "failed_gates": [],
+      "failed_but_not_gating": [],
+      "session_tag": "gh200-20261118T221137Z-p2f-lock1410",
+      "use": "counted",
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)"
+     }
+    }
+   },
+   "verdicts": [
+    {
+     "path": "G3 / pooled / verdict",
+     "ALL": "EQUIVALENT",
+     "CLEAN": "EQUIVALENT",
+     "registered": "EQUIVALENT"
+    },
+    {
+     "path": "G3 / verdict",
+     "ALL": "PASS",
+     "CLEAN": "PASS",
+     "registered": "PASS"
+    },
+    {
+     "path": "BARS / pooled / verdict",
+     "ALL": "FAILS",
+     "CLEAN": "FAILS",
+     "registered": "FAILS"
+    },
+    {
+     "path": "BARS / per_model / granite-3.0-1b-a400m / verdict",
+     "ALL": "FAILS",
+     "CLEAN": "FAILS",
+     "registered": "FAILS"
+    },
+    {
+     "path": "BARS / per_model / granite-3.0-3b-a800m / verdict",
+     "ALL": "FAILS",
+     "CLEAN": "FAILS",
+     "registered": "FAILS"
+    },
+    {
+     "path": "BARS / per_model / qwen2-57b-a14b-tp8 / verdict",
+     "ALL": "FAILS",
+     "CLEAN": "FAILS",
+     "registered": "FAILS"
+    }
+   ],
+   "CLEAN": {
+    "pages": {
+     "granite-3.0-1b-a400m-t128g1": "counted",
+     "granite-3.0-1b-a400m-t128g16": "counted",
+     "granite-3.0-3b-a800m-t128g1": "counted",
+     "granite-3.0-3b-a800m-t128g16": "counted",
+     "qwen2-57b-a14b-tp8-t128g1": "counted",
+     "qwen2-57b-a14b-tp8-t128g16": "counted"
+    },
+    "dropped_rows": {
+     "granite-3.0-1b-a400m-t128g1": [
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/uniform/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/balanced/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/2/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/uniform/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/balanced/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g1/3/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "granite-3.0-1b-a400m-t128g16": [
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "granite-3.0-3b-a800m-t128g1": [
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/uniform/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/balanced/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/1/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/uniform/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/balanced/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g1/2/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "granite-3.0-3b-a800m-t128g16": [
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "qwen2-57b-a14b-tp8-t128g1": [
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW2/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/uniform/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/balanced/native",
+       "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/1/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "qwen2-57b-a14b-tp8-t128g16": [
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/balanced/shared",
+       "no registered prediction"
+      ]
+     ]
+    },
+    "G3": {
+     "Q": {
+      "Q": 0.055388,
+      "df": 3,
+      "p": 0.99659,
+      "sigma": 0.0018,
+      "cells": 4,
+      "heterogeneous": false
+     },
+     "pooled": {
+      "verdict": "EQUIVALENT",
+      "mean": -0.000487,
+      "se": 0.000173,
+      "ci": [
+       -0.000894,
+       -8e-05
+      ],
+      "df": 3,
+      "t": 2.353363,
+      "margin": 0.0036,
+      "clusters": 4,
+      "cells": 4,
+      "cluster_means": {
+       "granite-3.0-1b-a400m-granite-3.0-1b-a400m-128g16": -0.00069,
+       "granite-3.0-3b-a800m-granite-3.0-3b-a800m-128g16": -0.000232,
+       "qwen2-57b-a14b-tp8-qwen2-57b-a14b-tp8-128g1": -0.00016,
+       "qwen2-57b-a14b-tp8-qwen2-57b-a14b-tp8-128g16": -0.000869
+      }
+     },
+     "verdict": "PASS",
+     "void_strata": []
+    },
+    "voided_cells": [],
+    "pages_in_view": {
+     "granite-3.0-1b-a400m": [
+      "granite-3.0-1b-a400m-128g16"
+     ],
+     "granite-3.0-3b-a800m": [
+      "granite-3.0-3b-a800m-128g16"
+     ],
+     "qwen2-57b-a14b-tp8": [
+      "qwen2-57b-a14b-tp8-128g1",
+      "qwen2-57b-a14b-tp8-128g16"
+     ]
+    },
+    "cells_measured": 24,
+    "cells": [
+     {
+      "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT/native",
+      "model": "granite-3.0-1b-a400m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PT",
+      "e": -0.04159260247900287,
+      "meas": 0.4365440011024475,
+      "pred": 0.418387,
+      "e_round5": -0.04159260247900287
+     },
+     {
+      "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW/native",
+      "model": "granite-3.0-1b-a400m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PW",
+      "e": -0.04715965062357963,
+      "meas": 0.43910399079322815,
+      "pred": 0.418396,
+      "e_round5": -0.04715965062357963
+     },
+     {
+      "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PT2/native",
+      "model": "granite-3.0-1b-a400m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PT2",
+      "e": -0.04118008842127574,
+      "meas": 0.436352014541626,
+      "pred": 0.418383,
+      "e_round5": -0.04118008842127574
+     },
+     {
+      "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/PW2/native",
+      "model": "granite-3.0-1b-a400m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PW2",
+      "e": -0.04479744467292057,
+      "meas": 0.43801599740982056,
+      "pred": 0.418394,
+      "e_round5": -0.04479744467292057
+     },
+     {
+      "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/uniform/native",
+      "model": "granite-3.0-1b-a400m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "uniform",
+      "e": -0.039521979648019956,
+      "meas": 0.41731199622154236,
+      "pred": 0.400819,
+      "e_round5": -0.039521979648019956
+     },
+     {
+      "cell": "granite-3.0-1b-a400m/granite-3.0-1b-a400m-128g16/9/balanced/native",
+      "model": "granite-3.0-1b-a400m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "balanced",
+      "e": -0.04018440045357197,
+      "meas": 0.41760000586509705,
+      "pred": 0.400819,
+      "e_round5": -0.04018440045357197
+     },
+     {
+      "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT/native",
+      "model": "granite-3.0-3b-a800m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PT",
+      "e": -0.019022475519606452,
+      "meas": 0.7241440117359161,
+      "pred": 0.710369,
+      "e_round5": -0.019022475519606452
+     },
+     {
+      "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW/native",
+      "model": "granite-3.0-3b-a800m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PW",
+      "e": -0.0379945347945444,
+      "meas": 0.7231040000915527,
+      "pred": 0.69563,
+      "e_round5": -0.0379945347945444
+     },
+     {
+      "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PT2/native",
+      "model": "granite-3.0-3b-a800m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PT2",
+      "e": -0.032758697734400544,
+      "meas": 0.7191680073738098,
+      "pred": 0.695609,
+      "e_round5": -0.032758697734400544
+     },
+     {
+      "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/PW2/native",
+      "model": "granite-3.0-3b-a800m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PW2",
+      "e": -0.023555351430144422,
+      "meas": 0.7275199890136719,
+      "pred": 0.710383,
+      "e_round5": -0.023555351430144422
+     },
+     {
+      "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/uniform/native",
+      "model": "granite-3.0-3b-a800m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "uniform",
+      "e": -0.033181641952867436,
+      "meas": 0.6900799870491028,
+      "pred": 0.667182,
+      "e_round5": -0.033181641952867436
+     },
+     {
+      "cell": "granite-3.0-3b-a800m/granite-3.0-3b-a800m-128g16/9/balanced/native",
+      "model": "granite-3.0-3b-a800m",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "balanced",
+      "e": -0.033405807643424934,
+      "meas": 0.6902400255203247,
+      "pred": 0.667182,
+      "e_round5": -0.033405807643424934
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g1",
+      "G": 1,
+      "n": 2,
+      "label": "PT",
+      "e": -0.016397121560119965,
+      "meas": 0.4941120147705078,
+      "pred": 0.48601,
+      "e_round5": -0.014604005882875248
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g1",
+      "G": 1,
+      "n": 2,
+      "label": "PW",
+      "e": -0.015944035851361504,
+      "meas": 0.4936639964580536,
+      "pred": 0.485793,
+      "e_round5": -0.014129036162446318
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PT2/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g1",
+      "G": 1,
+      "n": 2,
+      "label": "PT2",
+      "e": -0.015718673604228628,
+      "meas": 0.49374400079250336,
+      "pred": 0.485983,
+      "e_round5": -0.013899917328590528
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/PW2/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g1",
+      "G": 1,
+      "n": 2,
+      "label": "PW2",
+      "e": -0.026043321534151676,
+      "meas": 0.4989759922027588,
+      "pred": 0.485981,
+      "e_round5": -0.024211570078605416
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/uniform/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g1",
+      "G": 1,
+      "n": 2,
+      "label": "uniform",
+      "e": -0.030036577088706218,
+      "meas": 0.4005120098590851,
+      "pred": 0.388482,
+      "e_round5": -0.03026128945134343
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g1/2/balanced/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g1",
+      "G": 1,
+      "n": 2,
+      "label": "balanced",
+      "e": -0.030191513177939333,
+      "meas": 0.40057599544525146,
+      "pred": 0.388482,
+      "e_round5": -0.03041618964638304
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PT",
+      "e": -0.018493113144575135,
+      "meas": 1.6917120218276978,
+      "pred": 1.660427,
+      "e_round5": -0.018493113144575135
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PW",
+      "e": -0.02842831721229122,
+      "meas": 1.6724159717559814,
+      "pred": 1.624872,
+      "e_round5": -0.02842831721229122
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PT2/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PT2",
+      "e": -0.026062433873416557,
+      "meas": 1.6682239770889282,
+      "pred": 1.624746,
+      "e_round5": -0.026062433873416557
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/PW2/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "PW2",
+      "e": -0.029076701307106934,
+      "meas": 1.6734720468521118,
+      "pred": 1.624813,
+      "e_round5": -0.029076701307106934
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/uniform/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "uniform",
+      "e": -0.02354276961692814,
+      "meas": 1.601088047027588,
+      "pred": 1.563394,
+      "e_round5": -0.02354276961692814
+     },
+     {
+      "cell": "qwen2-57b-a14b-tp8/qwen2-57b-a14b-tp8-128g16/9/balanced/native",
+      "model": "qwen2-57b-a14b-tp8",
+      "cls": "128g16",
+      "G": 16,
+      "n": 9,
+      "label": "balanced",
+      "e": -0.024390940564705033,
+      "meas": 1.6024799942970276,
+      "pred": 1.563394,
+      "e_round5": -0.024390940564705033
+     }
+    ],
+    "BARS": {
+     "pooled": {
+      "verdict": "FAILS",
+      "stats": {
+       "cells": 24,
+       "mean": -0.029945,
+       "rms": 0.031338,
+       "worst": -0.04716
+      }
+     },
+     "per_model": {
+      "granite-3.0-1b-a400m": {
+       "verdict": "FAILS",
+       "stats": {
+        "cells": 6,
+        "mean": -0.042406,
+        "rms": 0.042492,
+        "worst": -0.04716
+       }
+      },
+      "granite-3.0-3b-a800m": {
+       "verdict": "FAILS",
+       "stats": {
+        "cells": 6,
+        "mean": -0.029986,
+        "rms": 0.030688,
+        "worst": -0.037995
+       }
+      },
+      "qwen2-57b-a14b-tp8": {
+       "verdict": "FAILS",
+       "stats": {
+        "cells": 12,
+        "mean": -0.023694,
+        "rms": 0.024301,
+        "worst": -0.030192
+       }
+      }
+     },
+     "cells scored": {
+      "granite-3.0-1b-a400m": 6,
+      "granite-3.0-3b-a800m": 6,
+      "qwen2-57b-a14b-tp8": 12
+     }
+    },
+    "DESCRIPTIVE": {
+     "B2's bar (2%, 5%, 1%) on the same cells": {
+      "pooled": {
+       "stats": {
+        "cells": 24,
+        "mean": -0.029945,
+        "rms": 0.031338,
+        "worst": -0.04716
+       },
+       "reading": "FAILS"
+      },
+      "per_model": {
+       "granite-3.0-1b-a400m": {
+        "stats": {
+         "cells": 6,
+         "mean": -0.042406,
+         "rms": 0.042492,
+         "worst": -0.04716
+        },
+        "reading": "FAILS"
+       },
+       "granite-3.0-3b-a800m": {
+        "stats": {
+         "cells": 6,
+         "mean": -0.029986,
+         "rms": 0.030688,
+         "worst": -0.037995
+        },
+        "reading": "FAILS"
+       },
+       "qwen2-57b-a14b-tp8": {
+        "stats": {
+         "cells": 12,
+         "mean": -0.023694,
+         "rms": 0.024301,
+         "worst": -0.030192
+        },
+        "reading": "FAILS"
+       }
+      }
+     },
+     "the bars without G3's per-stratum voids": "no cell voided",
+     "round 5 (every switch off), the same cells": {
+      "cells": 24,
+      "mean": -0.029661,
+      "rms": 0.031186,
+      "worst": -0.04716
+     },
+     "split: 128 G 1 cells": {
+      "cells": 6,
+      "mean": -0.022389,
+      "rms": 0.023317,
+      "worst": -0.030192
+     },
+     "split: 128 G 16 cells": {
+      "cells": 18,
+      "mean": -0.032464,
+      "rms": 0.033589,
+      "worst": -0.04716
+     },
+     "per model and class": {
+      "granite-3.0-1b-a400m 128g1": {
+       "cells": 0
+      },
+      "granite-3.0-1b-a400m 128g16": {
+       "cells": 6,
+       "mean": -0.042406,
+       "rms": 0.042492,
+       "worst": -0.04716
+      },
+      "granite-3.0-3b-a800m 128g1": {
+       "cells": 0
+      },
+      "granite-3.0-3b-a800m 128g16": {
+       "cells": 6,
+       "mean": -0.029986,
+       "rms": 0.030688,
+       "worst": -0.037995
+      },
+      "qwen2-57b-a14b-tp8 128g1": {
+       "cells": 6,
+       "mean": -0.022389,
+       "rms": 0.023317,
+       "worst": -0.030192
+      },
+      "qwen2-57b-a14b-tp8 128g16": {
+       "cells": 6,
+       "mean": -0.024999,
+       "rms": 0.025246,
+       "worst": -0.029077
+      }
+     }
+    }
+   }
+  }
+ },
+ "provenance": {
+  "registration_path": "docs/registered/2026-11-18-v7-prefill-blind-gh200.json",
+  "registration_sha256": "998a8c101c8b8a2a13fb0f002d281153b2bdaf10a54d7a8bebd0a9ab50665879",
+  "git_head": "148dbfc172c042a7f1bf0745d5fd44d020cbfc9d",
+  "git_dirty": false
+ }
+}

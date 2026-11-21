@@ -2,21 +2,88 @@
 """Measure this machine's achievable ceilings. Run once per pod type.
 
 Nsight Compute needs GPU performance counters, which need a host-level module
-flag a container tenant cannot set; on a rented pod `ncu` fails with
-ERR_NVGPUCTRPERM. So DRAM traffic cannot be read directly, and the roofline
+flag a container tenant cannot set, or a capability (CAP_PERFMON, CAP_SYS_ADMIN)
+the provider grants. No counter read has succeeded on a rented pod in this
+study: two were refused with ERR_NVGPUCTRPERM (2026-08-25, 2026-09-15), and
+whether this pod can read one is `scripts/dram_counter_route.py --probe`'s to
+answer, not this script's. So DRAM traffic is not read here, and the roofline
 would otherwise rest entirely on a datasheet peak.
 
-This measures the ceilings with ordinary kernels and a clock instead, and writes
-them beside the cited spec file. Efficiency can then be quoted against what the
-machine actually delivers, which is both fairer to your kernel and more
-defensible in public.
+This measures the ceilings with ordinary kernels and a clock instead. Efficiency
+can then be quoted against what the machine actually delivers, which is both
+fairer to your kernel and more defensible in public.
 
-    python scripts/calibrate_hardware.py   # -> hardware/measured_<device>.yaml
+    python scripts/calibrate_hardware.py --dry-run   # the plan and its MDE, free
+    python scripts/calibrate_hardware.py             # -> results/.../measured_<device>.yaml
+    python scripts/calibrate_hardware.py --publish   # ALSO into the tracked tree
+
+WHY THE DEFAULT NO LONGER WRITES INTO THE TREE
+----------------------------------------------
+It used to write `moe/bench/hardware/measured_<device>.yaml` directly, and that
+file is TRACKED. So the first metered step of every session modified the
+checkout, `pod_session.sh` P1 (clean working tree) went from PASS to FAIL, and
+`driver.py` stamped `git_dirty=True` on every row measured afterwards: all
+3,696 rows of the 2026-09-01 alpha-0558 arm, 44,872 of the 100,144 published
+rows in total. Rows that name a commit they were not measured at are rows
+nobody can reproduce, and the cause was a side effect of the calibration rather
+than anything the operator chose.
+
+The measurement now lands on an untracked session path under the results root
+(`results/` is gitignored), which costs nothing and dirties nothing. Copying it
+into the tree is a separate decision spelled `--publish`, because the copy is
+what makes the ruler visible to `roofline.load_measured()` and therefore to the
+sweep, and a session that needs it should say so out loud. `--publish` prints
+exactly which file it dirtied and what that does to the rows measured next.
+
+WHAT INSTRUMENT THIS IS
+-----------------------
+The ceilings are timed by `moe.bench.calibrate`, not by
+`moe.bench.timing.time_kernel`, and this script does not pretend otherwise: the
+`instrument` field it records names the function that actually ran. Migrating
+`calibrate` onto the shared queue-deep loop is that module's own phase; until it
+lands, an arm timed with `time_kernel` and a roof timed here are two
+instruments, and the only defensible thing to do is write down which is which.
+
+WHAT THE CLOCK GATE ASKS. `not_throttled` scores the clock the GEMM actually
+ran at, three ways: FLOOR (the under-load median against
+`timing.THERMAL_FLOOR_FRACTION` of THIS CARD'S OWN MAXIMUM SM clock, read off
+the device here), LEVEL (against a supplied reference clock, absent by
+construction in a calibration) and DRIFT (first against last sample). FLOOR
+was added 2026-09-11 after a rented H200 collapsed from 1980 MHz to its 345 MHz
+floor under sustained GEMM and this script published a tracked yaml whose ridge
+read 73.6 against a real ~156, with `not_throttled` PASSING: the gate scored
+DRIFT, and a card pinned flat at its floor does not drift. PER-TILE CELLS KEEP
+THE DRIFT-ONLY RULE, because a hot tile clocking down is the effect those arms
+measure. `under_load_clock_verdict` carries the argument.
+
+THIS IS NOT THE ONLY SITE THAT SCORES FLOOR, and reading it as one is how the
+gate below gets trusted to protect a session it cannot protect.
+`scripts/thermal_acceptance.py` gate C1 scores the same `clock_floor_ok`
+against the same maximum, and it runs FIRST for a reason this file makes
+plain: the gate here is scored after the card's minutes are already spent,
+and under `--publish` the tracked yaml is written whether it passed or not.
+The FAIL text below says "do not publish this calibration" as ADVICE to an
+operator, not as a branch. `clock_floor_ok` has exactly two scoring call
+sites, this one and that arm's; `timing.py`'s "FLOOR IS A THIRD QUESTION"
+section is the map of which site takes which rule, and it names both.
+
+EXIT CODES are `moe.bench.exit_codes`. `--dry-run` exits REFUSED, because a plan
+measured nothing and scored no gate, and `classify([])` raises rather than
+calling an empty gate list DONE for exactly that reason. (Note the divergence:
+`scripts/block_m_crossing_sweep.py --dry-run` exits 0 today. One of the two
+should move; this one is the reading the table supports.) A calibration whose
+clock could not be established is INVALID rather than DONE, because `sustained_peak_tflops` and
+`gemm_efficiency_pct` are normalised by that clock and the module refuses to
+quote them; the yaml is still written, so the numbers that do not depend on the
+clock survive for a reader who wants them.
 """
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -26,14 +93,107 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch  # noqa: E402
 import yaml  # noqa: E402
 
+from moe.bench import calibrate as calibrate_mod  # noqa: E402
+from moe.bench import exit_codes as EX  # noqa: E402
 from moe.bench.calibrate import DEFAULT_CEILING, calibrate  # noqa: E402
+from moe.bench.provenance import provenance_block, run_id  # noqa: E402
 from moe.bench.roofline import (  # noqa: E402
+    HARDWARE_DIR,
     ambiguous_for_device,
+    current_gpu_name,
     for_device,
     load_hardware,
+    measured_slug,
     power_limit_w,
 )
 from moe.bench.schema import git_provenance  # noqa: E402
+
+#: Two-sided 5%, 80% power. The multiplier a minimum-detectable-effect is
+#: `z(1-a/2) + z(power)` = 1.96 + 0.84; written out so the line an arm prints
+#: can be checked rather than believed.
+MDE_Z = 2.80
+
+
+def instrument_name() -> str:
+    """What actually timed these ceilings, named rather than assumed.
+
+    Reads a `TIMING_BASIS` from `moe.bench.calibrate` when that module grows
+    one (its migration onto `timing.time_kernel` is a separate phase), and
+    otherwise says plainly which loop ran. A calibration that claimed
+    `timing.TIMING_BASIS` while running `time_eager` would put the roof and the
+    ladders under one label when they are two instruments, which is the
+    confusion the audit measured at 12-16% in alpha.
+    """
+    basis = getattr(calibrate_mod, "TIMING_BASIS", None)
+    if basis:
+        return str(basis)
+    return ("moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed "
+            "events, L2 flush between iterations); NOT timing.TIMING_BASIS")
+
+
+def source_note(pattern: str) -> str:
+    """The ruler yaml's `source_note`: what these ceilings are and why they
+    exist, with `pattern` the bandwidth pattern the ruler adopted.
+
+    Until 2026-09-23 it called Nsight Compute unavailable on every rented pod,
+    citing ERR_NVGPUCTRPERM, in every yaml this script wrote, session 5's
+    included: two refused pods written into the data as the platform's
+    answer. This script never asks for a counter, so the note says that, and
+    names the probe that does, rather than stating what any pod can read."""
+    return ("Achievable ceilings, not datasheet peaks, measured with ordinary "
+            "kernels and a clock and no DRAM counter: whether this pod can read "
+            "one is scripts/dram_counter_route.py --probe's to answer, not this "
+            "script's. These ceilings are what make the efficiency columns "
+            f"meaningful without counters. Bandwidth is the '{pattern}' pattern; "
+            "every pattern measured is under `detail` so a different denominator "
+            "can be applied without re-running.")
+
+
+def mde_line(sigma_pct: float | None, trials: int, why: str) -> str:
+    """One line: the smallest effect this run could resolve, and from what.
+
+    `sigma_pct` is a stated noise level in percent of the measured value, `why`
+    says where it came from. Returns a REFUSAL line when no noise level is
+    available, because an MDE derived from a number nobody measured is a prior
+    dressed as a bound, which is exactly what B14 found across the arms.
+    """
+    if sigma_pct is None or sigma_pct <= 0 or trials < 1:
+        return (f"MDE: REFUSED. No noise level to derive one from ({why}). "
+                "State one before quoting a difference as real.")
+    mde = MDE_Z * sigma_pct / math.sqrt(trials)
+    return (f"MDE: {mde:.2f}% of the measured value, at alpha 0.05 and 80% "
+            f"power, from sigma {sigma_pct:.2f}% over {trials} trial(s) "
+            f"({why}). A difference smaller than this is not resolvable here.")
+
+
+def published_sigma_pct(published: Path) -> tuple[float | None, int, str]:
+    """`(median relative within-cell sd in %, rows used, provenance sentence)`.
+
+    Derived from the published rows themselves rather than asserted, so the MDE
+    moves when the apparatus does. It is a LOWER BOUND on the real noise: the
+    column is within-cell `ms_std / ms_p50`, and the between-run spread nobody
+    has measured yet is larger. Said in the sentence, so the number is never
+    quoted as the whole story.
+    """
+    rel: list[float] = []
+    for path in sorted(published.glob("*/run_*.csv")):
+        try:
+            with path.open(newline="") as fh:
+                for row in csv.DictReader(fh):
+                    try:
+                        p50 = float(row.get("ms_p50") or 0)
+                        sd = float(row.get("ms_std") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if p50 > 0 and sd > 0:
+                        rel.append(sd / p50)
+        except OSError:
+            continue
+    if not rel:
+        return None, 0, f"no timed rows with an ms_std under {published}"
+    return (100.0 * statistics.median(rel), len(rel),
+            f"median within-cell ms_std/ms_p50 over {len(rel)} published rows; "
+            "a LOWER bound, since between-run spread is not in that column")
 
 
 def _device_facts() -> dict:
@@ -42,12 +202,28 @@ def _device_facts() -> dict:
     The memory clock is the important one. HBM is DDR, so the pin rate is
     clk x 2 x bus_width / 8, and the doubling is mandatory: omitting it gives
     exactly half, the same class of silent 2x error as the read-for-ownership
-    question. On this H200, 3201 MHz gives 4916.7 GB/s, which is 2.4% above
-    NVIDIA's published 4.8 TB/s -- so the datasheet figure is already derated
-    and is not a theoretical maximum.
+    question.
+
+    THE BUS WIDTH IS THE ENABLED ONE, FROM NVML. On the 2026-09-09 H200 pod
+    NVML reported 6016 bits: 6144 x 141/144, the same harvest as the 141-of-144
+    GB capacity. 3201 MHz x 2 x 6016 / 8 = 4814.3 GB/s, which is NVIDIA's
+    published 4.8 TB/s to 0.3%. Until that day this function took 6144 from
+    the table below, printed 4916.7, and then explained the 2.4% gap as "the
+    datasheet figure is already derated". The datasheet was the pin rate and
+    the table was the unharvested width. The table is the fallback when NVML
+    cannot answer, and a disagreement between the two is written into the
+    facts rather than resolved silently.
+
+    THE SECOND FACT IS THE MAXIMUM SM CLOCK, added 2026-09-11 and read the
+    same way: NVML first, the forked `nvidia-smi` second, absent rather than
+    guessed. It is not a percentage's denominator, it is the FLOOR's: gate
+    `not_throttled` scores the GEMM's under-load median against
+    `timing.THERMAL_FLOOR_FRACTION` of it. Nothing else in this file is a
+    reference the card cannot drag down with it.
     """
     import torch
 
+    from moe.bench import timing as T
     from moe.bench.timing import _nvidia_smi
 
     out: dict = {}
@@ -65,12 +241,32 @@ def _device_facts() -> dict:
             out["throttle_reasons"] = parts[2] if len(parts) > 2 else ""
         except (ValueError, IndexError):
             pass
+    # THE MAXIMUM SM CLOCK, which is the one reference a thermal fault cannot
+    # move. Every other clock in this file is read from the card's own
+    # behaviour and therefore collapses with the card; this is a property of
+    # the part. `not_throttled` scores the GEMM's under-load median as a
+    # fraction of it (`timing.thermal_floor_mhz`), and it is written into the
+    # yaml so a later re-score of a committed calibration can ask the same
+    # question without the card being present.
+    max_sm, max_sm_source = T.max_sm_clock_mhz()
+    if max_sm:
+        out["clocks_max_sm_mhz"] = max_sm
+        out["clocks_max_sm_source"] = max_sm_source
+    else:
+        # Named rather than absent: a missing maximum is why `not_throttled`
+        # reads UNKNOWN, and a reader of the yaml should not have to guess.
+        out["clocks_max_sm_unreadable"] = max_sm_source
     clk = out.get("clocks_max_memory_mhz")
-    bits = _memory_bus_bits(props.name)
+    bits, source, table = resolve_memory_bus_bits(props.name, _nvml_memory_bus_bits())
     if clk and bits:
-        # DDR doubles the transfer rate, hence the factor of two.
         out["memory_bus_bits"] = bits
-        out["pin_rate_gbps"] = round(clk * 2 * bits / 8 / 1000, 1)
+        out["memory_bus_bits_source"] = source
+        if table is not None:
+            # The table disagreed with the device. Both are recorded so a
+            # reader can see the harvest, and the pin rate is the device's.
+            out["memory_bus_bits_table"] = table
+            out["pin_rate_gbps_at_table_width"] = pin_rate_gbps(clk, table)
+        out["pin_rate_gbps"] = pin_rate_gbps(clk, bits)
     elif clk:
         # No width, no pin rate. A wrong one is worse than none: it is the
         # only hard physical bound in this file, and every "nothing exceeded
@@ -79,17 +275,20 @@ def _device_facts() -> dict:
     return out
 
 
-#: Memory bus width in bits, by substring of the device name. nvidia-smi has no
-#: query for this and torch does not expose cudaDeviceProp.memoryBusWidth, so it
-#: is a table. Each entry is checked by reproducing the vendor bandwidth figure:
-#:   H200  3201 MHz x 2 x 6144 / 8 = 4916.7 GB/s  (spec 4.8 TB/s, derated)
+#: Memory bus width in bits, by a whole word of the device name (so "GH200"
+#: does not read as "H200"; a substring until 2026-09-25): THE FALLBACK when
+#: NVML cannot answer (`_nvml_memory_bus_bits`), and the number NVML is checked
+#: against. Each entry is checked by reproducing the vendor bandwidth figure:
+#:   H200  3201 MHz x 2 x 6016 / 8 = 4814.3 GB/s  (spec 4.8 TB/s; NVML reports
+#:         6016 on the 141 GB part, the unharvested width is 6144)
 #:   A100  1593 MHz x 2 x 5120 / 8 = 2038.8 GB/s  (spec 2039 GB/s)
 #:   H100  2619 MHz x 2 x 5120 / 8 = 3352.3 GB/s  (spec 3.35 TB/s)
 #: An earlier version hardcoded 6144 for every device, which reported an A100's
 #: pin rate as 2446.8 instead of 2038.8: 20% high, on the one number that is
-#: supposed to be a hard physical bound.
+#: supposed to be a hard physical bound; and until 2026-09-09 the H200 entry was
+#: 6144, 2.1% high on the same number, explained away as a derated datasheet.
 _MEMORY_BUS_BITS = {
-    "H200": 6144,
+    "H200": 6016,
     "H100": 5120,
     "A100": 5120,
     "B200": 8192,
@@ -97,28 +296,500 @@ _MEMORY_BUS_BITS = {
 
 
 def _memory_bus_bits(gpu_name: str) -> int | None:
+    """The table's width for a WHOLE word of the name, or None. A substring
+    match read "NVIDIA GH200 480GB" as an H200 and gave a Grace Hopper the
+    6016 bits of the 141 GB part's harvest, which it is not; its own NVML
+    answer then carried that width beside it as the table's disagreement,
+    as the Lambda GH200's ruler did on 2026-09-25 (memory_bus_bits 6144 from
+    NVML, memory_bus_bits_table 6016, pin_rate_gbps_at_table_width 3939.0).
+    Not in the table, it gets NVML's answer alone, or no pin rate."""
+    words = "".join(c if c.isalnum() else " " for c in gpu_name).split()
     for key, bits in _MEMORY_BUS_BITS.items():
-        if key in gpu_name:
+        if key in words:
             return bits
     return None
 
 
-def main() -> int:
+def _nvml_memory_bus_bits(index: int = 0) -> int | None:
+    """The ENABLED memory bus width in bits, from NVML, or None.
+
+    None when pynvml is missing, NVML will not initialise, or the answer is
+    not a positive integer; the caller then falls back to the table and says
+    so. Never raises: a missing width costs a pin rate, and a pin rate is
+    only ever compared against, never divided by.
+    """
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        try:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+            bits = int(pynvml.nvmlDeviceGetMemoryBusWidth(handle))
+        finally:
+            pynvml.nvmlShutdown()
+    except Exception:                                   # noqa: BLE001
+        return None
+    return bits if bits > 0 else None
+
+
+def resolve_memory_bus_bits(gpu_name: str, nvml_bits: int | None,
+                            ) -> tuple[int | None, str, int | None]:
+    """`(bits, source, table_bits)`: the width the pin rate is built from.
+
+    NVML first, because it reports the bus the part actually enables; the
+    table second, because a box without NVML still deserves a bound. The
+    third element is the table's value ONLY when it disagrees with NVML, so
+    the yaml records the harvest and nobody averages the two. `(None, "none",
+    None)` for a card NVML cannot see and the table does not know: no pin
+    rate rather than a wrong one.
+    """
+    table = _memory_bus_bits(gpu_name)
+    if nvml_bits:
+        return nvml_bits, "nvml", (table if table and table != nvml_bits else None)
+    if table:
+        return table, "table", None
+    return None, "none", None
+
+
+def pin_rate_gbps(clk_mhz: float, bits: int) -> float:
+    """clk x 2 (DDR) x bits / 8, in GB/s, to one decimal. Pure."""
+    return round(clk_mhz * 2 * bits / 8 / 1000, 1)
+
+
+def swept(args) -> dict:
+    """The knobs that change the numbers, in the order `run_id` will sort them.
+
+    Everything here is a knob the operator can vary between two runs on the
+    same card; `--out`, `--publish` and `--compare-to` are deliberately absent
+    because they re-file or re-describe a measurement rather than change it.
+    """
+    return {"buffer_gb": float(args.buffer_gb), "gemm_n": int(args.gemm_n),
+            "ceiling": str(args.ceiling), "settle": bool(args.settle),
+            "settle_s": float(args.settle_seconds)}
+
+
+def session_out(args, card: str) -> Path:
+    """Where a calibration lands by default: untracked, card-named, id-named.
+
+    Under the results root, which `.gitignore` excludes, so a calibration never
+    dirties the checkout. The run id carries every swept knob, so two ceilings
+    measured with different buffers or a different settle cannot land on each
+    other; the card is at the front of it for the reason `provenance.run_id`
+    documents.
+    """
+    root = Path(args.results_root)
+    return (root / "calibration" / run_id(card=card, **swept(args))
+            / f"{measured_slug(card)}.yaml")
+
+
+def write_cells(path: Path, cal, prov) -> Path:
+    """One row per bandwidth pattern, beside the yaml, with its provenance.
+
+    `find results/published -name cells.csv` returned zero across every arm, so
+    no published number could be traced to the samples under it. A ceiling has
+    the same duty as a cell: the row says what was timed, by what, and how
+    little of the timing state is known. The KernelTiming columns this
+    instrument does not report (`warmup_ms`, `iters`, `trials`, the clock
+    verdicts) are written EMPTY rather than filled with a plausible default,
+    and `instrument` says which loop ran, so a reader can see the gap instead
+    of inheriting a guess.
+    """
+    columns = ["pattern", "bytes_moved", "ms_p50", "ms_min", "gbps",
+               "gbps_peak_min", "sm_clock_start_mhz", "sm_clock_end_mhz",
+               "instrument", "warmup_ms", "iters", "trials", "l2_flush",
+               "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok", "note"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns + list(prov.as_columns()))
+        writer.writeheader()
+        for pat in cal.bandwidth_patterns:
+            row = dict.fromkeys(columns, "")
+            row.update(pattern=pat.pattern, bytes_moved=pat.bytes_moved,
+                       ms_p50=pat.ms_p50, ms_min=pat.ms_min, gbps=pat.gbps,
+                       gbps_peak_min=pat.gbps_peak_min,
+                       sm_clock_start_mhz=pat.sm_clock_start_mhz,
+                       sm_clock_end_mhz=pat.sm_clock_end_mhz,
+                       instrument=prov.instrument, l2_flush=True, note=pat.note)
+            row.update(prov.as_columns())
+            writer.writerow(row)
+    return path
+
+
+def score(cal, pin_rate_gbps: float | None,
+          max_sm_clock_mhz: float | None = None,
+          ) -> list[tuple[str, str, str, str]]:
+    """`(kind, name, verdict, detail)` for every gate this calibration scores.
+
+    SIX gates, and `tests/test_calibrate_hardware.py` plants both branches of
+    every one of them against a synthetic `Calibration`: clock_established,
+    ceiling_pattern_measured, no_pattern_exceeds_the_pin_rate,
+    write_rate_is_a_store_rate, clock_steady_across_patterns, not_throttled.
+    The docstring said five and the tests planted five, and the one left out was
+    `write_rate_is_a_store_rate`, whose FAIL branch had therefore never run:
+    the sound fixture puts write below the pin rate and the over-the-pin fixture
+    drops the write pattern entirely, so the gate was not even emitted there.
+
+    `not_throttled` IS SCORED ON THE UNDER-LOAD VERDICT, `under_load_clock_verdict`,
+    never on `clocks["throttled"]`. That field is `timing.clock_drift` over two
+    idle-instant samples taken between loads, which detects whether the first
+    sample caught the idle boost, not throttling (`TIMING_BASIS` v2 retired
+    it), and this gate scored it until 2026-09-03. A calibration that carries
+    no under-load flag is UNKNOWN here, which counts against the gate.
+
+    SINCE 2026-09-11 THAT VERDICT ALSO SCORES FLOOR, the under-load median
+    against `timing.THERMAL_FLOOR_FRACTION` of `max_sm_clock_mhz`, and this
+    function is where that number arrives. It is optional ONLY so that a
+    caller cannot pass it wrongly by forgetting the argument's position;
+    omitting it makes the gate UNKNOWN, never PASS, because "no maximum clock
+    to compare against" is an untested claim and this repository's rule is
+    that an untested claim is visible in the exit code. `main` reads it from
+    `_device_facts`; see `under_load_clock_verdict` for why a per-tile cell
+    keeps the DRIFT-only rule and a calibration does not.
+
+    Two of the six are CONDITIONAL, and a gate that is absent is not a gate that
+    passed: `write_rate_is_a_store_rate` is scored only when a write pattern was
+    measured, and neither pin-rate gate can be scored without a bus width, which
+    is what the UNKNOWN below is for.
+
+    UNKNOWN is used where the run could not decide rather than where it decided
+    "fine": no settle means no clock plateau to check against, and a card
+    outside the memory-bus table has no pin rate, so the claim that nothing
+    exceeded it was not tested. Both count against their gate, which is what
+    makes an untested claim visible in the exit code.
+    """
+    gates: list[tuple[str, str, str, str]] = []
+
+    established = cal.clock_established
+    gates.append((EX.VALIDITY, "clock_established",
+                  EX.PASS if established is True else
+                  EX.FAIL if established is False else EX.UNKNOWN,
+                  "the samples agree with each other and with the settle plateau"
+                  if established is True else
+                  "the samples disagree with each other or with the settle "
+                  "plateau; nothing normalised by the clock may be quoted"
+                  if established is False else
+                  "no settle to check the samples against (--no-settle)"))
+
+    ceiling = cal.pattern(cal.ceiling_pattern)
+    disowned = bool(ceiling and calibrate_mod.DISOWNED in (ceiling.note or ""))
+    gates.append((EX.VALIDITY, "ceiling_pattern_measured",
+                  EX.PASS if (ceiling and not disowned) else EX.FAIL,
+                  f"{cal.ceiling_pattern} = {ceiling.gbps:.1f} GB/s" if
+                  (ceiling and not disowned) else
+                  f"{cal.ceiling_pattern} was disowned by the measurement: "
+                  f"{(ceiling.note if ceiling else 'pattern absent')}"))
+
+    write = cal.pattern("write")
+    if pin_rate_gbps is None:
+        gates.append((EX.CLAIM, "no_pattern_exceeds_the_pin_rate", EX.UNKNOWN,
+                      "no memory-bus width for this device, so the one hard "
+                      "physical bound in the file could not be derived"))
+    else:
+        worst = max(cal.bandwidth_patterns, key=lambda p: p.gbps)
+        over = worst.gbps > pin_rate_gbps
+        gates.append((EX.CLAIM, "no_pattern_exceeds_the_pin_rate",
+                      EX.FAIL if over else EX.PASS,
+                      f"fastest pattern {worst.pattern} {worst.gbps:.1f} GB/s "
+                      f"against a derived pin rate of {pin_rate_gbps:.1f} GB/s"
+                      + ("; a figure above the pin rate means the byte "
+                         "accounting is wrong, not that the hardware exceeded "
+                         "its specification" if over else "")))
+        if write is not None:
+            gates.append((EX.CLAIM, "write_rate_is_a_store_rate",
+                          EX.PASS if write.gbps <= pin_rate_gbps else EX.FAIL,
+                          f"write {write.gbps:.1f} GB/s is "
+                          f"{100 * write.gbps / pin_rate_gbps:.1f}% of the pin "
+                          "rate; a read-for-ownership would make it 2N and "
+                          "impossible"))
+
+    gates.append((EX.CLAIM, "clock_steady_across_patterns",
+                  EX.FAIL if cal.clock_ramped else EX.PASS,
+                  "SM clock differed by >5% ACROSS the patterns, so they were "
+                  "measured in different states and are not comparable"
+                  if cal.clock_ramped else
+                  "every pattern was measured in the same clock state"))
+
+    verdict, detail = under_load_clock_verdict(cal, max_sm_clock_mhz)
+    gates.append((EX.CLAIM, "not_throttled", verdict, detail))
+    return gates
+
+
+#: Where a calibration may carry its under-load clock verdict, in the order
+#: they are read. `calibrate.py` writes the loaded-clock record beside the
+#: idle pair (`clocks`) or inside the GEMM's own `LoadedClock` block
+#: (`gemm_clock`); the field names are `timing.KernelTiming`'s, so a cell and a
+#: roof are levelled by one vocabulary and `write_cells` already writes the
+#: same three columns. The FLOOR term is NOT read from these blocks: it is a
+#: comparison against the card's maximum SM clock, which no calibration writes
+#: and `main` reads off the device.
+#:
+#: `fp8_gemm_clock` is deliberately NOT here. The bf16 block is the RULER's
+#: (every ridge is bf16 TFLOP/s over a bandwidth) and its verdict is the
+#: calibration's; the fp8 block qualifies a ceiling only the dtype arm reads.
+#: That block's own DRIFT verdict is printed on the page beside its median by
+#: `clock_lines` and scored by no gate: session 4 (2026-09-21) read 1395 ->
+#: 1320 MHz, 5.4% first-to-last, and published the fp8 ceiling as measured.
+#: Whether a drifted fp8 ceiling should be WITHHELD at the writer is an open
+#: decision, not a rule: the sibling thermal gate scores thirds rather than
+#: ends and calls the same five samples 0.5% steady. `under_load_clock_verdict`
+#: returns at the first block that carries flags.
+UNDER_LOAD_BLOCKS = ("clocks", "gemm_clock")
+
+
+def under_load_clock_verdict(cal, max_sm_clock_mhz: float | None = None,
+                             ) -> tuple[str, str]:
+    """`(verdict, detail)` for gate `not_throttled`, from the flags taken UNDER LOAD.
+
+    THE FLAG THIS REPLACES. `Calibration.clocks["throttled"]` is
+    `timing.clock_drift(before, after)`: two idle-instant samples, one before
+    the settle and one after the last bandwidth pass, and a >5% DROP between
+    them. On the committed H200 file that pair reads `drift_pct: -36.08`, a
+    RISE, because the first sample caught a cold card, and on the published
+    alpha-0558 arm the same detector flagged 91% of vLLM rows above T=4096
+    while flagged and unflagged replicates timed at ratio 0.998. It says
+    whether the START sample caught the idle boost. It cannot say whether the
+    ceilings were measured at the clock they are quoted at, and this gate
+    passed on it until 2026-09-03.
+
+    THE THREE TERMS IT READS INSTEAD, in `timing`'s own vocabulary, scored
+    together rather than first-one-wins.
+
+      FLOOR, `timing.clock_floor_ok`: the median clock sampled WHILE the GEMM
+      ran is at least `timing.THERMAL_FLOOR_FRACTION` of THIS CARD'S OWN
+      MAXIMUM SM clock, read off the device by `timing.max_sm_clock_mhz` and
+      passed in here. Added 2026-09-11, and it is the term that makes this
+      gate do its job.
+
+      LEVEL, `clock_level_ok`: the same median against the reference clock the
+      roof is quoted at. `None` by construction on anything `calibrate.py`
+      writes, because this record IS that reference; scored when a caller
+      supplies one.
+
+      DRIFT, `clock_drift_ok`: first and last under-load samples agree within
+      `timing.DRIFT_FRACTION`, either direction.
+
+    WHY FLOOR HAD TO BE ADDED, and it is the whole reason this function moved.
+    On 2026-09-11 a rented H200 boosted to its 1980 MHz maximum, collapsed to
+    its 345 MHz floor within ~30 s of sustained bf16 GEMM and stayed there,
+    drawing ~240 W of a 700 W limit while climbing from 87 C to 93 C. This
+    script ran to completion on it, published a tracked yaml, and THIS GATE
+    PASSED: a card pinned flat at its floor has first == last, drift 0.0. The
+    calibration it published reported ridge 73.6 where that card's ridge is
+    near 156, because the compute peak collapsed with the clock and the memory
+    side did not. LEVEL could not have caught it either: the reference comes
+    from the card's own calibration, so on a collapsed card it is a comparison
+    of 345 against 345.
+
+    WHICH CALL SITE TAKES WHICH RULE. THE CALIBRATOR SCORES FLOOR; THE
+    PER-TILE CONSUMERS KEEP DRIFT-ONLY, and that is a deliberate split rather
+    than an unfinished migration. The DRIFT-only rule was adopted 2026-09-09
+    for CELLS, on the 750-cell H200 census: the under-load clock is set per
+    tile by the kernel's own power draw under the board cap, so a hot tile
+    clocking down IS the effect those arms measure, and excluding LEVEL-LOW
+    cells removed exactly the two tiles the study is about. None of that
+    reasoning transfers here. A calibration is not a tile; its whole job is to
+    establish the card's CEILING, and a floored clock makes the ceiling wrong
+    for every arm that will be scored against it. `moe/bench/timing.py`'s
+    module docstring carries the same split, and `driver.py`, `pod_session.sh`
+    S6d and the five per-cell `clock_excluded` helpers are unchanged. THE
+    SPLIT IS ABOUT LOW, NOT ABOUT LEVEL: this gate still fails a SAGGED block
+    where a cell would keep it, and since 2026-09-15 neither of them treats a
+    BOOSTED clock as a throttle.
+
+    HOW THE TERMS COMBINE. Any scored term FAILing is a FAIL, and the detail
+    names every term and what each read. Otherwise a term that COULD NOT be
+    scored and should have been -- FLOOR, or a record with no usable sample at
+    all -- is UNKNOWN with the reason, which `exit_codes.classify` counts
+    AGAINST the gate: an untested claim has to be visible in the exit code,
+    and mapping "no maximum clock to compare against" to PASS is the shape of
+    the hole above. A missing LEVEL alone is not UNKNOWN, because it is absent
+    by construction and not by failure.
+
+    REFUSES on the legacy shape. A calibration that carries none of the flags
+    in any of `UNDER_LOAD_BLOCKS` predates the under-load verdict, and the only
+    clock evidence it has is the retired pair; the verdict is UNKNOWN with the
+    reason. Substituting the retired flag would let the gate pass on evidence
+    the instrument has already disowned.
+    """
+    from moe.bench import timing as T
+
+    floor_mhz = T.thermal_floor_mhz(max_sm_clock_mhz)
+    for name in UNDER_LOAD_BLOCKS:
+        block = getattr(cal, name, None) or {}
+        if not isinstance(block, dict):
+            continue
+        if "clock_level_ok" not in block and "clock_drift_ok" not in block:
+            continue
+        level = block.get("clock_level_ok")
+        drift = block.get("clock_drift_ok")
+        load = block.get("sm_clock_load_mhz")
+        ref = block.get("reference_clock_mhz")
+        where = f"{name}.{{clock_level_ok,clock_drift_ok}}"
+        floor = T.clock_floor_ok(load, max_sm_clock_mhz)
+
+        terms: list[tuple[str, bool | None, str]] = []
+        if floor is None:
+            terms.append((
+                "FLOOR", None,
+                "FLOOR NOT SCORED ("
+                + ("this card's maximum SM clock could not be read, so the "
+                   "one term that catches a card pinned flat at its own floor "
+                   "was not asked" if floor_mhz is None else
+                   "no under-load median in this record to compare against a "
+                   f"floor of {floor_mhz:.0f} MHz")
+                + ")"))
+        else:
+            terms.append((
+                "FLOOR", floor,
+                f"FLOOR {'PASS' if floor else 'FAIL'} ({load} MHz median under "
+                f"load against a floor of {floor_mhz:.0f} MHz, "
+                f"{T.THERMAL_FLOOR_FRACTION:.4f} of this card's "
+                f"{float(max_sm_clock_mhz):.0f} MHz maximum)"))
+        if level is not None:
+            level = bool(level)
+            side = str(block.get("clock_level_side") or "")
+            shown = f"{load if load is not None else 'unrecorded'} MHz against "\
+                    f"reference {ref if ref is not None else 'unrecorded'} MHz"
+            if level is False and side == T.LEVEL_HIGH:
+                # A HIGH-SIDE LEVEL FAILURE RESCALES THE ROOF, IT DOES NOT FAIL
+                # THE CLAIM. `clock_flags` reports False on EITHER edge of the
+                # band and records which in `clock_level_side`; this term read
+                # the bare verdict until 2026-09-15 and called every one of them
+                # "the card ran below the clock its roof is quoted at". On an
+                # H200 that sentence is false for every memory-shaped block,
+                # which boosts ABOVE the GEMM reference rather than sagging
+                # below it. The correct treatment is `driver._apply_cost`'s:
+                # move the roof to the clock the work ran at and keep the
+                # measurement. The scale is printed so a reader can apply it.
+                scale = (float(load) / float(ref)) if (load and ref) else None
+                terms.append((
+                    "LEVEL", True,
+                    f"LEVEL PASS on the HIGH side (clock_level_ok=False, "
+                    f"clock_level_side={side!r}, {shown}"
+                    + (f"; a roof quoted at the reference is rescaled by "
+                       f"{scale:.4f} for this block, which is what "
+                       f"roofline.roof_at_clock does per row" if scale else
+                       "; the scale cannot be computed without both clocks")
+                    + ")"))
+            else:
+                terms.append((
+                    "LEVEL", level,
+                    f"LEVEL {'PASS' if level else 'FAIL'} "
+                    f"(clock_level_ok={level}, "
+                    f"clock_level_side={side or 'unrecorded'!r}, {shown})"))
+        if drift is not None:
+            drift = bool(drift)
+            terms.append((
+                "DRIFT", drift,
+                f"DRIFT {'PASS' if drift else 'FAIL'} (clock_drift_ok={drift}, "
+                f"{block.get('sm_clock_start_mhz', 'unrecorded')} -> "
+                f"{block.get('sm_clock_end_mhz', 'unrecorded')} MHz)"))
+        else:
+            terms.append(("DRIFT", None,
+                          "DRIFT NOT SCORED (no first and last under-load "
+                          "sample in this record)"))
+
+        said = "; ".join(sentence for _n, _v, sentence in terms)
+        failed = [n for n, v, _s in terms if v is False]
+        if failed:
+            why = {
+                "FLOOR": "the card is pinned near its own clock floor, so "
+                         "every ceiling here was measured on a card that "
+                         "cannot hold a clock and the ridge derived from them "
+                         "is wrong",
+                "LEVEL": "the card ran BELOW the band around the clock its "
+                         "roof is quoted at, so the ceilings are low. Only the "
+                         "LOW side reaches this: a HIGH-side LEVEL failure is "
+                         "a boost, not a throttle, and is scored PASS above "
+                         "with the roof rescale it implies. A failure carrying "
+                         "no side is read as LOW, because a pre-v6 LEVEL was "
+                         "one-sided and could only fail low",
+                "DRIFT": "the clock moved during the measurement, so the "
+                         "ceilings are a blend of two states",
+            }
+            return (EX.FAIL, f"from {where}: {said}. "
+                    + " ".join(why[n] for n in failed))
+        unscored = [n for n, v, _s in terms if v is None]
+        if unscored:
+            return (EX.UNKNOWN, f"from {where}: {said}. "
+                    f"{' and '.join(unscored)} could not be scored, so this "
+                    "claim was not tested; the retired idle-instant "
+                    "`throttled` flag is NOT substituted for it")
+        return (EX.PASS, f"from {where}: {said}")
+    return (EX.UNKNOWN,
+            "this calibration predates the under-load clock verdict: none of "
+            f"{', '.join(UNDER_LOAD_BLOCKS)} carries clock_level_ok or "
+            "clock_drift_ok, and the only clock evidence in it is the retired "
+            "idle-instant `throttled` pair, which detects an idle-boost catch, "
+            "not throttling. NOT scored on it; recalibrate with a calibrate.py "
+            "that records the clock under load")
+
+
+def clock_lines(cal) -> list[str]:
+    """Each GEMM's under-load clock record, with the DRIFT verdict its own
+    block carries. Until 2026-09-21 the page printed the median and the spread
+    and no verdict, so session 4's operator read `1395 MHz median of [1395,
+    1350, 1395, 1410, 1320], spread 6.4%` beside a `clock_drift_ok: false` the
+    file recorded and nothing displayed. The verdict is a printed fact and not
+    a gate: no RESULT line changes, and the fp8 block says out loud that no
+    gate scores it (`UNDER_LOAD_BLOCKS`)."""
+    out = []
+    for label, rec in (("bf16 GEMM", cal.gemm_clock),
+                       ("fp8 GEMM", cal.fp8_gemm_clock)):
+        if not rec:
+            continue
+        drift = rec.get("clock_drift_ok")
+        verdict = ("" if drift is None else
+                   f", DRIFT {'PASS' if drift else 'FAIL'} "
+                   f"({rec.get('sm_clock_start_mhz')} -> "
+                   f"{rec.get('sm_clock_end_mhz')} MHz)")
+        if drift is False and label == "fp8 GEMM":
+            verdict += (" -- scored by no gate: this block is not in "
+                        "UNDER_LOAD_BLOCKS, and the fp8 ceiling beside it is "
+                        "published as measured")
+        out.append(f"  clock, {label:<10}{rec['median_mhz']:>5} MHz median of "
+                   f"{rec['samples']}, spread {rec['spread_pct']:.1f}%{verdict}")
+        out.append(f"  {'':<17}post-hoc idle sample {rec['after_idle_mhz']} MHz "
+                   f"(what this field used to be)"
+                   + (f", {rec['power_w']:.0f} W" if rec.get("power_w") else ""))
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=None,
-                    help="default: moe/bench/hardware/measured_<device>.yaml, "
-                         "so calibrating a second GPU does not overwrite the "
-                         "first")
+                    help="write the yaml exactly here. Default: an untracked "
+                         "path under --results-root named by the card and the "
+                         "run id, so a calibration never dirties the checkout")
+    ap.add_argument("--results-root", type=Path,
+                    default=Path(__file__).resolve().parents[1] / "results",
+                    help="root of the untracked results tree (gitignored)")
+    ap.add_argument("--publish", action="store_true",
+                    help="ALSO copy the yaml into moe/bench/hardware/, which is "
+                         "where roofline.load_measured() looks and therefore "
+                         "what the sweep reads. This modifies a TRACKED file: "
+                         "every row measured before you commit it carries "
+                         "git_dirty=True")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the plan, the paths and the MDE, measure "
+                         "nothing, write nothing")
+    ap.add_argument("--card", default=None,
+                    help="name the card for --dry-run planning on a machine "
+                         "that has none; ignored when a GPU is present")
     ap.add_argument("--buffer-gb", type=float, default=8.0,
                     help="STREAM buffer size; must dwarf L2 and run long enough "
                          "that launch and clock ramp do not matter")
     ap.add_argument("--gemm-n", type=int, default=8192)
     ap.add_argument("--ceiling", default=DEFAULT_CEILING,
-                    choices=("read", "copy", "triad", "write"),
+                    choices=("read_stream", "read_reduce", "copy", "triad",
+                             "write"),
                     help="which pattern defines achieved bandwidth. triad is the "
-                         "canonical STREAM metric; read is closest to streaming "
-                         "expert weights at small batch")
+                         "canonical STREAM metric and the default; read_stream "
+                         "is the ruler this study's ~98.5%%-read traffic "
+                         "actually matches, and read_reduce is the reduction's "
+                         "lower bound on it. Changing this re-baselines every "
+                         "efficiency column; price it with "
+                         "scripts/ruler_rebaseline.py first")
     ap.add_argument("--no-settle", dest="settle", action="store_false",
                     help="skip the clock settle. Only for a quick smoke check: "
                          "measuring from idle walks the clock ramp across the "
@@ -127,10 +798,45 @@ def main() -> int:
     ap.add_argument("--compare-to", default=None,
                     help="datasheet profile to compare against; auto-detected "
                          "when the device name is unambiguous")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+
+    card = current_gpu_name() or (args.card or "")
+    sigma_pct, _n, why = published_sigma_pct(
+        Path(__file__).resolve().parents[1] / "results" / "published")
+
+    if args.dry_run:
+        # THE PLAN, AND NOTHING ELSE. A dry run writes no file, tracked or
+        # otherwise, so a laptop rehearsal of a session cannot leave the tree
+        # dirty for the rows that follow it.
+        print("[calibrate] dry run: nothing is measured and nothing is written")
+        print(f"  patterns          bandwidth ladder, ceiling = {args.ceiling}")
+        print(f"  buffers           {args.buffer_gb:g} GiB, L2 flushed between "
+              "iterations")
+        print(f"  gemm              {args.gemm_n}^3 dense, bf16 and fp8 where "
+              "the silicon has it")
+        settle = (f"up to {args.settle_seconds:.0f}s under load" if args.settle
+                  else "SKIPPED (--no-settle)")
+        print(f"  settle            {settle}")
+        print(f"  instrument        {instrument_name()}")
+        if card:
+            print(f"  card              {card}")
+            print(f"  would write       {session_out(args, card)}")
+        else:
+            print("  card              NOT VISIBLE from here, so the run id "
+                  "cannot be formed (provenance.NoCard); pass --card to plan "
+                  "for a named part")
+        publish = (f"yes, into {HARDWARE_DIR} (dirties a TRACKED file)"
+                   if args.publish else
+                   "no; --publish copies it into the tree")
+        print(f"  publish           {publish}")
+        # B14: an arm that states no MDE lets any difference be read as real.
+        print(f"  {mde_line(sigma_pct, 3, why)}")
+        return EX.REFUSED
 
     if not torch.cuda.is_available():
-        raise SystemExit("calibration needs a GPU")
+        print("REFUSED: calibration needs a GPU; there is no ceiling to measure "
+              "here. --dry-run prints the plan without one.", file=sys.stderr)
+        return EX.REFUSED
 
     print("[calibrate] measuring achievable bandwidth and dense BF16 ...")
     print(f"[calibrate] buffers {args.buffer_gb:g} GiB, L2 flushed between iterations")
@@ -153,12 +859,32 @@ def main() -> int:
     if tdp:
         print(f"  power limit       {tdp:.0f} W"
               + ("   (SXM)" if tdp > 650 else "   (NVL)"))
+    # THE FLOOR, PRINTED BEFORE THE CEILINGS IT QUALIFIES. A reader who sees
+    # only the GB/s and the TFLOP/s cannot tell a card that is merely slow
+    # from one that has stopped clocking, and the 2026-09-11 pod published a
+    # complete-looking page at 345 of 1980 MHz.
+    max_sm = observed.get("clocks_max_sm_mhz")
+    if max_sm:
+        from moe.bench.timing import THERMAL_FLOOR_FRACTION, thermal_floor_mhz
+        print(f"  max SM clock      {max_sm:.0f} MHz  (from "
+              f"{observed.get('clocks_max_sm_source', '?')})"
+              f"  -> thermal floor {thermal_floor_mhz(max_sm):.0f} MHz"
+              f" = {THERMAL_FLOOR_FRACTION:.4f} of it")
+    else:
+        print("  max SM clock      UNREADABLE: "
+              f"{observed.get('clocks_max_sm_unreadable', 'no reason recorded')}. "
+              "The not_throttled gate's FLOOR term cannot be scored.")
+
     pin = observed.get("pin_rate_gbps")
     if pin:
         print(f"  memory clock      {observed['clocks_max_memory_mhz']:.0f} MHz"
               f"  -> pin rate {pin:.1f} GB/s")
-        print("                    (clk x 2 for DDR x 6144 bits / 8; a "
-              "datasheet figure below this is already derated)")
+        print(f"                    (clk x 2 for DDR x {observed['memory_bus_bits']} "
+              f"bits / 8; bus width from {observed.get('memory_bus_bits_source', '?')})")
+        if observed.get("memory_bus_bits_table") is not None:
+            print(f"                    the table says {observed['memory_bus_bits_table']} "
+                  f"bits, {observed['pin_rate_gbps_at_table_width']:.1f} GB/s: the "
+                  "device's enabled bus is narrower, and the device's number is used")
 
     spec_bw = spec_tf = None
     profile = args.compare_to
@@ -211,25 +937,53 @@ def main() -> int:
             print(f"                    the datasheet assumes ~{implied:.0f} MHz, "
                   "a boost clock this part does not hold under dense tensor load")
 
+    # WHERE THAT CLOCK CAME FROM. It used to be one nvidia-smi sample taken
+    # after the GEMM had already synchronised, and across the eleven committed
+    # H200 calibrations it moved 30% (1485-1935 MHz) while the achieved rate
+    # moved 12%. The line below is the whole reason this run can be believed:
+    # samples taken under load, their spread, and the idle sample beside them.
+    for line in clock_lines(cal):
+        print(line)
+    established = cal.clock_established
+    if established is False:
+        print("  CLOCK NOT ESTABLISHED: the samples disagree with each other or "
+              "with the settle plateau.")
+        print("                    Nothing normalised against a clock -- "
+              "sustained_peak_tflops, gemm_efficiency_pct -- may be quoted.")
+    elif established is None:
+        print("  clock state       not established (no settle to check against)")
+
     print("\n  ridge point by choice of denominator (FLOP/byte):")
     for pat in cal.bandwidth_patterns:
         mark = " <-- used" if pat.pattern == cal.ceiling_pattern else ""
-        print(f"    {pat.pattern:<8}{cal.ridge_point(pat.gbps):>8.0f}"
-              f"  ({pat.pattern}){mark}")
+        if pat.pattern == (cal.matched_pattern().pattern
+                           if cal.matched_pattern() else None):
+            mark += " <-- matched to this study's traffic"
+        print(f"    {pat.pattern:<12}{cal.ridge_point(pat.gbps):>8.0f}{mark}")
     if spec_bw and spec_tf:
-        print(f"    {'datasheet':<8}{spec_tf * 1e12 / (spec_bw * 1e9):>8.0f}")
+        print(f"    {'datasheet':<12}{spec_tf * 1e12 / (spec_bw * 1e9):>8.0f}")
+    band = cal.ridge_band()
+    if band:
+        print(f"    band          {band[0]:.1f} to {band[1]:.1f}  "
+              f"({100 * (band[1] / band[0] - 1):.1f}% wide) -- quote this, not "
+              "one end, for any crossing inside it")
 
-    st = cal.settle
-    if st.get("skipped"):
-        print("\n  settle            SKIPPED: ceilings may be mid-ramp")
-    else:
-        hist = st.get("clock_history_mhz") or []
-        print(f"\n  settle            "
-              f"{'reached' if st.get('settled') else 'TIMED OUT'} at "
-              f"{st.get('final_mhz', 0)} MHz   history {hist}")
-        if not st.get("settled"):
+    for line in cal.refusals:
+        print(f"  REFUSED           {line}")
+
+    # BOTH settles, each labelled with what it governs. The memory settle has
+    # been measured since 2026-08-27 and was never printed, so this report read
+    # "settle reached at 1500 MHz" followed by "clocks 1500 -> 1980 MHz" -- the
+    # signature of an unsettled ramp -- and docs/STUDY.md still listed the work
+    # as not done five days after it was done, on the strength of this output.
+    print()
+    for line in cal.settle_lines():
+        print(f"  {line}")
+    for info in (cal.settle, (cal.settle or {}).get("bandwidth_settle") or {}):
+        if info and not info.get("skipped") and not info.get("settled"):
             print("                    clocks still moving when the budget ran "
                   "out; raise --settle-seconds")
+            break
 
     if cal.warmup_pass:
         print(f"\n  warm-up pass      discarded; largest per-pattern change "
@@ -245,13 +999,39 @@ def main() -> int:
             print(f"    {pat.pattern:<8}{pat.sm_clock_start_mhz:>6} -> "
                   f"{pat.sm_clock_end_mhz:<6} MHz")
 
-    c = cal.clocks
-    print(f"\n  clocks            {c['sm_start_mhz']} -> {c['sm_end_mhz']} MHz, "
-          f"{c['temp_start_c']} -> {c['temp_end_c']} C"
-          + ("  THROTTLED" if c["throttled"] else ""))
-    if c["throttled"]:
-        print("                    ceilings measured on a throttling GPU are low; "
-              "let it cool and re-run")
+    c = cal.clocks or {}
+    # The idle-instant pair is printed AS the retired reading it is, and the
+    # verdict beside it is the under-load one the gate scores. Until 2026-09-03
+    # this block printed "THROTTLED" off that pair, which on the committed H200
+    # file is a -36% "drift" caused by a cold first sample.
+    print(f"\n  clocks (idle pair) {c.get('sm_start_mhz', '?')} -> "
+          f"{c.get('sm_end_mhz', '?')} MHz, {c.get('temp_start_c', '?')} -> "
+          f"{c.get('temp_end_c', '?')} C  [retired idle-instant reading, not scored]")
+    # THE SECOND CALL SITE, and it takes the same arguments as the gate's. A
+    # fix applied at one of these two and not the other is this repository's
+    # recurring defect: the printed page would describe a verdict the RESULT
+    # line did not score.
+    verdict, detail = under_load_clock_verdict(cal, observed.get("clocks_max_sm_mhz"))
+    print(f"  clock under load  {verdict}: {detail}")
+    if verdict == EX.FAIL and "FLOOR FAIL" in detail:
+        print("                    THIS CARD CANNOT HOLD A CLOCK. It is not "
+              "settling, it is pinned near its own")
+        print("                    floor: the ceilings above, the ridge and "
+              "every efficiency column derived")
+        print("                    from them are wrong, not merely low. Do "
+              "not publish this calibration, and")
+        print("                    do not spend a session on this pod. Check "
+              "nvidia-smi -q -d PERFORMANCE for")
+        print("                    the slowdown reasons and rent another card.")
+    elif verdict == EX.FAIL:
+        print("                    ceilings measured off the reference clock are "
+              "low; let it settle and re-run")
+    elif verdict == EX.UNKNOWN and "FLOOR NOT SCORED" in detail:
+        print("                    the floor term was not asked, so a card "
+              "pinned flat at its own clock floor")
+        print("                    would look exactly like this page. See "
+              "the detail above for which reader")
+        print("                    failed to answer.")
 
     # A write figure at or above datasheet peak means the byte accounting is
     # wrong (a read-for-ownership would make real traffic 2N), not that the
@@ -267,18 +1047,24 @@ def main() -> int:
                   "read-dominated workload.")
 
     sha, dirty = git_provenance()
+    # ONE PROVENANCE BLOCK, the shared one, so this yaml answers the same
+    # questions a cells.csv and a report.json answer: which commit, which card,
+    # which driver, which ruler, and WHICH INSTRUMENT. The 26 published reports
+    # carried none of it and the H200 s4 filenames could not be tied to any
+    # commit at all.
+    prov = provenance_block(
+        instrument=instrument_name(),
+        bandwidth=cal.achieved_bandwidth_gbps,
+        bandwidth_source=f"measured here, '{cal.ceiling_pattern}' pattern",
+        ridge=round(cal.ridge_point(), 1),
+        ridge_source="derived from this run's own ceilings",
+        target_ms=None,
+    )
     payload = {
         "name": f"{cal.gpu_name} (measured)",
         "verified": True,
         "source": "measured on this machine by scripts/calibrate_hardware.py",
-        "source_note": (
-            "Achievable ceilings, not datasheet peaks. Nsight Compute is "
-            "unavailable on a rented pod (ERR_NVGPUCTRPERM), so DRAM traffic "
-            "cannot be measured directly; these ceilings are what make the "
-            f"efficiency columns meaningful without counters. Bandwidth is the "
-            f"'{cal.ceiling_pattern}' pattern; every pattern measured is under "
-            "`detail` so a different denominator can be applied without "
-            "re-running."),
+        "source_note": source_note(cal.ceiling_pattern),
         "checked_by": "scripts/calibrate_hardware.py",
         "checked_on": time.strftime("%Y-%m-%d"),
         "measured_commit": sha,
@@ -298,24 +1084,73 @@ def main() -> int:
         "observed": {**observed, "power_limit_w": tdp},
         "spec_comparison": {"profile": profile, "bandwidth_gbps": spec_bw,
                             "bf16_tflops": spec_tf},
+        "provenance": prov.as_dict(),
     }
-    # One calibration file per device. A single shared measured.yaml meant
-    # calibrating a second GPU overwrote the first, and a later re-plot of an
-    # earlier sweep then scored it against the wrong roof.
-    out = args.out
-    if out is None:
-        from moe.bench.roofline import HARDWARE_DIR, measured_slug
-        out = HARDWARE_DIR / f"{measured_slug(cal.gpu_name)}.yaml"
+    # One calibration file per device, on an UNTRACKED path. A single shared
+    # measured.yaml meant calibrating a second GPU overwrote the first, and a
+    # later re-plot of an earlier sweep then scored it against the wrong roof;
+    # writing into the tracked tree meant every row measured afterwards carried
+    # git_dirty=True. The run id keeps two settings of the same card apart.
+    out = args.out if args.out is not None else session_out(args, cal.gpu_name)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(yaml.safe_dump(payload, sort_keys=False))
+    cells = write_cells(out.parent / "cells.csv", cal, prov)
     print(f"\n[calibrate] wrote {out}")
-    print("  commit it; plots and efficiency columns then use measured ceilings")
+    print(f"[calibrate] wrote {cells}")
+    print(f"  {mde_line(sigma_pct, 3, why)}")
+
+    published_to = None
+    if args.publish:
+        published_to = HARDWARE_DIR / f"{measured_slug(cal.gpu_name)}.yaml"
+        published_to.parent.mkdir(parents=True, exist_ok=True)
+        published_to.write_text(out.read_text())
+        print(f"[calibrate] PUBLISHED to {published_to}")
+        print("  That file is TRACKED. roofline.load_measured() reads it, so the "
+              "sweep now has ceilings; until you commit it, every row measured "
+              "carries git_dirty=True and cannot be reproduced from the commit "
+              "it names.")
+    else:
+        print("  Not in the tree: roofline.load_measured() will not see it and "
+              "the sweep's efficiency columns stay empty. Re-run with --publish "
+              "when you want the sweep to use it, and commit the result.")
+
+    band = cal.ridge_band()
     print(json.dumps({"achieved_bw_gbps": cal.achieved_bandwidth_gbps,
                       "ceiling_pattern": cal.ceiling_pattern,
                       "achieved_bf16_tflops": cal.achieved_bf16_tflops,
-                      "ridge": round(cal.ridge_point(), 1)}))
-    return 0
+                      "ridge": round(cal.ridge_point(), 1),
+                      # The band, not just the point, so a consumer that greps
+                      # this line cannot quote one end without seeing the other.
+                      "ridge_band": [round(band[0], 1), round(band[1], 1)]
+                      if band else None,
+                      "gemm_clock_mhz": cal.gemm_clock_mhz,
+                      "clock_established": cal.clock_established,
+                      "out": str(out),
+                      "published_to": str(published_to) if published_to else None,
+                      "instrument": prov.instrument}))
+
+    # THE ONLY LINES THE DRIVER MAY GREP. Everything above is prose, including
+    # the words PASS and REFUSED where they appear in it.
+    print()
+    # BOTH the pin rate and the maximum SM clock come from `observed`, which
+    # was read off this device above. The maximum is what the FLOOR term in
+    # `not_throttled` is a fraction of.
+    gates = score(cal, pin, observed.get("clocks_max_sm_mhz"))
+    for kind, name, verdict, detail in gates:
+        print(EX.result_line(kind, name, verdict, detail))
+    return EX.classify([(k, v) for k, _n, v, _d in gates])
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except Exception:                                   # noqa: BLE001
+        # ERROR is the table's word for an exception nobody planned; the
+        # traceback is the reason and it goes to stderr, not into an exit code
+        # that would read as a result.
+        import traceback
+
+        traceback.print_exc()
+        raise SystemExit(EX.ERROR) from None

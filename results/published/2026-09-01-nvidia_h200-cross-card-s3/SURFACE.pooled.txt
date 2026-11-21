@@ -1,0 +1,109 @@
+THIS FILE IS THE SUPERSEDED, POOLED VERSION OF SURFACE.txt.
+
+THE ARM THIS HEADER DESCRIBES is the one it sits in and no other: the H200 leg
+of the 2026-09-01 cross-card pair,
+/workspace/session/20260901T214218Z/cross_card/nvidia_h200-s3. It holds 11
+identifiable fits out of 28 block sizes swept: 4 mixtral-8x7b and
+7 qwen2-57b-a14b. Every number below is from those 11.
+
+THE HEADER THIS FILE CARRIED UNTIL 2026-09-02 WAS THE s4 ARM'S. When the paired
+version of scripts/alpha_surface.py replaced the pooled SURFACE.txt files, one
+superseded-header block was written into all three arms, so this file opened by
+stating "ten identifiable mixtral fits against seven for qwen2" and the medians
+0.731 and 0.713 as facts about the grid below, which has four mixtral fits and
+does not contain either number. A header that describes the wrong arm is worse
+than no header, because it reads as provenance.
+
+WHAT THE POOLED VERSION COMPUTED, AND WHY IT WAS SUPERSEDED. One median per
+lever level, taken over whatever else that level happened to be measured with.
+In this arm that mixes the two levers into each other:
+
+  The swizzle column falls from 0.827 (G=1, n=4) to 0.675 (G=64, n=1), a step of
+  0.152. Its G=1 median is two mixtral fits and two qwen2 fits; its G=64 median
+  is one qwen2 fit. Most of that step is therefore the model contrast the same
+  table reports separately as 0.840 against 0.719. The one cell of (model,
+  BLOCK_SIZE_N, BLOCK_M) that holds every swizzle level, (qwen2, 64, 32), moves
+  0.724 to 0.675: 0.048. With a single matched cell no paired MDE exists, so
+  SURFACE.txt refuses one rather than presenting 0.048 as a measured change.
+
+  The model column reads mixtral 0.840 against qwen2 0.719. Paired over the 4
+  cells that hold both models the median difference is 0.130, against a paired
+  MDE of 0.040, and it is NOT one-signed: (16, 64, 32) moves +0.054 while the
+  other three move -0.282, -0.211 and -0.049. A marginal median cannot show a
+  lever that changes sign under it, and this one does.
+
+WHY IT IS KEPT RATHER THAN DELETED. These are the numbers that were published
+and that other documents quote. Deleting them would leave those quotations with
+no source.
+
+THE PAIRED FILE BESIDE IT is SURFACE.txt, regenerated 2026-09-02 from THIS arm's
+committed reports by
+
+    python scripts/alpha_surface.py results/published/2026-09-01-nvidia_h200-cross-card-s3
+
+which the pooled script could not do at all: it globbed for a bare
+"report.json" and this arm holds seven "<name>.report.json" files, so it printed
+"no report.json under ..." and the committed summary was unregenerable from the
+repository. It also sorted GROUP_SIZE_M as text, which is why the swizzle column
+below runs 1, 16, 64, 8; the paired code takes a lever's extremes from that
+order, so until the fix it named the sweep 1 -> 8 rather than 1 -> 64 (audit
+S38).
+
+--------------------------------------------------------------------------
+
+ALPHA SURFACE -- every fit found under /workspace/session/20260901T214218Z/cross_card/nvidia_h200-s3
+
+alpha is the fraction of a weight re-read that MISSES L2. 1.0 means an
+extra M-tile costs a full re-read; 0.0 means L2 absorbs it entirely.
+A blank alpha means the fit was not identifiable at that BLOCK_M --
+fewer than 3 memory-bound treads -- not that it is zero.
+
+  model                 G   BN   BM  treads   alpha  corrected   upper  fit err
+  ------------------ ---- ---- ---- ------- ------- ---------- ------- --------
+  mixtral-8x7b          1   64   32      33   1.006      0.998   1.184    1.43%
+  mixtral-8x7b          1   64   64      16   0.930      0.916   1.070    0.77%
+  mixtral-8x7b          1   64  128       1      --         --      --       --
+  mixtral-8x7b          1   64  256       0      --         --      --       --
+  mixtral-8x7b         16   64   32      33   0.664      0.657   1.062    0.72%
+  mixtral-8x7b         16   64   64      16   0.750      0.735   1.228    1.70%
+  mixtral-8x7b         16   64  128       0      --         --      --       --
+  mixtral-8x7b         16   64  256       0      --         --      --       --
+  qwen2-57b-a14b        1  256   32       0      --         --      --       --
+  qwen2-57b-a14b        1  256   64       0      --         --      --       --
+  qwen2-57b-a14b        1  256  128       0      --         --      --       --
+  qwen2-57b-a14b        1  256  256       0      --         --      --       --
+  qwen2-57b-a14b        1   64   32      33   0.724      0.709   1.001    0.47%
+  qwen2-57b-a14b        1   64   64      16   0.719      0.692   0.967    0.45%
+  qwen2-57b-a14b        1   64  128       0      --         --      --       --
+  qwen2-57b-a14b        1   64  256       0      --         --      --       --
+  qwen2-57b-a14b       16   64   32      33   0.718      0.703   1.281    0.84%
+  qwen2-57b-a14b       16   64   64      16   0.701      0.675   1.166    1.05%
+  qwen2-57b-a14b       16   64  128       0      --         --      --       --
+  qwen2-57b-a14b       16   64  256       0      --         --      --       --
+  qwen2-57b-a14b       64   64   32      33   0.675      0.661   1.399    0.48%
+  qwen2-57b-a14b       64   64   64       0      --         --      --       --
+  qwen2-57b-a14b       64   64  128       0      --         --      --       --
+  qwen2-57b-a14b       64   64  256       0      --         --      --       --
+  qwen2-57b-a14b        8   64   32      33   0.726      0.712   1.334    0.96%
+  qwen2-57b-a14b        8   64   64      16   0.750      0.723   1.323    1.18%
+  qwen2-57b-a14b        8   64  128       0      --         --      --       --
+  qwen2-57b-a14b        8   64  256       0      --         --      --       --
+
+11 identifiable fit(s) of 28 block sizes swept.
+
+alpha against GROUP_SIZE_M, the swizzle width:
+  1                    n=4   median alpha 0.827   corrected 0.813
+  16                   n=4   median alpha 0.709   corrected 0.689
+  64                   n=1   median alpha 0.675   corrected 0.661
+  8                    n=2   median alpha 0.738   corrected 0.717
+
+alpha against model, i.e. per-expert footprint:
+  mixtral-8x7b         n=4   median alpha 0.840   corrected 0.825
+  qwen2-57b-a14b       n=7   median alpha 0.719   corrected 0.703
+
+READ IT AGAINST THE THREE CANDIDATES:
+  alpha = 0.100 (this repo, retracted): 0 of 11 fits within 0.05
+  alpha = 0.330 (TEMPO arXiv:2608.13057): 0 of 11 fits within 0.05
+  alpha = 0.558 (the 2026-09-01 pooled refit): 0 of 11 fits within 0.05
+
+A pooled scalar cannot describe this surface if the levers move it.

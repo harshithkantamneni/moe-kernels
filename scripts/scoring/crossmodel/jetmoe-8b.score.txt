@@ -1,0 +1,17 @@
+jetmoe-8b timed with mixtral-8x7b's fit and its own counted bytes (nothing fitted on it), 1710 MHz: SHARED+PRIVATE 58 cells, rms 7.17%, worst -20.39%, 12 beyond 5%
+  arm=native    29 cells rms 5.22% worst +11.23%
+  arm=private   29 cells rms 6.60% worst -20.39%
+  arm=shared    29 cells rms 7.69% worst -20.26%
+  G=3           24 cells rms 7.06% worst -20.39%
+  G=4           27 cells rms 5.28% worst -15.48%
+  G=8           18 cells rms 6.26% worst -15.18%
+  G=32          18 cells rms 7.88% worst -20.26%
+  n=1           12 cells rms 14.93% worst -20.39%
+  n=2           12 cells rms 3.40% worst +5.61%
+  n=3           12 cells rms 8.80% worst +11.23%
+  n=4           12 cells rms 0.73% worst +1.35%
+  n=5           12 cells rms 1.01% worst -2.72%
+  n=6           12 cells rms 0.61% worst -1.07%
+  n=7            6 cells rms 0.67% worst -0.95%
+  n=8            6 cells rms 0.32% worst -0.60%
+  n=9            3 cells rms 0.64% worst -0.80%

@@ -1,0 +1,20 @@
+INSTRUMENTED KERNEL (perturb): 9 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u8-stf           stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=cta,evict_a=none,evict_b=none
+  u9-stk64s4       stamps olmoe-1b-7b            BK 64 s4 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u10-stk32s4      stamps olmoe-1b-7b            BK 32 s4 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u11-stk128s4     stamps olmoe-1b-7b            BK 128 s4 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u12-stk64s8      stamps olmoe-1b-7b            BK 64 s8 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u13-sttail       stamps mixtral-8x22b          BK 64 s4 cells 2 spec stamps=iter,every=1,marks=112,evict_a=none,evict_b=none
+  u14-sttail       stamps mixtral-8x7b           BK 64 s4 cells 2 spec stamps=iter,every=1,marks=112,evict_a=none,evict_b=none
+  u15-stdead4      stamps olmoe-1b-7b            BK 64 s4 cells 4 spec stamps=cta,evict_a=none,evict_b=none
+  u16-stdead2      stamps olmoe-1b-7b            BK 64 s8 cells 4 spec stamps=cta,evict_a=none,evict_b=none
+  gate (decision 2): median |plain/copy - 1| <= 1%, worst <= 2%, identical occupancy; 8 bursts of 10 calls each way
+  u8-stf: FAIL median |r - 1| 1.68% > 1%; worst |r - 1| 2.22% > 2%; config [32, 64, 64, 8, 4, 8, False, 2]: plain {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5} != copy {'regs': 44, 'shared': 36864, 'ctas_per_sm': 5}; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u9-stk64s4: FAIL median |r - 1| 7.27% > 1%; worst |r - 1| 9.06% > 2%; config [32, 64, 64, 64, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 45, 'shared': 36864, 'ctas_per_sm': 5}
+  u10-stk32s4: FAIL median |r - 1| 8.10% > 1%; worst |r - 1| 8.62% > 2%; config [32, 64, 32, 64, 4, 8, False, 8]: plain {'regs': 47, 'shared': 18432, 'ctas_per_sm': 5} != copy {'regs': 40, 'shared': 18432, 'ctas_per_sm': 6}; config [32, 64, 32, 64, 4, 8, True, 1]: plain {'regs': 48, 'shared': 18432, 'ctas_per_sm': 5} != copy {'regs': 43, 'shared': 18432, 'ctas_per_sm': 5}
+  u11-stk128s4: FAIL median |r - 1| 7.29% > 1%; worst |r - 1| 7.84% > 2%; config [32, 64, 128, 64, 4, 8, False, 8]: plain {'regs': 57, 'shared': 73728, 'ctas_per_sm': 3} != copy {'regs': 56, 'shared': 73728, 'ctas_per_sm': 3}; config [32, 64, 128, 64, 4, 8, True, 1]: plain {'regs': 64, 'shared': 73728, 'ctas_per_sm': 3} != copy {'regs': 58, 'shared': 73728, 'ctas_per_sm': 3}
+  u12-stk64s8: FAIL median |r - 1| 9.51% > 1%; worst |r - 1| 9.76% > 2%; config [32, 64, 64, 64, 8, 8, True, 1]: plain {'regs': 55, 'shared': 86016, 'ctas_per_sm': 2} != copy {'regs': 48, 'shared': 86016, 'ctas_per_sm': 2}
+  u13-sttail: FAIL median |r - 1| 7.53% > 1%; worst |r - 1| 16.68% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 45, 'shared': 36864, 'ctas_per_sm': 5}
+  u14-sttail: FAIL median |r - 1| 5.90% > 1%; worst |r - 1| 14.65% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 45, 'shared': 36864, 'ctas_per_sm': 5}
+  u15-stdead4: FAIL median |r - 1| 1.45% > 1%; worst |r - 1| 3.58% > 2%; config [32, 64, 64, 8, 4, 8, False, 8]: plain {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5} != copy {'regs': 44, 'shared': 36864, 'ctas_per_sm': 5}; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u16-stdead2: FAIL median |r - 1| 2.14% > 1%; worst |r - 1| 5.64% > 2%; config [32, 64, 64, 8, 8, 8, False, 8]: plain {'regs': 48, 'shared': 86016, 'ctas_per_sm': 2} != copy {'regs': 44, 'shared': 86016, 'ctas_per_sm': 2}; config [32, 64, 64, 8, 8, 8, True, 1]: plain {'regs': 55, 'shared': 86016, 'ctas_per_sm': 2} != copy {'regs': 48, 'shared': 86016, 'ctas_per_sm': 2}

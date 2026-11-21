@@ -102,7 +102,7 @@ def test_ampere_does_half_of_hopper_per_sm_per_clock():
 
 
 @pytest.mark.parametrize("name,clk_mhz,published_gbps", [
-    ("NVIDIA H200", 3201, 4800),                # spec 4.8 TB/s, already derated
+    ("NVIDIA H200", 3201, 4800),                # spec 4.8 TB/s = the 6016-bit enabled bus
     ("NVIDIA A100-SXM4-80GB", 1593, 2039),      # spec 2039 GB/s
     ("NVIDIA H100 80GB HBM3", 2619, 3350),      # spec 3.35 TB/s
 ])
@@ -113,8 +113,10 @@ def test_the_pin_rate_reproduces_each_vendor_bandwidth(name, clk_mhz, published_
     GB/s instead of 2038.8: 20% high, on the one number that cannot be wrong.
 
     Each width is checked by reproducing the vendor figure. The derived rate
-    should sit at or slightly above the published one, since published numbers
-    are already derated.
+    should sit at the published one to within a percent: on the H200 the
+    table's 6144 gave 4916.7 against a published 4800 and that 2.4% was called
+    a derated datasheet until 2026-09-09, when NVML on the pod reported the
+    enabled bus as 6016 and the published figure turned out to BE the pin rate.
     """
     from scripts.calibrate_hardware import _memory_bus_bits
 
@@ -132,3 +134,25 @@ def test_an_unknown_device_gets_no_pin_rate_rather_than_a_guess():
     from scripts.calibrate_hardware import _memory_bus_bits
     assert _memory_bus_bits("NVIDIA GeForce RTX 5090") is None
     assert _memory_bus_bits("") is None
+
+
+@pytest.mark.parametrize("name,bits", [
+    ("NVIDIA GH200 480GB", None),               # Grace Hopper: "H200" is only a substring
+    ("NVIDIA GH200 144G HBM3e", None),
+    ("NVIDIA H200", 6016),
+    ("NVIDIA H200 NVL", 6016),
+    ("NVIDIA H100 80GB HBM3", 5120),
+    ("NVIDIA A100-SXM4-40GB", 5120),
+    ("NVIDIA A100-SXM4-80GB", 5120),
+])
+def test_the_bus_width_table_matches_a_whole_word_of_the_name(name, bits):
+    """A substring match gave "NVIDIA GH200 480GB" the H200's 6016 bits, the
+    harvest of the 141 GB part: a GH200 calibration on a Lambda VM would have
+    written that width into its ruler as the table's disagreement with NVML,
+    and used it as the pin rate had NVML not answered. A card the table does
+    not name gets NVML's width alone, or no pin rate."""
+    from scripts.calibrate_hardware import _memory_bus_bits, resolve_memory_bus_bits
+    assert _memory_bus_bits(name) == bits
+    if bits is None:
+        assert resolve_memory_bus_bits(name, 6144) == (6144, "nvml", None)
+        assert resolve_memory_bus_bits(name, None) == (None, "none", None)

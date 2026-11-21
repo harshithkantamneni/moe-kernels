@@ -1,0 +1,13 @@
+2026-11-12T01:52:09Z the branch's first commit: the VM can push
+2026-11-12T01:54:51Z setup_vm.sh: READY
+2026-11-12T01:54:56Z prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-11-12T01:55:08Z tilecensus (unit 2/10 - rr tiles=128x128x64w8s3,64x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
+2026-11-12T01:55:32Z regcheck (unit 3/10 - rcp probe=pc): exit 0 (0 min)
+2026-11-12T01:57:05Z perturb (unit 4/10 - pt probe=pc gates=s128,s64,sr): exit 1 (2 min)
+2026-11-12T01:57:31Z stamps (unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json): exit 0 (0 min)
+2026-11-12T02:05:33Z decodebytes (unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr): exit 0 (8 min)
+2026-11-12T02:05:59Z stamps (unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json): exit 0 (0 min)
+2026-11-12T02:13:55Z decodebytes (unit 8/10 - c64 histogram=docs/registered/2026-11-11-rr-pages/rr-64.json kernels=rr): exit 0 (8 min)
+2026-11-12T02:14:18Z stamps (unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native): exit 0 (0 min)
+2026-11-12T02:14:57Z bytes (unit 10/10 phi-3.5-moe br block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native byte-groups=1): exit 2 (1 min)
+2026-11-12T02:15:04Z the session ended: driver exit 3

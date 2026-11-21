@@ -1,0 +1,661 @@
+{
+  "run_id": "nvidia_gh200_480gb-1settle30.0-2window120.0-3poll2.0-d8c22533",
+  "card": "NVIDIA GH200 480GB",
+  "predictions": [
+    {
+      "number": 1,
+      "claim": "a healthy card holds a clock well clear of its own floor",
+      "numbers": "the median SM clock over the scored window is at least 0.3333 of this card's maximum. The lowest per-cell median anywhere in this repository's published corpus, 1275 MHz on a 1980 MHz part, sits 1.93x above that part's own floor; the 2026-09-11 fault sat 1.91x below its part's",
+      "fail": "THE SESSION IS REFUSED AND THE POD IS RETURNED. A card that cannot hold a clock produces a ruler whose compute peak has collapsed while its memory side has not, and every roof fraction, ridge and alpha measured against that ruler is wrong rather than merely low."
+    },
+    {
+      "number": 2,
+      "claim": "and it is still holding it at the end of the window, not on the way down",
+      "numbers": "the last third of the window agrees with the first third within 0.05 of it, the same fraction `timing.clock_flags` applies to a cell, after the first 30 s have been discarded as the governor's ramp",
+      "fail": "the card was still collapsing when the probe stopped. The median may be above the floor and the ceilings still unmeasurable, because the calibration that follows takes minutes and this window took two."
+    }
+  ],
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "number": "1",
+      "claim": "the probe watched a loaded card for the booked window",
+      "verdict": "PASS",
+      "measured": "55 scored samples over 119 s (of 68 polled, 30 s of ramp discarded)",
+      "threshold": ">= 9 samples and >= 108 s",
+      "invalidates": "every gate below, which would otherwise report a clean card from a window nobody measured",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "2",
+      "claim": "every scored sample came through NVML",
+      "verdict": "PASS",
+      "measured": "sources nvml",
+      "threshold": "exactly 'nvml'",
+      "invalidates": "both claims below: a forked sample describes an idle card, and an idle card reads at its boost clock",
+      "lines": []
+    },
+    {
+      "kind": "CLAIM",
+      "number": "1",
+      "claim": "the card holds a clock above its own thermal floor",
+      "verdict": "PASS",
+      "measured": "1440 MHz median over the window",
+      "threshold": ">= 660 MHz = 0.3333 x this card's 1980 MHz maximum, from nvml",
+      "invalidates": "the whole session: nothing measured on this pod is this card's ceiling and nothing scored against it may be quoted",
+      "lines": [
+        "board power 72.4% of the 900 W limit over the same window. A low clock AT the cap is a hungry kernel; a low clock well under it is a card in trouble.",
+        "NVML slowdown reasons seen: 0x4 SwPowerCap. RECORDED, NOT SCORED: the clock is what makes a ceiling wrong, this says why."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "number": "2",
+      "claim": "the clock is steady from the start of the window to its end",
+      "verdict": "PASS",
+      "measured": "first third 1440 MHz, last third 1440 MHz, 0.0% apart",
+      "threshold": "within 0.05 of the first third, either direction",
+      "invalidates": "the ceilings the calibration is about to measure, which will be taken minutes after this window closed",
+      "lines": []
+    }
+  ],
+  "trace": {
+    "settle_seconds": 30.0,
+    "window_seconds": 120.0,
+    "max_sm_clock_mhz": 1980.0,
+    "max_sm_clock_source": "nvml",
+    "power_limit_w": 900.0,
+    "samples": [
+      {
+        "t": 2.2397503849999794,
+        "mhz": 1440,
+        "temp_c": 55,
+        "power_w": 651.506,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 4.507058203000042,
+        "mhz": 1440,
+        "temp_c": 54,
+        "power_w": 652.631,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 6.769095561000086,
+        "mhz": 1455,
+        "temp_c": 53,
+        "power_w": 650.138,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 9.034006742999964,
+        "mhz": 1440,
+        "temp_c": 54,
+        "power_w": 651.22,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 11.301096223000059,
+        "mhz": 1440,
+        "temp_c": 54,
+        "power_w": 648.739,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 13.565778795000142,
+        "mhz": 1455,
+        "temp_c": 55,
+        "power_w": 651.933,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 15.831994728000154,
+        "mhz": 1440,
+        "temp_c": 55,
+        "power_w": 650.48,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 18.048920213999963,
+        "mhz": 1440,
+        "temp_c": 56,
+        "power_w": 649.039,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 20.26408081700015,
+        "mhz": 1440,
+        "temp_c": 56,
+        "power_w": 649.566,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 22.533104654,
+        "mhz": 1440,
+        "temp_c": 57,
+        "power_w": 650.09,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 24.75375821500006,
+        "mhz": 1440,
+        "temp_c": 57,
+        "power_w": 648.589,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 26.9712217230001,
+        "mhz": 1440,
+        "temp_c": 58,
+        "power_w": 651.519,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 29.189975647999972,
+        "mhz": 1440,
+        "temp_c": 58,
+        "power_w": 649.467,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 31.408194685000126,
+        "mhz": 1440,
+        "temp_c": 58,
+        "power_w": 653.751,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 33.62862981100011,
+        "mhz": 1440,
+        "temp_c": 58,
+        "power_w": 648.728,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 35.85012491700013,
+        "mhz": 1440,
+        "temp_c": 59,
+        "power_w": 648.759,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 38.07162360699999,
+        "mhz": 1440,
+        "temp_c": 59,
+        "power_w": 649.829,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 40.29293355899995,
+        "mhz": 1440,
+        "temp_c": 59,
+        "power_w": 649.238,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 42.514165591000165,
+        "mhz": 1440,
+        "temp_c": 59,
+        "power_w": 648.608,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 44.73546264700008,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 650.276,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 46.95668287000012,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 650.634,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 49.17754513700015,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 650.995,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 51.398059527999976,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 650.769,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 53.61873996899999,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 650.582,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 55.83938117800017,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 651.54,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 58.06028270900015,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 650.628,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 60.280779116000076,
+        "mhz": 1440,
+        "temp_c": 60,
+        "power_w": 651.472,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 62.50151306199996,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 651.333,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 64.72240582600011,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 650.667,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 66.94330607699999,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 651.283,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 69.16430309800012,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 651.019,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 71.38474180800017,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 650.906,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 73.60482288200001,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 652.01,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 75.82540594600005,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 651.251,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 78.046480664,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 651.717,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 80.26783244000012,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 650.798,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 82.48904520700012,
+        "mhz": 1440,
+        "temp_c": 61,
+        "power_w": 651.947,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 84.70984356999998,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.213,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 86.93093345600005,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.339,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 89.15150883900014,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.2,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 91.37241523500006,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.246,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 93.59354050299999,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.934,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 95.81456567999999,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.484,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 98.03573892200006,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.974,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 100.25628799700007,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 653.045,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 102.47695345800003,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.559,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 104.69736979599998,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 653.153,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 106.91763240399996,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 653.272,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 109.13852500300004,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.318,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 111.35946352200017,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.574,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 113.58042370600015,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 650.747,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 115.80105755,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.688,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 118.02185152700008,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.591,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 120.24281951900002,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.612,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 122.46409260200016,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.396,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 124.68530194100003,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.783,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 126.90620570800002,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.929,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 129.12754106400007,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.094,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 131.34834319800007,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.641,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 133.56932834200006,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.543,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 135.79019498900016,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 653.496,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 138.01130192699998,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 654.733,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 140.23256476999995,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 653.807,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 142.45385958099996,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.38,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 144.67505387999995,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.656,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 146.8967207600001,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 651.914,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 149.11804392399995,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 652.679,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      },
+      {
+        "t": 150.25578837000012,
+        "mhz": 1440,
+        "temp_c": 62,
+        "power_w": 656.449,
+        "source": "nvml",
+        "reasons": "0x4 SwPowerCap"
+      }
+    ],
+    "median_mhz": 1440,
+    "head_mhz": 1440.0,
+    "tail_mhz": 1440.0,
+    "floor_mhz": 660.0,
+    "power_fraction": 0.7240622222222222
+  },
+  "git_sha": "f49a2133c942c20c3b1b72e002b03af1ccd216a3",
+  "gpu_name": "NVIDIA GH200 480GB",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "scripts/thermal_acceptance.py: sustained dense bf16 GEMM (moe.bench.calibrate._load_compute, 8192^3, 32 per step) with SM clock, board power and temperature polled through NVML while the queue is busy; NOT timing.TIMING_BASIS, nothing is timed",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "f49a2133c942c20c3b1b72e002b03af1ccd216a3",
+    "git_dirty": false,
+    "git_dirty_files": 0,
+    "utc": "2026-09-25T07:13:48+00:00",
+    "hostname": "192-222-57-200",
+    "gpu_name": "NVIDIA GH200 480GB",
+    "driver_version": "580.105.08",
+    "cuda_version": "13.0",
+    "python": "3.12.14",
+    "torch": "2.13.0+cu130",
+    "triton": "3.7.1",
+    "vllm": null,
+    "sglang": null,
+    "instrument": "scripts/thermal_acceptance.py: sustained dense bf16 GEMM (moe.bench.calibrate._load_compute, 8192^3, 32 per step) with SM clock, board power and temperature polled through NVML while the queue is busy; NOT timing.TIMING_BASIS, nothing is timed",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "vllm": "package not installed",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}

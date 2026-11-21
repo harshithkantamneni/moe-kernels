@@ -1,0 +1,13 @@
+R=/home/ubuntu/moe/results/2026-09-25-nvidia_a100_sxm4_40gb-r3-counters
+G=64 start 00:37:33
+G=64 rc=3 end 00:58:14
+G=1 start 00:58:14
+G=1 rc=3 end 01:19:00
+G=4 start 01:19:00
+G=4 rc=1 end 01:39:42
+G=2 start 01:39:42
+G=2 rc=1 end 02:00:25
+G=16 start 02:00:25
+G=16 rc=3 end 02:21:06
+analyse rc=3 02:21:08
+DONE

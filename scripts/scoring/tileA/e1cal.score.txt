@@ -1,0 +1,6 @@
+SCORED against 2026-10-14-tileA-e1cal-gh200
+E1-CAL: NOT SCORED: tA-floor has no calibration (c_128, F_wg): v4 has no wgmma constants, rental B does not run
+  ALL: None None
+  CLEAN: None None
+STOP RULE: STOP: rental B does not run
+  tA-floor has no calibration (c_128, F_wg): v4 has no wgmma constants, rental B does not run

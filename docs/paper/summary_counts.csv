@@ -1,0 +1,23 @@
+group,verdict,count,rows
+primary time tests,HELD,3,"12, 25, 29"
+primary time tests,FALSIFIED,4,"17, 20, 33, 77"
+primary time tests,NOT SCORABLE,1,37
+primary time tests,NOT RUN,2,"24, 41"
+"per-GEMM floor tests (base capture, each registration once)",HELD,14,"10 w1, 15 w1, 22 w1, 26 w1, 26 w2, 30 w1, 30 w2, 34 w1, 38 w2, 42 w1, 42 w2, 43 w1, 43 w2, 47 w2"
+"per-GEMM floor tests (base capture, each registration once)",FALSIFIED,2,"34 w2, 47 w1"
+"per-GEMM floor tests (base capture, each registration once)",NOT SCORABLE,1,39 w1
+"PRIVATE bytes per GEMM, five 2026-09-29 GH200 registrations",HELD,9,"23 w1, 23 w2, 28 w1, 28 w2, 32 w1, 36 w1, 36 w2, 40 w1, 40 w2"
+"PRIVATE bytes per GEMM, five 2026-09-29 GH200 registrations",FALSIFIED,1,32 w2
+"PRIVATE bytes per GEMM, row 14 (inside its byte test)",FALSIFIED,2,"w1, w2"
+"PRIVATE bytes per GEMM, row 19 (inside its byte test)",FALSIFIED,2,"w1, w2"
+"code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",HELD,4,"1, 3, 4, 7"
+"code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",FALSIFIED,3,"2, 5, 8"
+"code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",UNDECIDED,1,6
+"floor law, rental 2 part 4 (row 60)",NEITHER,1,60
+"floor law, rental 3 part B (row 83)",INCONCLUSIVE,1,83
+"dead-CTA cost d 0.995 ns, rental 4 (row 89)",HOLDS,1,89
+"k-step law, rental 4 part B' (row 91)",UNDECIDED,1,91
+"skew end to end, model v2 from predicted bytes, rental 5 E1-SKEW (row 97)","NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS",1,97
+"dead-CTA increment under skew, rental 5 c15 D (row 99)",HOLDS,1,99
+"skew end to end, model v3 from predicted bytes, rental 6 E1-SKEW (row 104)",HOLDS,1,104
+"skew end to end, model v3 from predicted bytes, rental 7 E1-SKEW on Mixtral and Phi (row 112)",HOLDS,1,112

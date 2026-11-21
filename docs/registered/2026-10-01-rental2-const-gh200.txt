@@ -1,0 +1,67 @@
+REGISTERED 2026-10-01, before any rental-2 page: rental 2 part 3, the missing per-GEMM constant
+captures: mixtral-8x7b-tp8 floor2 treads [1, 2, 6, 8, 10, 11, 12, 13, 14, 15, 16] ['base', 'lock1710']; mixtral-8x7b-tp4 floor treads [1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16] ['base', 'lock1710']; mixtral-8x7b-tp2 floor treads [1, 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16] ['base', 'lock1710']; mixtral-8x7b-tp4 at 1005 floor1005 treads [2, 4, 6, 8, 12, 16] ['lock1005']
+primary: the 1710 lock captures (part 3 reads clocks, the base capture is printed beside)
+
+definitions:
+  q: N_live / 132, N_live = E n npn (every NATIVE M-tile full)
+  floor_bound: the cell's CORES floor share ceil(q) u / CORES >= 0.97 at sigma 1 (the launch order's own reads), NOT re-priced, and waves >= 2; the registered list below is the cell set
+  Z_f: the INTERCEPT of sm__cycles_active.avg regressed on q over a capture's floor-bound cells of one GEMM, the slope free (floor_estimator.intercept); one Z per (capture, GEMM)
+  T: elapsed.avg - active.avg - (ceil(q) - q) u, per cell (RECORD)
+  L: sm__cycles_elapsed.avg - sm__cycles_active.max, per cell
+  D_imb: active.max - active.avg - (ceil(q) - q) u, per cell
+  cta_excess: sm__ctas_launched.max - ceil(grid / 132), per cell (RECORD: dead CTAs exit at once and are counted)
+  concurrency: sm__ctas_active.sum / (132 x sm__cycles_active.avg), per cell (RECORD)
+  L0: the null kernel's sm__cycles_elapsed.avg - 1000: a one-CTA launch-and-drain floor, a LOWER BOUND on a 132-SM grid's (RECORD)
+  clock: each capture's median over its floor-bound cells of sm_clock_mhz (elapsed / gpu__time_duration), never the lock asked
+
+CAL, Z by intercept (sm__cycles_active.avg on q, the slope free), floor-bound cells of >= 2 waves:
+  mixtral-8x22b    2026-09-28 base w1 cells 4  Z/u +0.357  slope/u 0.9919  clock 1369 MHz  active rms 875 cycles
+  mixtral-8x22b    2026-09-28 base w2 cells 4  Z/u +0.189  slope/u 1.0043  clock 1365 MHz  active rms 872 cycles
+  mixtral-8x22b    2026-09-28 lock w1 cells 4  Z/u +0.464  slope/u 0.9925  clock 1764 MHz  active rms 1514 cycles
+  mixtral-8x22b    2026-09-28 lock w2 cells 4  Z/u +0.401  slope/u 0.9980  clock 1751 MHz  active rms 3117 cycles
+  mixtral-8x7b     2026-09-27 base w1 cells 4  Z/u +0.221  slope/u 0.9932  clock 1368 MHz  active rms 824 cycles
+  mixtral-8x7b     2026-09-27 base w2 cells 3  Z/u +0.192  slope/u 1.0097  clock 1362 MHz  active rms 578 cycles
+  mixtral-8x7b     2026-09-27 lock w1 cells 4  Z/u +0.226  slope/u 0.9940  clock 1679 MHz  active rms 674 cycles
+  mixtral-8x7b     2026-09-27 lock w2 cells 3  Z/u +0.260  slope/u 1.0079  clock 1664 MHz  active rms 918 cycles
+  mixtral-8x7b     2026-09-30 base w1 cells 6  Z/u +0.239  slope/u 0.9929  clock 1386 MHz  active rms 497 cycles
+  mixtral-8x7b     2026-09-30 base w2 cells 5  Z/u +0.166  slope/u 1.0114  clock 1392 MHz  active rms 753 cycles
+  mixtral-8x7b     2026-09-30 lock w1 cells 6  Z/u +0.251  slope/u 0.9938  clock 1685 MHz  active rms 747 cycles
+  mixtral-8x7b     2026-09-30 lock w2 cells 5  Z/u +0.257  slope/u 1.0082  clock 1671 MHz  active rms 854 cycles
+  olmoe-1b-7b      2026-09-29 base w1 cells 4  Z/u +0.434  slope/u 1.0008  clock 1346 MHz  active rms 50 cycles
+  olmoe-1b-7b      2026-09-29 base w2 cells 4  Z/u +0.576  slope/u 0.9938  clock 1334 MHz  active rms 168 cycles
+  olmoe-1b-7b      2026-09-29 lock w1 cells 4  Z/u +0.506  slope/u 1.0011  clock 1635 MHz  active rms 144 cycles
+  olmoe-1b-7b      2026-09-29 lock w2 cells 4  Z/u +0.682  slope/u 0.9943  clock 1627 MHz  active rms 127 cycles
+  qwen2-57b-a14b   2026-09-28 base w1 cells 4  Z/u +0.410  slope/u 0.9992  clock 1380 MHz  active rms 107 cycles
+  qwen2-57b-a14b   2026-09-28 base w2 cells 4  Z/u +0.388  slope/u 1.0020  clock 1367 MHz  active rms 334 cycles
+  qwen2-57b-a14b   2026-09-28 lock w1 cells 4  Z/u +0.363  slope/u 1.0006  clock 1682 MHz  active rms 898 cycles
+  qwen2-57b-a14b   2026-09-28 lock w2 cells 4  Z/u +0.598  slope/u 1.0019  clock 1673 MHz  active rms 1475 cycles
+  sigma_active (median of the CAL series' rms): 750 cycles
+
+K1: HOLDS when L <= 5000 cycles on at least 80% of the pool; FALSIFIED (H_LD carries a material part) when L > 5000 on more than 20% (CAL T at the lock <= 4.2k cycles, and L <= T)
+K2: Z_f / u of w2 on the tp4 (S 56) and tp2 (S 112) 1710 captures, pooled: the median of the two; band [0.25, 0.69], centre 0.401; FALSIFIED when the pooled value lies outside the band; H_LD predicts Z about 0 (the full CAL range of w2 Z_f / u at the 1710 lock, Qwen2 included (no model is excluded))
+K3: Z_f(1005) / Z_f(1710) on tp4 w1 and w2, the intercepts over the floor-bound cells the 1005 capture holds (n = 2, 4, 6, 8, 12, 16) and over the 1710 capture's own
+  forms: ns a constant in nanoseconds: the ratio equals f_1005 / f_1710 (each capture's own clock); cycles a constant in SM cycles: the ratio is 1.0
+  rule: per GEMM r = Z_1005 / Z_1710 and rho_f = f_1005 / f_1710; the pooled reading is the mean of the two GEMMs. The ns form HOLDS when |r - rho_f| <= 2 sigma_r and the cycle form is then FALSIFIED if |r - 1| > 2 sigma_r; the cycle form HOLDS when |r - 1| <= 2 sigma_r and the ns form is then FALSIFIED if |r - rho_f| > 2 sigma_r; sigma_r = r x sigma_ratio_rel (the registered noise model). A reading inside both bands, or neither, is INCONCLUSIVE (the zone the review names between the two)
+  w1: cells at 1005 [2, 4, 6, 8, 12, 16], at 1710 [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]; sigma_Z 599 / 568 cycles at Z 8616: sigma_r / r 0.096
+  w2: cells at 1005 [4, 6, 8, 12, 16], at 1710 [4, 6, 8, 10, 11, 12, 13, 14, 15, 16]; sigma_Z 791 / 733 cycles at Z 8124: sigma_r / r 0.133
+  the CAL base-to-lock exponent is not used as a band: by intercepts it reads [1.036202, 3.015536, 0.109917, 1.520547, 0.249477, 2.364547, 0.793218, 0.849912, -0.613745, 2.14091] over 10 series, which contains both forms (a 1.26x clock ratio cannot pin it); printed only
+K4: HOLDS when D_imb lies in [-0.2 u, 0.2 u] on at least 80% of the K1 pool; FALSIFIED (H_IMB) when D_imb >= 0.3 u on more than 20%; RECORD only: sm__ctas_launched.max - ceil(grid / 132) is printed, never scored (the review, section 3)
+K5: RECORD: n = 1, 2 cells' L, Z per cell (active.avg - q u), L0 and mean concurrency; tp4 and tp2 w1 Z_f / u against npn
+
+identification:
+  H_ZT: K1, K2 and K4 hold and K3 reads the ns form: a per-GEMM transient of about 0.4 u inside SM-busy time, constant in nanoseconds; a term a_g = zeta u_g / f is then registered for rental 3, never adopted from these pages
+  H_LD: K1 fails: the constant is launch/drain, and L0 says how much of it any kernel pays
+  H_IMB: K4 fails: the constant is dispatch imbalance
+  else: INCONCLUSIVE, with each K printed
+
+registered floor-bound cells (sigma 1), per capture model:
+  mixtral-8x7b-tp8 w1: n 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp8 w2: n 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp4 w1: n 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp4 w2: n 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp2 w1: n 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp2 w2: n 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+
+seen data:
+  a = elapsed - ceil(q) u at tp2 and tp4 n <= 9 is SEEN (rental-1 r3c pages hold NATIVE sm__cycles_elapsed at the 1710 lock); only the active and shape counters are new
+  tp8's floor counters at n = 1..6, 8, 10 are SEEN (rental 1)

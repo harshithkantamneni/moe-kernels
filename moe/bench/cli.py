@@ -6,6 +6,73 @@ a session would cost, without CUDA and without spending anything.
 
     python -m moe.bench.cli --profile standard --dry-run
     python -m moe.bench.cli --profile smoke --out-dir /workspace/results
+
+`--models`, `--tokens` and `--routings` override the profile's axes in place, so
+a rented box never has to edit `profiles.py` to sweep something the file does
+not name. That is not a convenience: an edited working tree stamps `git_dirty`
+on every row of the run.
+
+    python -m moe.bench.cli --profile trace-replay \\
+        --models deepseek-v2-lite \\
+        --routings uniform,trace:deepseek-v2-lite-chat-decode@b3l17
+
+MOE_FORCE_TILE pins the Triton tile for the whole run instead of letting vLLM's
+ladder step it with the token count. It is an environment variable rather than a
+flag because `scripts/pod_session.sh` and `docs/POD_RUNBOOK.md` already document
+it as one, and because it must reach every venv `moe.runner.subproc` spawns:
+
+    MOE_FORCE_TILE='{"BLOCK_SIZE_M":128,"BLOCK_SIZE_N":128,"BLOCK_SIZE_K":64,
+                     "GROUP_SIZE_M":1,"num_warps":8,"num_stages":4}' \\
+        python -m moe.bench.cli --profile crossing-uniform --env vllm \\
+               --groups baselines --impl vllm_fused_experts
+
+EXIT CODES ARE `moe.bench.exit_codes`'s, not this file's. The session driver
+runs this module as an arm of its own -- `pin_probe-n64-g1` and
+`pin_probe-n256-g16`, the two arms that decide whether five later arms may be
+quoted as tile-pinned -- and the only thing it reads without parsing prose is
+the integer. Until 2026-09-02 the integers here were the table's, INVERTED: a
+plan no span could pin printed the word REFUSED and exited 3, which the driver
+reads as INVALID and LATCHES, so the free refusal whose own message names the
+fix could never be re-run without hand-editing the ledger; a row that ran pinned
+and did not show the pin -- gate F1, the S6a defect this probe exists to detect
+-- exited 4, which is RETRY, so the driver would spend the minutes again next
+session; and a mistyped `--models` exited 1, CLAIM_FAIL, a refuted claim from a
+run that measured nothing. None of it needed a GPU to go wrong.
+
+So: DONE 0, CLAIM_FAIL 1, REFUSED 2 (nothing measured: a malformed variable, an
+unknown model, a plan holding no span able to pin), INVALID 3 (the sweep ran and
+a VALIDITY gate failed after it; nothing quotable), ERROR 4 (an exception this
+module did not plan for, caught in `main` so that a crash is never handed to the
+ledger as a refuted claim). The two force-tile gates print one
+`RESULT: VALIDITY F1 ...` line each and the code is `exit_codes.classify` over
+the same verdicts, so `classify_text` on the log recomputes what the process
+returned.
+
+`--dry-run` IS THE ONE PLACE THIS FILE SPEAKS A SECOND VOCABULARY, and it does
+so deliberately. It exits DONE (0) for a plan that validates and REFUSED (2) for
+one that does not, and the first integer does NOT mean the table's "measured;
+every VALIDITY and CLAIM gate PASSED", because a plan scores no gate at all --
+`classify_text` over a dry-run log raises NoGatesScored. The driver reads a plan
+arm through `dry_state` rather than through the gate table (0 PLANNED, 2
+PLAN_REFUSED, anything else BROKEN: "this is a PLAN, and it did not survive its
+own --dry-run") and it re-queues neither state. The sibling scripts converted in
+461d0e6 refuse unconditionally on their dry path because their rows are not plan
+rows; `scripts/run_all.sh` execs this one and reads 0 as "the plan validated,
+proceed". So the divergence from `scripts/check_mma_path.sh`, which refuses, is
+real and intended, and this paragraph is the thing that has to say so. The
+dotted spelling above is load-bearing
+as well as accurate: the driver's `adopts_exit_codes` greps each arm's own file
+for it, and prints a caveat beside every REFUSED or INVALID row that came out of
+a file which does not name it. See moe/bench/force_tile.py.
+
+2 IS A HANDLED OUTCOME AND NOT A TRACEBACK. `driver.refuse_dropped_retired_knobs`
+raises out of `run_sweep` on purpose -- a configuration the instrument cannot
+honour is the same for every cell, so swallowing it per cell would print one
+warning per cell and exit 0. Letting it out of `main` instead is no better: the
+process then exits 1, which `exit_codes` reads as CLAIM_FAIL, "measured; a CLAIM
+gate did not pass; a RESULT, not a retry", and `scripts/run_all.sh` runs under
+`set -euo pipefail` with the smoke profile ahead of the real sweep. So the
+refusal is caught here, printed as the reason it carries, and exits REFUSED.
 """
 from __future__ import annotations
 
@@ -13,11 +80,15 @@ import argparse
 import json
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import moe
 
-from ..spec import MODEL_CONFIGS
+from ..spec import MODEL_CONFIGS, RoutingSpec
+from ..stages import registry
+from . import exit_codes as EC
+from . import force_tile as FT
 from . import profiles as PR
 from . import timing as T
 from .driver import RunConfig, run_sweep
@@ -40,6 +111,12 @@ def parse_args(argv=None):
                    help="comma-separated model override, e.g. mixtral-8x7b,toy")
     p.add_argument("--tokens", default=None,
                    help="comma-separated token-count override")
+    p.add_argument("--routings", default=None,
+                   help="comma-separated routing override, in the label form "
+                        "the dry run prints and the CSV records: uniform, "
+                        "zipf:1.2, dirichlet:0.3, hot:0.5, "
+                        "trace:mixtral-8x7b-chat-decode, or a pinned slice "
+                        "trace:mixtral-8x7b-chat-decode@b3l17")
     p.add_argument("--max-minutes", type=float, default=None,
                    help="stop cleanly at this wall-clock budget; resume later")
     p.add_argument("--traces-dir", type=Path, default=None)
@@ -60,6 +137,41 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def parse_routing(text: str) -> RoutingSpec:
+    """Read one routing off the command line, in the form everything prints it.
+
+    `RoutingSpec.label` is the format: `uniform`, `zipf:1.2`, `trace:<id>`. So
+    what a dry run printed, or what a published CSV recorded, can be pasted back
+    in without translation, and there is one spelling of a routing in this
+    project rather than two.
+
+    WHY THIS EXISTS. `kind="trace"` is the axis the repo calls its
+    differentiator, and until `--routings` there was no way to point a sweep at
+    a capture except by editing `profiles.py` on the box -- which stamps
+    `git_dirty` on every row of the run and makes the arm unpublishable.
+
+    Errors exit rather than raise: this runs during argument parsing, where a
+    traceback is noise and a misspelt routing should cost nothing.
+    """
+    kind, _, rest = text.strip().partition(":")
+    kind, rest = kind.strip(), rest.strip()
+    if kind == "trace":
+        if not rest:
+            raise SystemExit("routing 'trace' needs an id, e.g. "
+                             "trace:mixtral-8x7b-chat-decode")
+        return RoutingSpec("trace", trace_id=rest)
+    param = 0.0
+    if rest:
+        try:
+            param = float(rest)
+        except ValueError:
+            raise SystemExit(f"routing {text!r}: {rest!r} is not a number") from None
+    try:
+        return RoutingSpec(kind, param)
+    except ValueError as e:
+        raise SystemExit(f"routing {text!r}: {e}") from None
+
+
 def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
     from dataclasses import replace
     changes = {}
@@ -71,9 +183,25 @@ def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
         changes["models"] = names
     if args.tokens:
         changes["token_counts"] = tuple(int(t) for t in args.tokens.split(","))
+    if getattr(args, "routings", None):
+        routings = tuple(parse_routing(r) for r in args.routings.split(",")
+                         if r.strip())
+        if not routings:
+            raise SystemExit("--routings was given but names no routing")
+        changes["routings"] = routings
     if getattr(args, "no_pipeline_scope", False):
         changes["include_pipeline_scope"] = False
-    return replace(profile, **changes) if changes else profile
+    profile = replace(profile, **changes) if changes else profile
+    # A trace belongs to the model it was captured from, and `Profile.specs`
+    # drops the pairings that are not that. An override can therefore ask for a
+    # matrix whose every cell is dropped, and finding that out from a run that
+    # writes no rows is the expensive way.
+    if not profile.specs():
+        raise SystemExit(
+            f"the overridden matrix has no cells: models {list(profile.models)} "
+            f"against routings {[r.label for r in profile.routings]}. A trace "
+            "is only valid on the model it was captured from.")
+    return profile
 
 
 def measured_ceilings() -> dict:
@@ -141,7 +269,41 @@ def time_limited(cells, max_minutes: float | None):
               "stopping cleanly. Re-run with the same --run-id to resume.")
 
 
-def dry_run(profile: PR.Profile, args, traces) -> int:
+def force_tile_plan(forced: FT.ForcedTile | None, impls) -> tuple[list[str], bool]:
+    """What the pin would do to this plan, printed BEFORE anything is spent.
+
+    Returns the lines and whether the plan is honourable at all. A plan where
+    nothing can be pinned is not a warning: it is the exact state the
+    2026-09-01 session ran in for 54 minutes, and the dry run is the review step
+    that was supposed to catch it.
+
+    Off the GPU box no framework span registers, so a laptop dry run always
+    reports "nothing can pin this". That is honest rather than a nuisance: it is
+    also what the run would do on a pod where the vLLM import failed.
+    """
+    if forced is None:
+        return [], True
+    can, cannot = FT.split_by_pinnability(impls)
+    lines = [f"\nforced tile     {forced.describe()}",
+             f"  resume key    {forced.fingerprint()} (in every manifest key, "
+             f"so a pinned run cannot resume an unpinned one)"]
+    if can:
+        lines.append(f"  CAN PIN       {', '.join(can)}")
+    if cannot:
+        lines.append(f"  CANNOT PIN    {', '.join(cannot)}")
+        lines.append("                those cells are RECORDED AND SKIPPED, "
+                     "never measured unpinned")
+    if not can:
+        lines.append(
+            f"\nREFUSED: {FT.ENV_VAR} is set and no implementation in this plan "
+            f"can honour it, so the run would measure nothing pinned. Either "
+            f"unset it, or point the sweep at the vLLM span: --env vllm "
+            f"--groups baselines --impl vllm_fused_experts, inside the vllm "
+            f"venv. Off the GPU box no framework span registers at all.")
+    return lines, bool(can)
+
+
+def dry_run(profile: PR.Profile, args, traces, forced=None) -> int:
     """Print what a sweep would do. All computation lives in profiles.plan()."""
     p = PR.plan(profile, env=args.env, impl_filter=tuple(args.impl),
                 include_reference=args.include_reference, traces=traces)
@@ -153,7 +315,16 @@ def dry_run(profile: PR.Profile, args, traces) -> int:
     print(f"dtypes          {', '.join(profile.dtypes)}")
     print(f"routings        {', '.join(r.label for r in profile.routings)}")
     print(f"seeds           {', '.join(str(s) for s in profile.seeds)}")
-    print(f"specs           {p.specs}")
+    # The axes above are a cartesian product and `Profile.specs` is not: a trace
+    # only sweeps the model it was captured from. Say so, or the two numbers
+    # disagree on the page with nothing to explain them.
+    product = (len(profile.models) * len(profile.token_counts)
+               * len(profile.dtypes) * len(profile.routings)
+               * len(profile.seeds))
+    dropped = product - p.specs
+    print(f"specs           {p.specs}" + (
+        f"   ({dropped} of {product} dropped: a trace is only valid on the "
+        "model it was captured from)" if dropped else ""))
     print(f"implementations {len(p.impls)}: "
           f"{', '.join(p.impls) if p.impls else 'NONE REGISTERED'}")
     print(f"timing modes    {p.modes} "
@@ -162,6 +333,22 @@ def dry_run(profile: PR.Profile, args, traces) -> int:
     print(f"timing rows     {p.timing_rows} (upper bound; a skipped or "
           "uncapturable graph mode still writes one row)")
     print(f"skipped         {p.unsupported} (implementation does not support the cell)")
+
+    # PRICED ON THE INSTRUMENT THIS RUN WOULD USE, not on the one the published
+    # rates were measured on. `MEASURED_CELL_COST` was fitted against arms timed
+    # by the retired `time_eager`/`time_graph`, which warmed for a CALL COUNT;
+    # `time_kernel` warms for `warmup_ms` of delivered GPU time per timed row,
+    # which is more on every environment and dtype in the table. A pre-rental
+    # figure that quoted the old number would be low, and low is the one
+    # direction a budget must not be wrong in.
+    warmup_ms = profile.warmup_ms if profile.warmup_ms is not None \
+        else RunConfig.__dataclass_fields__["warmup_ms"].default
+    hours = PR.estimated_hours(profile, warmup_ms=warmup_ms)
+    priced = ", ".join(f"{env} {h:.3g}" for env, h in sorted(hours.items())
+                       if env != "total" and h > 0)
+    print(f"\nestimated hours {hours['total']:.3g} total ({priced})")
+    print(f"                on {T.TIMING_BASIS}, warmup_ms={warmup_ms:g} per "
+          f"timed row")
 
     from .footprint import worst_cell
     spec, fp = worst_cell(profile.specs())
@@ -188,12 +375,36 @@ def dry_run(profile: PR.Profile, args, traces) -> int:
         print("\nNothing to benchmark: no non-reference implementations are "
               "registered. Write a kernel in moe/kernels/ (see TEMPLATE.md).")
 
+    # `registry()[name]` rather than a second call to candidate_impls, so this
+    # cannot describe a different implementation set from the one just planned.
+    lines, honourable = force_tile_plan(forced, [registry()[n] for n in p.impls])
+    for line in lines:
+        print(line)
+
     print("\nNo GPU was used. Nothing was spent.")
-    return 0 if p.ok else 1
+    # REFUSED, not 1. A plan that does not validate measured nothing, so the
+    # only two codes it can honestly carry are DONE (this plan would run) and
+    # REFUSED (it would not, and here is why). 1 is CLAIM_FAIL, which asserts a
+    # pre-registered expectation was tested and did not hold, and no expectation
+    # is tested here. The driver reads a plan arm's 2 as PLAN_REFUSED and its 0
+    # as PLANNED (`dry_state`), which is the distinction this line feeds.
+    return EC.DONE if (p.ok and honourable) else EC.REFUSED
 
 
-def main(argv=None) -> int:
+def _main(argv=None) -> int:
     args = parse_args(argv)
+
+    # BEFORE bootstrap, which imports vLLM and costs ~20 s on the pod: a
+    # mistyped tile config should cost nothing at all. SystemExit rather than a
+    # traceback for the reason parse_routing gives -- this is argument handling,
+    # and the message is the useful part.
+    try:
+        forced = FT.from_env()
+    except FT.ForceTileMalformed as e:
+        # str(e), not a wrapped message: every refusal in force_tile already
+        # names the variable and says what to do instead.
+        raise SystemExit(str(e)) from None
+
     moe.bootstrap(*[g.strip() for g in args.groups.split(",") if g.strip()])
 
     if args.list_impls:
@@ -207,13 +418,19 @@ def main(argv=None) -> int:
     routing, routing_info, traces = build_routing_source(args)
 
     if args.dry_run:
-        return dry_run(profile, args, traces)
+        return dry_run(profile, args, traces, forced)
 
     cfg_kw = dict(out_dir=args.out_dir, env_name=args.env, device=args.device,
-                  warmup=profile.warmup, trials=profile.trials,
-                  iters=profile.iters, l2_modes=profile.l2_modes,
+                  trials=profile.trials, l2_modes=profile.l2_modes,
                   graph_modes=profile.graph_modes, routing_info=routing_info,
-                  **measured_ceilings())
+                  force_tile=forced, **measured_ceilings())
+    # ONLY WHAT THE PROFILE ACTUALLY ASKED FOR. A profile that names neither
+    # takes `RunConfig`'s defaults, and there is no branch here that can hand
+    # the instrument a knob it has no parameter for: `Profile` no longer has
+    # the retired `warmup` count or `iters` to copy across.
+    cfg_kw.update({name: value for name, value in
+                   (("warmup_ms", profile.warmup_ms),
+                    ("target_ms", profile.target_ms)) if value is not None})
     if args.run_id:
         cfg_kw["run_id"] = args.run_id
     cfg = RunConfig(**cfg_kw)
@@ -230,12 +447,160 @@ def main(argv=None) -> int:
     print(f"[cli] env={args.env} {info['env_version']} "
           f"gpu={info.get('gpu_name', 'none')}")
 
+    if forced is not None:
+        # BEFORE the sweep, and a refusal here costs nothing: the alternative is
+        # discovering after 22 GB of weights and an fp32 oracle that the plan
+        # contained no span able to honour the pin, which is the shape of the
+        # 2026-09-01 session.
+        lines, honourable = force_tile_plan(forced, planned_impls(args))
+        for line in lines:
+            print(line)
+        if not honourable:
+            # REFUSED, and the distinction is the whole point of having two
+            # codes for "nothing quotable": this branch is BEFORE run_sweep, so
+            # no cell was timed, no pod minute was spent, and the arm can be
+            # re-run the moment the vLLM span registers. INVALID (3), which
+            # this returned until 2026-09-02, told the driver the opposite --
+            # measured then broken -- and it latches such a row.
+            return EC.REFUSED
+        print("[cli] gates registered before the run, with their thresholds:")
+        for gid, claim, _, threshold, _ in cfg.force_tile_ledger.gates():
+            print(f"[cli]   {gid}  {claim}: {threshold}")
+
     started = time.time()
-    path = run_sweep(cells, cfg, routing, info=info)
+    try:
+        path = run_sweep(cells, cfg, routing, info=info)
+    except T.TimingRefused as e:
+        # NOTHING WAS MEASURED, which is what REFUSED means and what makes this
+        # free rather than a wasted arm. The message is the useful part and it
+        # already names both ways out, so it is printed rather than wrapped, and
+        # stderr rather than stdout: `moe.runner.subproc` parses stdout for the
+        # JSON line below, and a refusal has no paths to hand back.
+        print(f"REFUSED: {e}", file=sys.stderr)
+        return EC.REFUSED
     print(f"[cli] run_id={cfg.run_id} elapsed={time.time() - started:.1f}s")
+    # The JSON line first: moe.runner.subproc parses it out of stdout and a
+    # non-zero exit below must not cost the caller the paths it needs to resume.
     print(json.dumps({"csv": str(path), "manifest": str(cfg.manifest_path),
                       "run_id": cfg.run_id}))
-    return 0
+    return force_tile_verdict(forced, cfg.force_tile_ledger)
+
+
+def planned_impls(args) -> list:
+    """The spans this invocation would benchmark, filtered exactly as
+    `profiles.cells` filters them, so the pinning report cannot describe an
+    implementation set the sweep does not use."""
+    impls = PR.candidate_impls(env=args.env,
+                               include_reference=args.include_reference)
+    keep = tuple(args.impl)
+    return [s for s in impls if not keep or s.name in keep]
+
+
+def force_tile_verdict(forced, ledger) -> int:
+    """The run's exit code, once the pin has been accounted for.
+
+    NON-VACUITY, and it is the whole reason the ledger counts anything. A sweep
+    that was asked to pin and pinned nothing writes rows nobody can quote as
+    pinned, and every check downstream of it examines zero pinned rows and
+    reports zero failures -- which is exactly how MOE_FORCE_TILE stayed set for
+    a whole session with nothing reading it. So that state exits non-zero and
+    says which of the two shapes it is.
+
+    BOTH SHAPES ARE INVALID, NOT ERROR AND NOT REFUSED. F1 and F2 are VALIDITY
+    gates (`ForceTileLedger.gates`) scored AFTER the sweep has run, so
+    `exit_codes.classify` maps either failure to 3: the pod minutes are spent,
+    the cells are on disk, and not one of them may be scored. The codes this
+    returned until 2026-09-02 said the other two things. 4 for F1 is ERROR,
+    which the driver retries, so the one gate that detects the S6a defect --
+    "the variable was set and the kernel did not run that tile" -- bought
+    another rental of the same failure. 3 for F2 was accidentally right and
+    printed the word REFUSED beside it, which is the code for a run that spent
+    nothing.
+
+    ONE `RESULT: ` LINE PER GATE, rendered by `exit_codes.result_line` and by
+    nothing else in this module, so the driver's summary reports these two gates
+    as scored instead of "This arm was NOT scored", and so `classify_text` over
+    the log recomputes the integer the process returned.
+    """
+    if forced is None:
+        # Not a scored arm at all: an unpinned sweep registers no gate, makes no
+        # claim about pinning and prints no RESULT line. DONE is the honest code
+        # for it, and `classify` is deliberately not consulted -- it raises on an
+        # empty gate list rather than calling nothing-examined a pass.
+        return EC.DONE
+    scored = []
+    for gid, claim, measured, threshold, ok in ledger.gates():
+        verdict = EC.PASS if ok else EC.FAIL
+        detail = f"[{EC.VALIDITY}] {claim} | measured {measured} | gate {threshold}"
+        print(EC.result_line(EC.VALIDITY, gid, verdict, " ".join(detail.split())))
+        print(f"[force-tile] GATE {gid}  {claim}: {measured} against "
+              f"{threshold}  {verdict}")
+        scored.append((EC.VALIDITY, gid, verdict))
+    if ledger.unobserved:
+        print(f"[force-tile] F1 FAILED: {len(ledger.unobserved)} "
+              f"implementation(s) ran under {FT.ENV_VAR} and produced no row "
+              f"showing that tile. No number from this run may be quoted as "
+              f"tile-pinned. See the NOT HONOURED lines above.")
+    if ledger.vacuous():
+        print(f"[force-tile] F2 FAILED: {FT.ENV_VAR} was set and not one cell "
+              f"of this run stands under it ({ledger.skipped_cells} cells were "
+              f"skipped as unpinnable). Point the sweep at the vLLM span -- "
+              f"--env vllm --groups baselines --impl vllm_fused_experts, inside "
+              f"the vllm venv -- or unset the variable to sweep vLLM's own "
+              f"ladder.")
+    rc = EC.classify(scored)
+    print(f"[force-tile] exit {EC.describe(rc)}")
+    if rc == EC.INVALID:
+        print("[force-tile] the cells this run wrote must NOT be scored, and "
+              "the arm is not auto-retried: re-run it only once the log says "
+              "in words what changed.")
+    return rc
+
+
+def main(argv=None) -> int:
+    """The two integers this module would otherwise return by accident.
+
+    A STRING SystemExit IS REFUSED (2). `raise SystemExit("some sentence")`
+    exits ONE, and 1 is CLAIM_FAIL: a pre-registered expectation that was tested
+    and did not hold, which the ledger records as a finished result and never
+    retries. Every refusal this module raises -- an unknown `--models`, a
+    routing that is not a number, an override whose matrix has no cells, a
+    malformed MOE_FORCE_TILE -- happens during argument handling, before
+    `moe.bootstrap` and long before a cell is timed, so all of them are REFUSED.
+    `python -m moe.bench.cli --models nope` returned 1 until 2026-09-02.
+
+    AN UNPLANNED EXCEPTION IS ERROR (4). An escaping traceback exits 1 as well,
+    for the same reason and with worse consequences: `--out-dir` under a path
+    that is not a directory, an OOM, a vLLM import that dies inside
+    `moe.bootstrap`. The driver reads 1 as CLAIM_FAIL, ledgers a dead process as
+    a refuted claim, and LATCHES the arm, so a transient crash costs a second
+    rental to discover. This is the same defect the ERR trap in
+    `scripts/check_mma_path.sh` exists to prevent, in the arm the same commit
+    left without one, and the header at the top of this file advertised an ERROR
+    row the file could not emit until 2026-09-02. The traceback is still printed
+    in full, because 4 is the code that says "read the log".
+
+    Caught here rather than at each raise site so the contract holds for a
+    caller of `main()` as well as for the CLI, and so a refusal added later
+    cannot reintroduce the defect by forgetting to name the code.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = exc.code if exc.code.startswith("REFUSED") else f"REFUSED: {exc.code}"
+            print(msg, file=sys.stderr)
+            return EC.REFUSED
+        raise
+    except Exception:
+        # NOT `except BaseException`: a Ctrl-C or a SIGTERM on the pod is the
+        # operator ending the run, not the instrument breaking, and turning it
+        # into a scored code would tell the ledger something false about it.
+        traceback.print_exc()
+        print(f"[cli] exit {EC.describe(EC.ERROR)}. Nothing above was scored "
+              "and no RESULT line was printed; whatever cells reached disk "
+              "before this must not be quoted.", file=sys.stderr)
+        return EC.ERROR
 
 
 if __name__ == "__main__":

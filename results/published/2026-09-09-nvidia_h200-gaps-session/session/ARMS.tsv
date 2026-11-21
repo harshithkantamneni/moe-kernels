@@ -1,0 +1,17 @@
+arm	state	rc	seconds	dirty	log	note
+pin_probe-n64-g1	DONE	0	32	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/pin_probe-n64-g1.log	log agrees: RESULT lines imply 0
+pin_probe-n256-g16	DONE	0	27	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/pin_probe-n256-g16.log	log agrees: RESULT lines imply 0
+calibrate	DONE	0	31	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/calibrate.log	log agrees: RESULT lines imply 0
+roofline-n64-g1	INVALID	3	96	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/roofline-n64-g1.log	log agrees: RESULT lines imply 3
+roofline-n256-g16	REFUSED	2	5	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/roofline-n256-g16.log	
+roofline-n256-g32	REFUSED	2	4	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/roofline-n256-g32.log	
+bm128_depth	INVALID	3	292	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/bm128_depth.log	log agrees: RESULT lines imply 3
+alias_ablation	INVALID	3	308	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/alias_ablation.log	log agrees: RESULT lines imply 3
+bn_g16	INVALID	3	364	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/bn_g16.log	log agrees: RESULT lines imply 3
+anchor_measure	DONE	0	235	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/anchor_measure.log	log agrees: RESULT lines imply 0
+anchor_rescore	CLAIM_FAIL	1	8	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/anchor_rescore.log	log agrees: RESULT lines imply 1
+mma_switch	DONE	0	62	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/mma_switch.log	log agrees: RESULT lines imply 0
+ruler	CLAIM_FAIL	1	27	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/ruler.log	log agrees: RESULT lines imply 1
+cap_test	INVALID	3	141	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/cap_test.log	log agrees: RESULT lines imply 3
+dtype	INVALID	3	413	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/dtype.log	log agrees: RESULT lines imply 3
+counter_plan	DONE	0	7	1	/workspace/session/gaps-nvidia_h200-20260909T031848Z/logs/counter_plan.log	log agrees: RESULT lines imply 0

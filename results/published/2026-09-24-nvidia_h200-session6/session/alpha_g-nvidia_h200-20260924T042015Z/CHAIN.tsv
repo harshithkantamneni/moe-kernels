@@ -1,0 +1,4 @@
+step	state	rc	seconds	dirty	log	note
+preflight-r1	DONE	0	5	0	/workspace/session/alpha_g-nvidia_h200-20260924T042015Z/chain-logs/preflight-r1.log	log agrees: RESULT lines imply 0
+preflight-r3	DONE	0	8	0	/workspace/session/alpha_g-nvidia_h200-20260924T042015Z/chain-logs/preflight-r3.log	log agrees: RESULT lines imply 0
+preconditions	REFUSED	2	198	1	/workspace/session/alpha_g-nvidia_h200-20260924T042015Z/chain-logs/preconditions.log	the driver refused: its thermal, calibration or reference-grade gate spoke

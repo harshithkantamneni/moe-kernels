@@ -1,0 +1,106 @@
+2026-11-18T09:41:59Z setup_vm.sh start: commit 556029e1a7e655bc73a9a6e951ccd773f760c48d from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-18T11:50:04Z
+2026-11-18T09:44:09Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-11-18T09:44:11Z driver start: commit 556029e1a7e655bc73a9a6e951ccd773f760c48d, steps of the plan scripts/plans/rentalV7M-domain-map-2026-11.plan, deadline 2026-11-18T11:50:04Z (117 min of work left)
+2026-11-18T09:44:11Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalV7M-domain-map-2026-11.plan (sha256 4d0f423de268aba54b6ba13963a3149e414e5bad7e9d700b4a7ebcd28dcd81bd), 16 units
+2026-11-18T09:44:11Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/16 -] (estimate 3 min, cap 15 min, 117 min left)
+2026-11-18T09:44:11Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-11-18T09:44:11Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-11-18T09:44:11Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-11-18T09:44:11Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261118T094411Z
+2026-11-18T09:44:11Z prelude END: exit 0 after 0 min [unit 1/16 -]
+2026-11-18T09:44:12Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:44:13Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/16 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 117 min left)
+2026-11-18T09:44:38Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-11-18T09:44:38Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3726.3 GB/s
+2026-11-18T09:44:38Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3949.1 GB/s against a derived pin rate of 4022.8 GB/s
+2026-11-18T09:44:38Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3949.1 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-11-18T09:44:38Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-11-18T09:44:38Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1455 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-11-18T09:44:38Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-11-18T09:44:38Z calibrate END: exit 0 after 0 min [unit 2/16 mixtral-8x7b dcal]
+2026-11-18T09:44:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:44:40Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-a-e8k2-h2048i512-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 3/16 map-a-e8k2-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e8k2-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 117 min left)
+2026-11-18T09:44:42Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-a-e8k2-h2048i512-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-dec
+2026-11-18T09:47:13Z r3decode: 2026-11-18T09:47:13Z G=1 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-decode-map-a-e8k2-h2048i512-GRR-map-a-e8k2-h2048i512-main-d68bc028
+2026-11-18T09:47:13Z r3decode: locked_r3 exit 0
+2026-11-18T09:47:13Z r3decode END: exit 0 after 3 min [unit 3/16 map-a-e8k2-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e8k2-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T09:47:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:47:16Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-a-e16k4-h2048i512-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 4/16 map-a-e16k4-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e16k4-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 114 min left)
+2026-11-18T09:47:17Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-a-e16k4-h2048i512-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-decb
+2026-11-18T09:49:49Z r3decode: 2026-11-18T09:49:48Z G=1 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-decode-map-a-e16k4-h2048i512-GRR-map-a-e16k4-h2048i512-main-fe5e0d5c
+2026-11-18T09:49:49Z r3decode: locked_r3 exit 0
+2026-11-18T09:49:49Z r3decode END: exit 0 after 3 min [unit 4/16 map-a-e16k4-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e16k4-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T09:49:49Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:49:52Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 5/16 map-a-e32k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 112 min left)
+2026-11-18T09:49:53Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-decc
+2026-11-18T09:52:25Z r3decode: 2026-11-18T09:52:24Z G=1 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-decode-map-a-e32k8-h2048i512-GRR-map-a-e32k8-h2048i512-main-90bc91cf
+2026-11-18T09:52:25Z r3decode: locked_r3 exit 0
+2026-11-18T09:52:25Z r3decode END: exit 0 after 3 min [unit 5/16 map-a-e32k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T09:52:25Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:52:28Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-a-e64k8-h2048i512-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 6/16 map-a-e64k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e64k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 109 min left)
+2026-11-18T09:52:29Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-a-e64k8-h2048i512-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-decd
+2026-11-18T09:54:52Z r3decode: 2026-11-18T09:54:50Z G=1 held at lock 1710: R3 exit 0 DONE, cells=72 worst=1710.0 MHz, 140 s, dir nvidia_gh200_480gb-decode-map-a-e64k8-h2048i512-GRR-map-a-e64k8-h2048i512-main-29fc7902
+2026-11-18T09:54:52Z r3decode: locked_r3 exit 0
+2026-11-18T09:54:52Z r3decode END: exit 0 after 2 min [unit 6/16 map-a-e64k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e64k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T09:54:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:54:55Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 7/16 map-a-e128k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 4 min, cap 15 min, 107 min left)
+2026-11-18T09:54:57Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-dece
+2026-11-18T09:57:08Z r3decode: 2026-11-18T09:57:07Z G=1 held at lock 1710: R3 exit 0 DONE, cells=63 worst=1710.0 MHz, 130 s, dir nvidia_gh200_480gb-decode-map-a-e128k8-h2048i512-GRR-map-a-e128k8-h2048i512-main-c5887d34
+2026-11-18T09:57:08Z r3decode: locked_r3 exit 0
+2026-11-18T09:57:08Z r3decode END: exit 0 after 2 min [unit 7/16 map-a-e128k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T09:57:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:57:11Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-a-e256k8-h2048i512-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 8/16 map-a-e256k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e256k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 4 min, cap 15 min, 104 min left)
+2026-11-18T09:57:13Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-a-e256k8-h2048i512-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-decf
+2026-11-18T09:59:24Z r3decode: 2026-11-18T09:59:24Z G=1 held at lock 1710: R3 exit 0 DONE, cells=54 worst=1710.0 MHz, 130 s, dir nvidia_gh200_480gb-decode-map-a-e256k8-h2048i512-GRR-map-a-e256k8-h2048i512-main-0cba1fee
+2026-11-18T09:59:24Z r3decode: locked_r3 exit 0
+2026-11-18T09:59:24Z r3decode END: exit 0 after 2 min [unit 8/16 map-a-e256k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e256k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T09:59:25Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T09:59:28Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 9/16 map-b-e32k4-h1024i384 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 4 min, cap 15 min, 102 min left)
+2026-11-18T09:59:29Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-decg
+2026-11-18T10:01:41Z r3decode: 2026-11-18T10:01:40Z G=1 held at lock 1710: R3 exit 0 DONE, cells=63 worst=1710.0 MHz, 130 s, dir nvidia_gh200_480gb-decode-map-b-e32k4-h1024i384-GRR-map-b-e32k4-h1024i384-main-45e233c5
+2026-11-18T10:01:41Z r3decode: locked_r3 exit 0
+2026-11-18T10:01:41Z r3decode END: exit 0 after 2 min [unit 9/16 map-b-e32k4-h1024i384 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:01:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:01:45Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1536i512-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 10/16 map-b-e32k4-h1536i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1536i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 100 min left)
+2026-11-18T10:01:46Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1536i512-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-dech
+2026-11-18T10:04:08Z r3decode: 2026-11-18T10:04:07Z G=1 held at lock 1710: R3 exit 0 DONE, cells=72 worst=1710.0 MHz, 140 s, dir nvidia_gh200_480gb-decode-map-b-e32k4-h1536i512-GRR-map-b-e32k4-h1536i512-main-d5404e8a
+2026-11-18T10:04:08Z r3decode: locked_r3 exit 0
+2026-11-18T10:04:08Z r3decode END: exit 0 after 2 min [unit 10/16 map-b-e32k4-h1536i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1536i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:04:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:04:12Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2048i768-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 11/16 map-b-e32k4-h2048i768 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2048i768-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 97 min left)
+2026-11-18T10:04:13Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2048i768-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-deci
+2026-11-18T10:06:55Z r3decode: 2026-11-18T10:06:54Z G=1 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 160 s, dir nvidia_gh200_480gb-decode-map-b-e32k4-h2048i768-GRR-map-b-e32k4-h2048i768-main-03c50b4b
+2026-11-18T10:06:55Z r3decode: locked_r3 exit 0
+2026-11-18T10:06:55Z r3decode END: exit 0 after 3 min [unit 11/16 map-b-e32k4-h2048i768 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2048i768-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:06:56Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:07:00Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2560i1152-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 12/16 map-b-e32k4-h2560i1152 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2560i1152-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 95 min left)
+2026-11-18T10:07:01Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2560i1152-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-decj
+2026-11-18T10:09:53Z r3decode: 2026-11-18T10:09:52Z G=1 held at lock 1710: R3 exit 0 DONE, cells=90 worst=1710.0 MHz, 170 s, dir nvidia_gh200_480gb-decode-map-b-e32k4-h2560i1152-GRR-map-b-e32k4-h2560i1152-main-be29cffb
+2026-11-18T10:09:53Z r3decode: locked_r3 exit 0
+2026-11-18T10:09:53Z r3decode END: exit 0 after 3 min [unit 12/16 map-b-e32k4-h2560i1152 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2560i1152-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:09:53Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:09:58Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h3072i1536-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 13/16 map-b-e32k4-h3072i1536 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h3072i1536-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 92 min left)
+2026-11-18T10:09:59Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h3072i1536-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-dec-11
+2026-11-18T10:12:41Z r3decode: 2026-11-18T10:12:40Z G=1 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 160 s, dir nvidia_gh200_480gb-decode-map-b-e32k4-h3072i1536-GRR-map-b-e32k4-h3072i1536-main-f383f792
+2026-11-18T10:12:41Z r3decode: locked_r3 exit 0
+2026-11-18T10:12:41Z r3decode END: exit 0 after 3 min [unit 13/16 map-b-e32k4-h3072i1536 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h3072i1536-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:12:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:12:46Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h4096i1536-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 14/16 map-b-e32k4-h4096i1536 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h4096i1536-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 89 min left)
+2026-11-18T10:12:47Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h4096i1536-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-dec-12
+2026-11-18T10:15:29Z r3decode: 2026-11-18T10:15:28Z G=1 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 160 s, dir nvidia_gh200_480gb-decode-map-b-e32k4-h4096i1536-GRR-map-b-e32k4-h4096i1536-main-40ffb6f8
+2026-11-18T10:15:29Z r3decode: locked_r3 exit 0
+2026-11-18T10:15:29Z r3decode END: exit 0 after 3 min [unit 14/16 map-b-e32k4-h4096i1536 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h4096i1536-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:15:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:15:35Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h7168i384-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 15/16 map-c-e256k8-h7168i384 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h7168i384-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 7 min, cap 21 min, 86 min left)
+2026-11-18T10:15:36Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h7168i384-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-dec-13
+2026-11-18T10:20:28Z r3decode: 2026-11-18T10:20:27Z G=1 held at lock 1710: R3 exit 0 DONE, cells=135 worst=1710.0 MHz, 290 s, dir nvidia_gh200_480gb-decode-map-c-e256k8-h7168i384-GRR-map-c-e256k8-h7168i384-main-6464db6e
+2026-11-18T10:20:28Z r3decode: locked_r3 exit 0
+2026-11-18T10:20:28Z r3decode END: exit 0 after 5 min [unit 15/16 map-c-e256k8-h7168i384 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h7168i384-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:20:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:20:33Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 16/16 map-c-e256k8-h4096i1024 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 7 min, cap 21 min, 81 min left)
+2026-11-18T10:20:35Z r3decode: docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json inst GRR rot auto, session tag gh200-20261118T094411Z-dec-14
+2026-11-18T10:26:06Z r3decode: 2026-11-18T10:26:06Z G=1 held at lock 1710: R3 exit 0 DONE, cells=135 worst=1710.0 MHz, 330 s, dir nvidia_gh200_480gb-decode-map-c-e256k8-h4096i1024-GRR-map-c-e256k8-h4096i1024-main-abdcedb2
+2026-11-18T10:26:06Z r3decode: locked_r3 exit 0
+2026-11-18T10:26:06Z r3decode END: exit 0 after 6 min [unit 16/16 map-c-e256k8-h4096i1024 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T10:26:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:26:12Z driver end: exit 0

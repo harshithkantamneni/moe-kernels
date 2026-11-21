@@ -1,0 +1,39 @@
+# THE CALIBRATION RENTAL C3 (2026-10-26): the instrumented copy of vLLM's kernel at vLLM's own 128x128x64 w8 s3 G 1
+# tile, per-CTA launch and finish stamps for Mixtral-8x7B and Qwen2-57B, w1 and w2, on A2's E1-CAL cells (the owner's
+# option (b) of 2026-10-22, after refit4's two offline rounds failed their gate: Mixtral-8x7B's 128 G 1 w1 runs about
+# 4% faster than priced under every knee form, and C5's theta_L, the launch spread within a later wave, is SEEN-fitted
+# at 0.25 to 0.30). One gpu_1x_gh200 at $2.29/h, run by C3's driver (C2's pinned driver plus lines marked C3):
+#   bash scripts/vm_run.sh start --ip <ip> --run-id <id> --deadline <launch + 70 min, epoch s> \
+#     --plan scripts/plans/rentalC3-cal-2026-10.plan --driver gh200_cal3_session.sh
+# Registration (before any page): docs/registered/2026-10-26-cal3-gh200.{txt,json}. C3 is DESCRIPTIVE: it certifies
+# nothing and every C3 page is SEEN once read.
+# Power and lock: C2's. 700 W set and read back (enforced.power.limit and the -q GPU-scope limit both at 700 W within
+# 1 W, else the session stops; no fallback); the session lock 1410 MHz locked and read back by the prelude, else stop;
+# A2's G-BAND gate after the two f128 pages ends the session when their counter clocks under load leave the band.
+# Units (registration 'units'):
+#   C3-P   the prelude: the power read-back and the 1410 lock probe
+#   C3-F   C2's sag estimator pages on this board (OLMoE f128, Mixtral-8x7B f128), then G-BAND
+#   C3-G   the instrumented copy's two checks before any stamp: regcheck (compile only: CTAs per SM of the plain
+#          kernel, the all-off copy and the stamped copy, all on the wgmma path) and perturb, the UNINSTRUMENTED
+#          REFERENCE: the plain kernel against the stamped copy on every C3 cell, decision 2's gate (median 1%, worst 2%)
+#   C3-S7  Mixtral-8x7B stamp pages, A2's E1-CAL cells (n 2: PT, PW, uniform, balanced), NATIVE, stamps=ends
+#   C3-SQ  Qwen2-57B stamp pages, A2's E1-CAL cells (n 1 and 2: PT, PW, uniform, balanced), NATIVE, stamps=ends
+# Line order is the priority. The driver drops the LAST unit first. Drop order: q only (C3-SQ).
+# nodrop: every unit but C3-SQ.
+# MINUTES: 30 of units estimated (26 nodrop): C2's actual minutes for the f128 pages (3 and 7) and the prelude, rental
+# 5's for regcheck and perturb (0 and 1 min on eleven variants at R3's tile; here two models' weights are built, 25 and
+# 32 GB, so 3 and 6) and its stamps estimates (4 each: a weight build, a compile and 12 to 24 calls).
+# Wall with about 25 min of boot, driver upgrade and setup: about 55 min ($2.10 at $2.29/h). Deadline launch + 70 min
+# (37 min of units after 25 of boot and the driver's 8 min reserve: q is not dropped at the start); guardian hard cap
+# launch + 85 min ($3.24 at most).
+- prelude lock-mhz=1410 power-limit-w=700 est=2 cap=15
+# C3-F: the sag estimator's pages on this board, then the lock band under load
+olmoe-1b-7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=3 cap=20
+mixtral-8x7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=7 cap=25
+- gate label=gband gate=band nodrop=1 est=1 cap=5
+# C3-G: regcheck (compile only), then the perturbation gate (the uninstrumented reference)
+- regcheck label=rc3 nodrop=1 est=3 cap=10
+- perturb label=pt3 nodrop=1 est=6 cap=20
+# C3-S7 and C3-SQ: the stamp pages, each run only on its PASS gate and regcheck
+mixtral-8x7b stamps label=st7 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native nodrop=1 est=4 cap=15
+qwen2-57b-a14b stamps label=stq block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native drop-group=q est=4 cap=15

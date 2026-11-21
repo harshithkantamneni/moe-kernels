@@ -1,0 +1,183 @@
+REGISTERED 2026-10-20, before any tile rental A2 page: tile rental A2, 2026-10-20-tileA2-gates-gh200
+status: REGISTERED BEFORE ANY A2 PAGE: the session's mechanical rules and the plan
+design: design-A2 DESIGN.md (2026-10-20) corrected by design-A2-review REVIEW.md (the review wins: every MAJOR and MINOR fix), the build review (GO-WITH-FIXES) and the owner's decisions of 2026-10-20: A 900 W GPU POWER LIMIT AND THE LOCK LADDER 1710, 1410, 1305 (the first rung whose probe passes is the lock of every later unit; the 900 W limit changes the owner's 2026-09-26 700 W decision for tile rental A2, and rental B2 at the limit A2 held, only); rental B2 at A2's power limit and lock rung; decode uses A2's constants only once A2's floor calibration is scored; the probe strict (one LOST cell fails a rung); every other decision is the design's recommendation as amended by the review: OD3 the byte pages re-run, OD4 sigma_page re-measured, OD5 w4, ms and dk droppable, OD6 CONV-L a registered test, nodrop, not a stop clause (REVIEW 3a: timed at 1710 and at L, a per-cell ratio), OD7 decode stays at 1710 by addendum, OD8 the band [0.975 L, L] (REVIEW 2c: the scaled band a registered fallback), OD9 the calibrate gate under the lowest rung (build review fix 3), OD10 the scorer import order fixed in place, OD11 the probe thresholds of DESIGN 6, OD12 the offline conversion check done before registering, OD13 rental A's timed pages against v4 forbidden
+tool: the driver scripts/gh200_tileA2_session.sh (the pinned tile driver plus lines marked A2), the gate helper scripts/tileA2_gate.py, the plan scripts/plans/rentalA2-tile-2026-10.plan
+
+plan: 168 min of units estimated (142 nodrop); the probe 20 min per rung (Mixtral about 10, Qwen2-57B 5, the OLMoE f128 counter page 4, hw_rulers 1), one rung in the estimate; a failing rung stops at its first failing page, so it costs at most 20. Expected wall at the estimates (rental A's actual minutes) plus about 25 min of boot, driver upgrade and setup: lock 1710: about 173 min, $6.6; lock 1410: about 207 min, $7.9 (the driver drops dk); lock 1305: about 207 min, $7.9 (the driver drops dk, ms, w4, rep). At 1710 the six CONV-L units (20 min) are skipped by rule and not budgeted
+  prelude -  est 1 cap 15 nodrop
+  calibrate mixtral-8x7b ta2 est 1 cap 30 nodrop
+  gate - gcal est 1 cap 5 nodrop
+  tilecensus - ta2 est 2 cap 25 nodrop
+  gate - gcen est 1 cap 5 nodrop
+  lockprobe - lp est 20 cap 70 nodrop
+  bytes olmoe-1b-7b f128 est 4 cap 20 nodrop
+  bytes mixtral-8x7b f128 est 8 cap 25 nodrop
+  gate - gband est 1 cap 5 nodrop
+  bytes olmoe-1b-7b f64w8 est 4 cap 20 nodrop
+  bytes mixtral-8x7b f64w8 est 7 cap 25 nodrop
+  gate - g64 est 1 cap 5 nodrop
+  timed mixtral-8x7b cvm1 est 3 cap 15 nodrop
+  timed olmoe-1b-7b cvo1 est 2 cap 15 nodrop
+  timed mixtral-8x7b cvm8 est 5 cap 15 nodrop
+  timed mixtral-8x7b cvm1t est 3 cap 15 nodrop
+  timed olmoe-1b-7b cvo1t est 2 cap 15 nodrop
+  timed mixtral-8x7b cvm8t est 5 cap 15 nodrop
+  timed olmoe-1b-7b e128g1 est 14 cap 30 nodrop
+  timed mixtral-8x7b e128g16 est 14 cap 40 nodrop
+  timed mixtral-8x7b e64g1 est 10 cap 30 nodrop
+  timed qwen2-57b-a14b e128g1 est 10 cap 35 nodrop
+  timed mixtral-8x7b e128g1 est 5 cap 20 nodrop
+  bytes olmoe-1b-7b b128g1 est 2 cap 20 nodrop
+  bytes mixtral-8x7b b64g1 est 4 cap 25 nodrop
+  bytes mixtral-8x7b b128g16 est 7 cap 25 nodrop
+  bytes qwen2-57b-a14b b128g1 est 5 cap 25 nodrop
+  timed olmoe-1b-7b e128g1r est 14 cap 30 rep
+  bytes olmoe-1b-7b f64w4 est 3 cap 20 w4
+  bytes olmoe-1b-7b f32w4 est 3 cap 20 ms
+  timed olmoe-1b-7b d9 est 3 cap 15 dk
+  timed olmoe-1b-7b d15 est 3 cap 15 dk
+
+power (rule P-W; the owner's 2026-10-20 decision):
+  rule: the prelude reads nvidia-smi power.max_limit (GPU scope) BEFORE setting anything: under the plan's 900 W the prelude REFUSES and the session stops before any unit (no fallback to 700 W); then -pl 900 -sc 0, and the read-back power.limit must be 900 W (the pinned prelude's own check), else REFUSED
+  rental A's board:
+    Current Power Limit (GPU, at the start): 700.0
+    Default Power Limit (GPU): 900.0
+    Max Power Limit (GPU): 900.0
+    Min Power Limit (GPU): 100.0
+    Max Power Limit (module, -sc 1): 1000.0
+    source: rental A's TREE/vm/session/power-at-start.txt (nvidia-smi -q -d POWER; the board 03e9ec)
+  module: the module's 1000 W (-sc 1, shared with Grace) is left at its default and recorded: nvidia-smi -q -d POWER (both scopes) before and after every probe rung and sampled each second during it (DESCRIPTIVE)
+  risk (REVIEW-A2 9): idle module minus GPU read about 70 W on rental A, so a 900 W GPU could meet the module cap; the probe is what sees it
+G-CAL (after calibrate; DESIGN-A2 6 risk 1, OD9; build review fix 3): calibrate's settled dense bf16 GEMM clock (its summary's gemm_clock_mhz, the median under load) under the ladder's LOWEST rung, 1305 MHz: the rental ends (about 5 min in); a board the lowest rung could hold always reaches the probe. At 900 W the reading is no longer the 700 W figure of the 14 recorded boards (1410 to 1470); calibrate is a weak proxy (unlocked, L2 flushed: REVIEW-A2 1), the probe is the real check
+G-CEN (after the census): tileA2-census's equality gate and no MMA path mismatch, else the rental ends
+G-PROBE (the lock-hold probe; DESIGN-A2 6 risk 2, REVIEW-A2 1a, 1c, 6):
+  pages:
+    mixtral-8x7b-128g16-probe.json: {"path": "docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json", "sha256": "bccfb3e2a2ce726433eb242886ba8fa73eb0be7ebcf95116c229d7736d706a40", "shuffle_seed": 20261410, "tile": [128, 128, 64, 8, 3], "group_m": 16, "source": "COPIED cells (treads 3, 8; labels PT, PW, uniform, balanced) of docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json, sha256 cf3da1b8b0224289323b457c40989de3a65646a87c4c13f6e95dbceb1a537431: the lock-hold probe (tileA2-gates); tile rental A2, scripts/scoring/tileA2/hist_a2.py", "cells": [{"label": "PT", "n": 3, "arms": ["native", "shared"], "counts_sha256": "a06c1c1cb616cbea18ab3e6a604c58b3642491b256efa670641923793b2df24a"}, {"label": "PW", "n": 3, "arms": ["native", "shared"], "counts_sha256": "9db20ab747297095e551aa450411b5042229d7bf49ea096fcaea7ddba7c63fdd"}, {"label": "uniform", "n": 3, "arms": ["native", "shared"], "counts_sha256": "b7459925cd8eac243cecc4fb63fe345366040422b693cddaf9793690785f81b8"}, {"label": "balanced", "n": 3, "arms": ["native", "shared"], "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"}, {"label": "PT", "n": 8, "arms": ["native", "shared"], "counts_sha256": "ab5a05c1a2bc58f14be6377754f42b390ba5dcd291d2beafe78d02d0f877e8ab"}, {"label": "PW", "n": 8, "arms": ["native", "shared"], "counts_sha256": "30c36c5623dbfa5f3c04c63f5cfa08024d1d6efcbebe84d22927d558bd04e861"}, {"label": "uniform", "n": 8, "arms": ["native", "shared"], "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b"}, {"label": "balanced", "n": 8, "arms": ["native", "shared"], "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"}]}
+    qwen2-57b-a14b-128g1-probe.json: {"path": "docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json", "sha256": "b6a730e31dd4e352c53ed53d9f6fa7086ae7ebc0ff1856dca790c4aa056fc174", "shuffle_seed": 20261410, "tile": [128, 128, 64, 8, 3], "group_m": 1, "source": "COPIED cells (treads 2; labels PT, PW, uniform, balanced) of docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json, sha256 bfd3ac6bf0b7f0be16c14cdfe3cedce1a6aeaf45be62933484bc783bc3f28086: the lock-hold probe (tileA2-gates); tile rental A2, scripts/scoring/tileA2/hist_a2.py", "cells": [{"label": "PT", "n": 2, "arms": ["native", "shared"], "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b"}, {"label": "PW", "n": 2, "arms": ["native", "shared"], "counts_sha256": "3eb037a244c4070d310c64026734f7ab3dbe99d78b043013629c13e95534cfad"}, {"label": "uniform", "n": 2, "arms": ["native", "shared"], "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985"}, {"label": "balanced", "n": 2, "arms": ["native", "shared"], "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"}]}
+  rung: the two histogram pages of docs/registered/2026-10-20-tileA2-hist (Mixtral 128x128 G 16 at
+treads 3 and 8, Qwen2-57B 128x128 G 1 at tread 2; every label, NATIVE and SHARED: 144 + 72 = 216 repeat
+rows), timed at the rung's lock L (the ladder 1710, 1410, 1305) under locked_r3 --slip-policy cell
+--min-clean-repeats 0, after one hw_rulers run at L (its bandwidths and matmul clock printed, DESCRIPTIVE).
+A rung HOLDS iff EVERY probe page:
+  P1  ran: exactly one report.json under gaps-<card>-<model>-<label>, rebuilt from its cells.csv;
+  P2  locked_r3's outcome holds L (summary.json outcome.held == L: state held or held-with-slips; nearly
+      vacuous under slip-policy cell, P3 and P4 do the work);
+  P3  every cell's rebuilt clock (r7-median-run3: the median over its clean repeats) is at least
+      L - 5 MHz, and no cell is LOST (under 6 clean of 9: its clock cannot be read; one LOST cell fails
+      the rung: the owner's decision of 2026-10-20, the probe stays strict);
+  P4  the r7-median-run3 non-clean share of the page's repeat rows is at most 10% (the G1 cap);
+AND the rung's COUNTER CLAUSE holds (the owner's decision of 2026-10-20 on the re-review's MAJOR 1: the
+counter pages, not the timed pages, are what sagged on rental A at 1710):
+  P5  OLMoE's f128 counter page (128x128x64 w8 s3, G 64, treads 1 to 9, label lp<L>f) at L gives at least
+      6 floor-bound cells (tcommon.floor_rows: NATIVE and SHARED, n 4..9, each GEMM's DRAM rate at most half
+      the peak) that pass rental 6's counter clock rule in the rung's counter band: lock_gate.check_page
+      PASS, each cell in band_of(L), the primary band, else the registered fallback, in the band gate's
+      order. 6 is tcommon.joint_cF's own minimum; joint_cF itself needs two models (one page cannot
+      separate c from the two F), so on one page the clause is joint_cF's cell count over the same rows.
+ORDER AND EARLY STOP (the re-review's MINOR 6, the cheaper option): the driver runs the Mixtral page, the
+Qwen2-57B page, then the OLMoE counter page, and reads the rule (`partial`) after each; at the first page
+that fails, the rung's remaining pages are NOT run and the rung fails (they could not make it pass).
+  ladder: 1710, then 1410, then 1305 MHz (owner, 2026-10-20), each rung probed by the prelude (lock, read back, reset); the first rung that HOLDS writes a2-lock.env A2_LOCK and every later unit runs there; none holds: the rental ends
+  strict (owner, 2026-10-20): one LOST cell (under 6 clean repeats of 9) fails its page and so the rung
+  counter clause P5 (owner, 2026-10-20: the re-review's MAJOR 1, option a): each rung also runs OLMoE's f128 counter page (label lp<L>f, est 4 min) and passes only if it gives at least 6 floor-bound cells in the rung's counter band (primary, else the registered fallback) after rental 6's counter clock rule: the band gate's rule on one page (joint_cF's own minimum; joint_cF needs two models). A rung whose counter clause fails steps down like a timed-probe failure. On rental A's board at 700 W this clause fails at 1710 (OLMoE f128's in-band cells were PRIVATE only: 0 floor-bound), where the timed OLMoE pages passed; the plan's own f128 units still run at the selected rung
+  early stop (the re-review's MINOR 6, the cheaper option): pages run in the order Mixtral, Qwen2-57B, the OLMoE counter page; the rule is read after each and the rung's remaining pages are not run after the first failure
+  pass rates (build review fix 6, MINOR 3):
+    model: the TIMED pages only: every repeat non-clean independently with probability p (iid; real dips cluster, so this is a guide); a page passes when no cell is LOST (P3) and at most 10% of its rows are non-clean (P4); P3's clock clause and P2 left out (on rental A's real pages they never decided). The counter clause P5 is a further hard clause on a separate page, not modelled: a rung passes at most as often as below
+    Mixtral page (16 cells, 144 rows): {"P(pass) at p 0.04": 0.995009, "P(pass) at p 0.08": 0.794614, "P(pass) at p 0.12": 0.229157, "P(pass) at p 0.15": 0.040304}
+    Qwen2-57B page (8 cells, 72 rows): {"P(pass) at p 0.04": 0.990325, "P(pass) at p 0.08": 0.776306, "P(pass) at p 0.12": 0.348991, "P(pass) at p 0.15": 0.133232}
+    rung: {"P(both pass) at p 0.04": 0.985383, "P(both pass) at p 0.08": 0.616863, "P(both pass) at p 0.12": 0.079974, "P(both pass) at p 0.15": 0.00537}
+    reading: under this model the two timed pages of a rung whose true non-clean rate is 4% pass together about 98 times in 100, at 8% about three in five, at 12% about one in twelve and at 15% about one in two hundred; P5 can only lower these: the strict rule trades false step-downs on a moderate sag for never passing a gross one
+  hw_rulers at L (REVIEW-A2 1c; DESIGN-A2 6 risk 7): before each rung's pages, DESCRIPTIVE: read2d / copy / add bandwidth and the matmul clock; score_probe_a2 prints the selected rung's against rung 1710's (DRAM at the lower L2 clock against v3's 3597.8 GB/s)
+  ms unread: no rule, no scorer and no person reads a probe page's time (they are E1-CAL cells at L)
+G-BAND (after f128 Mixtral; REVIEW-A2 2b): tcommon.joint_cF over the f128 pages in the band in force is not None (the primary band, else the registered fallback), else the rental ends
+G-64 (after f64w8 Mixtral; REVIEW-A2 2b): tcommon.joint_cF over the f64w8 pages in the band in force is not None, else the rental ends (finalise refuses without it when no accounting is SELECTED)
+abort mechanics: a gate is a plan unit (`- gate label=... gate=...`, nodrop); its exit is the gate helper's; ANY exit but 0, or a gate or lockprobe unit SKIPPED for time, ends the session at once: the card reset, the results pushed, the driver exit 3
+1710 at 900 W (REMOVED, folded into rung 1): the earlier build's DESCRIPTIVE 1710 probe and rulers at the plan's end are removed: rung 1 of the ladder is the same two pages and hw_rulers at 1710 at 900 W, read by the same rule, and it now decides the lock
+CONV-L's 1710 twin: the three CONV-L pages timed at 1710 (lock-mhz=1710), nodrop (tileA2-convl); all six CONV-L units carry unless-lock=1710 and are skipped by rule when rung 1710 holds
+score directory (build review fix 4): scripts/scoring/tileA2/ (a2_score_directory)
+plan:
+  path: scripts/plans/rentalA2-tile-2026-10.plan
+  sha256: 0ab6c60cea9d4ed6930c9f0968e08286b21ef5276d675f28df031a762c1a751d
+  units:
+    - {"step": "prelude", "model": "-", "label": "", "est": 1, "cap": 15, "drop": "nodrop"}
+    - {"step": "calibrate", "model": "mixtral-8x7b", "label": "ta2", "est": 1, "cap": 30, "drop": "nodrop"}
+    - {"step": "gate", "model": "-", "label": "gcal", "est": 1, "cap": 5, "drop": "nodrop"}
+    - {"step": "tilecensus", "model": "-", "label": "ta2", "est": 2, "cap": 25, "drop": "nodrop"}
+    - {"step": "gate", "model": "-", "label": "gcen", "est": 1, "cap": 5, "drop": "nodrop"}
+    - {"step": "lockprobe", "model": "-", "label": "lp", "est": 20, "cap": 70, "drop": "nodrop"}
+    - {"step": "bytes", "model": "olmoe-1b-7b", "label": "f128", "est": 4, "cap": 20, "drop": "nodrop"}
+    - {"step": "bytes", "model": "mixtral-8x7b", "label": "f128", "est": 8, "cap": 25, "drop": "nodrop"}
+    - {"step": "gate", "model": "-", "label": "gband", "est": 1, "cap": 5, "drop": "nodrop"}
+    - {"step": "bytes", "model": "olmoe-1b-7b", "label": "f64w8", "est": 4, "cap": 20, "drop": "nodrop"}
+    - {"step": "bytes", "model": "mixtral-8x7b", "label": "f64w8", "est": 7, "cap": 25, "drop": "nodrop"}
+    - {"step": "gate", "model": "-", "label": "g64", "est": 1, "cap": 5, "drop": "nodrop"}
+    - {"step": "timed", "model": "mixtral-8x7b", "label": "cvm1", "est": 3, "cap": 15, "drop": "nodrop"}
+    - {"step": "timed", "model": "olmoe-1b-7b", "label": "cvo1", "est": 2, "cap": 15, "drop": "nodrop"}
+    - {"step": "timed", "model": "mixtral-8x7b", "label": "cvm8", "est": 5, "cap": 15, "drop": "nodrop"}
+    - {"step": "timed", "model": "mixtral-8x7b", "label": "cvm1t", "est": 3, "cap": 15, "drop": "nodrop"}
+    - {"step": "timed", "model": "olmoe-1b-7b", "label": "cvo1t", "est": 2, "cap": 15, "drop": "nodrop"}
+    - {"step": "timed", "model": "mixtral-8x7b", "label": "cvm8t", "est": 5, "cap": 15, "drop": "nodrop"}
+    - {"step": "timed", "model": "olmoe-1b-7b", "label": "e128g1", "est": 14, "cap": 30, "drop": "nodrop"}
+    - {"step": "timed", "model": "mixtral-8x7b", "label": "e128g16", "est": 14, "cap": 40, "drop": "nodrop"}
+    - {"step": "timed", "model": "mixtral-8x7b", "label": "e64g1", "est": 10, "cap": 30, "drop": "nodrop"}
+    - {"step": "timed", "model": "qwen2-57b-a14b", "label": "e128g1", "est": 10, "cap": 35, "drop": "nodrop"}
+    - {"step": "timed", "model": "mixtral-8x7b", "label": "e128g1", "est": 5, "cap": 20, "drop": "nodrop"}
+    - {"step": "bytes", "model": "olmoe-1b-7b", "label": "b128g1", "est": 2, "cap": 20, "drop": "nodrop"}
+    - {"step": "bytes", "model": "mixtral-8x7b", "label": "b64g1", "est": 4, "cap": 25, "drop": "nodrop"}
+    - {"step": "bytes", "model": "mixtral-8x7b", "label": "b128g16", "est": 7, "cap": 25, "drop": "nodrop"}
+    - {"step": "bytes", "model": "qwen2-57b-a14b", "label": "b128g1", "est": 5, "cap": 25, "drop": "nodrop"}
+    - {"step": "timed", "model": "olmoe-1b-7b", "label": "e128g1r", "est": 14, "cap": 30, "drop": "rep"}
+    - {"step": "bytes", "model": "olmoe-1b-7b", "label": "f64w4", "est": 3, "cap": 20, "drop": "w4"}
+    - {"step": "bytes", "model": "olmoe-1b-7b", "label": "f32w4", "est": 3, "cap": 20, "drop": "ms"}
+    - {"step": "timed", "model": "olmoe-1b-7b", "label": "d9", "est": 3, "cap": 15, "drop": "dk"}
+    - {"step": "timed", "model": "olmoe-1b-7b", "label": "d15", "est": 3, "cap": 15, "drop": "dk"}
+  units_count: 32
+  est_total_min: 168
+  est_nodrop_min: 142
+  drop_order_last_first:
+    - dk
+    - ms
+    - w4
+    - rep
+  minutes: 168 min of units estimated (142 nodrop); the probe 20 min per rung (Mixtral about 10, Qwen2-57B 5, the OLMoE f128 counter page 4, hw_rulers 1), one rung in the estimate; a failing rung stops at its first failing page, so it costs at most 20. Expected wall at the estimates (rental A's actual minutes) plus about 25 min of boot, driver upgrade and setup: lock 1710: about 173 min, $6.6; lock 1410: about 207 min, $7.9 (the driver drops dk); lock 1305: about 207 min, $7.9 (the driver drops dk, ms, w4, rep). At 1710 the six CONV-L units (20 min) are skipped by rule and not budgeted
+  deadline:
+    deadline_min_after_launch: 220
+    hard_cap_min_after_launch: 235
+    arithmetic: the unit estimates are rental A's ACTUAL minutes (no further discount): units have 220 - 25 (boot, driver upgrade and setup) - 8 (the driver's reserve) = 187 min. The worst nodrop path is 142 nodrop min (the probe's first rung, 20, counter clause included) + two more full rungs (40) = 182 <= 187; every path fits (see minutes). The guardian terminates at launch + 235 min whatever the ledger says (15 min for the final push and verify)
+    drop: when the estimates overrun the driver drops dk, ms, w4, rep from the end (never a nodrop unit): at 1410 it drops dk; at 1305 it drops dk, ms, w4 AND rep (sigma_page then falls back to rental 3's 0.18%, OD4 lost), leaving 5 min of nodrop slack
+  aborts: a gate abort ends the rental at about 3 (G-CAL), 6 (G-CEN), at most 26, 46 or 66 (G-PROBE after one, two or three rungs) min of units, and G-BAND or G-64 about 13 and 25 min after the selected rung
+lock:
+  decision (owner, 2026-10-20): a 900 W GPU power limit (GPU scope, -sc 0) and the lock ladder 1710, 1410, 1305 MHz: the probe tries 1710 first; the first rung whose probe passes is the run's lock
+  changes: the owner's 2026-09-26 decision (the GPU power limit 700 W at the start, -sc 0) FOR TILE RENTAL A2 AND RENTAL B2 ONLY (B2 runs at the limit and the lock rung A2 held, read from A2's score directory); every other rental's driver keeps 700 W
+  why (DESIGN-A2 1, REVIEW-A2 1): rental A's wgmma pages sagged under the 1710 lock: reason 0x4 (SW power cap) only, 60 C at most; the smi trace went to 1290 MHz on the three heavy 128x128 pages; the inferred cause is the software power cap (GPU or module scope unresolved), so the limit rises to the card's maximum and the lock steps down only when the probe says the cap still bites
+  ladder (owner, 2026-10-20): 1710, then 1410, then 1305 MHz: the lock-hold probe's first rung that holds is A2's lock (tileA2-gates G-PROBE). At 1710 no clock conversion is used (v4L is v4 exactly) and CONV-L does not run; 1410 and 1305 carry the conversion
+  conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20): the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)
+  rules at L:
+    at 1710: rental A's own rules: the band [1640, 1710] (derived at that lock; the fallback band at 1710 is the same), G4 1705, v4 itself
+    counter band: below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)
+    fallback band (REVIEW-A2 2c): [L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled
+    G4: cell clock >= L - 5 MHz (1705, 1405, 1300)
+    dips: r7-median-run3 at the page's own lock_mhz (a read under L - 15 is dipped: 1395 is not at 1410, 1380 is)
+    lock_gate: lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)
+    v4 at L: r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L
+seen (REVIEW-A2 5):
+  label: SEEN before this registration (REVIEW-A2 5): none of it is a lever, the selection rules are tcommon's pinned functions unchanged (variant_rule, f_form_rule, joint_cF, floor_test); stated so a reader can weigh it
+  (i) rental A's out-of-band fits (DESIGN-A2 7d, work/fit.py, DESCRIPTIVE): tcommon.joint_cF on rental A's f128 pages with the band removed: c_128 698.67 +- 10.63 cycles, F_w1 2740 +- 615, F_w2 3113 +- 341, 36 cells, rel rms 0.53%, recorded occupancy 2; on the f64w8 pages c_64 459.1 +- 19.4; the cells' clocks 1601 to 1663 MHz
+  (ii) the 64x128 accounting outcome: predictable by interpolation from (i) and tileA-floor's registered table (W and T c_64 at c_128 600 and 750); nobody computed it
+  (iii) SEEN-expected: with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)
+  (iv) tA-dead: rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test
+  (v) the A key: rental A's key test on 19 of 56 rows: v3 5.0254% against CLAMP 5.0253% rms, NOT NAMED (CLAMP): the near tie is known; the 53 rows its band dropped stay unread
+  (vi) sigma_page: rental A's 0.1275% (24 cells, at a sagging 1710 clock); A2 re-measures it, and never copies rental A's in
+  (vii) what chose the lock, the probe cells and the gates: rental A's per-repeat clocks (cells.csv), the in-flight NVML reads, the smi traces (locked-r3/*/smi.csv: clock, power, temperature, reasons) and the calibrate log
+  (viii) rental A's times: rental A's 1710 times of every E1-CAL cell and its counted bytes of every byte row exist (results/published/2026-10-20-nvidia_gh200_480gb-tileA-session) UNREAD against v4: no v4 time is computed against the E1-CAL times, and the 53 band-dropped byte rows are not re-scored, before or after A2 (OD13, a rule of this registration); its rep and dead pages are scored and published ((iv), (vi)); A2's E1-CAL, byte, rep and dead pages read the same histogram files, so their workloads are SEEN while their times on A2's board are not; the per-row workload labels below are tileA's (as of 2026-10-14) and are not updated
+  (ix) the offline conversion check (OD12; REVIEW-A2 3b): see tileA2-convl 'offline_check (SEEN)': on the 2026-09-27 and R1 pages v3's c-only rule holds on the c-heavy G 4 / G 2 ladders and on the G 1 per-M-tile elasticity, and underpredicts the G 1 per-call clock elasticity
+a2_score_directory:
+  A2's score directory (REVIEW-A2 6a; build review fix 4): scripts/scoring/tileA2/ (the score files committed beside A2's scorers, as rental A's are in scripts/scoring/tileA/), every file written by A2's own wrappers (score_*_a2.py) from A2's pages at the lock the driver selected; no rental-A score file is copied in
+  session.score.json: score_session_a2.py: the lock rung the probe selected (a2-lock.env) and the GPU power limit read back after -pl (two readings within 1 W): rental B2's lock and limit (finalise_a2.py)
+  census.score.json: the NAMED MERGE STEP (score_census_a2.py, census_a2.merge): rental A's 72 entries (held to A2's by the equality gate) plus A2's deepseek-v2-lite entries at tread 3 when the OLMoE n 1 / n 3 rule reads SAME, scored by score_census.py; the merged file is kept beside it
+  floor.score.json: score_floor_a2.py at L (the band in force recorded)
+  bytes.score.json: score_bytes_a2.py at L, in the band in force; NOT SCORED or NOT NAMED gives CLAMP by tcommon's rule
+  rep.score.json: score_rep_a2.py at L; dropped, lost or not scored: tcommon.sigma_page_of's fallback, rental 3's 0.18% (rental A's 0.1275% is never copied in)
+  e1cal.score.json: score_e1cal_a2.py at L (v4 at_lock L from A2's selections)
+  dead.score.json, convl.score.json: score_dead_a2.py (SEEN-REPLICATE) and score_convl_a2.py
+  order: session, census, floor, bytes, rep, e1cal, dead, convl, probe (each reads the ones before it)

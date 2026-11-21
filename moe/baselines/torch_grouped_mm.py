@@ -254,6 +254,21 @@ class _GroupedMM(StageSpan):
             return f"grouped_mm caps the group count; {spec.model.num_experts} experts"
         return super().why_unsupported(spec)
 
+    def observe_tile_config(self, st: MoEState) -> dict:
+        """There is no Triton tile here, and the row must say so.
+
+        This dispatches into CUTLASS `bf16bf16_grouped_gemm_impl_sm90_sm100`,
+        which selects its own tile shape inside a compiled kernel with no python
+        hook to read it back from. So the source is recorded and every tile_*
+        int stays 0, which `tile_field` refuses to return as a measurement.
+
+        Not "unrecorded": that would say nobody looked. "cutlass_static" says
+        this implementation has no Triton BLOCK_SIZE_M to record, which is the
+        fact an analysis grouping rows by tile needs, and it is also why the
+        BLOCK_SIZE_M question was never about these rows in the first place.
+        """
+        return {"tile_config_source": "cutlass_static"}
+
 
 @register
 class TorchGroupedMMUp(_GroupedMM):

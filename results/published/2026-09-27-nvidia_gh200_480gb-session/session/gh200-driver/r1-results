@@ -1,0 +1,2 @@
+r1lock G=4 exit 1 (locks 1710 1500 1410)
+r1lock G=1 exit 1 (locks 1710 1500 1410)

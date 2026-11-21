@@ -1,0 +1,18 @@
+DRAIN ladder offsets over the four tiles: 26 ladders, median 9.91 us, range 7.18 to 21.01 us; c0 taken as that median
+mixtral-8x7b/T128/w2: A 4 X 47.91 us, A 8 X 24.21 us, A 4 over A 8 after bytes +23.70 us
+  A 4: n 128 (sub-wave), b 3.744 MB, L 170.40 us, per-CTA rate b / (L - c0) 23.3 GB/s, aggregate n b / (L - c0) 2.99 TB/s
+  A 8: n 256 (sub-wave), b 3.715 MB, L 267.30 us, per-CTA rate b / (L - c0) 14.4 GB/s, aggregate n b / (L - c0) 3.70 TB/s
+phi-3.5-moe/T128/w2: A 4 X 34.85 us, A 8 X 18.87 us, A 4 over A 8 after bytes +15.98 us
+  A 4: n 128 (sub-wave), b 1.680 MB, L 89.54 us, per-CTA rate b / (L - c0) 21.1 GB/s, aggregate n b / (L - c0) 2.70 TB/s
+  A 8: n 256 (sub-wave), b 1.668 MB, L 127.39 us, per-CTA rate b / (L - c0) 14.2 GB/s, aggregate n b / (L - c0) 3.63 TB/s
+jetmoe-8b/T128/w2: A 4 X 29.74 us, A 8 X 21.80 us, A 4 over A 8 after bytes +7.94 us
+  A 4: n 64 (sub-wave), b 1.503 MB, L 54.18 us, per-CTA rate b / (L - c0) 34.0 GB/s, aggregate n b / (L - c0) 2.17 TB/s
+  A 8: n 128 (sub-wave), b 1.481 MB, L 69.92 us, per-CTA rate b / (L - c0) 24.7 GB/s, aggregate n b / (L - c0) 3.16 TB/s
+offset sensitivity: the same rows at SUBWAVE's own fitted per-ladder offsets on this tile
+  mixtral-8x7b/T128/w2 A 4: n 128, offset 41.06 us, per-CTA rate b / (L - c0) 28.9 GB/s
+  mixtral-8x7b/T128/w2 A 8: n 256, offset 41.06 us, per-CTA rate b / (L - c0) 16.4 GB/s
+  phi-3.5-moe/T128/w2 A 4: n 128, offset 29.56 us, per-CTA rate b / (L - c0) 28.0 GB/s
+  phi-3.5-moe/T128/w2 A 8: n 256, offset 29.56 us, per-CTA rate b / (L - c0) 17.0 GB/s
+  jetmoe-8b/T128/w2 A 4: n 64, offset 21.98 us, per-CTA rate b / (L - c0) 46.7 GB/s
+  jetmoe-8b/T128/w2 A 8: n 128, offset 21.98 us, per-CTA rate b / (L - c0) 30.9 GB/s
+SUBWAVE r_cta on this tile 46.9 GB/s, binding rows ['jetmoe-8b/T128/w2 n 64']

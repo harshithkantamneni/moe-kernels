@@ -1,0 +1,14 @@
+[publish] publishing 1 run(s), 3 CSV(s): eeea4eaef73e
+[publish] rows were measured on NVIDIA H200
+[publish] rebuilt merged.csv from 3 arm(s): 3696 rows
+[publish] included moe/bench/hardware/measured_nvidia_h200.yaml, the calibration currently on disk for this device
+[publish] calibration provenance: same_session
+[publish]   ceilings  agree
+[publish]   commit    matches
+[publish]   date      within the sweep
+[publish]   device    agrees
+[publish]   ridge     2026-09-01-nvidia_h200-alpha-0558: 163.7 FLOP/byte for bf16 from the ceilings stamped on the rows (same_session)
+[publish] included 15 figure(s)
+[publish] wrote /workspace/repo/results/published/2026-09-01-nvidia_h200-alpha-0558/SUMMARY.md
+[publish] committed /workspace/repo/results/published/2026-09-01-nvidia_h200-alpha-0558
+[publish] pushed. The result set is now on GitHub.

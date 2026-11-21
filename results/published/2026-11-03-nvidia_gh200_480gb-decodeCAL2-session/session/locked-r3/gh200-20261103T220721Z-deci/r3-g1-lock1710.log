@@ -1,0 +1,107 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-gaps-ded3f398
+model       olmoe-1b-7b E=64 k=8 bf16; W_e 12.0 MiB
+page        docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json (sha256 d6f5257cf24d3d07...), olmoe-1b-7b-gaps, 8 cells, 8 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 8 calls, call j on copy j mod 2 (R x A_min 13 x W_e 12.0 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      2 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::2]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    4.2 min
+session     gh200-20261103T220721Z-deci-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-dg/private_weight_reference/nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-gaps-ded3f398
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=2   G08-R3                native      naive       16x64x128w4s4  A=13  L=16  P=240  dead=0/0     d3a293efe94a
+  T=2   G09-R3                native      naive       16x64x128w4s4  A=13  L=16  P=240  dead=0/0     3c0ee5bdaa3f
+  T=2   G10-R3                native      naive       16x64x128w4s4  A=13  L=16  P=240  dead=0/0     41149a3a2725
+  T=2   G11-R3                native      naive       16x64x128w4s4  A=13  L=16  P=240  dead=0/0     097ba3c4533f
+  T=2   G12-R3                native      naive       16x64x128w4s4  A=13  L=16  P=240  dead=0/0     db348415b69a
+  T=2   G13-R3                native      naive       16x64x128w4s4  A=13  L=16  P=240  dead=0/0     adeb32188342
+  T=2   G15-R1                native      naive       16x64x128w4s4  A=15  L=16  P=240  dead=0/0     f328b829259b
+  T=2   BASE-A16              native      naive       16x64x128w4s4  A=16  L=16  P=240  dead=0/0     725a18b75fb1
+WARNING 11-03 23:22:01 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1024,device_name=NVIDIA_GH200_480GB.json
+  rep 0 G08-R3           native T=  2     64.78 us ok
+  rep 0 G09-R3           native T=  2     64.89 us ok
+  rep 0 G10-R3           native T=  2     66.65 us ok
+  rep 0 G11-R3           native T=  2     69.63 us ok
+  rep 0 G12-R3           native T=  2     72.12 us ok
+  rep 0 G13-R3           native T=  2     73.22 us ok
+  rep 0 G15-R1           native T=  2     73.31 us ok
+  rep 0 BASE-A16         native T=  2     73.54 us ok
+  rep 1 BASE-A16         native T=  2     73.53 us ok
+  rep 1 G15-R1           native T=  2     73.29 us ok
+  rep 1 G13-R3           native T=  2     73.20 us ok
+  rep 1 G12-R3           native T=  2     72.05 us ok
+  rep 1 G11-R3           native T=  2     69.68 us ok
+  rep 1 G10-R3           native T=  2     66.72 us ok
+  rep 1 G09-R3           native T=  2     64.94 us ok
+  rep 1 G08-R3           native T=  2     64.77 us ok
+  rep 2 G08-R3           native T=  2     64.75 us ok
+  rep 2 G09-R3           native T=  2     64.97 us ok
+  rep 2 G10-R3           native T=  2     66.68 us ok
+  rep 2 G11-R3           native T=  2     69.67 us ok
+  rep 2 G12-R3           native T=  2     72.08 us ok
+  rep 2 G13-R3           native T=  2     73.21 us ok
+  rep 2 G15-R1           native T=  2     73.35 us ok
+  rep 2 BASE-A16         native T=  2     73.52 us ok
+  rep 3 BASE-A16         native T=  2     73.61 us ok
+  rep 3 G15-R1           native T=  2     73.28 us ok
+  rep 3 G13-R3           native T=  2     73.23 us ok
+  rep 3 G12-R3           native T=  2     72.04 us ok
+  rep 3 G11-R3           native T=  2     69.64 us ok
+  rep 3 G10-R3           native T=  2     66.63 us ok
+  rep 3 G09-R3           native T=  2     64.97 us ok
+  rep 3 G08-R3           native T=  2     64.73 us ok
+  rep 4 G08-R3           native T=  2     64.75 us ok
+  rep 4 G09-R3           native T=  2     64.89 us ok
+  rep 4 G10-R3           native T=  2     66.67 us ok
+  rep 4 G11-R3           native T=  2     69.63 us ok
+  rep 4 G12-R3           native T=  2     72.08 us ok
+  rep 4 G13-R3           native T=  2     73.20 us ok
+  rep 4 G15-R1           native T=  2     73.27 us ok
+  rep 4 BASE-A16         native T=  2     73.53 us ok
+  rep 5 BASE-A16         native T=  2     73.51 us ok
+  rep 5 G15-R1           native T=  2     73.33 us ok
+  rep 5 G13-R3           native T=  2     73.20 us ok
+  rep 5 G12-R3           native T=  2     72.10 us ok
+  rep 5 G11-R3           native T=  2     69.61 us ok
+  rep 5 G10-R3           native T=  2     66.65 us ok
+  rep 5 G09-R3           native T=  2     64.95 us ok
+  rep 5 G08-R3           native T=  2     64.73 us ok
+  rep 6 G08-R3           native T=  2     64.81 us ok
+  rep 6 G09-R3           native T=  2     64.93 us ok
+  rep 6 G10-R3           native T=  2     66.77 us ok
+  rep 6 G11-R3           native T=  2     69.61 us ok
+  rep 6 G12-R3           native T=  2     72.09 us ok
+  rep 6 G13-R3           native T=  2     73.25 us ok
+  rep 6 G15-R1           native T=  2     73.33 us ok
+  rep 6 BASE-A16         native T=  2     73.50 us ok
+  rep 7 BASE-A16         native T=  2     73.56 us ok
+  rep 7 G15-R1           native T=  2     73.27 us ok
+  rep 7 G13-R3           native T=  2     73.25 us ok
+  rep 7 G12-R3           native T=  2     72.06 us ok
+  rep 7 G11-R3           native T=  2     69.65 us ok
+  rep 7 G10-R3           native T=  2     66.63 us ok
+  rep 7 G09-R3           native T=  2     64.92 us ok
+  rep 7 G08-R3           native T=  2     64.79 us ok
+  rep 8 G08-R3           native T=  2     64.70 us ok
+  rep 8 G09-R3           native T=  2     64.92 us ok
+  rep 8 G10-R3           native T=  2     66.66 us ok
+  rep 8 G11-R3           native T=  2     69.63 us ok
+  rep 8 G12-R3           native T=  2     72.04 us ok
+  rep 8 G13-R3           native T=  2     73.18 us ok
+  rep 8 G15-R1           native T=  2     73.30 us ok
+  rep 8 BASE-A16         native T=  2     73.57 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-dg/private_weight_reference/nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-gaps-ded3f398/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

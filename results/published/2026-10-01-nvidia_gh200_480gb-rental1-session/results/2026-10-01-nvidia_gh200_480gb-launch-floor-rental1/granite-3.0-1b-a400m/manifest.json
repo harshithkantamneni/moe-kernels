@@ -1,0 +1,265 @@
+{
+ "tool": "scripts/launch_floor.py",
+ "plan": {
+  "model": "granite-3.0-1b-a400m",
+  "treads": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9
+  ],
+  "modes": [
+   "E240",
+   "GR"
+  ],
+  "arms": [
+   "native",
+   "shared",
+   "private"
+  ],
+  "group_m": 4,
+  "duty": 0.25,
+  "repeats": 3,
+  "seed": 0,
+  "block_m": 32,
+  "copies_declared": 9,
+  "declaration": "the ladder's id count 1024..9216 does not cross 1024: one kernel throughout",
+  "declared_by_arm": {
+   "native": 32,
+   "shared": 288,
+   "private": 288
+  },
+  "pinned": {
+   "BLOCK_SIZE_N": 64,
+   "BLOCK_SIZE_K": 64,
+   "GROUP_SIZE_M": 4,
+   "num_warps": 8,
+   "num_stages": 4,
+   "BLOCK_SIZE_M": 32
+  },
+  "timed_cells": 162,
+  "traces": [
+   {
+    "arm": "native",
+    "n": 1,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "native",
+    "n": 1,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "native",
+    "n": 1,
+    "flush": "E0",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "native",
+    "n": 1,
+    "flush": "E0",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "native",
+    "n": 1,
+    "flush": "E480",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "native",
+    "n": 1,
+    "flush": "E480",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "shared",
+    "n": 1,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "shared",
+    "n": 1,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "shared",
+    "n": 1,
+    "flush": "E0",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "shared",
+    "n": 1,
+    "flush": "E0",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "shared",
+    "n": 1,
+    "flush": "E480",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "shared",
+    "n": 1,
+    "flush": "E480",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "private",
+    "n": 1,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "private",
+    "n": 1,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "private",
+    "n": 1,
+    "flush": "E0",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "private",
+    "n": 1,
+    "flush": "E0",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "private",
+    "n": 1,
+    "flush": "E480",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "private",
+    "n": 1,
+    "flush": "E480",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "native",
+    "n": 6,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "native",
+    "n": 6,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "shared",
+    "n": 6,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "shared",
+    "n": 6,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "private",
+    "n": 6,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "private",
+    "n": 6,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "native",
+    "n": 9,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "native",
+    "n": 9,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "shared",
+    "n": 9,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "shared",
+    "n": 9,
+    "flush": "E240",
+    "kind": "TR-G"
+   },
+   {
+    "arm": "private",
+    "n": 9,
+    "flush": "E240",
+    "kind": "TR-E"
+   },
+   {
+    "arm": "private",
+    "n": 9,
+    "flush": "E240",
+    "kind": "TR-G"
+   }
+  ],
+  "minutes": 13.1,
+  "warmup_ms": 300.0,
+  "cell_budget_ms": 200.0,
+  "trials": 3
+ },
+ "override_hook": "vllm.model_executor.layers.fused_moe",
+ "reference_clock_mhz": null,
+ "reference_clock_source": "no calibration yaml for NVIDIA GH200 480GB, so the clock the roof was measured at is not known here",
+ "flush_mb": {
+  "E240": 240,
+  "GR": 240,
+  "E0": 0,
+  "E480": 480
+ },
+ "weights_bytes": 905969664,
+ "versions": {
+  "python": "3.12.14",
+  "torch": "2.13.0",
+  "triton": "3.7.1",
+  "vllm": "0.27.1"
+ },
+ "device": {
+  "name": "NVIDIA GH200 480GB",
+  "uuid": "35b064df-a166-0d27-d867-682c0a299866"
+ },
+ "host": {
+  "lscpu": "Architecture:                         aarch64\nCPU op-mode(s):                       64-bit\nByte Order:                           Little Endian\nCPU(s):                               64\nOn-line CPU(s) list:                  0-63\nVendor ID:                            ARM\nModel name:                           Neoverse-V2\nModel:                                0\nThread(s) per core:                   1\nCore(s) per socket:                   64\nSocket(s):                            1\nStepping:                             r0p0\nBogoMIPS:                             2000.00\nFlags:                                fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm dit uscat ilrcpc flagm ssbs sb paca pacg dcpodp sve2 sveaes svepmull svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16 dgh bti\nNUMA node(s):                         9\nNUMA node0 CPU(s):                    0-63\nNUMA node1 CPU(s):                    \nNUMA node2 CPU(s):                    \nNUMA node3 CPU(s):                    \nNUMA node4 CPU(s):                    \nNUMA node5 CPU(s):                    \nNUMA node6 CPU(s):                    \nNUMA node7 CPU(s):                    \nNUMA node8 CPU(s):                    \nVulnerability Gather data sampling:   Not affected\nVulnerability Itlb multihit:          Not affected\nVulnerability L1tf:                   Not affected\nVulnerability Mds:                    Not affected\nVulnerability Meltdown:               Not affected\nVulnerability Mmio stale data:        Not affected\nVulnerability Reg file data sampling: Not affected\nVulnerability Retbleed:               Not affected\nVulnerability Spec rstack overflow:   Not affected\nVulnerability Spec store bypass:      Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:             Mitigation; __user pointer sanitization\nVulnerability Spectre v2:             Not affected\nVulnerability Srbds:                  Not affected\nVulnerability Tsx async abort:        Not affected\n",
+  "governor": "unreadable",
+  "platform": "Linux-6.8.0-1013-nvidia-64k-aarch64-with-glibc2.35",
+  "commit": "436e41c68d0b68e8f6e14b7d0500733a6bdd6ca0",
+  "git_dirty": false,
+  "python": "3.12.14"
+ },
+ "findings": [],
+ "started": 1790892514.3675244,
+ "ended": 1790893119.8757565,
+ "failed": 0
+}

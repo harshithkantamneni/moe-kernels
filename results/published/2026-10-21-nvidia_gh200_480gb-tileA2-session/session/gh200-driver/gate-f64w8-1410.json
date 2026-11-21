@@ -1,0 +1,14 @@
+{
+ "gate": "f64w8",
+ "verdict": "PASS",
+ "band": [
+  1352.19,
+  1410.0
+ ],
+ "pages": {
+  "olmoe-1b-7b": "counted (26 of 27 cells in the clock band)",
+  "mixtral-8x7b": "counted (22 of 27 cells in the clock band)"
+ },
+ "cells": 32,
+ "why": ""
+}

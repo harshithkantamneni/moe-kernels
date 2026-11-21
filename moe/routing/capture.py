@@ -1,9 +1,10 @@
 """Locating MoE gates in an unfamiliar model, and recording what they route.
 
-This is library code, not script code: `find_gate_modules` encodes a subtle
-model-layout rule with a near-miss that has already bitten once, and the
+This is library code, not script code. `find_gate_modules` encodes a subtle
+model-layout rule with a near-miss that has already bitten once, `routed_ids`
+encodes a second one about what a gate module actually RETURNS, and the
 recorder must apply the same per-model gating function the reference oracle
-does. Keeping it here means one gating rule, tested in one place.
+does. Keeping all three here means one gating rule, tested in one place.
 
 `scripts/capture_traces.py` is the CLI over it.
 """
@@ -25,6 +26,11 @@ def find_gate_modules(model, num_experts: int) -> list[tuple[str, object]]:
     The last-component match is the load-bearing part. A suffix match on "gate"
     also catches `attn_gate` and Qwen2's `shared_expert_gate`, and hooking
     those records counts that are not routed-expert counts at all.
+
+    The `weight.shape[0]` fallback is what catches DeepSeek: its gate is not an
+    `nn.Linear` and has no `out_features`, only a bare `nn.Parameter` of shape
+    [num_experts, hidden]. That module is correctly found here and returns
+    something entirely different from logits, which is `routed_ids`' problem.
     """
     found = []
     for name, module in model.named_modules():
@@ -37,6 +43,70 @@ def find_gate_modules(model, num_experts: int) -> list[tuple[str, object]]:
         if out == num_experts:
             found.append((name, module))
     return found
+
+
+def routed_ids(output, cfg: MoEConfig, where: str = "gate",
+               check_values: bool = False) -> torch.Tensor:
+    """The [N, top_k] expert ids a gate just chose, whatever shape it returned.
+
+    Two gate shapes exist in the wild and they are NOT interchangeable.
+
+    A plain `nn.Linear` router (mixtral, qwen2) returns float logits
+    [N, num_experts]; the scoring function and the top-k are still ours to
+    apply, and `gate_scores` owns which scoring function that is. DeepSeek's
+    `MoEGate.forward` returns the 3-tuple `(topk_idx, topk_weight, aux_loss)`
+    whose element 0 is ALREADY the chosen ids, int64 [N, top_k], and whose
+    aux_loss is None outside training.
+
+    The hook used to take element 0 and treat it as logits either way. On
+    DeepSeek-V2-Lite that softmaxes expert INDEX VALUES. The old
+    `.reshape(-1, num_experts)` raises at decode, where a batch of 4 supplies
+    4*6 = 24 ids against 64 experts, and SILENTLY SUCCEEDS at prefill whenever
+    batch*seq_len*top_k happens to divide by num_experts -- writing a trace
+    that passes every check in `write_trace` and describes nothing. This
+    function is why a capture cannot do that: it dispatches on what actually
+    arrived and refuses anything that is neither shape.
+
+    Taking the model's own ids is also strictly more faithful than recomputing
+    them. DeepSeek's `topk_method="group_limited_greedy"` zeroes whole expert
+    groups before the top-k, so a plain top-k over the logits picks different
+    experts than the model did.
+
+    `check_values` costs a device sync, so callers do it once per layer rather
+    than once per decode step.
+    """
+    tensor = output[0] if isinstance(output, (tuple, list)) else output
+    if not isinstance(tensor, torch.Tensor):
+        raise TypeError(
+            f"{where}: gate returned {type(tensor).__name__}, not a tensor. "
+            "This module is not a router and must not be hooked.")
+    tensor = tensor.detach()
+    if tensor.ndim != 2:
+        raise ValueError(
+            f"{where}: expected a 2-D gate output [tokens, ...], got shape "
+            f"{tuple(tensor.shape)}. A gate scores a flattened token stream; "
+            "anything else means the wrong module is hooked.")
+
+    if tensor.is_floating_point():
+        if tensor.shape[1] != cfg.num_experts:
+            raise ValueError(
+                f"{where}: float gate output is {tensor.shape[1]} wide, not "
+                f"num_experts={cfg.num_experts}. These are not router logits.")
+        scores = gate_scores(tensor.float(), cfg)
+        return torch.topk(scores, cfg.top_k, dim=-1).indices
+
+    if tensor.shape[1] != cfg.top_k:
+        raise ValueError(
+            f"{where}: integer gate output is {tensor.shape[1]} wide, not "
+            f"top_k={cfg.top_k}. Expected already-selected expert ids.")
+    if check_values:
+        lo, hi = int(tensor.min()), int(tensor.max())
+        if lo < 0 or hi >= cfg.num_experts:
+            raise ValueError(
+                f"{where}: expert ids span [{lo}, {hi}], outside "
+                f"[0, {cfg.num_experts - 1}]. The config and the model "
+                "disagree about how many experts there are.")
+    return tensor
 
 
 class GateRecorder:
@@ -53,11 +123,32 @@ class GateRecorder:
         self.counts: torch.Tensor | None = None
         self.handles: list = []
         self.index: dict[str, int] = {}
+        self.names: dict[int, str] = {}
+        self.token_mask: torch.Tensor | None = None
+        self._validated: set[int] = set()
 
     def attach(self, gates) -> None:
         for i, (name, module) in enumerate(gates):
             self.index[name] = i
+            self.names[i] = name
             self.handles.append(module.register_forward_hook(self._make_hook(i)))
+
+    def set_token_mask(self, mask) -> None:
+        """Which rows of the NEXT forward pass are real tokens, not padding.
+
+        A padded batch runs its PAD positions through the router like any other
+        token. The attention mask keeps them out of the attention scores; it
+        does not stop the gate from scoring them, and every PAD routes on the
+        same embedding, so they all pile onto whichever experts that one vector
+        happens to like. A prefill capture over a ragged batch can be mostly
+        padding, and nothing downstream can tell -- the histogram is
+        well-formed, it just describes the pad token.
+
+        `mask` is a flat bool tensor of length batch*seq_len, matching the rows
+        the gate sees. `None` counts every row, which is what a decode step
+        wants: one real token per sequence and no padding at all.
+        """
+        self.token_mask = None if mask is None else mask.reshape(-1).bool()
 
     def _ensure(self, device) -> torch.Tensor:
         """Allocate the accumulator once, on the first device that reports.
@@ -77,13 +168,23 @@ class GateRecorder:
         cfg = self.cfg
 
         def hook(_module, _inputs, output):
-            logits = output[0] if isinstance(output, tuple) else output
-            logits = logits.detach().float().reshape(-1, cfg.num_experts)
-            # The library owns the per-model gating rule. A copy of it here
-            # would silently keep recording softmax counts the day a model
-            # needs a third scoring function.
-            ids = torch.topk(gate_scores(logits, cfg), cfg.top_k, dim=-1).indices
-            counts = self._ensure(logits.device)
+            where = self.names.get(layer, f"gate {layer}")
+            # The value-range check syncs, so pay for it once per layer. A
+            # config that disagrees with the model disagrees on every step.
+            first_time = layer not in self._validated
+            ids = routed_ids(output, cfg, where=where, check_values=first_time)
+            self._validated.add(layer)
+
+            mask = self.token_mask
+            if mask is not None:
+                if mask.numel() != ids.shape[0]:
+                    raise ValueError(
+                        f"{where}: token mask covers {mask.numel()} rows but "
+                        f"the gate saw {ids.shape[0]}. The mask is stale; set "
+                        "it for every forward pass or clear it with None.")
+                ids = ids[mask.to(ids.device)]
+
+            counts = self._ensure(ids.device)
             contribution = expert_counts(ids, cfg.num_experts)
             counts[layer] += contribution.to(counts.device)
 

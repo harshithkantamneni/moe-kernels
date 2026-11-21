@@ -1,0 +1,185 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "mixtral-8x7b",
+ "page": "B",
+ "shuffle_seed": 20261007,
+ "cells": [
+  {
+   "label": "DW",
+   "n": 2,
+   "counts": [
+    72,
+    61,
+    25,
+    89,
+    62,
+    71,
+    78,
+    54
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 10.772,
+    "seed": 20263036,
+    "stats": {
+     "cv": 0.279945,
+     "max_mean": 1.390625,
+     "gini": 0.148926
+    },
+    "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 256",
+    "matches": [
+     "cv",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts": [
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "DW",
+   "n": 8,
+   "counts": [
+    312,
+    264,
+    306,
+    293,
+    310,
+    101,
+    224,
+    238
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 8.8914,
+    "seed": 20266070,
+    "stats": {
+     "cv": 0.259692,
+     "max_mean": 1.21875,
+     "gini": 0.130615
+    },
+    "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 1024",
+    "matches": []
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 8,
+   "counts": [
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 8,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "DW",
+   "n": 32,
+   "counts": [
+    1069,
+    1380,
+    990,
+    452,
+    1319,
+    1093,
+    830,
+    1059
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 9.7867,
+    "seed": 20269057,
+    "stats": {
+     "cv": 0.264698,
+     "max_mean": 1.347656,
+     "gini": 0.141296
+    },
+    "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 4096",
+    "matches": [
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 32,
+   "counts": [
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 32,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "fitted Zipf/Dirichlet shapes (scripts/skew_synth.py); no trace count"
+}

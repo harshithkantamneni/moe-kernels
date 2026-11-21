@@ -1,0 +1,103 @@
+2026-10-06T06:57:23Z setup_vm.sh start: commit 49f219808863cc3515979babf6eaed123d73f876 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-06T13:35:50Z
+2026-10-06T06:58:50Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed c106827 to run-gh200-rental3-20261006t0655: setup_vm.sh: READY
+2026-10-06T06:58:51Z driver start: commit 49f219808863cc3515979babf6eaed123d73f876, steps of the plan scripts/plans/rental3-2026-10.plan, deadline 2026-10-06T13:35:50Z (388 min of work left)
+2026-10-06T06:58:51Z plan: /home/ubuntu/moe/repo/scripts/plans/rental3-2026-10.plan (sha256 3de1bab346d873ec96e41f24a515fda8ef37da40944244798282d447a700be28), 24 units
+2026-10-06T06:58:51Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/24 -] (estimate 3 min, cap 15 min, 388 min left)
+2026-10-06T06:58:55Z prelude END: exit 0 after 0 min [unit 1/24 -]
+2026-10-06T06:58:56Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 7f956bf to run-gh200-rental3-20261006t0655: prelude (unit 1/24 -): exit 0 (0 min)
+2026-10-06T06:58:57Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,3,4,5,6,8,10,12,13,14,16, base clock and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1] (estimate 5 min, cap 15 min, 388 min left)
+2026-10-06T07:01:20Z floor END: exit 0 after 2 min [unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:01:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed fd4b7d4 to run-gh200-rental3-20261006t0655: floor (unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
+2026-10-06T07:01:23Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,3,4,5,6,8,10,12,13,14,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 386 min left)
+2026-10-06T07:02:46Z floor END: exit 0 after 1 min [unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:02:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ff46714 to run-gh200-rental3-20261006t0655: floor (unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:02:49Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 4/24 qwen2-57b-a14b-tp8 e2e] (estimate 2 min, cap 30 min, 385 min left)
+2026-10-06T07:03:13Z calibrate END: exit 0 after 0 min [unit 4/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T07:03:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 8c042a2 to run-gh200-rental3-20261006t0655: calibrate (unit 4/24 qwen2-57b-a14b-tp8 e2e): exit 0 (0 min)
+2026-10-06T07:03:15Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 [unit 5/24 qwen2-57b-a14b-tp8 e2e] (estimate 38 min, cap 90 min, 384 min left)
+2026-10-06T07:38:59Z timed END: exit 0 after 36 min [unit 5/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T07:39:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d002c33 to run-gh200-rental3-20261006t0655: timed (unit 5/24 qwen2-57b-a14b-tp8 e2e): exit 0 (36 min)
+2026-10-06T07:39:02Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 3 8 32, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32] (estimate 9 min, cap 30 min, 348 min left)
+2026-10-06T07:44:28Z bytes END: exit 0 after 5 min [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32]
+2026-10-06T07:44:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b3617e8 to run-gh200-rental3-20261006t0655: bytes (unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32): exit 0 (5 min)
+2026-10-06T07:44:31Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 3,4,5,6,8,10,12,14,16, base clock and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1] (estimate 4 min, cap 15 min, 343 min left)
+2026-10-06T07:46:00Z floor END: exit 0 after 1 min [unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:46:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed fe97bbc to run-gh200-rental3-20261006t0655: floor (unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:46:03Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 3,4,5,6,8,10,12,14,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 8/24 granite-3.0-1b-a400m floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 341 min left)
+2026-10-06T07:46:53Z floor END: exit 0 after 1 min [unit 8/24 granite-3.0-1b-a400m floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:46:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 00e6d60 to run-gh200-rental3-20261006t0655: floor (unit 8/24 granite-3.0-1b-a400m floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:46:56Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, base clock and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 9/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 15 min, 340 min left)
+2026-10-06T07:49:32Z floor END: exit 0 after 3 min [unit 9/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:49:33Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 3230814 to run-gh200-rental3-20261006t0655: floor (unit 9/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (3 min)
+2026-10-06T07:49:35Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 10/24 mixtral-8x7b-tp4 floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1] (estimate 2 min, cap 10 min, 338 min left)
+2026-10-06T07:50:50Z floor END: exit 0 after 1 min [unit 10/24 mixtral-8x7b-tp4 floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:50:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9b338a4 to run-gh200-rental3-20261006t0655: floor (unit 10/24 mixtral-8x7b-tp4 floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:50:53Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 11/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 2 min, cap 10 min, 336 min left)
+2026-10-06T07:52:25Z floor END: exit 0 after 2 min [unit 11/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:52:26Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9222ff5 to run-gh200-rental3-20261006t0655: floor (unit 11/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
+2026-10-06T07:52:29Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1410 lock; --floor-shape-metrics --floor-null-kernel [unit 12/24 mixtral-8x7b-tp4 floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 335 min left)
+2026-10-06T07:53:46Z floor END: exit 0 after 1 min [unit 12/24 mixtral-8x7b-tp4 floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:53:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed bc1b414 to run-gh200-rental3-20261006t0655: floor (unit 12/24 mixtral-8x7b-tp4 floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:53:50Z launchfloor START: launch floor at the 1710 lock: arms native, G=64, treads 2,4,6,8,10,11,12,13,14,15,16, modes E240,GR; a timed process (no profiler), no trace phase [unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0] (estimate 7 min, cap 25 min, 334 min left)
+2026-10-06T07:59:01Z launchfloor END: exit 3 after 5 min [unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0]
+2026-10-06T07:59:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1a569be to run-gh200-rental3-20261006t0655: launchfloor (unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0): exit 3 (5 min)
+2026-10-06T07:59:04Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 6,8,10,11,12,13,14,15,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 2 min, cap 10 min, 328 min left)
+2026-10-06T08:00:21Z floor END: exit 0 after 1 min [unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T08:00:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 2f56bb4 to run-gh200-rental3-20261006t0655: floor (unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T08:00:25Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 15/24 mixtral-8x7b-tp2 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 327 min left)
+2026-10-06T08:02:54Z floor END: exit 0 after 2 min [unit 15/24 mixtral-8x7b-tp2 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T08:02:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 25a1faa to run-gh200-rental3-20261006t0655: floor (unit 15/24 mixtral-8x7b-tp2 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
+2026-10-06T08:02:58Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1] (estimate 5 min, cap 20 min, 324 min left)
+2026-10-06T08:06:35Z bytes END: exit 0 after 4 min [unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1]
+2026-10-06T08:06:35Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 8eb59a2 to run-gh200-rental3-20261006t0655: bytes (unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1): exit 0 (4 min)
+2026-10-06T08:06:38Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 8 --block-k 32 [unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8] (estimate 5 min, cap 20 min, 321 min left)
+2026-10-06T08:10:15Z bytes END: exit 0 after 4 min [unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8]
+2026-10-06T08:10:16Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 25022eb to run-gh200-rental3-20261006t0655: bytes (unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8): exit 0 (4 min)
+2026-10-06T08:10:19Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 128 [unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4] (estimate 5 min, cap 20 min, 317 min left)
+2026-10-06T08:13:55Z bytes END: exit 0 after 4 min [unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4]
+2026-10-06T08:13:56Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 13869b5 to run-gh200-rental3-20261006t0655: bytes (unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4): exit 0 (4 min)
+2026-10-06T08:13:59Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 128 [unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3] (estimate 5 min, cap 20 min, 313 min left)
+2026-10-06T08:17:35Z bytes END: exit 0 after 4 min [unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3]
+2026-10-06T08:17:36Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a88bb75 to run-gh200-rental3-20261006t0655: bytes (unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3): exit 0 (4 min)
+2026-10-06T08:17:39Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 7 [unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7] (estimate 5 min, cap 20 min, 310 min left)
+2026-10-06T08:21:16Z bytes END: exit 0 after 4 min [unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7]
+2026-10-06T08:21:17Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b4240fc to run-gh200-rental3-20261006t0655: bytes (unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7): exit 0 (4 min)
+2026-10-06T08:21:20Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 [unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3] (estimate 5 min, cap 20 min, 306 min left)
+2026-10-06T08:24:57Z bytes END: exit 0 after 4 min [unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3]
+2026-10-06T08:24:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d37a91a to run-gh200-rental3-20261006t0655: bytes (unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3): exit 0 (4 min)
+2026-10-06T08:25:01Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 6), no G=3 page [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6] (estimate 14 min, cap 40 min, 302 min left)
+2026-10-06T08:35:49Z timed END: exit 0 after 11 min [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6]
+2026-10-06T08:35:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 5d349a8 to run-gh200-rental3-20261006t0655: timed (unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6): exit 0 (11 min)
+2026-10-06T08:35:53Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 [unit 23/24 qwen2-57b-a14b-tp8 e2e] (estimate 35 min, cap 75 min, 291 min left)
+2026-10-06T09:08:05Z deep END: exit 0 after 32 min [unit 23/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T09:08:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 7452dbf to run-gh200-rental3-20261006t0655: deep (unit 23/24 qwen2-57b-a14b-tp8 e2e): exit 0 (32 min)
+2026-10-06T09:08:09Z launchfloor START: launch floor at the 1710 lock: arms native,shared,private, G=4, treads 1,2,3, modes E0,E240,E360,E480, traces at 1; a timed process (no profiler) then a trace process [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1] (estimate 14 min, cap 35 min, 259 min left)
+2026-10-06T09:15:51Z launchfloor END: exit 0 after 8 min [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1]
+2026-10-06T09:15:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 5fd6c9c to run-gh200-rental3-20261006t0655: launchfloor (unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1): exit 0 (8 min)
+2026-10-06T09:15:56Z driver end: exit 3
+[push] pushed 772d4ef to run-gh200-rental3-20261006t0655: the session ended: driver exit 3

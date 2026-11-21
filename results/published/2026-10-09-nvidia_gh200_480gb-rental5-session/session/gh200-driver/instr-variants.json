@@ -1,0 +1,13 @@
+[
+ {"id": "u14-stf-v1", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [2,4,6], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1"},
+ {"id": "u14-stf-v2", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [2,4,6], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17"},
+ {"id": "u14-stf-v3", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [2,4,6], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17"},
+ {"id": "u15-stt8x22-v1", "kind": "stamps", "model": "mixtral-8x22b", "groups": [8], "treads": [1], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1"},
+ {"id": "u15-stt8x22-v2", "kind": "stamps", "model": "mixtral-8x22b", "groups": [8], "treads": [1], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17"},
+ {"id": "u16-stt-v1", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [1,2], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1"},
+ {"id": "u16-stt-v2", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [1,2], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17"},
+ {"id": "u17-std4-v2", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [8], "treads": [2,4], "arms": ["native", "shared"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17"},
+ {"id": "u17-std4-v3", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [8], "treads": [2,4], "arms": ["native", "shared"], "block_k": 64, "num_stages": 4, "spec": "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17"},
+ {"id": "u18-std2-v2", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [8], "treads": [2,4], "arms": ["native", "shared"], "block_k": 64, "num_stages": 8, "spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17"},
+ {"id": "u18-std2-v3", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [8], "treads": [2,4], "arms": ["native", "shared"], "block_k": 64, "num_stages": 8, "spec": "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17"}
+]

@@ -1,0 +1,4 @@
+SCORED against 2026-10-20-tileA2-bytes-gh200
+  pages: {'olmoe-1b-7b-b128g1': 'counted', 'mixtral-8x7b-b64g1': 'counted', 'mixtral-8x7b-b128g16': 'counted', 'qwen2-57b-a14b-b128g1': 'counted'}
+KEY: NOT NAMED (nearest v3); v4 takes CLAMP rms % {'v3': 8.702596, 'CLAMP': 10.199669, 'ROWKEY60': 9.775631, 'ROWKEY30': 14.37888} worst nearest 20.408713%
+LOCK 1410 MHz; band [1352.19, 1410.0]

@@ -1,0 +1,18 @@
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=16     ld.global=9
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=16     ld.global=5
+     32 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+=== verdict ===
+  kernels containing wgmma   : 0
+  kernels containing mma.sync: 2
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=32     ld.global=16
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=32     ld.global=8
+     64 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+=== verdict ===
+  kernels containing wgmma   : 0
+  kernels containing mma.sync: 2
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=32     ld.global=16
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=32     ld.global=8
+     64 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+=== verdict ===
+  kernels containing wgmma   : 0
+  kernels containing mma.sync: 2

@@ -1,0 +1,346 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "block_m": 128,
+  "block_n": 128,
+  "num_stages": 3,
+  "group_m": 16,
+  "treads": [
+    3,
+    4,
+    8
+  ],
+  "arms": [
+    "native",
+    "shared"
+  ],
+  "cells": [
+    [
+      "native",
+      3,
+      "PT"
+    ],
+    [
+      "shared",
+      3,
+      "PT"
+    ],
+    [
+      "native",
+      3,
+      "PW"
+    ],
+    [
+      "shared",
+      3,
+      "PW"
+    ],
+    [
+      "native",
+      3,
+      "uniform"
+    ],
+    [
+      "shared",
+      3,
+      "uniform"
+    ],
+    [
+      "native",
+      3,
+      "balanced"
+    ],
+    [
+      "shared",
+      3,
+      "balanced"
+    ],
+    [
+      "native",
+      4,
+      "PT"
+    ],
+    [
+      "shared",
+      4,
+      "PT"
+    ],
+    [
+      "native",
+      4,
+      "PW"
+    ],
+    [
+      "shared",
+      4,
+      "PW"
+    ],
+    [
+      "native",
+      4,
+      "uniform"
+    ],
+    [
+      "shared",
+      4,
+      "uniform"
+    ],
+    [
+      "native",
+      4,
+      "balanced"
+    ],
+    [
+      "shared",
+      4,
+      "balanced"
+    ],
+    [
+      "native",
+      8,
+      "PT"
+    ],
+    [
+      "shared",
+      8,
+      "PT"
+    ],
+    [
+      "native",
+      8,
+      "PW"
+    ],
+    [
+      "shared",
+      8,
+      "PW"
+    ],
+    [
+      "native",
+      8,
+      "uniform"
+    ],
+    [
+      "shared",
+      8,
+      "uniform"
+    ],
+    [
+      "native",
+      8,
+      "balanced"
+    ],
+    [
+      "shared",
+      8,
+      "balanced"
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "the ladder's id count 1024..9216 does not cross 1024: one kernel throughout",
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-b128g16-r3-counters/lock1410/r3c-g16.profiles/g16.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-b128g16-r3-counters/lock1410/r3c-g16.profiles/g16.triton-cache",
+  "histogram": {
+    "schema": "moe-kernels/histogram-page/1",
+    "file_sha256": "cf3da1b8b0224289323b457c40989de3a65646a87c4c13f6e95dbceb1a537431",
+    "page": "mixtral-8x7b-128g16",
+    "shuffle_seed": 20261410,
+    "cells": [
+      {
+        "label": "PT",
+        "n": 3,
+        "counts": [
+          370,
+          363,
+          342,
+          417,
+          465,
+          346,
+          389,
+          380
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 3,
+        "counts": [
+          285,
+          395,
+          401,
+          278,
+          407,
+          266,
+          347,
+          693
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 3,
+        "counts": [
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 3,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT",
+        "n": 4,
+        "counts": [
+          440,
+          569,
+          521,
+          401,
+          587,
+          466,
+          614,
+          498
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 4,
+        "counts": [
+          506,
+          574,
+          322,
+          412,
+          653,
+          260,
+          659,
+          710
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 4,
+        "counts": [
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 4,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT",
+        "n": 8,
+        "counts": [
+          798,
+          1072,
+          1202,
+          976,
+          1051,
+          1041,
+          1103,
+          949
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 8,
+        "counts": [
+          1138,
+          1383,
+          437,
+          1458,
+          1289,
+          677,
+          1185,
+          625
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 8,
+        "counts": [
+          1024,
+          1024,
+          1024,
+          1024,
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 8,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      }
+    ]
+  }
+}

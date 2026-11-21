@@ -1,0 +1,154 @@
+{
+ "pin": {
+  "repo": "https://github.com/RRZE-HPC/gpu-benches",
+  "commit": "23e586dd8d8a19e72abd9d385a088623cefabfae",
+  "committed": "2025-10-24T09:08:33+02:00",
+  "licence": "GPL-3.0",
+  "note": "third-party; fetched on the VM at this commit, never vendored into moe-kernels"
+ },
+ "sm": 90,
+ "lock_mhz": 1710.0,
+ "l2_mib": 60.0,
+ "steps": [
+  {
+   "cmd": [
+    "git",
+    "clone",
+    "--quiet",
+    "https://github.com/RRZE-HPC/gpu-benches",
+    "/home/ubuntu/moe/ext/gpu-benches"
+   ],
+   "rc": 0,
+   "secs": 0.3,
+   "tail": ""
+  },
+  {
+   "cmd": [
+    "git",
+    "-C",
+    "/home/ubuntu/moe/ext/gpu-benches",
+    "fetch",
+    "--quiet",
+    "origin",
+    "23e586dd8d8a19e72abd9d385a088623cefabfae"
+   ],
+   "rc": 0,
+   "secs": 0.2,
+   "tail": ""
+  },
+  {
+   "cmd": [
+    "git",
+    "-C",
+    "/home/ubuntu/moe/ext/gpu-benches",
+    "checkout",
+    "--quiet",
+    "--detach",
+    "23e586dd8d8a19e72abd9d385a088623cefabfae"
+   ],
+   "rc": 0,
+   "secs": 0.0,
+   "tail": ""
+  },
+  {
+   "cmd": [
+    "git",
+    "-C",
+    "/home/ubuntu/moe/ext/gpu-benches",
+    "rev-parse",
+    "HEAD"
+   ],
+   "rc": 0,
+   "secs": 0.0,
+   "tail": "23e586dd8d8a19e72abd9d385a088623cefabfae\n"
+  },
+  {
+   "cmd": [
+    "make",
+    "-C",
+    "/home/ubuntu/moe/ext/gpu-benches/gpu-latency",
+    "SM=90",
+    "CUDA_HOME=/usr",
+    "cuda-latency"
+   ],
+   "rc": 0,
+   "secs": 1.6,
+   "tail": "make: Entering directory '/home/ubuntu/moe/ext/gpu-benches/gpu-latency'\nnvcc -std=c++11 -O3 -gencode arch=compute_90,code=sm_90 --compiler-options=\"-O2 -pipe -march=native -Wall -fopenmp\" -Xcompiler -rdynamic --generate-line-info  -o cuda-latency main.cu -L/opt/cuda/lib64 -lcublas -lnvidia-ml\nmake: Leaving directory '/home/ubuntu/moe/ext/gpu-benches/gpu-latency'\n"
+  },
+  {
+   "cmd": [
+    "make",
+    "-C",
+    "/home/ubuntu/moe/ext/gpu-benches/gpu-stream",
+    "SM=90",
+    "CUDA_HOME=/usr",
+    "cuda-stream"
+   ],
+   "rc": 0,
+   "secs": 2.1,
+   "tail": "make: Entering directory '/home/ubuntu/moe/ext/gpu-benches/gpu-stream'\nnvcc -std=c++20 -O3 -gencode arch=compute_90,code=sm_90 --compiler-options=\"-O2 -pipe -Wall -fopenmp -g\" -Xcompiler -rdynamic --generate-line-info  -Xcompiler \\\"-Wl,-rpath,/usr/extras/CUPTI/lib64/\\\" -Xcompiler \"-Wall\" -I/usr/extras/CUPTI/include -o cuda-stream main.cu -L/opt/cuda/lib64 -lcuda -lnvidia-ml\nmake: Leaving directory '/home/ubuntu/moe/ext/gpu-benches/gpu-stream'\n"
+  },
+  {
+   "cmd": [
+    "make",
+    "-C",
+    "/home/ubuntu/moe/ext/gpu-benches/gpu-l2-cache",
+    "SM=90",
+    "CUDA_HOME=/usr",
+    "cuda-l2-cache"
+   ],
+   "rc": 0,
+   "secs": 2.7,
+   "tail": "make: Entering directory '/home/ubuntu/moe/ext/gpu-benches/gpu-l2-cache'\nnvcc -std=c++17 -O3 -gencode arch=compute_90,code=sm_90 --compiler-options=\"-O2 -pipe -Wall -fopenmp -g\" -Xcompiler -rdynamic --generate-line-info  -Xcompiler \\\"-Wl,-rpath,/usr/extras/CUPTI/lib64/\\\" -I/usr/extras/CUPTI/include -I/usr/include -o cuda-l2-cache main.cu -L/usr/lib64 -L/usr/extras/CUPTI/lib64 -lcupti -lcuda   -lnvidia-ml -lnvperf_host -lnvperf_target\nmain.cu(51): warning #177-D: variable \"smCount\" was declared but never referenced\n    int smCount = prop.multiProcessorCount;\n        ^\n\nRemark: The warnings can be suppressed with \"-diag-suppress <warning-number>\"\n\nmake: Leaving directory '/home/ubuntu/moe/ext/gpu-benches/gpu-l2-cache'\n"
+  },
+  {
+   "cmd": [
+    "timeout",
+    "420",
+    "/home/ubuntu/moe/ext/gpu-benches/gpu-latency/cuda-latency"
+   ],
+   "rc": 124,
+   "secs": 420.1,
+   "tail": "",
+   "capped": true
+  },
+  {
+   "cmd": [
+    "timeout",
+    "240",
+    "/home/ubuntu/moe/ext/gpu-benches/gpu-stream/cuda-stream"
+   ],
+   "rc": 0,
+   "secs": 52.6,
+   "tail": "",
+   "capped": false
+  },
+  {
+   "cmd": [
+    "timeout",
+    "300",
+    "/home/ubuntu/moe/ext/gpu-benches/gpu-l2-cache/cuda-l2-cache"
+   ],
+   "rc": 0,
+   "secs": 105.6,
+   "tail": "",
+   "capped": false
+  }
+ ],
+ "started": 1791326983.6998785,
+ "clocks": {
+  "gpu-latency": {
+   "before": "1710 MHz, 2619 MHz, 37, 118.38 W",
+   "after": "1710 MHz, 2619 MHz, 34, 113.54 W"
+  },
+  "gpu-stream": {
+   "before": "1710 MHz, 2619 MHz, 34, 113.54 W",
+   "after": "1710 MHz, 2619 MHz, 46, 418.98 W"
+  },
+  "gpu-l2-cache": {
+   "before": "1710 MHz, 2619 MHz, 46, 413.23 W",
+   "after": "1710 MHz, 2619 MHz, 36, 139.28 W"
+  }
+ },
+ "ended": 1791327569.0291677
+}

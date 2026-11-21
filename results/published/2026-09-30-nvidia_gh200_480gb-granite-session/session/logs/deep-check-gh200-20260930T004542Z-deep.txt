@@ -1,0 +1,6 @@
+G=2 treads 1..9 declared 9 VALIDITY not PASS: ['V5 UNKNOWN']
+G=4 treads 1..9 declared 9 VALIDITY not PASS: ['V5 UNKNOWN']
+G=2 SHARED ms 0.2698 0.2696 0.2849 0.2910 0.2886 0.3033 0.3459 0.3906 0.4365 | increments -0.000 0.015 0.006 -0.002 0.015 0.043 0.045 0.046
+G=4 SHARED ms 0.2507 0.2543 0.2739 0.2735 0.2602 0.3033 0.3458 0.3904 0.4365 | increments 0.004 0.020 -0.000 -0.013 0.043 0.042 0.045 0.046
+P3 G=2 minus G=4 at n = 3 5 7 9: 0.011 0.028 0.000 0.000 ms
+P4 G=4 n=8 to 9: 0.046 ms against the median of the others, 0.031

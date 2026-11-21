@@ -1,0 +1,8 @@
+v6d (addendum 6) FROZEN 2026-11-10T22:35:03Z, before any re-score of the SEEN decode blind pages under any addendum-6 variant and before gate_d6 ran
+choices made on SEEN measurement pages only: PC (pc.read.json, d6_build/pc_spans.json), PC2 (pc2.read.json), DS (ds.readings.json), CAL2 (the published tree, scored by score_cal_d3 under v6d); the old decode blind pages were not read, computed on or re-scored in build-D6 before this line (they were seen during the 2026-11-04 diagnoses and re-scored under v6d variants in design-D6, disclosed)
+law: c0 linear in G between G 8 (PC2-R1b 2.7208 us on 16x64x128; PC2-R2a 2.4002 us elsewhere) and G 128 (PC-R2 4.7047 us), held outside, every wave of a multi-wave GEMM at c0(S); L table PC-R7/R1 G 4..384 with c0(G) removed; X_sat 16x64x128 PC2-R1d 3781.89, 64x128x64 PC-R7 3612.42, 4-per-SM PC x DS W1RATE ratio; kappa by fill: PC's spans on the 3-per-SM tiles, PC2-R3's K 14336 rungs on the 4-per-SM tiles (PC's below); naive: law on a cell with no non-fetching follower, v4d' otherwise; CALL/ALIGN/SLOPE v5d's
+CAL2 under the frozen v6d (clause 1 preview, computed before the freeze): GO rms 1.81% worst +5.97% mean -0.03% n 91 (T0 -1.87 us, s_naive -2.14 us, s_block -0.72 us)
+9653cea5c32337d819e400343c1c6d379d33c2ad8d554262736db18eda5110ae  scripts/r3_timing_model_v6d.py
+9af3fadc3f4f87a3977faad7bad2a41f6a9c855570fb2bb9f94680b7c0c5522a  scripts/scoring/decode/d6_build/v6d_constants.json
+827230ae8103e14e60fbc2ab2a27267368dadfd6159366506349a65d17263d75  scripts/scoring/decode/d6_build/pc_spans.json
+cf36479eae47efed9b34809db5070ae896c59b29127f7184e160db6a05034527  scripts/scoring/decode/d6common.py (at the freeze; the gate code is built after it)

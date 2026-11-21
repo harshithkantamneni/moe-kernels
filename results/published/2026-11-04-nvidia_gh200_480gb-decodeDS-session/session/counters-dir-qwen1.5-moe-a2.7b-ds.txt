@@ -1,0 +1,1 @@
+/home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters

@@ -1,0 +1,444 @@
+{
+ "registered": "2026-10-01, before any rental-2 page",
+ "name": "2026-10-01-rental2-w1floor-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r2/DESIGN.md section 4, replaced as the review directs (REVIEW.md sections 4 and 5.4): unseen tread sets, FLUID_LOW as the rival, a co-primary per-cell test, noise-derived bands, the primary capture named",
+ "tool": "scripts/floor_estimator.py; scorer scripts/scoring/rental2/score_w1floor.py",
+ "primary_capture": "the BASE-clock G = 64 captures (r3f-g64.json) of the tp8 floor2, tp4 floor and tp2 floor units; the 1710 lock captures are printed beside, as the 2026-09-30 registration did",
+ "x_grid": "grid x S / 132, grid = live + dead CTAs from the page's own launch__grid_size, asserted equal to the registered grid (V1 already holds it)",
+ "geometry": {
+  "mixtral-8x7b-tp8": {
+   "w1": {
+    "K": 4096,
+    "N": 3584,
+    "npn": 56,
+    "ksteps": 64,
+    "asymptote": 352.2,
+    "u": 22542.4
+   },
+   "w2": {
+    "K": 1792,
+    "N": 4096,
+    "npn": 64,
+    "ksteps": 28,
+    "asymptote": 379.1,
+    "u": 10613.8
+   }
+  },
+  "mixtral-8x7b-tp4": {
+   "w1": {
+    "K": 4096,
+    "N": 7168,
+    "npn": 112,
+    "ksteps": 64,
+    "asymptote": 352.2,
+    "u": 22542.4
+   },
+   "w2": {
+    "K": 3584,
+    "N": 4096,
+    "npn": 64,
+    "ksteps": 56,
+    "asymptote": 361.6,
+    "u": 20248.6
+   }
+  },
+  "mixtral-8x7b-tp2": {
+   "w1": {
+    "K": 4096,
+    "N": 14336,
+    "npn": 224,
+    "ksteps": 64,
+    "asymptote": 352.2,
+    "u": 22542.4
+   },
+   "w2": {
+    "K": 7168,
+    "N": 4096,
+    "npn": 64,
+    "ksteps": 112,
+    "asymptote": 352.8,
+    "u": 39518.2
+   }
+  }
+ },
+ "sets": {
+  "mixtral-8x7b-tp8 w1": {
+   "ksteps": 64,
+   "npn": 56,
+   "asymptote": 352.2,
+   "u": 22542.4,
+   "sets": {
+    "A": {
+     "treads": [
+      13,
+      14,
+      15
+     ],
+     "H_EST": 313.387207,
+     "bias": -0.110201,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 8.716427
+    },
+    "B": {
+     "treads": [
+      11,
+      15,
+      16
+     ],
+     "H_EST": 350.695701,
+     "bias": -0.004271,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 3.2945
+    },
+    "C": {
+     "treads": [
+      11,
+      12,
+      13
+     ],
+     "H_EST": 365.619559,
+     "bias": 0.038102,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 8.716427
+    }
+   }
+  },
+  "mixtral-8x7b-tp8 w2": {
+   "ksteps": 28,
+   "npn": 64,
+   "asymptote": 379.1,
+   "u": 10613.8,
+   "sets": {
+    "W2a": {
+     "treads": [
+      11,
+      12,
+      13
+     ],
+     "H_EST": 393.481724,
+     "bias": 0.037936,
+     "FLUID": 379.1,
+     "FLUID_LOW": 365.4524,
+     "sigma_slope": 17.432855
+    },
+    "W2b": {
+     "treads": [
+      14,
+      15,
+      16
+     ],
+     "H_EST": 393.486328,
+     "bias": 0.037949,
+     "FLUID": 379.1,
+     "FLUID_LOW": 365.4524,
+     "sigma_slope": 17.432855
+    }
+   }
+  },
+  "mixtral-8x7b-tp4 w1": {
+   "ksteps": 64,
+   "npn": 112,
+   "asymptote": 352.2,
+   "u": 22542.4,
+   "sets": {
+    "A": {
+     "treads": [
+      14,
+      15,
+      16
+     ],
+     "H_EST": 339.503383,
+     "bias": -0.036049,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 4.358214
+    },
+    "B": {
+     "treads": [
+      11,
+      13,
+      15
+     ],
+     "H_EST": 352.560896,
+     "bias": 0.001025,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 2.179107
+    },
+    "C": {
+     "treads": [
+      10,
+      12,
+      13
+     ],
+     "H_EST": 365.618737,
+     "bias": 0.0381,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 2.853121
+    }
+   }
+  },
+  "mixtral-8x7b-tp4 w2": {
+   "ksteps": 56,
+   "npn": 64,
+   "asymptote": 361.6,
+   "u": 20248.6,
+   "sets": {
+    "W2a": {
+     "treads": [
+      11,
+      12,
+      13
+     ],
+     "H_EST": 375.331264,
+     "bias": 0.037974,
+     "FLUID": 361.6,
+     "FLUID_LOW": 348.5824,
+     "sigma_slope": 8.716427
+    },
+    "W2b": {
+     "treads": [
+      14,
+      15,
+      16
+     ],
+     "H_EST": 375.333566,
+     "bias": 0.03798,
+     "FLUID": 361.6,
+     "FLUID_LOW": 348.5824,
+     "sigma_slope": 8.716427
+    }
+   }
+  },
+  "mixtral-8x7b-tp2 w1": {
+   "ksteps": 64,
+   "npn": 224,
+   "asymptote": 352.2,
+   "u": 22542.4,
+   "sets": {
+    "D1": {
+     "treads": [
+      10,
+      11,
+      12
+     ],
+     "H_EST": 352.56032,
+     "bias": 0.001023,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 2.179107
+    },
+    "D2": {
+     "treads": [
+      12,
+      13,
+      14
+     ],
+     "H_EST": 365.618408,
+     "bias": 0.038099,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 2.179107
+    }
+   }
+  },
+  "mixtral-8x7b-tp2 w2": {
+   "ksteps": 112,
+   "npn": 64,
+   "asymptote": 352.8,
+   "u": 39518.2,
+   "sets": {
+    "W2a": {
+     "treads": [
+      11,
+      12,
+      13
+     ],
+     "H_EST": 366.256034,
+     "bias": 0.038141,
+     "FLUID": 352.8,
+     "FLUID_LOW": 340.0992,
+     "sigma_slope": 4.358214
+    },
+    "W2b": {
+     "treads": [
+      14,
+      15,
+      16
+     ],
+     "H_EST": 366.256034,
+     "bias": 0.038141,
+     "FLUID": 352.8,
+     "FLUID_LOW": 340.0992,
+     "sigma_slope": 4.358214
+    }
+   }
+  }
+ },
+ "sets_note": "every tread in these sets is >= 10 on tp4/tp2 and >= 11 on tp8: on no published page (rental-1 r3c pages hold n = 1..9 at G = 64 on every shard, and tp8's floor n = 1..6, 8, 10). tp2 w1 has only two unseen sets, of bias about 0 and +3.8%: delta only. Every w2 set within 10..16 sits at +3.8% (ceil(512 n / 132) does not wrap there): w2 is an offset test, H_EST +3.8% against FLUID 0%",
+ "seen_replication": {
+  "tp8 w1 (6, 8, 10) SEEN": 339.502232
+ },
+ "noise": {
+  "sigma_cell_cycles": 2677.549874,
+  "source": "CAL: the median over the four calibration models' G = 64 base and lock captures of the rms of (elapsed - CORES) about a free line in grid S / 132, floor-bound cells of >= 4 waves",
+  "theta_delta": {
+   "mixtral-8x7b-tp8 w1": {
+    "sigma_theta": 0.276439,
+    "sigma_delta": 0.013099
+   },
+   "mixtral-8x7b-tp4 w1": {
+    "sigma_theta": 0.199464,
+    "sigma_delta": 0.005423
+   },
+   "mixtral-8x7b-tp2 w1": {
+    "sigma_delta": 0.003094
+   }
+  },
+  "propagation": "every slope, theta and delta is linear in the cells' cycles (floor_estimator.slope_weights, theta_delta_weights): sigma = sigma_cell x ||weights||, exact for sets that share cells; the fit is unweighted OLS over the sets"
+ },
+ "families": {
+  "H_EST": "the CORES model through F4's estimator: theta 1, delta 0",
+  "FLUID": "a set-independent slope at the asymptote 344.1 + F / S: theta 0, delta 0",
+  "FLUID_LOW": "the FINDINGS reading of rental 1: a set-independent slope of 0.964 x the asymptote: theta 0, delta -3.6%",
+  "H_NPN": "secondary, labelled: H_EST x (1 + delta_npn), delta_npn -3.6% at npn 56 log-linear to -0.7% at 448 (already refuted on SEEN data: it predicts 327.3 on (6, 8, 10) where 339.6 was measured)",
+  "npn_deficit": {
+   "mixtral-8x7b-tp8": -0.036,
+   "mixtral-8x7b-tp4": -0.026333,
+   "mixtral-8x7b-tp2": -0.016667
+  }
+ },
+ "rules": {
+  "fit": "per w1 GEMM with three sets (tp8, tp4): r_k = slope_k / asymptote - 1 = delta + theta x bias_k, unweighted OLS over the sets (floor_estimator.theta_delta); tp2 w1: delta_H = mean(r_k - bias_k) and delta_F = mean(r_k)",
+  "theta_call": "theta > 0.5 reads H_EST's side, theta < 0.5 FLUID's",
+  "H_EST": "FALSIFIED if |theta - 1| > 2 sigma_theta on tp8 w1 or tp4 w1, or |delta_H| > 2 sigma_delta on two of the three w1 GEMMs",
+  "FLUID": "FALSIFIED if |theta| > 2 sigma_theta on tp8 w1 or tp4 w1, or |delta_F| > 2 sigma_delta on two of the three w1 GEMMs",
+  "FLUID_LOW": "FALSIFIED if |theta| > 2 sigma_theta on tp8 w1 or tp4 w1, or |delta_F + 0.036| > 2 sigma_delta on tp8 w1",
+  "H_NPN": "FALSIFIED if delta_H on tp8 w1 > -2.0% (secondary)",
+  "w2_offset": "per shard, the mean over W2a, W2b of slope / asymptote - 1: H_EST predicts the mean registered bias (+3.8%), FLUID 0; each family HOLDS within 2 sigma (sigma the mean's propagated noise / asymptote), else FALSIFIED",
+  "co_primary_per_cell": "per GEMM, on the unseen cells of >= 4 waves (n >= 10 on tp4/tp2, n >= 11 on tp8): rms_C of cycles about ceil(q) u + a and rms_F about q u + a, a one free constant each; CEIL wins when rms_F - rms_C > sigma_cell, FLUID when rms_C - rms_F > sigma_cell, else INCONCLUSIVE. H_EST is supported when CEIL wins on tp8 w1 and tp4 w1; FLUID (and FLUID_LOW) when FLUID wins on both",
+  "both_fail": "when every family is FALSIFIED the verdict is NEITHER: no family is selected and the per-set slopes are printed",
+  "per_cell_record": "each >= 4-wave cell's (measured - CORES) / CORES is printed beside part 3's a"
+ },
+ "co_primary_expected_separation": {
+  "mixtral-8x7b-tp8 w1": {
+   "cells": [
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "rms_fluid_if_ceil_true": 6020.101563,
+   "rms_ceil_if_fluid_true": 6020.101563
+  },
+  "mixtral-8x7b-tp8 w2": {
+   "cells": [
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "rms_fluid_if_ceil_true": 2197.155199,
+   "rms_ceil_if_fluid_true": 2197.155199
+  },
+  "mixtral-8x7b-tp4 w1": {
+   "cells": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "rms_fluid_if_ceil_true": 6416.988138,
+   "rms_ceil_if_fluid_true": 6416.988138
+  },
+  "mixtral-8x7b-tp4 w2": {
+   "cells": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "rms_fluid_if_ceil_true": 4908.755284,
+   "rms_ceil_if_fluid_true": 4908.755284
+  },
+  "mixtral-8x7b-tp2 w1": {
+   "cells": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "rms_fluid_if_ceil_true": 6345.354517,
+   "rms_ceil_if_fluid_true": 6345.354517
+  },
+  "mixtral-8x7b-tp2 w2": {
+   "cells": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "rms_fluid_if_ceil_true": 9580.177053,
+   "rms_ceil_if_fluid_true": 9580.177053
+  }
+ },
+ "power": {
+  "mixtral-8x7b-tp8 w1": {
+   "theta_bands_2sigma": {
+    "H_EST": [
+     0.447122,
+     1.552878
+    ],
+    "FLUID": [
+     -0.552878,
+     0.552878
+    ]
+   },
+   "disjoint": false
+  },
+  "mixtral-8x7b-tp4 w1": {
+   "theta_bands_2sigma": {
+    "H_EST": [
+     0.601072,
+     1.398928
+    ],
+    "FLUID": [
+     -0.398928,
+     0.398928
+    ]
+   },
+   "disjoint": true
+  }
+ },
+ "power_note": "theta's 2-sigma bands overlap on tp8 w1 (sigma_theta 0.28 at sigma_cell 2.7k cycles over 3-tread sets) and are disjoint on tp4 w1; the co-primary per-cell test (about 2.5 sigma_cell of rms separation per GEMM) carries the call where theta cannot",
+ "unseen_min_tread": {
+  "mixtral-8x7b-tp8": 11,
+  "mixtral-8x7b-tp4": 10,
+  "mixtral-8x7b-tp2": 10
+ },
+ "seen_data": [
+  "tp8 w1 (6, 8, 10) and every tread <= 9 at G = 64 on all three shards are SEEN; none is in a scored set",
+  "H_NPN's -3.6% is read off rental-1 tp8 (SEEN) and 8x7B's -0.7%"
+ ]
+}

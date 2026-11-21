@@ -1,0 +1,297 @@
+== P1  GR follows C_reg, Granite-3B n <= 5 ([0.80, 1.10] x C_reg)
+  native  n1  GR 0.0838  C_reg 0.0947  x0.885  band 0.0758-0.1042  in  (GR host-bound frac 0.00)
+  native  n2  GR 0.1128  C_reg 0.1263  x0.893  band 0.1010-0.1389  in  (GR host-bound frac 0.00)
+  native  n3  GR 0.1558  C_reg 0.1690  x0.922  band 0.1352-0.1859  in  (GR host-bound frac 0.00)
+  native  n4  GR 0.2008  C_reg 0.2147  x0.935  band 0.1718-0.2362  in  (GR host-bound frac 0.00)
+  native  n5  GR 0.2447  C_reg 0.2582  x0.948  band 0.2066-0.2840  in  (GR host-bound frac 0.00)
+  shared  n1  GR 0.0897  C_reg 0.1096  x0.818  band 0.0877-0.1206  in  (GR host-bound frac 0.00)
+  shared  n2  GR 0.1195  C_reg 0.1411  x0.847  band 0.1129-0.1552  in  (GR host-bound frac 0.00)
+  shared  n3  GR 0.1639  C_reg 0.1838  x0.892  band 0.1470-0.2022  in  (GR host-bound frac 0.00)
+  shared  n4  GR 0.2081  C_reg 0.2296  x0.906  band 0.1837-0.2526  in  (GR host-bound frac 0.00)
+  shared  n5  GR 0.2531  C_reg 0.2731  x0.927  band 0.2185-0.3004  in  (GR host-bound frac 0.00)
+  private n1  GR 0.0897  C_reg 0.1096  x0.818  band 0.0877-0.1206  in  (GR host-bound frac 0.00)
+  private n2  GR 0.1496  C_reg 0.1676  x0.892  band 0.1341-0.1844  in  (GR host-bound frac 0.00)
+  private n3  GR 0.2090  C_reg 0.2257  x0.926  band 0.1806-0.2483  in  (GR host-bound frac 0.00)
+  private n4  GR 0.2656  C_reg 0.2841  x0.935  band 0.2273-0.3125  in  (GR host-bound frac 0.00)
+  private n5  GR 0.3227  C_reg 0.3423  x0.943  band 0.2738-0.3765  in  (GR host-bound frac 0.00)
+  increments I_GR(5)-I_GR(1): {'native': 0.1609, 'shared': 0.1634, 'private': 0.233} (>= 0.10 required for shared, private)
+  outside: 0 of 15 (fail if > 1); rival line (GR n<=3 >= 0.20 ms): [('private', 3)]
+  P1: HELD
+
+== P2  GR = E240 on GPU-bound cells, max(2%, 6 us); Granite n >= 7, JetMoE n >= 3
+  granite-3.0- native  n7  GR 0.3292 E240 0.3382  diff   -8.9 us (-2.64%)  band 6.8  OUT  E240 hb 1.00
+  granite-3.0- native  n8  GR 0.3735 E240 0.3792  diff   -5.7 us (-1.50%)  band 7.6  in  E240 hb 0.00
+  granite-3.0- native  n9  GR 0.4188 E240 0.4245  diff   -5.8 us (-1.36%)  band 8.5  in  E240 hb 0.00
+  granite-3.0- shared  n7  GR 0.3383 E240 0.3438  diff   -5.4 us (-1.58%)  band 6.9  in  E240 hb 1.00
+  granite-3.0- shared  n8  GR 0.3831 E240 0.3884  diff   -5.2 us (-1.35%)  band 7.8  in  E240 hb 0.00
+  granite-3.0- shared  n9  GR 0.4285 E240 0.4344  diff   -5.9 us (-1.35%)  band 8.7  in  E240 hb 0.00
+  granite-3.0- private n7  GR 0.4383 E240 0.4436  diff   -5.2 us (-1.18%)  band 8.9  in  E240 hb 0.00
+  granite-3.0- private n8  GR 0.4980 E240 0.5028  diff   -4.8 us (-0.96%)  band 10.1  in  E240 hb 0.00
+  granite-3.0- private n9  GR 0.5562 E240 0.5613  diff   -5.1 us (-0.91%)  band 11.2  in  E240 hb 0.00
+  jetmoe-8b    native  n3  GR 0.3822 E240 0.3860  diff   -3.8 us (-0.98%)  band 7.7  in  E240 hb 0.00
+  jetmoe-8b    native  n4  GR 0.4795 E240 0.4854  diff   -6.0 us (-1.23%)  band 9.7  in  E240 hb 0.00
+  jetmoe-8b    shared  n3  GR 0.3732 E240 0.3789  diff   -5.7 us (-1.50%)  band 7.6  in  E240 hb 0.00
+  jetmoe-8b    shared  n4  GR 0.4826 E240 0.4886  diff   -5.9 us (-1.21%)  band 9.8  in  E240 hb 0.00
+  jetmoe-8b    private n3  GR 0.5366 E240 0.5418  diff   -5.2 us (-0.96%)  band 10.8  in  E240 hb 0.00
+  jetmoe-8b    private n4  GR 0.6756 E240 0.6799  diff   -4.4 us (-0.64%)  band 13.6  in  E240 hb 0.00
+  alternative reading (only cells whose E240 is measured GPU-bound, hb < 0.2): 13/13 inside; outside []
+  P2: FALSIFIED (1 of 15 outside)
+
+== P3  E0 - E240 = F_trace - h_flush_trace - dD_tail, Granite n = 1, 2, +/- 12 us
+  native  n1  E0-E240  +55.7 us | F 75.3 - h_flush 73.2 - dD_tail(TR-G) +279.4 = -277.4  miss +333.1  OUT | alt dD_tail(TR-E) -0.1 ->   +2.2 miss  +53.5 | hb E0 1.00 E240 1.00
+  native  n2  E0-E240  +57.4 us | F 75.8 - h_flush 65.1 - dD_tail(TR-G) +297.0 = -286.4  miss +343.8  OUT | alt dD_tail(TR-E) -2.1 ->  +12.8 miss  +44.6 | hb E0 1.00 E240 1.00
+  shared  n1  E0-E240  +44.6 us | F 75.2 - h_flush 66.8 - dD_tail(TR-G) +310.7 = -302.3  miss +346.9  OUT | alt dD_tail(TR-E) -0.5 ->   +9.0 miss  +35.7 | hb E0 1.00 E240 1.00
+  shared  n2  E0-E240  +52.1 us | F 75.7 - h_flush 66.4 - dD_tail(TR-G) +282.5 = -273.2  miss +325.3  OUT | alt dD_tail(TR-E) -3.6 ->  +12.9 miss  +39.2 | hb E0 1.00 E240 1.00
+  private n1  E0-E240  +65.3 us | F 75.0 - h_flush 68.2 - dD_tail(TR-G) +380.0 = -373.1  miss +438.5  OUT | alt dD_tail(TR-E) -0.5 ->   +7.4 miss  +58.0 | hb E0 1.00 E240 1.00
+  private n2  E0-E240  +56.3 us | F 75.3 - h_flush 65.0 - dD_tail(TR-G) +373.6 = -363.3  miss +419.6  OUT | alt dD_tail(TR-E) -1.9 ->  +12.2 miss  +44.1 | hb E0 1.00 E240 1.00
+  P3: FALSIFIED (6 of 6 outside; fail if > 1)
+
+== P4  E480: moved verdict and shift -(F480 - F240) +/- 12 us, Granite non-edge cells
+  F480 - F240 from traces (median of 6 TR-E pairs): 67.4 us (bytes/ruler 67.5 us)
+  native  n1  E240 0.3182 hb 1.00 (pred hb) | E480 0.2550 hb 1.00 H 0.4286 pred-list hb rule hb | shift -63.1 us miss +4.3
+  native  n2  E240 0.3171 hb 1.00 (pred hb) | E480 0.2575 hb 1.00 H 0.4334 pred-list hb rule hb | shift -59.6 us miss +7.8
+  native  n3  E240 0.3190 hb 1.00 (pred hb) | E480 0.2561 hb 1.00 H 0.4278 pred-list hb rule hb | shift -62.8 us miss +4.6
+  native  n4  E240 0.3478 hb 1.00 (pred hb) | E480 0.2799 hb 1.00 H 0.4295 pred-list hb rule hb | shift -67.9 us miss -0.5
+  native  n5  E240 0.3384 hb 1.00 (pred hb) | E480 0.2757 hb 1.00 H 0.4324 pred-list gpu rule hb | shift -62.7 us miss +4.8
+  native  n6  E240 0.3445 hb 1.00 (pred gpu) | E480 0.2936 hb 0.33 H 0.4277 pred-list gpu rule gpu
+  native  n7  E240 0.3382 hb 1.00 (pred gpu) | E480 0.3349 hb 0.00 H 0.4305 pred-list gpu rule gpu
+  native  n8  E240 0.3792 hb 0.00 (pred gpu) | E480 0.3796 hb 0.00 H 0.4249 pred-list gpu rule gpu
+  native  n9  E240 0.4245 hb 0.00 (pred gpu) | E480 0.4247 hb 0.00 H 0.4281 pred-list gpu rule gpu
+  shared  n1  E240 0.3282 hb 1.00 (pred hb) | E480 0.2555 hb 1.00 H 0.4289 pred-list hb rule hb | shift -72.6 us miss -5.2
+  shared  n2  E240 0.3238 hb 1.00 (pred hb) | E480 0.2509 hb 1.00 H 0.4228 pred-list hb rule hb | shift -73.0 us miss -5.5
+  shared  n3  E240 0.3263 hb 1.00 (pred hb) | E480 0.2600 hb 1.00 H 0.4276 pred-list hb rule hb | shift -66.4 us miss +1.1
+  shared  n4  E240 0.3458 hb 1.00 (pred hb) | E480 0.2724 hb 1.00 H 0.4205 pred-list gpu rule hb | shift -73.4 us miss -6.0
+  shared  n5  E240 0.3377 hb 1.00 (pred hb) | E480 0.2732 hb 1.00 H 0.4264 pred-list gpu rule hb | shift -64.5 us miss +2.9
+  shared  n6  E240 0.3455 hb 1.00 (pred gpu) | E480 0.3021 hb 0.00 H 0.4214 pred-list gpu rule gpu
+  shared  n7  E240 0.3438 hb 1.00 (pred gpu) | E480 0.3439 hb 0.00 H 0.4271 pred-list gpu rule gpu
+  shared  n8  E240 0.3884 hb 0.00 (pred gpu) | E480 0.3884 hb 0.00 H 0.4194 pred-list gpu rule gpu
+  shared  n9  E240 0.4344 hb 0.00 (pred gpu) | E480 0.4342 hb 0.00 H 0.4254 pred-list gpu rule gpu
+  private n1  E240 0.3123 hb 1.00 (pred hb) | E480 0.2586 hb 1.00 H 0.4305 pred-list hb rule hb | shift -53.7 us miss +13.7
+  private n2  E240 0.3205 hb 1.00 (pred hb) | E480 0.2531 hb 1.00 H 0.4240 pred-list hb rule hb | shift -67.5 us miss -0.0
+  private n3  E240 0.3540 hb 1.00 (pred hb) | E480 0.2854 hb 1.00 H 0.4309 pred-list gpu rule hb | shift -68.6 us miss -1.2
+  private n4  E240 0.3429 hb 1.00 (pred hb) | E480 0.2718 hb 1.00 H 0.4276 pred-list gpu rule hb | shift -71.0 us miss -3.6
+  private n5  E240 0.3394 hb 1.00 (pred gpu) | E480 0.3279 hb 0.00 H 0.4336 pred-list gpu rule gpu
+  private n6  E240 0.3864 hb 0.00 (pred gpu) | E480 0.3864 hb 0.00 H 0.4341 pred-list gpu rule gpu
+  private n7  E240 0.4436 hb 0.00 (pred gpu) | E480 0.4435 hb 0.00 H 0.4214 pred-list gpu rule gpu
+  private n8  E240 0.5028 hb 0.00 (pred gpu) | E480 0.5026 hb 0.00 H 0.4250 pred-list gpu rule gpu
+  private n9  E240 0.5613 hb 0.00 (pred gpu) | E480 0.5614 hb 0.00 H 0.4307 pred-list gpu rule gpu
+  wrong E480 verdicts vs rule with own H (scored): [] (fail if > 2); vs the printed list (H 0.3545): [('native', 5), ('shared', 4), ('shared', 5), ('private', 3), ('private', 4)]; shifts outside +/-12 us: [('private', 1)]; edge cells: [('E480', 'native', 6)]
+  P4: FALSIFIED
+
+== P5  C_reg + F < H (own H) gives the host-bound verdict, non-edge cells, >= 95%
+  granite-3.0-3b-a800m   52/53 (98.1%)  misses [('E240', 'shared', 7, 0.355, 0.4219, 'meas hb')]  edges [('E480', 'native', 6, 0.33)]
+  jetmoe-8b              21/22 (95.5%)  misses [('E240', 'private', 2, 0.364, 0.4284, 'meas hb')]  edges [('E480', 'native', 1, 0.67), ('E480', 'native', 2, 0.67)]
+  jetmoe-8b@6d2595d      21/22 (95.5%)  misses [('E240', 'private', 2, 0.364, 0.4284, 'meas hb')]  edges [('E480', 'native', 1, 0.67), ('E480', 'native', 2, 0.67)]
+  granite-3.0-1b-a400m   27/27 (100.0%)  misses []  edges []
+  pooled (primary C_reg): 100/102 (98.0%)
+  P5: HELD
+
+== P6  MP predicts I_eager within max(5%, 12 us), every E240/E0/E480 cell at the trace treads
+  granite-3.0- E240 native  n1  meas 0.3182 MP 0.3056 miss  -12.6 us ( -3.9%) band 15.9 in  hb 1.00 scale 0.652
+  granite-3.0- E0   native  n1  meas 0.3738 MP 0.3776 miss   +3.7 us ( +1.0%) band 18.7 in  hb 1.00 scale 0.717
+  granite-3.0- E480 native  n1  meas 0.2550 MP 0.2426 miss  -12.5 us ( -4.9%) band 12.8 in  hb 1.00 scale 0.672
+  granite-3.0- E240 native  n2  meas 0.3171 MP 0.3036 miss  -13.4 us ( -4.2%) band 15.9 in  hb 1.00 scale 0.693
+  granite-3.0- E0   native  n2  meas 0.3745 MP 0.3763 miss   +1.8 us ( +0.5%) band 18.7 in  hb 1.00 scale 0.723
+  granite-3.0- E480 native  n2  meas 0.2575 MP 0.2499 miss   -7.6 us ( -3.0%) band 12.9 in  hb 1.00 scale 0.676
+  granite-3.0- E240 native  n4  meas 0.3478 MP 0.3554 miss   +7.6 us ( +2.2%) band 17.4 in  hb 1.00 scale 0.722
+  granite-3.0- E0   native  n4  meas 0.3796 MP 0.3822 miss   +2.7 us ( +0.7%) band 19.0 in  hb 1.00 scale 0.646  [E240 traces, mode flush substituted]
+  granite-3.0- E480 native  n4  meas 0.2799 MP 0.2853 miss   +5.4 us ( +1.9%) band 14.0 in  hb 1.00 scale 0.717  [E240 traces, mode flush substituted]
+  granite-3.0- E240 native  n6  meas 0.3445 MP 0.3468 miss   +2.3 us ( +0.7%) band 17.2 in  hb 1.00 scale 0.680
+  granite-3.0- E0   native  n6  meas 0.3816 MP 0.3836 miss   +1.9 us ( +0.5%) band 19.1 in  hb 1.00 scale 0.615  [E240 traces, mode flush substituted]
+  granite-3.0- E480 native  n6  meas 0.2936 MP 0.2845 miss   -9.1 us ( -3.1%) band 14.7 in  hb 0.33 scale 0.686  [E240 traces, mode flush substituted]
+  granite-3.0- E240 native  n9  meas 0.4245 MP 0.4142 miss  -10.3 us ( -2.4%) band 21.2 in  hb 0.00 scale 0.703
+  granite-3.0- E0   native  n9  meas 0.4247 MP 0.4142 miss  -10.5 us ( -2.5%) band 21.2 in  hb 0.00 scale 0.637  [E240 traces, mode flush substituted]
+  granite-3.0- E480 native  n9  meas 0.4247 MP 0.4142 miss  -10.5 us ( -2.5%) band 21.2 in  hb 0.00 scale 0.708  [E240 traces, mode flush substituted]
+  granite-3.0- E240 shared  n1  meas 0.3282 MP 0.3187 miss   -9.4 us ( -2.9%) band 16.4 in  hb 1.00 scale 0.701
+  granite-3.0- E0   shared  n1  meas 0.3728 MP 0.3751 miss   +2.3 us ( +0.6%) band 18.6 in  hb 1.00 scale 0.694
+  granite-3.0- E480 shared  n1  meas 0.2555 MP 0.2446 miss  -10.9 us ( -4.3%) band 12.8 in  hb 1.00 scale 0.660
+  granite-3.0- E240 shared  n2  meas 0.3238 MP 0.3135 miss  -10.3 us ( -3.2%) band 16.2 in  hb 1.00 scale 0.703
+  granite-3.0- E0   shared  n2  meas 0.3759 MP 0.3776 miss   +1.7 us ( +0.5%) band 18.8 in  hb 1.00 scale 0.716
+  granite-3.0- E480 shared  n2  meas 0.2509 MP 0.2366 miss  -14.3 us ( -5.7%) band 12.5 OUT  hb 1.00 scale 0.661
+  granite-3.0- E240 shared  n4  meas 0.3458 MP 0.3506 miss   +4.8 us ( +1.4%) band 17.3 in  hb 1.00 scale 0.722
+  granite-3.0- E0   shared  n4  meas 0.3771 MP 0.3805 miss   +3.5 us ( +0.9%) band 18.9 in  hb 1.00 scale 0.643  [E240 traces, mode flush substituted]
+  granite-3.0- E480 shared  n4  meas 0.2724 MP 0.2763 miss   +3.9 us ( +1.4%) band 13.6 in  hb 1.00 scale 0.711  [E240 traces, mode flush substituted]
+  granite-3.0- E240 shared  n6  meas 0.3455 MP 0.3518 miss   +6.2 us ( +1.8%) band 17.3 in  hb 1.00 scale 0.702
+  granite-3.0- E0   shared  n6  meas 0.3731 MP 0.3765 miss   +3.4 us ( +0.9%) band 18.7 in  hb 1.00 scale 0.616  [E240 traces, mode flush substituted]
+  granite-3.0- E480 shared  n6  meas 0.3021 MP 0.2922 miss   -9.9 us ( -3.3%) band 15.1 in  hb 0.00 scale 0.690  [E240 traces, mode flush substituted]
+  granite-3.0- E240 shared  n9  meas 0.4344 MP 0.4249 miss   -9.5 us ( -2.2%) band 21.7 in  hb 0.00 scale 0.720
+  granite-3.0- E0   shared  n9  meas 0.4343 MP 0.4249 miss   -9.4 us ( -2.2%) band 21.7 in  hb 0.00 scale 0.644  [E240 traces, mode flush substituted]
+  granite-3.0- E480 shared  n9  meas 0.4342 MP 0.4249 miss   -9.3 us ( -2.1%) band 21.7 in  hb 0.00 scale 0.718  [E240 traces, mode flush substituted]
+  granite-3.0- E240 private n1  meas 0.3123 MP 0.2996 miss  -12.7 us ( -4.1%) band 15.6 in  hb 1.00 scale 0.658
+  granite-3.0- E0   private n1  meas 0.3776 MP 0.3794 miss   +1.8 us ( +0.5%) band 18.9 in  hb 1.00 scale 0.701
+  granite-3.0- E480 private n1  meas 0.2586 MP 0.2477 miss  -10.9 us ( -4.2%) band 12.9 in  hb 1.00 scale 0.663
+  granite-3.0- E240 private n2  meas 0.3205 MP 0.3092 miss  -11.3 us ( -3.5%) band 16.0 in  hb 1.00 scale 0.708
+  granite-3.0- E0   private n2  meas 0.3768 MP 0.3808 miss   +4.0 us ( +1.1%) band 18.8 in  hb 1.00 scale 0.732
+  granite-3.0- E480 private n2  meas 0.2531 MP 0.2364 miss  -16.7 us ( -6.6%) band 12.7 OUT  hb 1.00 scale 0.652
+  granite-3.0- E240 private n4  meas 0.3429 MP 0.3463 miss   +3.5 us ( +1.0%) band 17.1 in  hb 1.00 scale 0.696
+  granite-3.0- E0   private n4  meas 0.3734 MP 0.3760 miss   +2.6 us ( +0.7%) band 18.7 in  hb 1.00 scale 0.619  [E240 traces, mode flush substituted]
+  granite-3.0- E480 private n4  meas 0.2718 MP 0.2842 miss  +12.3 us ( +4.5%) band 13.6 in  hb 1.00 scale 0.704  [E240 traces, mode flush substituted]
+  granite-3.0- E240 private n6  meas 0.3864 MP 0.3765 miss   -9.9 us ( -2.6%) band 19.3 in  hb 0.00 scale 0.704
+  granite-3.0- E0   private n6  meas 0.3885 MP 0.3791 miss   -9.4 us ( -2.4%) band 19.4 in  hb 1.00 scale 0.625  [E240 traces, mode flush substituted]
+  granite-3.0- E480 private n6  meas 0.3864 MP 0.3765 miss   -9.9 us ( -2.6%) band 19.3 in  hb 0.00 scale 0.716  [E240 traces, mode flush substituted]
+  granite-3.0- E240 private n9  meas 0.5613 MP 0.5515 miss   -9.8 us ( -1.7%) band 28.1 in  hb 0.00 scale 0.678
+  granite-3.0- E0   private n9  meas 0.5643 MP 0.5515 miss  -12.7 us ( -2.3%) band 28.2 in  hb 0.00 scale 0.608  [E240 traces, mode flush substituted]
+  granite-3.0- E480 private n9  meas 0.5614 MP 0.5515 miss   -9.9 us ( -1.8%) band 28.1 in  hb 0.00 scale 0.689  [E240 traces, mode flush substituted]
+  jetmoe-8b    E240 native  n1  meas 0.3240 MP 0.3320 miss   +8.0 us ( +2.5%) band 16.2 in  hb 1.00 scale 0.673
+  jetmoe-8b    E0   native  n1  meas 0.3455 MP 0.3484 miss   +2.9 us ( +0.9%) band 17.3 in  hb 1.00 scale 0.692
+  jetmoe-8b    E480 native  n1  meas 0.2422 MP 0.2470 miss   +4.9 us ( +2.0%) band 12.1 in  hb 0.67 scale 0.643
+  jetmoe-8b    E240 native  n2  meas 0.3322 MP 0.3373 miss   +5.2 us ( +1.6%) band 16.6 in  hb 1.00 scale 0.688
+  jetmoe-8b    E0   native  n2  meas 0.3512 MP 0.3536 miss   +2.4 us ( +0.7%) band 17.6 in  hb 1.00 scale 0.685
+  jetmoe-8b    E480 native  n2  meas 0.2682 MP 0.2657 miss   -2.5 us ( -0.9%) band 13.4 in  hb 0.67 scale 0.634
+  jetmoe-8b    E240 native  n3  meas 0.3860 MP 0.3763 miss   -9.7 us ( -2.5%) band 19.3 in  hb 0.00 scale 0.661
+  jetmoe-8b    E0   native  n3  meas 0.3877 MP 0.3763 miss  -11.4 us ( -2.9%) band 19.4 in  hb 0.33 scale 0.576  [E240 traces, mode flush substituted]
+  jetmoe-8b    E480 native  n3  meas 0.3872 MP 0.3763 miss  -10.8 us ( -2.8%) band 19.4 in  hb 0.00 scale 0.659  [E240 traces, mode flush substituted]
+  jetmoe-8b    E240 shared  n1  meas 0.3466 MP 0.3521 miss   +5.5 us ( +1.6%) band 17.3 in  hb 1.00 scale 0.694
+  jetmoe-8b    E0   shared  n1  meas 0.3766 MP 0.3797 miss   +3.1 us ( +0.8%) band 18.8 in  hb 1.00 scale 0.724
+  jetmoe-8b    E480 shared  n1  meas 0.2797 MP 0.2820 miss   +2.3 us ( +0.8%) band 14.0 in  hb 1.00 scale 0.641
+  jetmoe-8b    E240 shared  n2  meas 0.3510 MP 0.3577 miss   +6.6 us ( +1.9%) band 17.6 in  hb 1.00 scale 0.689
+  jetmoe-8b    E0   shared  n2  meas 0.3723 MP 0.3771 miss   +4.8 us ( +1.3%) band 18.6 in  hb 1.00 scale 0.685
+  jetmoe-8b    E480 shared  n2  meas 0.2644 MP 0.2711 miss   +6.7 us ( +2.5%) band 13.2 in  hb 1.00 scale 0.641
+  jetmoe-8b    E240 shared  n3  meas 0.3789 MP 0.3716 miss   -7.3 us ( -1.9%) band 18.9 in  hb 0.00 scale 0.688
+  jetmoe-8b    E0   shared  n3  meas 0.3811 MP 0.3864 miss   +5.3 us ( +1.4%) band 19.1 in  hb 1.00 scale 0.644  [E240 traces, mode flush substituted]
+  jetmoe-8b    E480 shared  n3  meas 0.3794 MP 0.3716 miss   -7.8 us ( -2.0%) band 19.0 in  hb 0.00 scale 0.691  [E240 traces, mode flush substituted]
+  jetmoe-8b    E240 private n1  meas 0.3516 MP 0.3574 miss   +5.8 us ( +1.6%) band 17.6 in  hb 1.00 scale 0.709
+  jetmoe-8b    E0   private n1  meas 0.3815 MP 0.3859 miss   +4.4 us ( +1.2%) band 19.1 in  hb 1.00 scale 0.731
+  jetmoe-8b    E480 private n1  meas 0.2786 MP 0.2857 miss   +7.2 us ( +2.6%) band 13.9 in  hb 1.00 scale 0.668
+  jetmoe-8b    E240 private n2  meas 0.3595 MP 0.3536 miss   -5.9 us ( -1.6%) band 18.0 in  hb 1.00 scale 0.692
+  jetmoe-8b    E0   private n2  meas 0.3671 MP 0.3727 miss   +5.6 us ( +1.5%) band 18.4 in  hb 1.00 scale 0.713
+  jetmoe-8b    E480 private n2  meas 0.3598 MP 0.3502 miss   -9.6 us ( -2.7%) band 18.0 in  hb 0.00 scale 0.659
+  jetmoe-8b    E240 private n3  meas 0.5418 MP 0.5317 miss  -10.1 us ( -1.9%) band 27.1 in  hb 0.00 scale 0.712
+  jetmoe-8b    E0   private n3  meas 0.5436 MP 0.5317 miss  -11.9 us ( -2.2%) band 27.2 in  hb 0.00 scale 0.633  [E240 traces, mode flush substituted]
+  jetmoe-8b    E480 private n3  meas 0.5414 MP 0.5317 miss   -9.7 us ( -1.8%) band 27.1 in  hb 0.00 scale 0.718  [E240 traces, mode flush substituted]
+  granite-3.0- E240 native  n1  meas 0.3279 MP 0.3152 miss  -12.7 us ( -3.9%) band 16.4 in  hb 1.00 scale 0.671
+  granite-3.0- E240 native  n6  meas 0.3438 MP 0.3315 miss  -12.3 us ( -3.6%) band 17.2 in  hb 1.00 scale 0.736
+  granite-3.0- E240 native  n9  meas 0.3629 MP 0.3690 miss   +6.1 us ( +1.7%) band 18.1 in  hb 1.00 scale 0.704
+  granite-3.0- E240 shared  n1  meas 0.3425 MP 0.3344 miss   -8.2 us ( -2.4%) band 17.1 in  hb 1.00 scale 0.702
+  granite-3.0- E240 shared  n6  meas 0.3432 MP 0.3322 miss  -11.0 us ( -3.2%) band 17.2 in  hb 1.00 scale 0.728
+  granite-3.0- E240 shared  n9  meas 0.3637 MP 0.3700 miss   +6.3 us ( +1.7%) band 18.2 in  hb 1.00 scale 0.713
+  granite-3.0- E240 private n1  meas 0.3388 MP 0.3230 miss  -15.8 us ( -4.7%) band 16.9 in  hb 1.00 scale 0.698
+  granite-3.0- E240 private n6  meas 0.3705 MP 0.3784 miss   +7.9 us ( +2.1%) band 18.5 in  hb 1.00 scale 0.726
+  granite-3.0- E240 private n9  meas 0.3689 MP 0.3738 miss   +4.9 us ( +1.3%) band 18.4 in  hb 1.00 scale 0.717
+  own-trace cells: 55/57 inside; outside [('granite-3.0-3b-a800m', 'shared', 2, 'E480'), ('granite-3.0-3b-a800m', 'private', 2, 'E480')]
+  substituted cells (E0/E480 at treads without their own traces): 24/24 inside; outside []
+  P6: FALSIFIED
+
+== P7  Granite n = 1 classification (gates nothing)
+  native  TR-G kernels 78.8 us (GEMM 67.5, non-GEMM 11.3) | TR-E r3call span 495.6 us, fused_experts span 451.5 us, launch-API share 10.8% of r3call / 11.9% of fused_experts | unprofiled H 423.4 us
+  shared  TR-G kernels 85.2 us (GEMM 73.9, non-GEMM 11.2) | TR-E r3call span 484.9 us, fused_experts span 437.8 us, launch-API share 10.7% of r3call / 11.7% of fused_experts | unprofiled H 434.7 us
+  private TR-G kernels 84.8 us (GEMM 73.9, non-GEMM 11.0) | TR-E r3call span 485.7 us, fused_experts span 440.7 us, launch-API share 10.9% of r3call / 11.9% of fused_experts | unprofiled H 413.6 us
+  P7: all four criteria met on every arm: True
+
+== P8  Granite-1B (unseen): GR in P1's rule, P5's rule, plateau H - Phi in [0.23, 0.27] (seen)
+  native  n1  GR 0.0557 C_reg 0.0678 x0.821 band 0.0542-0.0746 in | E240 0.3279 hb 1.00 H 0.4345 pred(H 0.3545) hb
+  native  n2  GR 0.0704 C_reg 0.0860 x0.818 band 0.0688-0.0946 in | E240 0.3395 hb 1.00 H 0.4543 pred(H 0.3545) hb
+  native  n3  GR 0.0956 C_reg 0.1097 x0.872 band 0.0878-0.1207 in | E240 0.3420 hb 1.00 H 0.4547 pred(H 0.3545) hb
+  native  n4  GR 0.1208 C_reg 0.1342 x0.900 band 0.1074-0.1476 in | E240 0.3361 hb 1.00 H 0.4514 pred(H 0.3545) hb
+  native  n5  GR 0.1456 C_reg 0.1587 x0.917 band 0.1270-0.1746 in | E240 0.3396 hb 1.00 H 0.4502 pred(H 0.3545) hb
+  native  n6  GR 0.1698 C_reg 0.1832 x0.927 band 0.1466-0.2015 in | E240 0.3438 hb 1.00 H 0.4520 pred(H 0.3545) hb
+  native  n7  GR 0.1947 C_reg 0.2077 x0.937 band 0.1662-0.2285 in | E240 0.3540 hb 1.00 H 0.4424 pred(H 0.3545) hb
+  native  n8  GR 0.2187 C_reg 0.2322 x0.942 band 0.1858-0.2554 in | E240 0.3672 hb 1.00 H 0.4473 pred(H 0.3545) hb
+  native  n9  GR 0.2410 C_reg 0.2510 x0.960 band 0.2008-0.2761 in | E240 0.3629 hb 1.00 H 0.4469 pred(H 0.3545) hb
+  shared  n1  GR 0.0590 C_reg 0.0774 x0.762 band 0.0619-0.0851 OUT | E240 0.3425 hb 1.00 H 0.4542 pred(H 0.3545) hb
+  shared  n2  GR 0.0736 C_reg 0.0957 x0.769 band 0.0766-0.1053 OUT | E240 0.3419 hb 1.00 H 0.4491 pred(H 0.3545) hb
+  shared  n3  GR 0.0988 C_reg 0.1193 x0.828 band 0.0954-0.1312 in | E240 0.3435 hb 1.00 H 0.4548 pred(H 0.3545) hb
+  shared  n4  GR 0.1235 C_reg 0.1438 x0.859 band 0.1150-0.1582 in | E240 0.3434 hb 1.00 H 0.4552 pred(H 0.3545) hb
+  shared  n5  GR 0.1480 C_reg 0.1683 x0.879 band 0.1346-0.1851 in | E240 0.3406 hb 1.00 H 0.4555 pred(H 0.3545) hb
+  shared  n6  GR 0.1732 C_reg 0.1928 x0.899 band 0.1542-0.2121 in | E240 0.3432 hb 1.00 H 0.4505 pred(H 0.3545) hb
+  shared  n7  GR 0.1978 C_reg 0.2173 x0.910 band 0.1738-0.2390 in | E240 0.3582 hb 1.00 H 0.4453 pred(H 0.3545) hb
+  shared  n8  GR 0.2226 C_reg 0.2418 x0.921 band 0.1934-0.2660 in | E240 0.3621 hb 1.00 H 0.4445 pred(H 0.3545) hb
+  shared  n9  GR 0.2465 C_reg 0.2606 x0.946 band 0.2085-0.2867 in | E240 0.3637 hb 1.00 H 0.4477 pred(H 0.3545) hb
+  private n1  GR 0.0590 C_reg 0.0774 x0.762 band 0.0619-0.0851 OUT | E240 0.3388 hb 1.00 H 0.4482 pred(H 0.3545) hb
+  private n2  GR 0.0926 C_reg 0.1091 x0.849 band 0.0873-0.1200 in | E240 0.3440 hb 1.00 H 0.4548 pred(H 0.3545) hb
+  private n3  GR 0.1259 C_reg 0.1408 x0.894 band 0.1126-0.1549 in | E240 0.3422 hb 1.00 H 0.4531 pred(H 0.3545) hb
+  private n4  GR 0.1566 C_reg 0.1724 x0.908 band 0.1379-0.1896 in | E240 0.3355 hb 1.00 H 0.4451 pred(H 0.3545) hb
+  private n5  GR 0.1874 C_reg 0.2041 x0.918 band 0.1633-0.2245 in | E240 0.3488 hb 1.00 H 0.4414 pred(H 0.3545) hb
+  private n6  GR 0.2188 C_reg 0.2357 x0.928 band 0.1886-0.2593 in | E240 0.3705 hb 1.00 H 0.4542 pred(H 0.3545) hb
+  private n7  GR 0.2502 C_reg 0.2674 x0.936 band 0.2139-0.2941 in | E240 0.3677 hb 1.00 H 0.4469 pred(H 0.3545) hb
+  private n8  GR 0.2834 C_reg 0.2990 x0.948 band 0.2392-0.3289 in | E240 0.3689 hb 1.00 H 0.4517 pred(H 0.3545) gpu
+  private n9  GR 0.3148 C_reg 0.3304 x0.953 band 0.2643-0.3634 in | E240 0.3689 hb 1.00 H 0.4501 pred(H 0.3545) gpu
+  GR outside: 3 of 27 (fail if > 1); P5 rule on this model 27/27; plateau (host-bound E240 cells) 0/27 in [0.23, 0.27], range 0.3279-0.3705; session-H list wrong on [('private', 8), ('private', 9)]
+  P8: FALSIFIED
+
+== control: E240 against the published Granite-3B 09-30 G = 4 cells (record)
+  27 cells, E240/published - 1: median +19.8%, range -0.6% to +33.0%
+    native-1   E240 0.3182 published 0.2456 +29.6% (k=18)
+    native-2   E240 0.3171 published 0.2433 +30.3% (k=18)
+    native-3   E240 0.3190 published 0.2662 +19.8% (k=18)
+    native-4   E240 0.3478 published 0.2649 +31.3% (k=18)
+    native-5   E240 0.3384 published 0.2672 +26.6% (k=18)
+    native-6   E240 0.3445 published 0.2946 +16.9% (k=18)
+    native-7   E240 0.3382 published 0.3364 +0.5% (k=18)
+    native-8   E240 0.3792 published 0.3813 -0.6% (k=18)
+    native-9   E240 0.4245 published 0.4267 -0.5% (k=18)
+    shared-1   E240 0.3282 published 0.2468 +33.0% (k=18)
+    shared-2   E240 0.3238 published 0.2479 +30.6% (k=18)
+    shared-3   E240 0.3263 published 0.2695 +21.1% (k=18)
+    shared-4   E240 0.3458 published 0.2683 +28.9% (k=18)
+    shared-5   E240 0.3377 published 0.2593 +30.2% (k=18)
+    shared-6   E240 0.3455 published 0.3029 +14.1% (k=18)
+    shared-7   E240 0.3438 published 0.3453 -0.4% (k=18)
+    shared-8   E240 0.3884 published 0.3899 -0.4% (k=18)
+    shared-9   E240 0.4344 published 0.4359 -0.4% (k=18)
+    private-1  E240 0.3123 published 0.2450 +27.5% (k=18)
+    private-2  E240 0.3205 published 0.2599 +23.3% (k=18)
+    private-3  E240 0.3540 published 0.2667 +32.7% (k=18)
+    private-4  E240 0.3429 published 0.2699 +27.1% (k=18)
+    private-5  E240 0.3394 published 0.3266 +3.9% (k=18)
+    private-6  E240 0.3864 published 0.3855 +0.2% (k=18)
+    private-7  E240 0.4436 published 0.4427 +0.2% (k=18)
+    private-8  E240 0.5028 published 0.5016 +0.2% (k=18)
+    private-9  E240 0.5613 published 0.5608 +0.1% (k=18)
+
+== diagnosis (not registered): the profiler hangover and the host-paced relation
+  granite-3.0- BEFORE the first trace burst: E240 native n1  I 0.2463  H 0.3459  hb True  H-I 0.0996
+  granite-3.0- BEFORE the first trace burst: E0   native n1  I 0.2939  H 0.3018  hb True  H-I 0.0079
+  granite-3.0- BEFORE the first trace burst: E480 native n1  I 0.1830  H 0.3516  hb True  H-I 0.1686
+  granite-3.0- BEFORE the first trace burst: GR   native n1  I 0.0842  H 0.0932  hb False  H-I 0.0090
+  granite-3.0- after: E0   host-bound rows 65  median H 0.3823  median H-I (Phi) 0.0031  IQR 0.0014-0.0090
+  granite-3.0- after: E240 host-bound rows 56  median H 0.4244  median H-I (Phi) 0.0855  IQR 0.0811-0.1046
+  granite-3.0- after: E480 host-bound rows 42  median H 0.4278  median H-I (Phi) 0.1672  IQR 0.1501-0.1733
+  jetmoe-8b    BEFORE the first trace burst: E240 native n1  I 0.2451  H 0.3202  hb True  H-I 0.0751
+  jetmoe-8b    BEFORE the first trace burst: E0   native n1  I 0.2845  H 0.2878  hb True  H-I 0.0034
+  jetmoe-8b    BEFORE the first trace burst: E480 native n1  I 0.2126  H 0.3258  hb False  H-I 0.1132
+  jetmoe-8b    BEFORE the first trace burst: GR   native n1  I 0.2089  H 0.0272  hb False  H-I -0.1817
+  jetmoe-8b    after: E0   host-bound rows 21  median H 0.3751  median H-I (Phi) 0.0041  IQR 0.0029-0.0053
+  jetmoe-8b    after: E240 host-bound rows 17  median H 0.4279  median H-I (Phi) 0.0797  IQR 0.0776-0.0811
+  jetmoe-8b    after: E480 host-bound rows 13  median H 0.4180  median H-I (Phi) 0.1462  IQR 0.1440-0.1486
+  granite-3.0- BEFORE the first trace burst: E240 native n1  I 0.2600  H 0.3669  hb True  H-I 0.1068
+  granite-3.0- BEFORE the first trace burst: GR   native n1  I 0.0551  H 0.0962  hb False  H-I 0.0411
+  granite-3.0- after: E240 host-bound rows 80  median H 0.4493  median H-I (Phi) 0.1071  IQR 0.0841-0.1110
+  P4 shift corrected for the H difference between modes, (E480 - E240) - (H480 - H240) against -(F480 - F240):
+    native  n1  shift -63.1  H480-H240 +5.2  corrected -68.3  miss -0.9 us
+    native  n2  shift -59.6  H480-H240 +12.0  corrected -71.6  miss -4.2 us
+    native  n3  shift -62.8  H480-H240 +4.3  corrected -67.1  miss +0.3 us
+    native  n4  shift -67.9  H480-H240 -2.6  corrected -65.3  miss +2.1 us
+    native  n5  shift -62.7  H480-H240 +12.4  corrected -75.1  miss -7.7 us
+    shared  n1  shift -72.6  H480-H240 -5.8  corrected -66.8  miss +0.6 us
+    shared  n2  shift -73.0  H480-H240 -10.9  corrected -62.1  miss +5.3 us
+    shared  n3  shift -66.4  H480-H240 +1.1  corrected -67.5  miss -0.1 us
+    shared  n4  shift -73.4  H480-H240 -6.9  corrected -66.5  miss +0.9 us
+    shared  n5  shift -64.5  H480-H240 +9.5  corrected -74.0  miss -6.6 us
+    private n1  shift -53.7  H480-H240 +16.9  corrected -70.6  miss -3.2 us
+    private n2  shift -67.5  H480-H240 -1.1  corrected -66.4  miss +1.0 us
+    private n3  shift -68.6  H480-H240 -4.2  corrected -64.4  miss +3.0 us
+    private n4  shift -71.0  H480-H240 +5.3  corrected -76.3  miss -8.9 us
+  P3 the same way, (E0 - E240) - (H0 - H240):
+    native  n1  E0-E240 +55.7  H0-H240 -36.0  residual +91.7 us (F_trace 75.3)
+    native  n2  E0-E240 +57.4  H0-H240 -36.4  residual +93.8 us (F_trace 75.8)
+    shared  n1  E0-E240 +44.6  H0-H240 -51.1  residual +95.7 us (F_trace 75.2)
+    shared  n2  E0-E240 +52.1  H0-H240 -47.7  residual +99.8 us (F_trace 75.7)
+    private n1  E0-E240 +65.3  H0-H240 -26.0  residual +91.3 us (F_trace 75.0)
+    private n2  E0-E240 +56.3  H0-H240 -36.0  residual +92.3 us (F_trace 75.3)
+  P6 sensitivity on the two E480 misses (lambda 0 / lambda 2 us):
+    granite-3.0- E480 shared n2 lambda 0.0: MP 0.2366 vs 0.2509 miss -14.3 us (band 12.5)
+    granite-3.0- E480 shared n2 lambda 2.0: MP 0.2366 vs 0.2509 miss -14.3 us (band 12.5)
+    granite-3.0- E480 private n2 lambda 0.0: MP 0.2364 vs 0.2531 miss -16.7 us (band 12.7)
+    granite-3.0- E480 private n2 lambda 2.0: MP 0.2364 vs 0.2531 miss -16.7 us (band 12.7)
+
+readings:
+  - P2: scored on the registered cell list (Granite n >= 7, JetMoE n >= 3, every arm) as committed; Granite native and shared n = 7 read host-bound at E240 on this run (H about 0.43 ms), and the result on only the cells measured GPU-bound is printed beside it
+  - P3: dD_tail read from TR-G as the registration's inputs line says; the graph trace's D_tail includes the GPU backlog the replay loop builds, so an alternative from TR-E is printed beside it (not scored)
+  - P4: the moved verdict is scored with each cell's own H (C_reg + F480 < H_cell), as the JSON's fitted_on_what.H says (the 0.3545 ms behind the printed lists native n<=4, shared n<=3, private n<=2 is 'for the printed estimates only'); the printed list is reported beside it. Shift scored on cells host-bound and non-edge at both E240 and E480, against -(F480-F240) from the traces (median of the six n = 1, 2 TR-E pairs); the bytes/ruler value is printed too
+  - P5: F at E480 is 480 MiB / the registration's ruler 3.7261 TB/s = 0.1351 ms (the registration's C* 0.219 = 0.3545 - 0.1355); JetMoE uses the primary 09-29 C_reg, the 6d2595d CORES row printed beside it; H is each cell's median host enqueue per call (host_enqueue_ms / calls_per_burst)
+  - P6: MP anchors each iteration at its start-event record; host offsets (flush launch return, call-kernel launch returns, end-record return) and the iteration period from TR-E of the cell's own mode, scaled by H_cell / P_traced (P_traced = median start-record to start-record period); kernel durations from TR-G of the same mode, the flush duration from TR-E; lambda is parse_trace's median per-call least lambda; median interval over iterations 25..49 of 50. E0 and E480 cells at the trace treads 4, 6, 9 (Granite) and 3 (JetMoE) have no E0/E480 traces: they are scored separately on E240's traces with the mode's flush substituted, and that set is reported, not counted in the verdict
+  - P7: traced host spans run about 2x the unprofiled H (profiler overhead); the >= 0.25 ms span criterion is read on the traced span as written, and the unprofiled H is printed beside it
+  - P8: the fails-if names only P1's rule (GR cells) and P5's rule; the plateau band (Granite-fitted, seen) and the session-H host-bound list are reported as records
+
+verdicts: {'P1': 'HELD', 'P2': 'FALSIFIED', 'P3': 'FALSIFIED', 'P4': 'FALSIFIED', 'P5': 'HELD', 'P6': 'FALSIFIED', 'P7': 'CLASSIFIES', 'P8': 'FALSIFIED'}

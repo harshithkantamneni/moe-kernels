@@ -1,0 +1,51 @@
+# RENTAL 4 (2026-10-06), one gpu_1x_gh200 at $2.29/h, run as
+#   bash scripts/gh200_model_session.sh --plan scripts/plans/rental4-2026-10.plan --deadline <epoch s>
+# Registered before any page: docs/registered/2026-10-06-rental4-*.{json,txt} (README there),
+# scorers scripts/scoring/rental4/, synthetic-tested in tests/test_scoring_rental4.py.
+# Design: scratchpad design-r4/DESIGN.md, corrected by design-r4-review/REVIEW.md and then by
+# reanalysis/REANALYSIS.md section 4 (the later document wins), with the owner's decisions of
+# 2026-10-06: A3 CUT; gpu-benches run on the VM (third-party, GPL-3.0, fetched at a pin, never
+# vendored); the instrumented copy of vLLM 0.27.1's kernel (moe/instrumented), off by default,
+# gated by the perturb unit (median <= 1%, worst <= 2%, identical occupancy).
+#
+# One unit a line: <model> <step> [key=value ...]. The order is the priority: the driver drops
+# the LAST unit first, and a drop-group goes together (the c9 / c15 pairs, the stamps, B'). Z (phi-3.5-moe at 1005) and A3 sit past the line in both earlier drafts: Z
+# is left out (no registration), A3 is cut by the owner.
+#
+# MINUTES: 144 of units (the dry run prints the sum); with about 12 of pushes about 156, 2.6 h,
+# about $6.0 at $2.29/h; with setup (about 30) about 186 min, $7.1. The guardian's 410-min
+# hard cap is $15.6.
+- prelude est=3 cap=15
+mixtral-8x7b calibrate label=r4 est=2 cap=30
+# hardware constants measured independently of any fused_moe page (registration: rulers, gpubench)
+- rulers label=r4 est=3 cap=10
+- gpubench label=r4 est=8 cap=20
+# A1: d_w2 alone at 15 copies against 9, same board (registration: dead)
+qwen2-57b-a14b-tp8 timed label=c9 timed-groups=8 timed-treads=9 declared-copies=9 drop-group=a1 est=16 cap=45
+qwen2-57b-a14b-tp8 timed label=c15 timed-groups=8 timed-treads=9 declared-copies=15 drop-group=a1 est=17 cap=45
+# the perturbation gate for every instrumented unit below (registration: perturb)
+- perturb label=pt est=10 cap=25
+# stamps (registration: stamps). F split; per-iteration law vs BK and occupancy; tail CTAs; dead CTAs
+mixtral-8x7b stamps label=stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-stamps=cta drop-group=st est=6 cap=15
+olmoe-1b-7b stamps label=stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 drop-group=st est=2 cap=8
+olmoe-1b-7b stamps label=stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4 drop-group=st est=3 cap=8
+olmoe-1b-7b stamps label=stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128 drop-group=st est=3 cap=8
+olmoe-1b-7b stamps label=stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8 drop-group=st est=2 cap=8
+mixtral-8x22b stamps label=sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112 drop-group=st est=3 cap=10
+mixtral-8x7b stamps label=sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112 drop-group=st est=2 cap=8
+olmoe-1b-7b stamps label=stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta drop-group=st est=2 cap=8
+olmoe-1b-7b stamps label=stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8 drop-group=st est=2 cap=8
+# B': counters at BLOCK_K and num_stages, OLMoE G = 64, same-board base first (registration: occlaw)
+olmoe-1b-7b bytes label=k64s4 byte-groups=64 drop-group=b est=4 cap=20
+olmoe-1b-7b bytes label=k32s4 byte-groups=64 block-k=32 num-stages=4 drop-group=b est=4 cap=20
+olmoe-1b-7b bytes label=k128s4 byte-groups=64 block-k=128 drop-group=b est=4 cap=20
+olmoe-1b-7b bytes label=k64s6 byte-groups=64 num-stages=6 drop-group=b est=4 cap=20
+olmoe-1b-7b bytes label=k64s2 byte-groups=64 num-stages=2 drop-group=b est=4 cap=20
+olmoe-1b-7b bytes label=k64s3 byte-groups=64 num-stages=3 drop-group=b est=4 cap=20
+olmoe-1b-7b bytes label=k64s8 byte-groups=64 num-stages=8 drop-group=b est=4 cap=20
+# the eviction trio is CUT (build-r4-review E1): Triton 3.7.1 lowers these pipelined loads to
+# cp.async .ca/.cg and drops eviction_policy, so a hinted page would count the all-off kernel.
+# An L2 access-policy-window design (host side, kernel unchanged) is deferred, unregistered.
+# A2: d_w1 + d_w2 at 15 copies against 9 (registration: dead)
+olmoe-1b-7b timed label=c9 timed-groups=8 timed-treads=9 declared-copies=9 drop-group=a2 est=16 cap=45
+olmoe-1b-7b timed label=c15 timed-groups=8 timed-treads=9 declared-copies=15 drop-group=a2 est=16 cap=45

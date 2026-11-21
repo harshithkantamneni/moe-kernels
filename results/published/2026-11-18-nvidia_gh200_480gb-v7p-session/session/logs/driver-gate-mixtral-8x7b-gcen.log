@@ -1,0 +1,2 @@
+== 2026-11-18T22:12:20Z step gate: gate v7pcensus: scripts/v7p_gate.py census at the 1410 lock; FAIL ends the rental before any timed unit (v7 prefill blind)
+2026-11-18T22:12:21Z gate v7pcensus at 1410 MHz: RESULT: GATE v7pcensus PASS ctas_per_sm 2 (exit 0)

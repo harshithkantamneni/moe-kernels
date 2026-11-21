@@ -1,0 +1,66 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist0c725879cf03323a-49ac5848
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json (sha256 0c725879cf03323a...), page convl-mixtral-8x7b-g1, 4 cells x arms = 4 timed cells, token-row shuffle seed 20261020; R3's balanced ladder is NOT run (--treads ignored)
+arms        native; PRIVATE cannot run skewed
+  ridge       177.27 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 660.5 TFLOP/s bf16 over 3726.2 GB/s (triad pattern); calibrated 2026-10-20 at 36291487
+experts     native declares E=8; shared declares E x n_decl = 72 at every cell
+            n_decl = 9 against n_max = 3 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 3 against the 3 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261020T224556Z-p2g-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-cvm1t/private_weight_reference/nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist0c725879cf03323a-49ac5848
+slips       --slip-policy cell at the 1710 MHz lock: a repeat under 1695 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native, 3 repeats, about 0 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=3   PT               native         small-batch  220c03aaea5ef16d
+  n=3   PW               native         small-batch  d6c33a3b84f86171
+  n=3   uniform          native         small-batch  41ae04250782ed3e
+  n=3   balanced         native         small-batch  74234e98afe7498f
+  rep 0 PT             native   n=  3 T=    384    2.5040 ms
+  rep 0 PW             native   n=  3 T=    384    2.5804 ms
+  rep 0 uniform        native   n=  3 T=    384    2.2237 ms
+  rep 0 balanced       native   n=  3 T=    384    2.2150 ms
+  rep 1 balanced       native   n=  3 T=    384    2.2135 ms
+  rep 1 uniform        native   n=  3 T=    384    2.2246 ms
+  rep 1 PW             native   n=  3 T=    384    2.5789 ms
+  rep 1 PT             native   n=  3 T=    384    2.5053 ms
+  rep 2 PT             native   n=  3 T=    384    2.5054 ms
+  rep 2 PW             native   n=  3 T=    384    2.5800 ms
+  rep 2 uniform        native   n=  3 T=    384    2.2228 ms
+  rep 2 balanced       native   n=  3 T=    384    2.2163 ms
+  rep 3 balanced       native   n=  3 T=    384    2.2159 ms
+  rep 3 uniform        native   n=  3 T=    384    2.2253 ms
+  rep 3 PW             native   n=  3 T=    384    2.5801 ms
+  rep 3 PT             native   n=  3 T=    384    2.5040 ms
+  rep 4 PT             native   n=  3 T=    384    2.5046 ms
+  rep 4 PW             native   n=  3 T=    384    2.5797 ms
+  rep 4 uniform        native   n=  3 T=    384    2.2231 ms
+  rep 4 balanced       native   n=  3 T=    384    2.2147 ms
+  rep 5 balanced       native   n=  3 T=    384    2.2134 ms
+  rep 5 uniform        native   n=  3 T=    384    2.2241 ms
+  rep 5 PW             native   n=  3 T=    384    2.5799 ms
+  rep 5 PT             native   n=  3 T=    384    2.5066 ms
+  rep 6 PT             native   n=  3 T=    384    2.5050 ms
+  rep 6 PW             native   n=  3 T=    384    2.5802 ms
+  rep 6 uniform        native   n=  3 T=    384    2.2229 ms
+  rep 6 balanced       native   n=  3 T=    384    2.2145 ms
+  rep 7 balanced       native   n=  3 T=    384    2.2153 ms
+  rep 7 uniform        native   n=  3 T=    384    2.2252 ms
+  rep 7 PW             native   n=  3 T=    384    2.5781 ms
+  rep 7 PT             native   n=  3 T=    384    2.5052 ms
+  rep 8 PT             native   n=  3 T=    384    2.5039 ms
+  rep 8 PW             native   n=  3 T=    384    2.5803 ms
+  rep 8 uniform        native   n=  3 T=    384    2.2235 ms
+  rep 8 balanced       native   n=  3 T=    384    2.2146 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: FAIL
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-cvm1t/private_weight_reference/nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist0c725879cf03323a-49ac5848/report.json
+exit     3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable

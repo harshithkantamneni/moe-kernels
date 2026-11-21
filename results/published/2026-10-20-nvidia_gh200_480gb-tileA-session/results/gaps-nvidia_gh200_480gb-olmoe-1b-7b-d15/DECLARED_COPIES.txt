@@ -1,0 +1,2 @@
+declared-copies 15 (plan key, rental 4): R3 --declared-copies 15
+NOT JOINABLE TO COUNTER BYTES: every counter page declares R3's 9 copies (validate_counter_plan), so no byte page shares this page's grid

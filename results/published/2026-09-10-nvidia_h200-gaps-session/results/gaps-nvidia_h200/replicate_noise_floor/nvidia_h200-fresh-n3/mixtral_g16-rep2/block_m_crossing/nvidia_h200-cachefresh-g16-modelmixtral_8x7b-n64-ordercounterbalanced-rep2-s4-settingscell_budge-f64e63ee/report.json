@@ -1,0 +1,615 @@
+{
+  "alpha": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "retracted_alpha": 0.1,
+  "ridge": 155.9303223641331,
+  "ridge_band": [
+    145.8283579261745,
+    158.6308475109141
+  ],
+  "ridge_source": "calibration: measured on this device: NVIDIA H200 (measured), 682.1 TFLOP/s bf16 over 4374.3 GB/s (triad pattern); calibrated 2026-09-10 at c0644bea",
+  "ridge_band_source": "this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling",
+  "bandwidth_gbps": 4374.299702465323,
+  "bandwidth_source": "calibration: measured on this device: NVIDIA H200 (measured), 4374.3 GB/s (triad pattern)",
+  "cells_excluded_for_drift": 13,
+  "cells_excluded_for_drift_from_ladders": 1,
+  "cells_kept_level_high": 117,
+  "cells_kept_level_high_from_ladders": 36,
+  "cells_kept_level_low": 0,
+  "cells_kept_level_low_from_ladders": 0,
+  "clock_exclusion_reaches": [
+    "plateau",
+    "compute_reference",
+    "noise_margin",
+    "gate_1",
+    "gate_2",
+    "gate_3",
+    "gate_4",
+    "ladder_fits"
+  ],
+  "ridge_band_degenerate": false,
+  "model_roof_tflops": 682.0859627227494,
+  "dtype_bytes": 2,
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "fixed": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 16,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "plateau_tflops": 369.8830333009026,
+  "timing_spread_median": 0.016150369967203336,
+  "overhead_ms": 0.26010406017303467,
+  "compute_reference": {
+    "block_m": 256,
+    "overhead_ms": 0.26010406017303467,
+    "slope_per_tile": 1.9757621606191,
+    "mean_rel_err": 0.029132966699694132,
+    "note": "BLOCK_M=256 ladder, 4 treads, proportional to 2.9%: compute branch 1.9758 ms per tile, fixed cost 0.2601 ms",
+    "refused_block_m": null,
+    "refusals": [],
+    "roof_fraction": 0.5354209588040129,
+    "vacuity_ratio": 0.3832869511691221,
+    "vacuity_basis": "dense",
+    "fused_roof_fraction": null,
+    "fused_roof_band": null,
+    "vacuity_floor": 0.2052198668920382,
+    "skipped": [],
+    "level_ratio": 0.8427284373459387,
+    "level_comparisons": 4
+  },
+  "sm_count": 132,
+  "sm_source": "reported by the driver",
+  "card": "nvidia_h200",
+  "alpha_measured": 0.7082412105429922,
+  "alpha_source": "measured at BLOCK_M=64 over 15 memory-bound treads, activation traffic subtracted",
+  "predictions": {
+    "32": {
+      "ai_cap": 57.34767025089605,
+      "crossing_rows_ridge_lo": null,
+      "crossing_rows_ridge_hi": null,
+      "first_compute_tread": null,
+      "crosses": false,
+      "crossing_rows": null,
+      "no_crossing_reason": "BLOCK_M=32 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 57.3 Op/B sits at or below the ridge 145.8 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number",
+      "cap_overstatement": [
+        1.0089285714285714,
+        1.5078125
+      ],
+      "cap_overstatement_note": "cap is 2*BM/(alpha*b) from a FITTED alpha and is HIGH by ai_model.lin_overstatement = 1+phi+delta, 1.01-1.51x here (alpha_a unmeasured, delta taken as 0, so a lower bound)"
+    },
+    "64": {
+      "ai_cap": 114.6953405017921,
+      "crossing_rows_ridge_lo": null,
+      "crossing_rows_ridge_hi": null,
+      "first_compute_tread": null,
+      "crosses": false,
+      "crossing_rows": null,
+      "no_crossing_reason": "BLOCK_M=64 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 114.7 Op/B sits at or below the ridge 145.8 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number",
+      "cap_overstatement": [
+        1.0178571428571428,
+        2.015625
+      ],
+      "cap_overstatement_note": "cap is 2*BM/(alpha*b) from a FITTED alpha and is HIGH by ai_model.lin_overstatement = 1+phi+delta, 1.02-2.02x here (alpha_a unmeasured, delta taken as 0, so a lower bound)"
+    },
+    "256": {
+      "ai_cap": 458.7813620071684,
+      "crossing_rows_ridge_lo": 145.8283579261745,
+      "crossing_rows_ridge_hi": 158.6308475109141,
+      "first_compute_tread": 1,
+      "crosses": true,
+      "crossing_rows": 145.8283579261745,
+      "no_crossing_reason": "",
+      "cap_overstatement": [
+        1.0714285714285714,
+        5.0625
+      ],
+      "cap_overstatement_note": "cap is 2*BM/(alpha*b) from a FITTED alpha and is HIGH by ai_model.lin_overstatement = 1+phi+delta, 1.07-5.06x here (alpha_a unmeasured, delta taken as 0, so a lower bound)"
+    }
+  },
+  "ladder": {
+    "32": {
+      "points": [
+        [
+          1,
+          0.777103990316391
+        ],
+        [
+          2,
+          1.326367974281311
+        ],
+        [
+          3,
+          1.9236479997634888
+        ],
+        [
+          4,
+          2.419071912765503
+        ],
+        [
+          5,
+          3.036384105682373
+        ],
+        [
+          6,
+          3.596832036972046
+        ],
+        [
+          7,
+          4.163664102554321
+        ],
+        [
+          8,
+          4.620351791381836
+        ],
+        [
+          9,
+          5.283344030380249
+        ],
+        [
+          10,
+          5.825215816497803
+        ],
+        [
+          11,
+          6.400767803192139
+        ],
+        [
+          12,
+          6.865664005279541
+        ],
+        [
+          13,
+          7.551776170730591
+        ],
+        [
+          14,
+          8.036160469055176
+        ],
+        [
+          15,
+          8.584351539611816
+        ],
+        [
+          16,
+          8.974736213684082
+        ],
+        [
+          17,
+          9.733136177062988
+        ],
+        [
+          18,
+          10.257967948913574
+        ],
+        [
+          19,
+          10.82529592514038
+        ],
+        [
+          20,
+          11.378543853759766
+        ],
+        [
+          21,
+          11.971455574035645
+        ],
+        [
+          22,
+          12.522656440734863
+        ],
+        [
+          23,
+          13.10968017578125
+        ],
+        [
+          24,
+          13.537440299987793
+        ],
+        [
+          25,
+          14.210463523864746
+        ],
+        [
+          26,
+          14.768608093261719
+        ],
+        [
+          27,
+          15.331071853637695
+        ],
+        [
+          28,
+          15.7708158493042
+        ],
+        [
+          29,
+          16.34832000732422
+        ],
+        [
+          30,
+          16.981407165527344
+        ],
+        [
+          31,
+          17.457088470458984
+        ],
+        [
+          32,
+          17.866559982299805
+        ],
+        [
+          33,
+          18.69411277770996
+        ]
+      ],
+      "memory_points": 33,
+      "alpha": 0.7007741364545447,
+      "alpha_corrected": 0.6932303000311398,
+      "alpha_upper": 1.0419226538659483,
+      "slope_memory": 0.5566948310815715,
+      "slope_compute": null,
+      "slope_compute_ref": 0.2469702700773875,
+      "crosses": false,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "identifiable": true,
+      "unidentifiable_reason": "",
+      "outcome": "identified",
+      "outcome_reason": "",
+      "undecided": false,
+      "branch_start": 0,
+      "excluded_drifted": 0,
+      "kept_high_clock": 32,
+      "kept_low_clock": 0,
+      "mean_rel_err": 0.00645012880453912
+    },
+    "64": {
+      "points": [
+        [
+          1,
+          0.8785119950771332
+        ],
+        [
+          3,
+          1.9911359548568726
+        ],
+        [
+          4,
+          2.5539519786834717
+        ],
+        [
+          5,
+          3.187407970428467
+        ],
+        [
+          6,
+          3.7823359966278076
+        ],
+        [
+          7,
+          4.39024019241333
+        ],
+        [
+          8,
+          4.836111783981323
+        ],
+        [
+          9,
+          5.601072072982788
+        ],
+        [
+          10,
+          6.217872142791748
+        ],
+        [
+          11,
+          6.823408126831055
+        ],
+        [
+          12,
+          7.4268479347229
+        ],
+        [
+          13,
+          8.053664207458496
+        ],
+        [
+          14,
+          8.643088340759277
+        ],
+        [
+          15,
+          9.230112075805664
+        ],
+        [
+          16,
+          9.473455905914307
+        ]
+      ],
+      "memory_points": 15,
+      "alpha": 0.7228126111843556,
+      "alpha_corrected": 0.7082412105429922,
+      "alpha_upper": 1.0570810080508573,
+      "slope_memory": 0.5945464693225421,
+      "slope_compute": null,
+      "slope_compute_ref": 0.493940540154775,
+      "crosses": false,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "identifiable": true,
+      "unidentifiable_reason": "",
+      "outcome": "identified",
+      "outcome_reason": "",
+      "undecided": false,
+      "branch_start": 0,
+      "excluded_drifted": 1,
+      "kept_high_clock": 0,
+      "kept_low_clock": 0,
+      "mean_rel_err": 0.014703696346891528
+    },
+    "256": {
+      "points": [
+        [
+          1,
+          2.1522879600524902
+        ],
+        [
+          2,
+          4.018688201904297
+        ],
+        [
+          3,
+          5.956992149353027
+        ],
+        [
+          4,
+          7.803056001663208
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "alpha_corrected": null,
+      "alpha_upper": null,
+      "slope_memory": null,
+      "slope_compute": 1.8890608072280883,
+      "slope_compute_ref": 1.9757621606191,
+      "crosses": null,
+      "basis": "the reference ladder itself: compute bound at every tread",
+      "identifiable": false,
+      "unidentifiable_reason": "is_the_reference_ladder",
+      "outcome": "is_the_reference_ladder",
+      "outcome_reason": "BLOCK_M=256 is the compute reference, so by the assumption that qualified it there is no memory branch here to fit",
+      "undecided": false,
+      "branch_start": 0,
+      "excluded_drifted": 0,
+      "kept_high_clock": 4,
+      "kept_low_clock": 0,
+      "mean_rel_err": 0.0032506860610677455
+    }
+  },
+  "bracketing": {
+    "reached_rows": 1024.0,
+    "reached_tiles": 16,
+    "horizon_rows": 374.23277367391944,
+    "positive_control": null,
+    "saturation": 0.9528281750266809,
+    "last_gain": 0.03926729365076054,
+    "best_other_roof_fraction": 0.5422821367330362,
+    "roof_tflops": 682.0859627227494
+  },
+  "gates": [
+    {
+      "number": 0,
+      "claim": "override_config changed the kernel at every setting",
+      "kind": "VALIDITY",
+      "basis": "OBSERVED",
+      "verdict": "PASS",
+      "measured": "fresh Triton artefacts per setting: BM=32:17, BM=64:16, BM=256:16",
+      "gate": ">= 1 per setting",
+      "detail": [],
+      "provenance": {}
+    },
+    {
+      "number": 1,
+      "claim": "time steps at T = n x BLOCK_M x E/k",
+      "kind": "CLAIM",
+      "basis": "OBSERVED",
+      "verdict": "PASS",
+      "measured": "median step minus tread +16.46%",
+      "gate": ">= +6.33% (half the model's step) and > 3x noise (4.85%)",
+      "detail": [
+        "31 boundaries bracketed, 0 where the tread moved at least as much as the step",
+        "median step +15.27%, median tread -0.12%, model step +12.67%",
+        "waves are printed on both sides of every step so occupancy can be ruled out as the cause:",
+        "BM= 32 n= 2 T=   256 r=    64  tread  +0.35%  STEP +40.58%  (model +35.47%)  waves   54.3/  81.5",
+        "BM= 32 n= 3 T=   384 r=    96  tread  +0.61%  STEP +23.47%  (model +26.08%)  waves   81.5/ 108.6",
+        "BM= 32 n= 4 T=   512 r=   128  tread  +0.32%  STEP +24.36%  (model +20.67%)  waves  108.6/ 135.8",
+        "BM= 32 n= 5 T=   640 r=   160  tread  -0.18%  STEP +17.31%  (model +17.06%)  waves  135.8/ 162.9",
+        "BM= 32 n= 6 T=   768 r=   192  tread  +0.46%  STEP +15.27%  (model +14.54%)  waves  162.9/ 190.1",
+        "BM= 32 n= 7 T=   896 r=   224  tread  +0.45%  STEP +11.09%  (model +12.80%)  waves  190.1/ 217.2",
+        "BM= 32 n= 8 T=  1024 r=   256  tread  -0.11%  STEP +13.96%  (model +11.25%)  waves  217.2/ 244.4",
+        "BM= 32 n= 9 T=  1152 r=   288  tread  +0.34%  STEP +10.29%  (model +10.18%)  waves  244.4/ 271.5",
+        "BM= 32 n=10 T=  1280 r=   320  tread  -0.03%  STEP  +9.56%  (model  +9.16%)  waves  271.5/ 298.7",
+        "BM= 32 n=11 T=  1408 r=   352  tread  +0.30%  STEP  +7.40%  (model  +8.45%)  waves  298.7/ 325.8",
+        "BM= 32 n=12 T=  1536 r=   384  tread  -0.12%  STEP  +8.71%  (model  +7.73%)  waves  325.8/ 353.0",
+        "BM= 32 n=13 T=  1664 r=   416  tread  +1.18%  STEP  +6.41%  (model  +7.26%)  waves  353.0/ 380.1",
+        "BM= 64 n= 1 T=   256 r=    64  tread  +2.02%  STEP +65.16%  (model +54.90%)  waves   27.2/  54.3",
+        "BM= 64 n= 3 T=   768 r=   192  tread  -1.48%  STEP +34.45%  (model +25.75%)  waves   81.5/ 108.6",
+        "BM= 64 n= 4 T=  1024 r=   256  tread  -2.57%  STEP +29.10%  (model +20.39%)  waves  108.6/ 135.8",
+        "BM= 64 n= 5 T=  1280 r=   320  tread  -2.77%  STEP +24.26%  (model +16.85%)  waves  135.8/ 162.9",
+        "BM= 64 n= 6 T=  1536 r=   384  tread  -2.35%  STEP +20.61%  (model +14.36%)  waves  162.9/ 190.1",
+        "BM= 64 n= 7 T=  1792 r=   448  tread  -2.84%  STEP +15.83%  (model +12.67%)  waves  190.1/ 217.2",
+        "BM= 64 n= 8 T=  2048 r=   512  tread  -4.90%  STEP +18.59%  (model +11.22%)  waves  217.2/ 244.4",
+        "BM= 64 n= 9 T=  2304 r=   576  tread  -2.34%  STEP +14.12%  (model +10.07%)  waves  244.4/ 271.5",
+        "BM= 64 n=10 T=  2560 r=   640  tread  -2.72%  STEP +12.22%  (model  +9.14%)  waves  271.5/ 298.7",
+        "BM= 64 n=11 T=  2816 r=   704  tread  -2.21%  STEP +10.92%  (model  +8.36%)  waves  298.7/ 325.8",
+        "BM= 64 n=12 T=  3072 r=   768  tread  -1.87%  STEP +10.27%  (model  +7.71%)  waves  325.8/ 353.0",
+        "BM= 64 n=13 T=  3328 r=   832  tread  -1.66%  STEP  +9.41%  (model  +7.15%)  waves  353.0/ 380.1",
+        "BM= 64 n=14 T=  3584 r=   896  tread  -1.92%  STEP  +9.07%  (model  +6.66%)  waves  380.1/ 407.3",
+        "BM= 64 n=15 T=  3840 r=   960  tread  -2.08%  STEP  +5.37%  (model  +6.24%)  waves  407.3/ 434.4",
+        "BM= 64 n=16 T=  4096 r=  1024  tread  -2.59%  STEP +12.11%  (model  +5.87%)  waves  434.4/ 461.6",
+        "BM=256 n= 1 T=  1024 r=   256  tread  +0.78%  STEP +61.65%  (model +100.00%)  waves   27.2/  54.3",
+        "BM=256 n= 2 T=  2048 r=   512  tread  +0.02%  STEP +36.07%  (model +50.00%)  waves   54.3/  81.5",
+        "BM=256 n= 3 T=  3072 r=   768  tread  +0.58%  STEP +22.44%  (model +33.33%)  waves   81.5/ 108.6",
+        "BM=256 n= 4 T=  4096 r=  1024  tread  +0.24%  STEP +19.17%  (model +25.00%)  waves  108.6/ 135.8"
+      ],
+      "provenance": {}
+    },
+    {
+      "number": 2,
+      "claim": "time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)",
+      "kind": "CLAIM",
+      "basis": "OBSERVED",
+      "verdict": "PASS",
+      "measured": "ms(BM=32) / ms(BM=256) = 2.290x at 1024 rows per expert",
+      "gate": ">= 1.50x",
+      "detail": [
+        "time moves DOWN with BLOCK_M, as traffic requires",
+        "model at alpha=0.558: 2.832x   model at the retracted alpha=0.10: 1.000x",
+        "a refutation here is the interesting answer: it says the padded arithmetic or the lost occupancy outweighs 32 weight re-reads",
+        "rows/expert  BM=32         BM=64         BM=256         ms(lo)/ms(hi)",
+        "        256     4.6204 ms     2.5540 ms     2.1523 ms   2.147x",
+        "        512     8.9747 ms     4.8361 ms     4.0187 ms   2.233x",
+        "        768    13.5374 ms     7.4268 ms     5.9570 ms   2.273x",
+        "       1024    17.8666 ms     9.4735 ms     7.8031 ms   2.290x"
+      ],
+      "provenance": {}
+    },
+    {
+      "number": 3,
+      "claim": "the fitted alpha's interval overlaps the pre-registered band 0.529-0.588",
+      "kind": "CLAIM",
+      "basis": "IMPORTED",
+      "verdict": "FAIL",
+      "measured": "alpha 0.708",
+      "gate": "interval [0.637, 1.057] against [0.529, 0.588] -- DISJOINT, ABOVE the band",
+      "detail": [
+        "measured is the FITTED alpha (0.708 [0.637, 1.057]  (systematic [0.708, 1.057]: activation-corrected to fixed-cost-corrected; bootstrap [0.637, 0.805] over 400 resamples of 15 treads)), measured at BLOCK_M=64 over 15 memory-bound treads, activation traffic subtracted. It is not a crossing ratio and no crossing was measured to produce it.",
+        "the interval is DISJOINT from the band and lies ABOVE it: measured 0.708 [0.637, 1.057] is ABOVE the band [0.529, 0.588]",
+        "INFORMATIONAL, the retired one-sided gate: alpha > 0.33 would have read PASS. It is not the verdict: it passes for everything from 0.33 to 1.0, so it cannot fail from above and every committed surface fit clears it.",
+        "NO ladder's fitted slopes imply a crossing exists (C > B is met nowhere; slopes missing at [256]), so nothing here is a crossing measurement and no crossing has been observed",
+        "the same alpha restates the model's crossing ratio as 1 + 0.708 = 1.708x, which is what the retired ratio gate printed as its 'measured' value. That number is algebra over this line, not a second observation.",
+        "model's crossing ratio: ridge 145.8: no crossing   ridge 158.6: no crossing",
+        "the retracted alpha=0.1 would put that ratio at 1.100x",
+        "SCORED ON AN alpha IMPORTED from BLOCK_M=64: it is not identifiable at BLOCK_M=128 on this sweep (there is no BLOCK_M=128 ladder in this sweep). ALPHA_BY_BLOCK_M records a drift of about +/-25% across block sizes, and that drift is `phi` growing with BM/BN rather than a different miss fraction, so an imported alpha is an alpha of ANOTHER TILING and the import is a bound, not a substitution.",
+        "  BLOCK_M= 32  alpha 0.701 from 33 memory-bound treads, fit error 0.65%",
+        "  BLOCK_M= 64  alpha 0.723 from 15 memory-bound treads, fit error 1.47%",
+        "  BLOCK_M=256  alpha not identifiable (0 memory-bound tread(s)): BLOCK_M=256 is the compute reference, so by the assumption that qualified it there is no memory branch here to fit"
+      ],
+      "provenance": {
+        "tests": "alpha interval overlaps ALPHA_BAND, both sides",
+        "alpha_band": [
+          0.529,
+          0.588
+        ],
+        "alpha_interval": {
+          "point": 0.7082412105429922,
+          "lo": 0.6374761552678063,
+          "hi": 1.0570810080508573,
+          "sys_lo": 0.7082412105429922,
+          "sys_hi": 1.0570810080508573,
+          "boot_lo": 0.6374761552678063,
+          "boot_hi": 0.8046674791862788,
+          "treads": 15,
+          "trials": 400
+        },
+        "retired_one_sided_threshold": 0.33,
+        "retired_one_sided_verdict": true,
+        "retired_one_sided_note": "alpha_hat > 0.33, the midpoint of the refit and the retracted value. INFORMATIONAL. It is one-sided and passes for everything from 0.33 to 1.0, which is why it is no longer the verdict.",
+        "not_an_observed_crossing": true,
+        "observed_crossing_ratio": null,
+        "ladders_whose_slopes_imply_a_crossing": [],
+        "ladders_with_a_missing_slope": [
+          256
+        ],
+        "alpha_hat": 0.7082412105429922,
+        "alpha_source": "measured at BLOCK_M=64 over 15 memory-bound treads, activation traffic subtracted",
+        "alpha_source_block_m": 64,
+        "imported_from_another_block_m": true,
+        "target_tile_outcome": null,
+        "target_tile_outcome_reason": null,
+        "restated_crossing_ratio": 1.708241210542992,
+        "restated_crossing_ratio_note": "1 + alpha_hat, the model's identity evaluated at the fitted alpha. It is what the retired ratio gate printed as 'measured'. It is not a measurement and it is only the crossing ratio at all when the BLOCK_M=128 crossing lands in tread 2.",
+        "model_ratio_ridge_lo": null,
+        "model_ratio_ridge_hi": null,
+        "model_ratio_retracted": 1.1,
+        "ridge_band": [
+          145.8283579261745,
+          158.6308475109141
+        ],
+        "blocked_by_target_tile": false
+      }
+    },
+    {
+      "number": 4,
+      "claim": "BLOCK_M=64 never reaches the compute roof (ridge x bandwidth)",
+      "kind": "CLAIM",
+      "basis": "OBSERVED",
+      "verdict": "UNDECIDED",
+      "measured": "peak 0.447 of ridge x bandwidth",
+      "gate": "< 0.95 of ridge x bandwidth, and <= 0.868 (the midpoint of this run's ceiling 0.736 and the rival world's 1.000)",
+      "detail": [
+        "THE SWEEP IS NOT BRACKETED, so an absence here is not evidence of absence and this gate refuses to score it.",
+        "measured in fractions of ridge x bandwidth (682 TFLOP/s); the refit caps this block size at cap/ridge = 114.7/155.9 = 0.736 and the retracted alpha=0.1 at 1.000",
+        "throughput per tread as a fraction of that roof: n=1:0.30, n=3:0.40, n=4:0.41, n=5:0.41, n=6:0.42, n=7:0.42, n=8:0.44, n=9:0.42, n=10:0.43, n=11:0.43, n=12:0.43, n=13:0.43, n=14:0.43, n=15:0.43, n=16:0.45",
+        "this arm's own plateau is 369.9 TFLOP/s = 54.2% of that roof. Against the plateau this block size peaks at 0.824, which is the number the retired gate scored against 0.85. It is ARM-RELATIVE and it is not the verdict.",
+        "per-tile slopes: memory B=0.5945 ms against compute C=0.4939 ms (scaled from the reference by C ~ BLOCK_M). C > B is the condition for a crossing to exist at all, and it is NOT met.",
+        "swept to 1024 rows per expert (16 M-tiles)",
+        "horizon 374 rows: 2x the crossing the retracted alpha=0.1 predicts for this block size",
+        "positive control: NOTHING reached the compute roof in this grid (best other block size 0.54 of ridge x bandwidth = 682 TFLOP/s), so the sweep never demonstrated it can detect a crossing at all",
+        "modelled AI at the last tread is 95.3% of the ceiling, and the last tread gained 3.9% of throughput over the one before it"
+      ],
+      "provenance": {
+        "units": "fraction of ridge x bandwidth (peak compute)",
+        "roof_tflops": 682.0859627227494,
+        "plateau_tflops": 369.8830333009026,
+        "plateau_over_roof": 0.5422821367330362,
+        "model_ceiling": 0.7355550784660866,
+        "retracted_ceiling": 1.0,
+        "threshold": 0.8677775392330433,
+        "positive_control_block_m": null,
+        "best_other_roof_fraction": 0.5422821367330362,
+        "retired_denominator": "the arm's own plateau; see GATE4_ROOF_FRACTION",
+        "peak_roof_fraction": 0.4466646515964416,
+        "peak_arm_relative_fraction": 0.8236757609007012,
+        "worlds_separate": true,
+        "reached_roof": false,
+        "exceeded_ceiling_midpoint": false
+      }
+    }
+  ],
+  "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+  "gpu_name": "NVIDIA H200",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-10T04:41:42+00:00",
+    "hostname": "eec145fd46b6",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 155.9303223641331,
+    "ridge_source": "calibration: measured on this device: NVIDIA H200 (measured), 682.1 TFLOP/s bf16 over 4374.3 GB/s (triad pattern); calibrated 2026-09-10 at c0644bea",
+    "bandwidth": 4374.299702465323,
+    "bandwidth_source": "calibration: measured on this device: NVIDIA H200 (measured), 4374.3 GB/s (triad pattern)",
+    "warmup_ms": 300.0,
+    "iters": 105,
+    "target_ms": 400.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}

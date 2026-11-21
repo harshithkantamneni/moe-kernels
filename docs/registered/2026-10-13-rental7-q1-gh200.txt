@@ -1,0 +1,84 @@
+REGISTERED 2026-10-13, before any rental-7 page: rental 7, 2026-10-13-rental7-q1-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r7 DESIGN.md corrected by design-r7-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-13 (1 S_med plus the run guard, P20 printed beside; 2 Q1-H rivals scored apart from the copies clause; 3 the l2open byte page in, C 60 MiB, the 5% clause on skewed rows; 4 no second-K rerun; 5 fresh seeds on the same treads)
+tool: scorer scripts/scoring/rental7/score_q1.py; r7common.q1h_rule, q1h_power; r6common.q1c_rule, q1c_power
+
+Q1-H registered population | v3 | tau 0.9: {'pairs': 24, 'clusters': 5, 'P(v3 HOLDS)': 0.98259, 'P(level clause)': 0.98259, 'P(copies clause)': 1.0, 'P(EXCLUDED v2)': 0.9992, 'P(EXCLUDED H8)': 1.0, 'P(EXCLUDED v3_all)': 0.01306}
+Q1-H registered population | v3 | tau 1.3: {'pairs': 24, 'clusters': 5, 'P(v3 HOLDS)': 0.92951, 'P(level clause)': 0.92951, 'P(copies clause)': 1.0, 'P(EXCLUDED v2)': 0.97698, 'P(EXCLUDED H8)': 0.99999, 'P(EXCLUDED v3_all)': 0.03884}
+Q1-H registered population | v3 | tau 0.9 | anchors 0: {'pairs': 24, 'clusters': 5, 'P(v3 HOLDS)': 0.99879, 'P(level clause)': 0.99879, 'P(copies clause)': 1.0, 'P(EXCLUDED v2)': 0.99996, 'P(EXCLUDED H8)': 1.0, 'P(EXCLUDED v3_all)': 0.00089}
+Q1-H registered population | v3 | tau 0.9 | c15 effect +1 us: {'pairs': 24, 'clusters': 5, 'P(v3 HOLDS)': 0.91209, 'P(level clause)': 0.967, 'P(copies clause)': 0.94319, 'P(EXCLUDED v2)': 0.99852, 'P(EXCLUDED H8)': 1.0, 'P(EXCLUDED v3_all)': 0.02483}
+Q1-H registered population | v3 | tau 0.9 | c15 effect +2 us: {'pairs': 24, 'clusters': 5, 'P(v3 HOLDS)': 0.05364, 'P(level clause)': 0.94181, 'P(copies clause)': 0.05683, 'P(EXCLUDED v2)': 0.9972, 'P(EXCLUDED H8)': 1.0, 'P(EXCLUDED v3_all)': 0.0424}
+Q1-H registered population | v2 true | tau 0.9: {'pairs': 24, 'clusters': 5, 'P(v3 HOLDS)': 0.0, 'P(level clause)': 0.0, 'P(copies clause)': 1.0, 'P(EXCLUDED v2)': 0.01083, 'P(EXCLUDED H8)': 0.88522, 'P(EXCLUDED v3_all)': 0.99997}
+Q1-H registered population | H8 true | tau 0.9: {'pairs': 24, 'clusters': 5, 'P(v3 HOLDS)': 0.0, 'P(level clause)': 0.0, 'P(copies clause)': 1.0, 'P(EXCLUDED v2)': 0.99699, 'P(EXCLUDED H8)': 0.01306, 'P(EXCLUDED v3_all)': 1.0}
+Q1-H design population only (3 clusters) | v3 | tau 0.9: {'pairs': 12, 'clusters': 3, 'P(v3 HOLDS)': 0.88704, 'P(level clause)': 0.88704, 'P(copies clause)': 1.0, 'P(EXCLUDED v2)': 0.99613, 'P(EXCLUDED H8)': 1.0, 'P(EXCLUDED v3_all)': 0.09285}
+Q1-H design population only (3 clusters) | v3 | tau 1.3: {'pairs': 12, 'clusters': 3, 'P(v3 HOLDS)': 0.79237, 'P(level clause)': 0.79237, 'P(copies clause)': 1.0, 'P(EXCLUDED v2)': 0.96093, 'P(EXCLUDED H8)': 0.99896, 'P(EXCLUDED v3_all)': 0.13871}
+Q1-C x9 -5.97 | board 1.0 + replicate 0.45 | CALL true: {'P(correct)': 0.9922, 'P(SELECTED and correct)': 0.9495}
+Q1-C x9 -5.97 | board 1.0 + replicate 0.45 | DEAD true: {'P(correct)': 0.9923, 'P(SELECTED and correct)': 0.95}
+Q1-C x9 -7.95 | board 1.0 + replicate 0.45 | CALL true: {'P(correct)': 0.9994, 'P(SELECTED and correct)': 0.9927}
+Q1-C x9 -7.95 | board 1.0 + replicate 0.45 | DEAD true: {'P(correct)': 0.9993, 'P(SELECTED and correct)': 0.9928}
+
+what: rental 6's lost Q1 units, all six on this board (Qwen1.5 c9 rerun: Q1-C's D and the copies clause are same-board contrasts)
+pages:
+  q9: c9 balanced pages (SEEN replicates)
+  q15: c15 balanced pages (SHARED BLIND, NATIVE SEEN)
+  models:
+    qwen1.5-moe-a2.7b: [1, 2]
+    phi-3.5-moe: [1, 2]
+    jetmoe-8b: [1, 2, 4]
+  files: (in the JSON)
+  files_note: rental 6's registered q1-*.json verbatim (balanced cells only, no draw)
+predictions_note: rental 6's registered Q1 predictions verbatim (copied from 2026-10-09-rental6-q1-gh200), so its g_R and A proxies are unchanged; the skew-page pairs read rental7-skew's predictions
+statistic:
+  g: per (NATIVE, SHARED) pair on one page: g = (T_S - T_N)_meas - (T_S - T_N)_v3, us, T_v3 carried to the page's own A (r6model.reprice); a page with no align_probe: its SHARED cells are NOT SCORED in Q1-H and Q1-P
+  se: cluster-robust (CR1) on (model, n): se^2 = C / (C - 1) x sum_c (sum_i in c (g_i - mean))^2 / N^2
+  g_R: rival R's per-pair (S - N)_R - (S - N)_v3 from the registered predictions (both carried to the page's A), averaged over the SAME valid pairs
+tests:
+  Q1-H:
+    label: REPLICATE: 21 of its 24 pairs are SEEN replicates (every c9 and skew-page control pair); only the c15 SHARED cells are BLIND, so the verdict is BLIND only in the copies clause
+    population: CONTROL pairs (uniform, balanced) whose NATIVE takes block-scan and that pass the host rule: Phi n 2 (skew pages A, B, C and Q1 c9, c15), Qwen1.5 n 2 (c9, c15), JetMoE n 4 (c9, c15); ADDED (design-r7-review (d), SEEN-SELECTED, zero cost: the cells are on the skew pages): Mixtral n 6 and Phi n 4 controls on pages A, B, C
+    clusters: ["jetmoe-8b|n4", "mixtral-8x7b|n6", "phi-3.5-moe|n2", "phi-3.5-moe|n4", "qwen1.5-moe-a2.7b|n2"]
+    pairs: (in the JSON)
+    rule: v3 HOLDS iff |mean g| <= 1.5 us (pair-weighted) AND the copies clause (|d| <= 1.5 us, d the pair-weighted mean over models with valid Q1 pairs at both c9 and c15 of mean g(c15) - mean g(c9)); the copies clause undecided leaves v3 UNDECIDED (FAILS if the level clause fails); a rival is EXCLUDED iff |mean g - g_R| > 3 se and > 1.5 us, scored whenever 6 pairs and 3 clusters are valid WHATEVER the copies clause reads (owner decision 2); se CR1 on (model, n) and at least 3 clusters, else UNDECIDED
+    rivals: ["v2", "H8", "v3_all"]
+    min_pairs: 6
+    min_clusters: 3
+    not_separated: v3_all is not separated from v3 by construction (g_R 0 on every block-scan pair): stated here, not discovered
+    power: (in the JSON)
+  Q1-C:
+    cell: Qwen1.5 SHARED n 1 (NATIVE block-scan), c9 and c15 Q1 pages; x = g of that pair
+    statistic: D = x15 - x9 (owner, review (e)): a board shift common to the two pages cancels
+    rivals: {"CALL": "D = 0 (a per-call cost at n = 1)", "DEAD": "D = (ratio - 1) x9, ratio = dead CTAs c15 / c9 = 66272 / 39824 = 1.664122", "ZERO": "x9 = 0: printed only (SEEN x9 already reads -7.95 / -5.97 us)", "OVERLAP": "partial host overlap at n 1 (rental 3): predicts what CALL predicts; printed as such"}
+    dead_ratio: 1.664122
+    se_D_us: 0.636396
+    rule: the nearer of CALL and DEAD to D is SELECTED if the other is more than 2 se_D farther; else NOT SEPARATED; positions are functions of the MEASURED x9 (review (h) 5); se_D = sqrt2 x 0.45 us (Qwen1.5 replicate, SEEN)
+    host_margin: Qwen1.5 NATIVE n 1 is 339.6 us + F240 = 407 us against the 0.40 ms cut: the rule reads the REGISTERED prediction, so a faster board does not void the cell (the page's timer flag still can)
+    note: rental 6's rule verbatim (D = x15 - x9 at Qwen1.5 SHARED n 1)
+    power: (in the JSON)
+  Q1-P:
+    status: DESCRIPTIVE
+    population: small-batch NATIVE pairs passing the host rule: Phi n 1 (Q1 c9, c15), Mixtral n 3 controls on the rental-7 pages A, B, C
+    pairs: (in the JSON)
+  Q1-SK:
+    status: OPEN, printed: mean g over Phi n 2 skewed pairs minus mean g over the same pages' Phi n 2 control pairs
+    pairs: (in the JSON)
+gates: as rental7-skew (G1 under r7-median-run3, 6 of 9 clean, G2 host rule + timer flag, G4 1705, G5); views ALL and CLEAN; the P20 view printed
+labels:
+  c9: SEEN replicates
+  c15: SHARED BLIND; NATIVE SEEN (it declares E at any copies count)
+  anchors_sigma: SEEN
+  n1_exclusion: SEEN-INFORMED (rental 6)
+scorer_ambiguities:
+  1 the registered rule and where it runs: r7-median-run3 (S_med plus the run guard, owner decision 1), applied by the scorer to cells.csv (r7common.rebuild); R3 is unchanged and runs --slip-policy cell --min-clean-repeats 0; a page that ran another min-clean is NOT SCORED
+  2 S_med's G1 drift clause: the run guard excludes a repeat (3 or more consecutive reads a step under the lock); G1 fails on drift only past 10% non-clean repeat rows (slipped, run-guarded or not ok); the endpoint flag is recorded only
+  3 the P20 side view: rebuilt from the same cells.csv with today's exclusions: its own medians, clocks, host flags and lost cells (6 of 9), G1's clock clauses on its kept cells and the 20% ceiling; DESCRIPTIVE, every test printed on it
+  4 per-shape E1: read in each view on that view's cells; the registered verdict holds only if both views hold; a shape is CERTIFIED in CLEAN only with at least 2 of its 3 pages in CLEAN and its CLEAN cells meeting the bar
+  5 Q1-H se with few clusters: CR1 on (model, n) clusters needs at least 3 clusters; fewer is UNDECIDED (no C / (C - 1) with C = 1); the registered population has 5
+  6 pair or cluster weights: pair-weighted mean (rental 6's); the equal-cluster-weight mean is printed
+  7 the copies clause: matched by model: per model with valid Q1 pairs at both c9 and c15, mean g(c15) - mean g(c9), pair-weighted over those models; identical to rental 6's unmatched means when all six Q1 pages are valid
+  8 one copies side only: the copies clause is UNDECIDED; v3 reads UNDECIDED (FAILS if its level clause fails); the rivals are still scored (owner decision 2)
+  9 the share denominator: every timed repeat row of the page in cells.csv (R3 at min-clean 0 times all 9 of every cell); cells.csv's rows per cell must equal the report's repeat_rows, else NOT SCORED
+  10 l2open: rows are (cell, arm) on w1 only for the verdict (PT, PW skewed; uniform and balanced printed), NATIVE and SHARED at n <= 9 and NATIVE at n 16; w2 under v3 printed; rental 6's counter clock rule; one page, one view
+seen_data:
+  - every c9 and skew-page control pair is a SEEN replicate
+  - anchors and sigma SEEN
+  - h SEEN-FITTED

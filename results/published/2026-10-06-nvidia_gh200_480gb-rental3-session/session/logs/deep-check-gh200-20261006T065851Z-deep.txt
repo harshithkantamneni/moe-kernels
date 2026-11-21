@@ -1,0 +1,6 @@
+G=2 treads 1..9 declared 9 VALIDITY not PASS: none
+G=4 treads 1..9 declared 9 VALIDITY not PASS: none
+G=2 SHARED ms 0.2690 0.2789 0.3883 0.4965 0.6041 0.7125 0.8131 0.9214 1.0298 | increments 0.010 0.109 0.108 0.108 0.108 0.101 0.108 0.108
+G=4 SHARED ms 0.2749 0.2788 0.3872 0.4948 0.6027 0.7113 0.8114 0.9199 1.0277 | increments 0.004 0.108 0.108 0.108 0.109 0.100 0.108 0.108
+P3 G=2 minus G=4 at n = 3 5 7 9: 0.001 0.001 0.002 0.002 ms
+P4 G=4 n=8 to 9: 0.108 ms against the median of the others, 0.108

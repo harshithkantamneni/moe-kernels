@@ -1,0 +1,6 @@
+/workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=base torch 2.13.0+cu130 / triton 3.7.1 gpu=NVIDIA H200
+[driver] wrote 2 rows -> /workspace/results/pin-probe/run_2daaf417d93f_base.csv
+[cli] run_id=2daaf417d93f elapsed=1.1s
+{"csv": "/workspace/results/pin-probe/run_2daaf417d93f_base.csv", "manifest": "/workspace/results/pin-probe/run_2daaf417d93f_base.manifest.jsonl", "run_id": "2daaf417d93f"}

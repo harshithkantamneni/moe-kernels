@@ -1,0 +1,372 @@
+{
+ "registration": "2026-10-20-tileA2-convl-gh200",
+ "part": "convl",
+ "lock_mhz": 1410.0,
+ "CONV-L": "HOLDS",
+ "views": {
+  "ALL": {
+   "verdict": "HOLDS",
+   "classes": {
+    "G1": {
+     "verdict": "HOLDS",
+     "stats": {
+      "cells": 7,
+      "rms": 0.006082,
+      "worst": 0.009956,
+      "mean": 0.003788
+     }
+    },
+    "G8": {
+     "verdict": "HOLDS",
+     "stats": {
+      "cells": 8,
+      "rms": 0.001568,
+      "worst": -0.002835,
+      "mean": -0.001303
+     }
+    }
+   },
+   "pages": {
+    "mixtral-8x7b-cvm1": "counted",
+    "mixtral-8x7b-cvm1t": "counted",
+    "olmoe-1b-7b-cvo1": "counted",
+    "olmoe-1b-7b-cvo1t": "counted",
+    "mixtral-8x7b-cvm8": "counted",
+    "mixtral-8x7b-cvm8t": "counted"
+   },
+   "dropped": {
+    "cvm1": [],
+    "cvm1t": [],
+    "cvo1": [],
+    "cvo1t": [],
+    "cvm8": [],
+    "cvm8t": []
+   },
+   "rows": [
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/PT/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.063489,
+     "ratio_pred": 1.057026,
+     "r": 0.006115
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/PW/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.061043,
+     "ratio_pred": 1.054485,
+     "r": 0.006219
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/uniform/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.062,
+     "ratio_pred": 1.053699,
+     "r": 0.007878
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/balanced/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.064189,
+     "ratio_pred": 1.053699,
+     "r": 0.009956
+    },
+    {
+     "cell": "olmoe-1b-7b/convl-olmoe-1b-7b-g1/3/PT/native",
+     "page": "convl-olmoe-1b-7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.196465,
+     "ratio_pred": 1.194576,
+     "r": 0.001581
+    },
+    {
+     "cell": "olmoe-1b-7b/convl-olmoe-1b-7b-g1/3/PW/native",
+     "page": "convl-olmoe-1b-7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.193433,
+     "ratio_pred": 1.194576,
+     "r": -0.000957
+    },
+    {
+     "cell": "olmoe-1b-7b/convl-olmoe-1b-7b-g1/3/uniform/native",
+     "page": "convl-olmoe-1b-7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.186683,
+     "ratio_pred": 1.191783,
+     "r": -0.004279
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/PT/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.207425,
+     "ratio_pred": 1.208058,
+     "r": -0.000524
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/PW/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.207682,
+     "ratio_pred": 1.208064,
+     "r": -0.000316
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/uniform/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.204677,
+     "ratio_pred": 1.207794,
+     "r": -0.002581
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/balanced/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.20437,
+     "ratio_pred": 1.207794,
+     "r": -0.002835
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/PT/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.208225,
+     "ratio_pred": 1.209278,
+     "r": -0.000871
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/PW/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.208422,
+     "ratio_pred": 1.209316,
+     "r": -0.000739
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/uniform/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.20758,
+     "ratio_pred": 1.209192,
+     "r": -0.001333
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/balanced/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.20771,
+     "ratio_pred": 1.209192,
+     "r": -0.001225
+    }
+   ],
+   "per_page (DESCRIPTIVE)": {
+    "convl-mixtral-8x7b-g1": {
+     "cells": 4,
+     "rms": 0.007701,
+     "worst": 0.009956,
+     "mean": 0.007542
+    },
+    "convl-mixtral-8x7b-g8": {
+     "cells": 8,
+     "rms": 0.001568,
+     "worst": -0.002835,
+     "mean": -0.001303
+    },
+    "convl-olmoe-1b-7b-g1": {
+     "cells": 3,
+     "rms": 0.002691,
+     "worst": -0.004279,
+     "mean": -0.001218
+    }
+   }
+  },
+  "CLEAN": {
+   "verdict": "HOLDS",
+   "classes": {
+    "G1": {
+     "verdict": "HOLDS",
+     "stats": {
+      "cells": 7,
+      "rms": 0.006082,
+      "worst": 0.009956,
+      "mean": 0.003788
+     }
+    },
+    "G8": {
+     "verdict": "HOLDS",
+     "stats": {
+      "cells": 8,
+      "rms": 0.001568,
+      "worst": -0.002835,
+      "mean": -0.001303
+     }
+    }
+   },
+   "pages": {
+    "mixtral-8x7b-cvm1": "counted",
+    "mixtral-8x7b-cvm1t": "counted",
+    "olmoe-1b-7b-cvo1": "counted",
+    "olmoe-1b-7b-cvo1t": "counted",
+    "mixtral-8x7b-cvm8": "counted",
+    "mixtral-8x7b-cvm8t": "counted"
+   },
+   "dropped": {
+    "cvm1": [],
+    "cvm1t": [],
+    "cvo1": [],
+    "cvo1t": [],
+    "cvm8": [],
+    "cvm8t": []
+   },
+   "rows": [
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/PT/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.063489,
+     "ratio_pred": 1.057026,
+     "r": 0.006115
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/PW/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.061043,
+     "ratio_pred": 1.054485,
+     "r": 0.006219
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/uniform/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.062,
+     "ratio_pred": 1.053699,
+     "r": 0.007878
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g1/3/balanced/native",
+     "page": "convl-mixtral-8x7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.064189,
+     "ratio_pred": 1.053699,
+     "r": 0.009956
+    },
+    {
+     "cell": "olmoe-1b-7b/convl-olmoe-1b-7b-g1/3/PT/native",
+     "page": "convl-olmoe-1b-7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.196465,
+     "ratio_pred": 1.194576,
+     "r": 0.001581
+    },
+    {
+     "cell": "olmoe-1b-7b/convl-olmoe-1b-7b-g1/3/PW/native",
+     "page": "convl-olmoe-1b-7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.193433,
+     "ratio_pred": 1.194576,
+     "r": -0.000957
+    },
+    {
+     "cell": "olmoe-1b-7b/convl-olmoe-1b-7b-g1/3/uniform/native",
+     "page": "convl-olmoe-1b-7b-g1",
+     "cls": "G1",
+     "ratio_meas": 1.186683,
+     "ratio_pred": 1.191783,
+     "r": -0.004279
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/PT/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.207425,
+     "ratio_pred": 1.208058,
+     "r": -0.000524
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/PW/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.207682,
+     "ratio_pred": 1.208064,
+     "r": -0.000316
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/uniform/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.204677,
+     "ratio_pred": 1.207794,
+     "r": -0.002581
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/6/balanced/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.20437,
+     "ratio_pred": 1.207794,
+     "r": -0.002835
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/PT/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.208225,
+     "ratio_pred": 1.209278,
+     "r": -0.000871
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/PW/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.208422,
+     "ratio_pred": 1.209316,
+     "r": -0.000739
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/uniform/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.20758,
+     "ratio_pred": 1.209192,
+     "r": -0.001333
+    },
+    {
+     "cell": "mixtral-8x7b/convl-mixtral-8x7b-g8/16/balanced/native",
+     "page": "convl-mixtral-8x7b-g8",
+     "cls": "G8",
+     "ratio_meas": 1.20771,
+     "ratio_pred": 1.209192,
+     "r": -0.001225
+    }
+   ],
+   "per_page (DESCRIPTIVE)": {
+    "convl-mixtral-8x7b-g1": {
+     "cells": 4,
+     "rms": 0.007701,
+     "worst": 0.009956,
+     "mean": 0.007542
+    },
+    "convl-mixtral-8x7b-g8": {
+     "cells": 8,
+     "rms": 0.001568,
+     "worst": -0.002835,
+     "mean": -0.001303
+    },
+    "convl-olmoe-1b-7b-g1": {
+     "cells": 3,
+     "rms": 0.002691,
+     "worst": -0.004279,
+     "mean": -0.001218
+    }
+   }
+  }
+ },
+ "e1cal_verdict_read": "FAILS",
+ "reading (DESCRIPTIVE)": "CONV-L HOLDS and E1-CAL does not: this indicates the wgmma calibration or v4's wgmma terms, not the conversion; a carried constant can still weigh more on 128x128 G 1 cells (more bytes, bw at the lower L2 clock) than on R3's tile, so it is not ruled out"
+}

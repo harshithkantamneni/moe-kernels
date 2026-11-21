@@ -1,0 +1,22 @@
+PC2-R4 READ naive GEMMs of seen models: price (us) and price / t - 1
+  N-MX-T1       w1 no follower t  133.40 | v4d'  120.40 (-9.7%) twin  131.75 (-1.2%) all@fetch  131.75 (-1.2%)
+  N-MX-T1       w2 no follower t   70.05 | v4d'   80.03 (+14.2%) twin   75.56 (+7.9%) all@fetch   75.56 (+7.9%)
+  N-JM-T1       w2 no follower t   20.14 | v4d'   31.50 (+56.4%) twin   20.67 (+2.6%) all@fetch   20.67 (+2.6%)
+  N-PH-T1       w1 no follower t   63.70 | v4d'   74.27 (+16.6%) twin   70.94 (+11.4%) all@fetch   70.94 (+11.4%)
+  N-PH-T1       w2 no follower t   33.07 | v4d'   35.78 (+8.2%) twin   34.52 (+4.4%) all@fetch   34.52 (+4.4%)
+  N-PH-T2-A4    w1 no follower t  116.01 | v4d'  107.50 (-7.3%) twin  126.00 (+8.6%) all@fetch  126.00 (+8.6%)
+  N-PH-T2-A4    w2 no follower t   58.39 | v4d'   58.45 (+0.1%) twin   63.17 (+8.2%) all@fetch   63.17 (+8.2%)
+  N-PH-T2-A2    w1 follower    t  113.27 | v4d'  107.50 (-5.1%) twin  126.00 (+11.2%) all@fetch  126.00 (+11.2%)
+  N-G3-T1       w1 no follower t    9.83 | v4d'    7.95 (-19.1%) twin   12.09 (+23.0%) all@fetch   12.09 (+23.0%)
+  N-G3-T1       w2 no follower t    7.02 | v4d'    3.62 (-48.4%) twin    8.55 (+21.8%) all@fetch    8.55 (+21.8%)
+  N-QW-T1       w1 no follower t   16.14 | v4d'   11.88 (-26.4%) twin   17.92 (+11.0%) all@fetch   17.92 (+11.0%)
+  N-QW-T2-A4    w1 follower    t   20.45 | v4d'   15.45 (-24.5%) twin   30.14 (+47.3%) all@fetch   17.50 (-14.4%)
+  N-QW-T2-A4    w2 follower    t   10.80 | v4d'    8.15 (-24.6%) twin   17.58 (+62.7%) all@fetch   11.24 (+4.0%)
+  N-DS-T1       w1 no follower t   21.58 | v4d'   17.81 (-17.5%) twin   23.96 (+11.0%) all@fetch   23.96 (+11.0%)
+  N-DS-T2-A6    w1 follower    t   34.67 | v4d'   30.42 (-12.2%) twin   43.20 (+24.6%) all@fetch   33.69 (-2.8%)
+v4d'      no follower n 11 rms 26.3% mean -3.0%
+v4d'      follower    n  4 rms 18.6% mean -16.6%
+twin      no follower n 11 rms 12.1% mean +9.9%
+twin      follower    n  4 rms 41.6% mean +36.5%
+all@fetch no follower n 11 rms 12.1% mean +9.9%
+all@fetch follower    n  4 rms 9.5% mean -0.5%

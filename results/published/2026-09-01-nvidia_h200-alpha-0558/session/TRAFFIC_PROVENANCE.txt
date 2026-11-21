@@ -1,0 +1,15 @@
+# is a byte figure in this session counted or modelled
+# written by scripts/pod_session.sh pre-flight P-nsys on 2026-09-01T22:10:16Z
+# card: NVIDIA H200
+
+INFERRED
+
+TRAFFIC: INFERRED. Every byte figure below is compulsory-traffic arithmetic, never counted. Reason: NO. No invocation of this nsys sampled a DRAM metric on this device. The open path in docs/FINDINGS.md is now a closed one for this pod, and DRAM traffic stays modelled rather than counted. The control attempt above says whether nsys itself works here, which separates 'no sampler' from 'no nsys'.
+
+route      : none
+reason     : NO. No invocation of this nsys sampled a DRAM metric on this device. The open path in docs/FINDINGS.md is now a closed one for this pod, and DRAM traffic stays modelled rather than counted. The control attempt above says whether nsys itself works here, which separates 'no sampler' from 'no nsys'.
+probe      : /workspace/session/20260901T214218Z/nsys
+
+Steps 1, 2, 2b, 3 and 4 all carry this label. Step 2b is the ONE
+measurement in this session that is independent of the byte model
+whatever this file says, because it never divides by bytes at all.

@@ -1,0 +1,51 @@
+# THE SETTLE RENTAL S1 (2026-10-21): DESCRIPTIVE counter pages that settle what DIAGNOSIS-A2 (Q7) could not, so v5's
+# sag (F1) and re-read (F3) terms are measured, not fitted (owner 2026-10-21). One gpu_1x_gh200 at $2.29/h, run by S1's
+# driver (A2's pinned driver plus lines marked S1):
+#   bash scripts/vm_run.sh start --ip <ip> --run-id <id> --deadline <launch + 85 min, epoch s> \
+#     --plan scripts/plans/rentalS1-settle-2026-10.plan --driver gh200_settleS1_session.sh
+# Registration (before any page): docs/registered/2026-10-21-settleS1-gh200.{txt,json}. S1 certifies nothing and scores
+# no model verdict; every S1 page is SEEN for v5, whose blind test uses rental B2's new shapes (JetMoE, Phi-3.5, Qwen1.5).
+# A2's power and lock rules: a 900 W GPU limit (the prelude refuses a card whose power.max_limit is under it, and now
+# also refuses unless enforced.power.limit and nvidia-smi -q's GPU-scope Current Power Limit both read 900 W; A2 read
+# 700 W from -q and 900 W from power.limit all session), the session lock 1410 MHz (A2's held rung); the M2 pages at
+# their own locks 1305 and 1005. A refusal at 900 W reruns the SAME session at 700 W (owner 2026-10-21, pre-authorised):
+# the refusal is recorded, the prelude sets 700 W and needs both readings at 700 W, else the session stops. No gate and no lock-hold probe: no S1 unit chooses a lock or stops the session on a
+# reading, and every page carries its own clock (sm__cycles_elapsed.avg over gpu__time_duration.sum).
+# Units (registration 'units'):
+#   M0  the power proof: a sustained bf16 GEMM for 90 s, no clock lock, nvidia-smi logging power.draw,
+#       enforced.power.limit and clocks_event_reasons every 100 ms: the draw shows which limit holds
+#   M1  the replay contrast: kernel replay (A2's instrument, kr) then application replay with no cache flush (ar) on
+#       E1-CAL cells OLMoE 128 G 1 n 1 PT, n 4 PT and Qwen2-57B n 2 PT, NATIVE
+#   M2  the sag against the lock: the OLMoE f128 counter page (G 64, treads 1-9, three arms) at 1305 and 1005 MHz,
+#       and at 1410 on this board (the reference, nodrop)
+#   M3  Mixtral 128x128 G 1 counted bytes: n 2 PT, PW, uniform, balanced, NATIVE
+#   M4  PRIVATE-arm ladder pages at the balanced cells A2's byte pages read: Mixtral 128x128 G 16 treads 3, 4, 8 and
+#       Mixtral 64x128 w8 G 1 tread 2, arms NATIVE, SHARED, PRIVATE
+#   M5  stall reasons on the 128x128 G 1 byte cells: Qwen2-57B n 1, 2 and OLMoE n 1, 2, 4, NATIVE (drop-group st)
+# Line order is the priority. The driver drops the LAST unit first; a drop-group goes together. Drop order: st only.
+# nodrop: the prelude and every M0, M1, M2 (1305, 1005, 1410), M3 and M4 unit. The application-replay units are capped
+# at 10 min (est 5), so a stuck replay cannot starve the Mixtral units behind it.
+# MINUTES: 47 of units estimated (40 nodrop; the prelude's 2 cover a refused 900 W read-back and the 700 W one), from A2's own page times (OLMoE f128 165 s, b128g1 129 s, Qwen2 b128g1
+# 273 s, Mixtral b128g16 340 s, b64g1 223 s; an application-replay page re-runs its child once per metric pass, about
+# five). Wall with about 25 min of boot, driver upgrade and setup: about 72 min ($2.75 at $2.29/h). Deadline launch +
+# 85 min; guardian hard cap launch + 100 min ($3.82 at most).
+- prelude lock-mhz=1410 power-limit-w=900 est=2 cap=15
+# M0: the power proof, first (the limit every later page ran under)
+- powerproof label=pp nodrop=1 est=3 cap=10
+# M1: kernel replay first (A2's instrument, same cells, same board), then application replay, per model
+olmoe-1b-7b bytes label=kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json arms=native byte-groups=1 nodrop=1 est=3 cap=20
+olmoe-1b-7b bytes label=ar block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json arms=native byte-groups=1 replay=application nodrop=1 est=5 cap=10
+qwen2-57b-a14b bytes label=kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json arms=native byte-groups=1 nodrop=1 est=3 cap=20
+qwen2-57b-a14b bytes label=ar block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json arms=native byte-groups=1 replay=application nodrop=1 est=5 cap=10
+# M2: the OLMoE f128 page at 1305 and 1005 MHz, then at 1410 on this board
+olmoe-1b-7b bytes label=f1305 lock-mhz=1305 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=3 cap=15
+olmoe-1b-7b bytes label=f1005 lock-mhz=1005 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=4 cap=15
+olmoe-1b-7b bytes label=f1410 lock-mhz=1410 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=3 cap=15
+# M3: Mixtral 128x128 G 1 bytes, NATIVE
+mixtral-8x7b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/mixtral-8x7b-128g1-n.json arms=native byte-groups=1 nodrop=1 est=3 cap=20
+# M4: PRIVATE-arm ladder pages (NATIVE, SHARED, PRIVATE) at A2's G-16 and 64 G-1 byte cells
+mixtral-8x7b bytes label=p128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=16 byte-treads=3,4,8 nodrop=1 est=4 cap=20
+mixtral-8x7b bytes label=p64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=1 byte-treads=2 nodrop=1 est=2 cap=15
+# M5: stall reasons, NATIVE, kernel replay
+qwen2-57b-a14b bytes label=st block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-n.json arms=native byte-groups=1 stall-metrics=1 drop-group=st est=4 cap=20
+olmoe-1b-7b bytes label=st block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-n.json arms=native byte-groups=1 stall-metrics=1 drop-group=st est=3 cap=20

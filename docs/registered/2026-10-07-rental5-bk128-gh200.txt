@@ -1,0 +1,72 @@
+REGISTERED 2026-10-07, before any rental-5 page: rental 5, 2026-10-07-rental5-bk128-gh200
+status: REGISTERED BEFORE ANY PAGE: a BLIND confirmation of the occupancy-3 floor, not a lever
+design: design-r5 DESIGN.md part 4a with REVIEW.md section (f): SYNC (q 0.55-0.65) is already excluded by the SEEN counters (c128 686.9 is about 2 x 346), so this confirms the floor's time blind; num-stages=4 explicit on both pages; placed BELOW second K
+tool: scorer scripts/scoring/rental5/score_bk128.py
+
+predicted q = T128/T64: n4 H_C 0.9940 SYNC 0.5808 PS 0.9967; n5 H_C 0.9939 SYNC 0.5769 PS 0.9967; n6 H_C 0.9939 SYNC 0.5739 PS 0.9966; n7 H_C 0.9938 SYNC 0.5720 PS 0.9966; n8 H_C 0.9938 SYNC 0.5704 PS 0.9966; n9 H_C 0.9938 SYNC 0.5693 PS 0.9966
+
+pages:
+  path: gaps-<card>-olmoe-1b-7b-<label>/private_weight_reference/*/report.json, the G = 64 page, NATIVE only, treads 1..9
+  labels:
+    bk64: [64, 4]
+    bk128: [128, 4]
+  design_check: each page's pinned BLOCK_SIZE_K and num_stages must equal its label's; else NOT SCORED
+statistic:
+  q_n: T(bk128, n) / T(bk64, n), NATIVE ms_p50, same board, n = 4..9 (floor-bound)
+  e: q_meas / q_pred - 1
+floor_formula: q_pred = 1 + sum_g ceil(N_live,g / 132) [(S128 c128 + F_g) - (S64 c64 + F_g)] / (1710 MHz) / T64_pred, T64_pred the v2 timing model at sigma 1 (OLMoE NATIVE G 64, the 8x7B v2 fit), c64 the SEEN k64s4 counter c (346.2 / 344.0)
+rivals:
+  H_C:
+    c128: {"w1": 686.9, "w2": 684.1}
+    label: SEEN rental-4 counters at BK 128 s4, occupancy 3 / 3
+  SYNC:
+    c128: {"w1": 346.2, "w2": 344.0}
+    label: c per k-step held at BK 64: the floor halves
+  PS:
+    c128: 688.2
+    label: c128 = 2 x 344.1 (CAL c), printed
+predicted_q:
+  4:
+    T64_ms: 0.728758
+    H_C: 0.993974
+    SYNC: 0.580841
+    PS: 0.996684
+  5:
+    T64_ms: 0.893953
+    H_C: 0.993918
+    SYNC: 0.576941
+    PS: 0.996653
+  6:
+    T64_ms: 1.069753
+    H_C: 0.993875
+    SYNC: 0.573945
+    PS: 0.996629
+  7:
+    T64_ms: 1.234949
+    H_C: 0.993847
+    SYNC: 0.572044
+    PS: 0.996614
+  8:
+    T64_ms: 1.410749
+    H_C: 0.993824
+    SYNC: 0.570383
+    PS: 0.996601
+  9:
+    T64_ms: 1.575944
+    H_C: 0.993807
+    SYNC: 0.569267
+    PS: 0.996592
+rules:
+  H_C: HOLDS if rms e <= 1% over the scored n; else FAILS
+  SYNC: EXCLUDED if |e_SYNC| > 3 sqrt2 sigma_page (0.007637) on at least 4 cells
+  PS: printed only (0.2 to 0.6% from H_C)
+  need: at least 4 of n = 4..9 on both pages, else NOT SCORED
+gates: R3's VALIDITY gates by rental 3's two views (ALL and CLEAN); V5 does not gate
+missing: a page missing: NOT SCORED; the drop-group bk keeps the pair together
+labels:
+  time: BLIND-CALMODEL (OLMoE is a CAL model; no OLMoE G = 64 timed page at BK 128)
+  counters: SEEN
+secondary: r5common.secondary on (q_pred H_C, q_meas), one cluster: calibration NOT RESOLVED
+seen_data:
+  - c128, c64 SEEN (rental 4 counters)
+  - the v2 fit is CAL (8x7B)

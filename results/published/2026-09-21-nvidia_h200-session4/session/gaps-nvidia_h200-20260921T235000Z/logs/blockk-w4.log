@@ -1,0 +1,140 @@
+experiment  blockk_diagonal: separate residency from pipeline depth on the BLOCK_SIZE_K diagonal
+run id      nvidia_h200-bm64-bn64-budget200.0-cells1x32_2x32_3x32_6x32_3x64_4x64_2x128_3x128-dtypebf16-flush-0ef035cc
+
+## PREDICTIONS, registered before the run and printed before any measurement
+
+THE QUESTION. occupancy_vs_swizzle's P6 is UNKNOWN because no two num_stages settings in that corpus ever shared a resident-block count, so its P1 residency null is confounded with pipeline depth. This arm moves BLOCK_SIZE_K, which is 64 in every fit in the corpus, so that shared memory and prefetch depth come apart.
+
+THE FOUR WORLDS THE GATES DISCRIMINATE. Four, because `verdict_of` has four outcomes and this block registered three: the BOTH world was reachable, planted in the test file, and had no registered reading, so the page asserted C1's 'the concurrency family is CLOSED' and C2's 'residency moved w by more than the model predicts' in one report.
+  FOLLOWS DEPTH      C1 PASS. P1's null is confirmed: what moved with num_stages was latency hiding, the concurrency family is closed, and the reuse-distance reading of alpha stands unopposed by a footprint rival.
+  FOLLOWS RESIDENCY  C1 FAIL. P1's null was an artefact of the lockstep, residency moves the weight-stream cost, and C2 prints the size it returns at as a fraction of the concurrency model's own predicted swing.
+  BOTH               C1 PASS and C2 FAIL, and the PASS is the REGISTERED INEQUALITY and nothing more: both knobs cleared their own spread and depth is the larger. P1's null is NOT confirmed -- residency moved w -- and the concurrency family is NOT closed. The quotable sentence is the ORDERING of the two coefficients, with C2's printed fraction of the predicted swing beside it.
+  NEITHER            C1 UNKNOWN, and the page is not a null on either knob: an arm that saw no effect of either cannot say which of them P1 was reading.
+
+THE REGISTERED THRESHOLD is 3 sigma of each coefficient's OWN bootstrap spread, resampling repeats with replacement and refitting the whole chain on every draw.
+
+THE GRID, and the arithmetic every cell is chosen by. One CTA holds num_stages x (BLOCK_M x BLOCK_K + BLOCK_K x BLOCK_N) x 2 bytes, which at BLOCK_M = BLOCK_N = 64 is num_stages x BLOCK_K x 256 B.
+  cell     stages  BLOCK_K   smem/CTA   residency
+  1x32          1       32        8 KiB   16 blocks/SM (smem 25, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); threads binds) at 8 KiB/CTA
+  2x32          2       32       16 KiB   13 blocks/SM (smem 13, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 16 KiB/CTA
+  3x32          3       32       24 KiB   9 blocks/SM (smem 9, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 24 KiB/CTA
+  6x32          6       32       48 KiB   4 blocks/SM (smem 4, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 48 KiB/CTA
+  3x64          3       64       48 KiB   4 blocks/SM (smem 4, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 48 KiB/CTA
+  4x64          4       64       64 KiB   3 blocks/SM (smem 3, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 64 KiB/CTA
+  2x128         2      128       64 KiB   3 blocks/SM (smem 3, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 64 KiB/CTA
+  3x128         3      128       96 KiB   2 blocks/SM (smem 2, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 96 KiB/CTA
+
+THE TWO REGISTERED ISO-SHARED-MEMORY PAIRS, which are the contrast this design is named for:
+  3x64 / 6x32: 48 KiB both, depths 3 and 6, BLOCK_K 64 and 32
+  4x64 / 2x128: 64 KiB both, depths 4 and 2, BLOCK_K 64 and 128
+
+AND THE ISO-DEPTH RESIDENCY LADDER, 3x32, 3x64, 3x128: three BLOCK_K at one num_stages, which is the one contrast in this apparatus where residency moves and the software-pipeline depth is byte-identical.
+
+THE THIRD MECHANISM, named so it cannot contaminate the reading. Holding shared memory fixed forces num_stages and BLOCK_K to move in OPPOSITE directions, so inside a pair depth and BLOCK_K are perfectly anti-collinear and two cells cannot separate them. The grid is eight cells and the reading is a three-parameter fit; C3 registers bK = 0 and can refute it.
+
+THE DESIGN AS THIS CARD REALISES IT:
+  cell     log2 stages  log2 BK  log2 resident
+  1x32           0.000    5.000          4.000
+  2x32           1.000    5.000          3.700
+  3x32           1.585    5.000          3.170
+  6x32           2.585    5.000          2.000
+  3x64           1.585    6.000          2.000
+  4x64           2.000    6.000          1.585
+  2x128          1.000    7.000          1.585
+  3x128          1.585    7.000          1.000
+  singular values 18.3174, 3.5755, 1.9157, 0.0492; rank 4 of 4; condition 372.4
+  standard error per unit of per-cell spread: intercept 20.022, bD depth 1.830, bK block_k 2.158, bR residency 2.185
+
+SCORED ON w, NOT ON B/(A+B). The EXA ratio's denominator carries a fitted intercept far noisier than the slope it is added to, and that intercept goes NEGATIVE in two of the 2026-09-10 session's arms, so a residency effect of a few per cent in the slope arrives in the ratio as a sign flip. w is the same slope over a byte count from moe.spec and a rate the caller names: no fitted level and no intercept. The per-cent noise figures the session-3 analysis quotes for w are ITS figures and are in no committed file here, so they are not printed as this page's; the spread this design is actually powered against is the line below, which says ASSUMED or says which of this run's own cells it measured.
+
+ridge 151.427 Op/B, measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b. Used ONLY by V4, to ask whether each cell's MEASURED marginal arithmetic intensity is below it. No claim here is scored against a roof.
+the concurrency model predicts +0.0561 in ln w per doubling of residency over 2 to 16 blocks/SM at 132 SMs over 63 MB of L2; NO GATE IS SCORED ON ITS LEVEL and C2 quotes bR against it only to give the size a unit.
+
+NOT A READOUT. Everything above is arithmetic over this repo's calibration and vLLM's resource model. NOT A PRODUCTION CLAIM: BLOCK_SIZE_K 32 and 128 are settings vLLM ships for other shapes, and this grid is chosen to separate two mechanisms, not to recommend a tile. NOT RUN: no cell below has been timed.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16 (2 B/element)
+pinned       BLOCK_SIZE_M=64 BLOCK_SIZE_N=64 GROUP_SIZE_M=1 num_warps=4  (num_stages and BLOCK_SIZE_K are the sweep)
+cells        8: 1x32, 2x32, 3x32, 6x32, 3x64, 4x64, 2x128, 3x128
+treads       8 exactly-full tile stacks per cell, r = 64..512 rows per expert, T = 256..2048 tokens
+repeats      15 round-robin passes per cell
+timing       300 ms of warmup under load, then 3 trial(s) of 200 ms of kernel time each, L2 flush ON; the instrument sizes its own iteration count
+timings      960 (8 cells x 8 treads x 15 reps)
+estimate     864 s of GPU at what the instrument charges (warmup + trials x budget per timing), excluding compiles and allocation
+not priced   the two terms that figure leaves out, with what is known about each rather than a shrug. COMPILES: at most 8 x 8 = 64 distinct Triton specialisations, and probably 8 -- the kernel's constexprs are the tile, and every token count on this ladder is a multiple of 16, so the divisibility-by-16 specialisation key does not move across the treads. The COMPILE CENSUS pays the first one per cell before the metered loop and prints the count it actually built. ALLOCATION: the expert weight set is drawn ONCE, not once per tread -- moe.reference.torch_ref.make_inputs caches it on (model, dtype, seed, device, scale), which this arm never moves -- so the 960 rebuilds redraw only the activations, at most 17 MB each.
+card         sm_90  228 KiB smem/SM  2048 threads/SM  32 blocks/SM  132 SMs  63 MB L2   [read off NVIDIA H200]
+card slug    nvidia_h200
+ridge        151.427 Op/B, measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b
+bandwidth    4378.0 GB/s, measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)
+instrument   queue-deep/l2-flush/settled-warmup/clock-under-load/v4
+
+TILE RESOURCE BILL, one CTA, at sm_90
+  1x32      BLOCK_M=  64  smem      8 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  2x32      BLOCK_M=  64  smem     16 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  3x32      BLOCK_M=  64  smem     24 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  6x32      BLOCK_M=  64  smem     48 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  3x64      BLOCK_M=  64  smem     48 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  4x64      BLOCK_M=  64  smem     64 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  2x128     BLOCK_M=  64  smem     64 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  3x128     BLOCK_M=  64  smem     96 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+
+REGISTER SENSITIVITY, the one limit this plan cannot compute. At num_warps=4 one CTA is 128 threads, so a card with 65536 registers per SM holds 512 / n_regs CTAs.
+  n_regs  by_regs  resident-block ladder            rank  se(bD)  se(bK)  se(bR)
+      32       16  16,13,9,4,4,3,3,2                   4   1.830   2.158   2.185
+      48       10  10,10,9,4,4,3,3,2                   4   0.975   1.361   1.547
+      64        8  8,8,8,4,4,3,3,2                     4   0.841   1.274   1.642
+      96        5  5,5,5,4,4,3,3,2                     4   0.592   1.055   2.075
+     128        4  4,4,4,4,4,3,3,2                     4   0.497   0.767   1.880
+     168        3  3,3,3,3,3,3,3,2                     4   0.493   0.519   2.229
+     224        2  2,2,2,2,2,2,2,2                     3     SINGULAR: this design separates nothing
+     255        2  2,2,2,2,2,2,2,2                     3     SINGULAR: this design separates nothing
+  A run whose measured n_regs lands on a SINGULAR row is refused by the compile census below, before a timed cell is paid for. The escape is --num-warps 4, which halves the threads per CTA and doubles by_regs at every n_regs.
+
+WEIGHT-STREAM DENOMINATOR. One complete stream of this layer's routed expert weight set is 0.6438 ms: 2.8186 GB at 4378.0 GB/s. w scales exactly 1:1 in that rate, so every w on this page names it.
+
+MINIMUM DETECTABLE EFFECT at 3 sigma, per doubling, in ln w, at a per-TIMING spread of 0.4281%:
+             spread source: ASSUMED: 0.005/1.168, the widest per-repeat sd of w in moe/bench/weights.py's record of the 2026-09-10 session over the median of ALL 23 of that session's ladders (NOT the subject subset, which publishes no median). No cell of THIS run was on disk to measure it from
+             bD depth     0.0235
+             bK block_k   0.0277
+             bR residency 0.0281
+             AN UPPER BOUND, not the line it looks like. The sigma above is a per-TIMING spread and one observation of this regression is a CELL's ln w, which is a median over the repeats and then a slope over the treads; both collapses shrink it. A coefficient under its line here may still be resolved, and the number that says so is the bootstrap sd printed beside each coefficient after the run.
+             COMPUTED AT THE RESIDENCY BOUND. No n_regs has been read, so this is the top row of the register-sensitivity table above. THAT ROW IS NOT THE WORST-CONDITIONED ONE FOR EVERY COEFFICIENT, which this note used to claim: read the table's own bR column, where the deepest register rows are worse conditioned than the bound, so a kernel landing there has a bR standard error WIDER than the line above. The compile census reprints these lines at the measured n_regs before a timed cell is paid for, and those are the realised numbers.
+
+WRITES TO    /workspace/results/gaps-nvidia_h200/blockk_diagonal/nvidia_h200-bm64-bn64-budget200.0-cells1x32_2x32_3x32_6x32_3x64_4x64_2x128_3x128-dtypebf16-flush-0ef035cc
+             git visibility UNVERIFIED (check-ignore exited 128; 128 means outside the work tree, which is the pod default)
+             cells.csv (one row per tread per repeat, flushed), CARD, report.txt, report.json, triton-cache/
+
+reference clock  1455 MHz, NVIDIA H200: median of the samples taken while the calibration's dense GEMM ran
+
+## COMPILE CENSUS, one untimed call per cell, before the metered loop
+
+  1x32     16 blocks/SM (smem 25, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); threads binds) at 8 KiB/CTA
+  2x32     13 blocks/SM (smem 13, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 16 KiB/CTA
+  3x32     9 blocks/SM (smem 9, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 24 KiB/CTA
+  6x32     4 blocks/SM (smem 4, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 48 KiB/CTA
+  3x64     4 blocks/SM (smem 4, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 48 KiB/CTA
+  4x64     3 blocks/SM (smem 3, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 64 KiB/CTA
+  2x128    3 blocks/SM (smem 3, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 64 KiB/CTA
+  3x128    2 blocks/SM (smem 2, threads 16, cta 32, regs ? (UPPER BOUND: no n_regs read); smem binds) at 96 KiB/CTA
+  cell     log2 stages  log2 BK  log2 resident
+  1x32           0.000    5.000          4.000
+  2x32           1.000    5.000          3.700
+  3x32           1.585    5.000          3.170
+  6x32           2.585    5.000          2.000
+  3x64           1.585    6.000          2.000
+  4x64           2.000    6.000          1.585
+  2x128          1.000    7.000          1.585
+  3x128          1.585    7.000          1.000
+  singular values 18.3174, 3.5755, 1.9157, 0.0492; rank 4 of 4; condition 372.4
+  standard error per unit of per-cell spread: intercept 20.022, bD depth 1.830, bK block_k 2.158, bR residency 2.185
+  Triton entries built by the census: 1x32=17, 2x128=16, 2x32=16, 3x128=16, 3x32=16, 3x64=16, 4x64=16, 6x32=16
+
+MINIMUM DETECTABLE EFFECT at 3 sigma, per doubling, in ln w, at a per-TIMING spread of 0.4281%:
+             spread source: ASSUMED: 0.005/1.168, the widest per-repeat sd of w in moe/bench/weights.py's record of the 2026-09-10 session over the median of ALL 23 of that session's ladders (NOT the subject subset, which publishes no median). No cell of THIS run was on disk to measure it from
+             bD depth     0.0235
+             bK block_k   0.0277
+             bR residency 0.0281
+             AN UPPER BOUND, not the line it looks like. The sigma above is a per-TIMING spread and one observation of this regression is a CELL's ln w, which is a median over the repeats and then a slope over the treads; both collapses shrink it. A coefficient under its line here may still be resolved, and the number that says so is the bootstrap sd printed beside each coefficient after the run.
+  kernel probe: vLLM exposes no fused_moe_kernel with a Triton cache under either known path, so the compiled shared memory could not be read
+REFUSED: the kernel probe read no n_regs for 8 of 8 cell(s): 1x32, 2x128, 2x32, 3x128, 3x32, 3x64, 4x64, 6x32 (probe note: vLLM exposes no fused_moe_kernel with a Triton cache under either known path, so the compiled shared memory could not be read). Residency is min(by_smem, by_threads, by_blocks, by_regs) and only the first depends on BLOCK_SIZE_K, so without n_regs every cell carries an upper BOUND and V3 reads UNKNOWN, which makes the whole page INVALID after the metered loop has been paid for. The probe reads `n_regs` off the compiled kernel object and `shared` off its metadata, and either can be absent on a Triton the probe does not know. Nothing was timed.

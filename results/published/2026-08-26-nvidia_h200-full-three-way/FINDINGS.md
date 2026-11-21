@@ -1,3 +1,17 @@
+> **This file is arm-scoped and historical.** It analyses the 17,640 rows of the
+> 2026-08-26 three-way sweep against the calibration of that day (read ceiling
+> 4389.4 GB/s, ridge 160.4), and it predates C5, the fp8 arms, the A100 arm, the
+> whole-layer arm and the ridge band. The study-level results are in
+> [`docs/FINDINGS.md`](../../../docs/FINDINGS.md), organised around C1-C5 and
+> regenerated from the current rows.
+>
+> Kept otherwise unedited because it is the analysis this directory's `SUPERSEDED` marker
+> refers to: the pair of arms, one written against each ruler, is the evidence
+> that the ruler moved. Two numbers here have since changed with the
+> calibration, and both are noted in `docs/FINDINGS.md`: the 83 sub-floor rows
+> are 82 on the corrected ceiling, and the read-variant section's conclusion was
+> subsequently confirmed and closed.
+
 # What the three-way sweep says
 
 17,640 rows, one H200 SXM (700 W, 132 SMs, 60 MiB L2, driver 580.159.04, CUDA 13.0).
@@ -83,6 +97,7 @@ bandwidth exceeds the STREAM triad ceiling. They are not spread across the sweep
 - all 83 are deepseek-v3
 - all 83 are at T of 16, 32 or 64
 - 27 of the 83 are `throttled`; 56 are not, so throttling does not explain them
+  NOTE 2026-09-03: "throttle" is the word withdrawn from the description above, not the mechanism. Two idle-instant reads either side of the cell, flagged on a >5% drop, is what the detector did; what that detected was whether the first read had caught the idle boost clock, not throttling under load (moe/bench/timing.py, "CLOCKS ARE READ UNDER LOAD": on the alpha-0558 arm the same flag fired on 91% of vLLM rows above T=4096 while flagged and unflagged replicates of one cell timed at ratio 0.998). Every count and conclusion on this page is unchanged. Rows written after 00f3324 carry the LEVEL and DRIFT verdicts taken under load instead (`clock_level_ok`, `clock_drift_ok`).
 - peak is 4483.4 GB/s: 102.5% of triad, 91.2% of the pin rate
 - **zero rows anywhere in the sweep exceed the pin rate**
 
@@ -406,6 +421,8 @@ point samples, not a time series: SM clock read once before a cell's timing call
 once after, flag set when the second is more than 5% below the first. It is directional,
 so a ramping clock can never trip it, and blind to a dip that recovers in between. A
 throttled row is not a failed row; all 1,663 passed the fp32 oracle.
+
+> NOTE 2026-09-03: "throttle" is the word withdrawn from the description above, not the mechanism. Two idle-instant reads either side of the cell, flagged on a >5% drop, is what the detector did; what that detected was whether the first read had caught the idle boost clock, not throttling under load (moe/bench/timing.py, "CLOCKS ARE READ UNDER LOAD": on the alpha-0558 arm the same flag fired on 91% of vLLM rows above T=4096 while flagged and unflagged replicates of one cell timed at ratio 0.998). Every count and conclusion on this page is unchanged. Rows written after 00f3324 carry the LEVEL and DRIFT verdicts taken under load instead (`clock_level_ok`, `clock_drift_ok`).
 
 Section 2 is computed with them excluded, which is why its n is 3,225 rather than 4,410.
 Excluding them moves the PyTorch median from 1.59 to 1.62 and leaves vLLM and SGLang

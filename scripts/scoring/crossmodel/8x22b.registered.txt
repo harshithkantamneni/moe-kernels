@@ -1,0 +1,15 @@
+8x22b: mixtral-8x22b, docs/registered/2026-09-27-mixtral-8x22b-gh200.json, results/published/2026-09-28-nvidia_gh200_480gb-8x22b-session (ledger rows [10, 11, 12, 13, 14])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6] 346.4 band [340.0, 365.0] all-cell 346.4 HELD
+  floor r3f-g64.json             w2 n=[2, 3, 4, 6] 348.0 printed all-cell 348.0 printed
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6] 347.3 band [340.0, 365.0] all-cell 347.3 HELD
+  floor r3f-g64-lock1710.json    w2 n=[2, 3, 4, 6] 346.3 printed all-cell 346.3 printed
+  time from predicted bytes (scored): 40 cells rms 1.71% worst -4.73% beyond 5% 0
+  G>=8 SHARED slope n=2..6: G=8 0.9155, G=32 0.9141 (registered 0.927, band [0.908, 0.946])
+  bytes w1 all arms                                       216 cells rms 1.02% worst -5.43% beyond 5% 1
+  bytes w1 shared+private                                 144 cells rms 1.03% worst -5.43% beyond 5% 1
+  bytes private w1                                         72 cells rms 1.01% worst -5.43% beyond 5% 1
+  bytes private w2                                         72 cells rms 1.63% worst 5.34% beyond 5% 1
+  bytes shared w1                                          72 cells rms 1.05% worst 3.38% beyond 5% 0
+  bytes shared w2                                          68 cells rms 7.65% worst -32.87% beyond 5% 13
+  bytes shared+native w2 G<=16 n<=4                        48 cells rms 3.45% worst 6.70% beyond 5% 7
+  bytes named set (w1 S+P, PRIVATE w2, SHARED w2 G<=16 n<=4)  240 cells rms 1.60% worst 6.70% beyond 5% 5

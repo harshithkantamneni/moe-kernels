@@ -1,0 +1,5 @@
+INSTRUMENTED KERNEL C3 (stamps): 1 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u8-stq           qwen2-57b-a14b         128x128x64 w8 s3 G1 qwen2-57b-a14b-128g1 cells 8 (PT-n1-native, PW-n1-native, uniform-n1-native, balanced-n1-native, PT-n2-native, PW-n2-native, uniform-n2-native, balanced-n2-native) spec stamps=ends,evict_a=none,evict_b=none
+  3 warm-up and 3 stamped calls per cell, each held ahead; on a PASS regcheck and gate hard legs (PERTURBED on a timing FAIL alone)
+PERTURBED: the overhead gate for u8-stq reads FAIL; the stamps run and the pages are labelled PERTURBED, the measured overhead beside every reading (owner OD-1, 2026-10-26)
+STAMPS u8-stq: 48 launches, 0 failed; /home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-instr-qwen2-57b-a14b-stq

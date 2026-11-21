@@ -1,0 +1,13 @@
+R=/home/ubuntu/moe/results/2026-09-25-nvidia_gh200_480gb-r3-counters
+G=64 start 06:53:33
+G=64 rc=3 end 06:56:59
+G=1 start 06:56:59
+G=1 rc=3 end 07:00:24
+G=4 start 07:00:24
+G=4 rc=3 end 07:03:49
+G=2 start 07:03:49
+G=2 rc=3 end 07:07:14
+G=16 start 07:07:14
+G=16 rc=3 end 07:10:38
+analyse rc=3 07:10:40
+DONE

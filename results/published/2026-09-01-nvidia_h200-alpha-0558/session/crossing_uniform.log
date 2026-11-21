@@ -1,0 +1,67 @@
+
+[run_all] git
+d9190b2
+error: cannot pull with rebase: You have unstaged changes.
+error: Please commit or stash them.
+[run_all] pull skipped
+[run_all] WARNING: working tree is dirty; every row will be marked git_dirty
+
+[run_all] smoke: correctness and plumbing
+/workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+/workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'vllm_fused_moe' did not import: No module named 'vllm'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=base torch 2.13.0+cu130 / triton 3.7.1 gpu=NVIDIA H200
+[driver] wrote 16 rows -> /workspace/results/run_97b39480b2dd_base.csv
+[cli] run_id=97b39480b2dd elapsed=1.9s
+{"csv": "/workspace/results/run_97b39480b2dd_base.csv", "manifest": "/workspace/results/run_97b39480b2dd_base.manifest.jsonl", "run_id": "97b39480b2dd"}
+
+[run_all] sweep: profile=crossing-uniform envs=base,vllm,sglang
+[runner] base: /workspace/venvs/base/bin/python -m moe.bench.cli --env base --profile crossing-uniform --out-dir /workspace/results --groups reference,kernels,baselines --max-minutes 100 --run-id eeea4eaef73e
+[cli] env=base torch 2.13.0+cu130 / triton 3.7.1 gpu=NVIDIA H200
+[driver] wrote 1848 rows -> /workspace/results/run_eeea4eaef73e_base.csv
+[cli] run_id=eeea4eaef73e elapsed=1537.2s
+{"csv": "/workspace/results/run_eeea4eaef73e_base.csv", "manifest": "/workspace/results/run_eeea4eaef73e_base.manifest.jsonl", "run_id": "eeea4eaef73e"}
+[runner] vllm: /workspace/venvs/vllm/bin/python -m moe.bench.cli --env vllm --profile crossing-uniform --out-dir /workspace/results --groups reference,kernels,baselines --max-minutes 100 --run-id eeea4eaef73e
+[cli] env=vllm 0.27.1 gpu=NVIDIA H200
+INFO 09-01 22:53:47 [fused_moe.py:1148] Using configuration from /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=8,N=14336,device_name=NVIDIA_H200.json for MoE layer.
+INFO 09-01 22:56:45 [fused_moe.py:1148] Using configuration from /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=2560,device_name=NVIDIA_H200.json for MoE layer.
+WARNING 09-01 22:59:35 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1408,device_name=NVIDIA_H200.json
+WARNING 09-01 23:01:59 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=256,N=2048,device_name=NVIDIA_H200.json
+[driver] wrote 924 rows -> /workspace/results/run_eeea4eaef73e_vllm.csv
+[cli] run_id=eeea4eaef73e elapsed=714.7s
+{"csv": "/workspace/results/run_eeea4eaef73e_vllm.csv", "manifest": "/workspace/results/run_eeea4eaef73e_vllm.manifest.jsonl", "run_id": "eeea4eaef73e"}
+[runner] sglang: /workspace/venvs/sglang/bin/python -m moe.bench.cli --env sglang --profile crossing-uniform --out-dir /workspace/results --groups reference,kernels,baselines --max-minutes 100 --run-id eeea4eaef73e
+[cli] env=sglang 0.5.18 gpu=NVIDIA H200
+[driver] wrote 924 rows -> /workspace/results/run_eeea4eaef73e_sglang.csv
+[cli] run_id=eeea4eaef73e elapsed=774.5s
+{"csv": "/workspace/results/run_eeea4eaef73e_sglang.csv", "manifest": "/workspace/results/run_eeea4eaef73e_sglang.manifest.jsonl", "run_id": "eeea4eaef73e"}
+[runner] merged 3696 rows from 3 environment(s) -> /workspace/results/merged.csv
+
+[run_all] plots
+[plot] drawing every dtype present: bf16, fp8_e4m3
+/workspace/repo/scripts/plot.py:71: UserWarning: Tight layout not applied. The bottom and top margins cannot be made large enough to accommodate all Axes decorations.
+  fig.tight_layout()
+[plot] plots/roofline_bf16.png
+[plot] plots/scaling_deepseek-v2-lite_bf16.png
+[plot] plots/scaling_deepseek-v3_bf16.png
+[plot] plots/scaling_mixtral-8x7b_bf16.png
+[plot] plots/scaling_qwen2-57b-a14b_bf16.png
+[plot] plots/scaling_toy_bf16.png
+[plot] plots/imbalance_bf16.png
+[plot] plots/l2_absorption_bf16.png
+[plot] plots/roofline_fp8_e4m3.png
+[plot] plots/scaling_deepseek-v2-lite_fp8_e4m3.png
+[plot] plots/scaling_deepseek-v3_fp8_e4m3.png
+[plot] plots/scaling_mixtral-8x7b_fp8_e4m3.png
+[plot] plots/scaling_qwen2-57b-a14b_fp8_e4m3.png
+[plot] plots/imbalance_fp8_e4m3.png
+[plot] plots/l2_absorption_fp8_e4m3.png
+
+[run_all] summary
+  rows            73904
+  correctness ok  73904
+  THROTTLED ROWS  8513 (clocks dropped >5% mid-cell)
+  results in      /workspace/results
+
+[run_all] done. Stop or terminate the pod now; the volume keeps everything.

@@ -1,0 +1,88 @@
+WRITES TO   /workspace/session/20260901T214218Z/nsys
+THE SAMPLING ARITHMETIC, which needs no GPU and settles the shape of
+the answer before anything is run.
+
+  one 54 us launch at     10 kHz ->   0.54 samples, NOT usable
+  one 54 us launch at    100 kHz ->   5.40 samples, NOT usable
+  one 54 us launch at    200 kHz ->  10.80 samples, NOT usable
+
+So a single launch of the cell this study cares about cannot be measured
+at any rate nsys offers. Back-to-back launches merged into one window:
+
+      1.0 ms contiguous at 10 kHz ->     10.0 samples, edge 20.00%, alpha to +/-0.3116
+     10.0 ms contiguous at 10 kHz ->    100.0 samples, edge  2.00%, alpha to +/-0.0312
+    100.0 ms contiguous at 10 kHz ->   1000.0 samples, edge  0.20%, alpha to +/-0.0031
+   1000.0 ms contiguous at 10 kHz ->  10000.0 samples, edge  0.02%, alpha to +/-0.0003
+
+and the SAME 10 ms of kernel time profiled as separate windows rather than merged:
+
+      1 window(s) over 10 ms total -> edge    2.00%, usable
+     10 window(s) over 10 ms total -> edge   20.00%, NOT usable
+    100 window(s) over 10 ms total -> edge  200.00%, NOT usable
+   1000 window(s) over 10 ms total -> edge 2000.00%, NOT usable
+
+The edge term is per WINDOW. Adding launches without merging them buys
+samples and no accuracy, which is the single thing to get right in the
+workload design and the reason every workload here goes idle before its
+timed loop and never synchronises inside it.
+
+WHAT PRECISION THE STUDY NEEDS, at two M-tiles per expert:
+  tell alpha=0.558 from the retracted 0.10   traffic to 17%
+  pin alpha to +/-0.05                        traffic to 3.2%
+
+and what a given traffic precision buys, per M-tile count:
+  traffic err |  n=2     n=4     n=8     n=16  
+      2.0%    |   0.031   0.018   0.014   0.012
+      5.0%    |   0.078   0.045   0.035   0.031
+     10.0%    |   0.156   0.089   0.070   0.062
+     20.0%    |   0.312   0.178   0.140   0.125
+More tiles per expert always gives a SHARPER alpha, so a probe that cannot
+resolve a two-tile cell may still resolve an eight-tile one.
+
+WHAT IS INSTALLED
+  nsys        /usr/bin/nsys
+  version     2022.4.2   (NVIDIA Nsight Systems version 2022.4.2.50-32196742v0)
+  device      NVIDIA H200
+  flags       device=--gpu-metrics-device set=--gpu-metrics-set frequency=--gpu-metrics-frequency
+  offered     --gpu-metrics-device, --gpu-metrics-frequency, --gpu-metrics-set
+  metric sets 7 listed, chosen gh100
+  neighbours  none
+
+THE LADDER, at 200 kHz, 1.5 s of stream per attempt
+
+  [no] --gpu-metrics-device=all with --gpu-metrics-set=gh100 at 200 kHz
+    argv     /usr/bin/nsys profile --force-overwrite true --trace cuda --sample none --cpuctxsw none --gpu-metrics-device=all --gpu-metrics-frequency=200000 --gpu-metrics-set=gh100 --output /workspace/session/20260901T214218Z/nsys/probe-0 /workspace/venvs/base/bin/python /workspace/repo/scripts/nsys_dram_probe.py --workload stream --seconds 1.5 --buffer-mb 2048.0
+    exit     0 in 8.7s (no recognised cause in the output)
+    verdict  no report file was written
+
+  [no] --gpu-metrics-device=all at 200 kHz, nsys picks the set
+    argv     /usr/bin/nsys profile --force-overwrite true --trace cuda --sample none --cpuctxsw none --gpu-metrics-device=all --gpu-metrics-frequency=200000 --output /workspace/session/20260901T214218Z/nsys/probe-1 /workspace/venvs/base/bin/python /workspace/repo/scripts/nsys_dram_probe.py --workload stream --seconds 1.5 --buffer-mb 2048.0
+    exit     0 in 8.9s (no recognised cause in the output)
+    verdict  no report file was written
+
+  [no] --gpu-metrics-device=0, in case `all` is the part that is refused
+    argv     /usr/bin/nsys profile --force-overwrite true --trace cuda --sample none --cpuctxsw none --gpu-metrics-device=0 --gpu-metrics-frequency=200000 --output /workspace/session/20260901T214218Z/nsys/probe-2 /workspace/venvs/base/bin/python /workspace/repo/scripts/nsys_dram_probe.py --workload stream --seconds 1.5 --buffer-mb 2048.0
+    exit     0 in 9.3s (no recognised cause in the output)
+    verdict  no report file was written
+
+  [no] --gpu-metrics-device=all at the nsys default 10 kHz, in case the rate is what is refused
+    argv     /usr/bin/nsys profile --force-overwrite true --trace cuda --sample none --cpuctxsw none --gpu-metrics-device=all --gpu-metrics-frequency=10000 --output /workspace/session/20260901T214218Z/nsys/probe-3 /workspace/venvs/base/bin/python /workspace/repo/scripts/nsys_dram_probe.py --workload stream --seconds 1.5 --buffer-mb 2048.0
+    exit     0 in 9.4s (no recognised cause in the output)
+    verdict  no report file was written
+
+  [no] --gpu-metrics-devices=all, the other spelling, in case --help under-reports
+    argv     /usr/bin/nsys profile --force-overwrite true --trace cuda --sample none --cpuctxsw none --gpu-metrics-devices=all --output /workspace/session/20260901T214218Z/nsys/probe-4 /workspace/venvs/base/bin/python /workspace/repo/scripts/nsys_dram_probe.py --workload stream --seconds 1.5 --buffer-mb 2048.0
+    exit     1 in 0.0s (no recognised cause in the output)
+    verdict  no report file was written
+    stderr   unrecognised option '--gpu-metrics-devices=all'
+             usage: nsys profile [<args>] [application] [<application args>]
+             Try 'nsys profile --help' for more information.
+
+  [no] no gpu metrics at all: the CONTROL, which says whether nsys itself works here
+    argv     /usr/bin/nsys profile --force-overwrite true --trace cuda --sample none --cpuctxsw none --output /workspace/session/20260901T214218Z/nsys/probe-5 /workspace/venvs/base/bin/python /workspace/repo/scripts/nsys_dram_probe.py --workload stream --seconds 1.5 --buffer-mb 2048.0
+    exit     0 in 8.6s (no recognised cause in the output)
+    verdict  no report file was written
+
+VERDICT: NO. No invocation of this nsys sampled a DRAM metric on this device. The open path in docs/FINDINGS.md is now a closed one for this pod, and DRAM traffic stays modelled rather than counted. The control attempt above says whether nsys itself works here, which separates 'no sampler' from 'no nsys'.
+
+elapsed 45s, report /workspace/session/20260901T214218Z/nsys/probe.json

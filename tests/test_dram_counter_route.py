@@ -1,0 +1,5172 @@
+"""Tests for scripts/dram_counter_route.py.
+
+Three things are worth testing here and they are different in kind.
+
+  1. THE ARITHMETIC. `alpha = (dR/dn - a) / W` must return the alpha that
+     generated the data, and the bracket must contain it. Both are exact, so
+     both are tested to machine precision rather than to a tolerance.
+  2. THE PINNED CONSTANTS. Every prediction rests on `W` and `a`, which are
+     imported from `block_m_crossing_sweep` rather than re-derived. If that byte
+     model moves, this file's predictions move silently with it, so the numbers
+     are pinned here and a change has to be acknowledged.
+  3. THE REFUSALS. A scorer that returns 0.0 for something it never measured is
+     worse than one that crashes. Each refusal path is asserted to raise or to
+     report REFUSE, never to produce a number.
+"""
+from __future__ import annotations
+
+import json
+import math
+import re
+import statistics
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+import scripts.dram_counter_route as DCR
+from moe.bench import counter_probe_kernel as PK
+from moe.bench import exit_codes
+from moe.bench import provenance as PV
+from moe.spec import MODEL_CONFIGS
+from scripts.dram_counter_route import (
+    A100_REPORT,
+    C1_TOLERANCE,
+    CALL_MARKER,
+    CONTRAST_INSTRUMENT,
+    CONTRAST_TOLERANCE,
+    COUNTER_ROW_KEYS,
+    COUNTER_SCHEMA_TEXT,
+    COUNTER_TOP_KEYS,
+    DATASHEET_PEAK_GBPS,
+    DEFAULT_REPORT,
+    FAIL,
+    GAPS_SESSION,
+    INSTRUMENT,
+    NCU_METRICS,
+    NO_CARD,
+    PASS,
+    PROBE_INSTRUMENT,
+    REFUSE,
+    RUN_INSTRUMENT,
+    Anchors,
+    CorpusMissing,
+    CounterRunRefused,
+    activation_bytes_per_tile,
+    alpha_from_counters,
+    anchor_cap_bracket,
+    anchors_from_points,
+    bracket_directory,
+    build_counter_payload,
+    build_parser,
+    c1_registration,
+    canned_ncu_csv,
+    cap_from_counter,
+    card_key,
+    contrast_pairs,
+    contrast_plan,
+    contrast_rows,
+    corpus_knobs,
+    corpus_slope,
+    counter_route_is_open,
+    discrimination,
+    git_visibility,
+    main,
+    measured_bandwidth_gbps,
+    measured_dr_dn,
+    measured_ridge,
+    ncu_argv,
+    normalise_per_call,
+    occupancy_block_n,
+    ols,
+    one_run_dir,
+    parse_ncu_csv,
+    physical_bracket,
+    plan_id,
+    predicted_read_bytes,
+    probe_capabilities,
+    probe_kernel_word,
+    route_verdict,
+    run_id_for,
+    score_counter_run,
+    stamped,
+    sweep_argv,
+    synthetic_counter_payload,
+    weight_bytes_total,
+    weight_stream_ms,
+)
+
+MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
+REPO = Path(__file__).resolve().parents[1]
+
+
+# --------------------------------------------------------------------------
+# 2. The pinned constants.
+# --------------------------------------------------------------------------
+
+def test_weight_bytes_are_pinned():
+    """`E x 3 F H x 2` for mixtral, to the byte.
+
+    2.81857 GB is the number every prediction in the plan divides by. If this
+    assertion ever fails the byte model changed and every registered prediction
+    in docs/COUNTERS.md is stale, which is exactly what the test is for.
+    """
+    assert weight_bytes_total(MIXTRAL) == 8 * 3 * 14336 * 4096 * 2
+    assert weight_bytes_total(MIXTRAL) == 2_818_572_288
+
+
+def test_activation_bytes_per_tile_are_pinned():
+    """`E x BM x (2H + 3F) x 2`, and linear in BLOCK_M."""
+    assert activation_bytes_per_tile(MIXTRAL, 32) == 8 * 32 * (2 * 4096 + 3 * 14336) * 2
+    assert activation_bytes_per_tile(MIXTRAL, 32) == 26_214_400
+    assert activation_bytes_per_tile(MIXTRAL, 64) == 2 * activation_bytes_per_tile(MIXTRAL, 32)
+
+
+def test_datasheet_peaks_carry_only_known_cards():
+    """No default entry. Bracketing an unknown card against a guessed pin rate
+    is the same class of error as the stale ridge already in the reports."""
+    assert set(DATASHEET_PEAK_GBPS) == {"nvidia_a100_sxm4_80gb", "nvidia_h200"}
+    assert DATASHEET_PEAK_GBPS["nvidia_h200"] == 4800.0
+
+
+# --------------------------------------------------------------------------
+# 1. The arithmetic.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("planted", [0.0, 0.1, 0.4522, 0.558, 0.705, 1.0])
+def test_alpha_recovered_exactly_from_synthetic_traffic(planted):
+    rows = [{"n": n, "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, planted)}
+            for n in (1, 2, 3, 4, 6, 8)]
+    alpha, _, resid = alpha_from_counters(rows, MIXTRAL, 32)
+    assert alpha == pytest.approx(planted, abs=1e-12)
+    assert resid < 1e-12
+
+
+def test_alpha_is_independent_of_the_bandwidth_the_data_was_generated_at():
+    """The whole argument for the counter: the estimator has no bandwidth in it.
+
+    Two ladders generated at the same alpha but different achieved bandwidths
+    give the same answer, which is not true of any timing-based estimator in
+    this study.
+    """
+    rows = [{"n": n, "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, 0.6)}
+            for n in (1, 2, 4, 8)]
+    a1, _, _ = alpha_from_counters(rows, MIXTRAL, 32)
+    scaled = [{"n": r["n"], "dram_bytes_read": r["dram_bytes_read"]} for r in rows]
+    a2, _, _ = alpha_from_counters(scaled, MIXTRAL, 32)
+    assert a1 == pytest.approx(a2)
+
+
+def test_n1_traffic_is_identical_under_every_anchor():
+    """The trap the plan is built around: R(1) discriminates nothing.
+
+    If this ever stops being true the plan's claim/validity split is wrong and
+    the n=1 gate would silently become a claim gate.
+    """
+    at_one = {a: predicted_read_bytes(MIXTRAL, 32, 1, a) for a in (0.452, 0.647, 0.705)}
+    assert len(set(round(v, 6) for v in at_one.values())) == 1
+    table = discrimination(MIXTRAL, 32, (1, 2, 8), {"a": 0.452, "b": 0.705})
+    assert table[0]["spread_frac"] == pytest.approx(0.0)
+    assert table[-1]["spread_frac"] > 0.4       # n=8 separates them by over 40%
+
+
+def test_physical_bracket_contains_the_ladder_that_generated_it():
+    """Generate a ladder at a known alpha and a known achieved bandwidth; the
+    bracket must contain the UNCORRECTED alpha that ladder reports."""
+    W = weight_bytes_total(MIXTRAL)
+    a1 = activation_bytes_per_tile(MIXTRAL, 32)
+    for planted in (0.30, 0.558, 0.90):
+        for achieved in (900.0, 1450.0, 2000.0):
+            times = [1e3 * predicted_read_bytes(MIXTRAL, 32, n, planted) / (achieved * 1e9)
+                     for n in (1, 2, 3, 4)]
+            _, slope = ols([1, 2, 3, 4], times)
+            lo, hi = physical_bracket(slope, times[0], W, a1, 2039.0)
+            uncorrected = (W * planted + a1) / (W + a1)
+            assert lo - 1e-12 <= uncorrected <= hi + 1e-12
+            assert lo <= hi
+
+
+def test_bracket_is_tighter_when_the_kernel_runs_closer_to_peak():
+    """The bracket's width is the price of not having a counter, and it is set
+    by how far from the pin rate the n=1 launch runs. A cell at 95% of peak is
+    nearly pinned; one at 30% is nearly uninformative."""
+    W = weight_bytes_total(MIXTRAL)
+    a1 = activation_bytes_per_tile(MIXTRAL, 32)
+    widths = []
+    for achieved in (600.0, 1450.0, 1950.0):
+        times = [1e3 * predicted_read_bytes(MIXTRAL, 32, n, 0.6) / (achieved * 1e9)
+                 for n in (1, 2, 3, 4)]
+        _, slope = ols([1, 2, 3, 4], times)
+        lo, hi = physical_bracket(slope, times[0], W, a1, 2039.0)
+        widths.append(hi - lo)
+    assert widths[0] > widths[1] > widths[2]
+
+
+def test_anchors_disagree_on_a_ladder_whose_first_tread_is_elevated():
+    """The mechanism the evaluation identified, reproduced synthetically.
+
+    Push t(1) up by 30% and leave the rest of the branch alone: the published
+    A+B anchor rises, the t(1) anchor falls, and the n>=3 anchor rises further.
+    A test that only checked "the three functions return floats" would pass on
+    an implementation where all three were the same number.
+    """
+    clean = [(n, 0.5 + 0.9 * n) for n in range(1, 9)]
+    anc = anchors_from_points(clean, len(clean))
+    assert anc.published == pytest.approx(anc.t1, rel=1e-9)
+    assert anc.n3 == pytest.approx(anc.published, rel=1e-9)
+
+    lifted = [(1, clean[0][1] * 1.30), *clean[1:]]
+    anc2 = anchors_from_points(lifted, len(lifted))
+    assert anc2.t1 < anc2.published < anc2.n3
+
+
+# --------------------------------------------------------------------------
+# 3. The refusals and the non-vacuity checks.
+# --------------------------------------------------------------------------
+
+def test_ols_refuses_rather_than_inventing_a_line():
+    with pytest.raises(ValueError):
+        ols([1], [2.0])
+    with pytest.raises(ValueError):
+        ols([3, 3, 3], [1.0, 2.0, 3.0])
+
+
+def test_alpha_from_counters_refuses_two_distinct_tile_counts():
+    rows = [{"n": 1, "dram_bytes_read": 1e9}, {"n": 1, "dram_bytes_read": 1e9},
+            {"n": 2, "dram_bytes_read": 2e9}]
+    with pytest.raises(ValueError):
+        alpha_from_counters(rows, MIXTRAL, 32)
+
+
+def test_anchors_refuse_a_two_tread_branch():
+    with pytest.raises(ValueError):
+        anchors_from_points([(1, 1.0), (2, 2.0)], 2)
+
+
+def test_physical_bracket_refuses_a_non_positive_constant():
+    # A zero slope is NOT a refusal: it means an extra tile cost no traffic,
+    # which is a measurable alpha of zero. Only the constants that make the
+    # bracket meaningless are refused.
+    for bad in ((1.0, 0.0, 1, 1, 2039.0),      # no measured t(1)
+                (1.0, 1.0, 0, 1, 2039.0),      # no weight set
+                (1.0, 1.0, 1, 1, 0.0)):        # no pin rate for this card
+        with pytest.raises(ValueError):
+            physical_bracket(*bad)
+    assert physical_bracket(0.0, 1.0, 1, 1, 2039.0)[0] == 0.0
+
+
+def test_card_key_returns_none_for_an_unknown_directory():
+    assert card_key(Path("2026-09-02-nvidia_b200-alpha-surface-s3")) is None
+    assert card_key(Path("2026-09-02-nvidia_h200-alpha-surface-s4")) == "nvidia_h200"
+
+
+def test_bracket_directory_refuses_an_unknown_card(tmp_path):
+    d = tmp_path / "2026-09-02-nvidia_b200-alpha-surface"
+    d.mkdir()
+    with pytest.raises(ValueError):
+        bracket_directory(d)
+
+
+def test_score_counter_run_refuses_a_partial_payload():
+    with pytest.raises(KeyError):
+        score_counter_run({"device": "x", "model": "mixtral-8x7b", "block_m": 32})
+
+
+def test_non_vacuity_gate_fires_on_an_empty_run():
+    """A run that profiled nothing must FAIL loudly, not report alpha 0.0."""
+    payload = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
+               "block_m": 32, "cache_control": "all",
+               "rows": [{"n": 1, "launches": 0, "dram_bytes_read": 0.0}]}
+    gates, summary = score_counter_run(payload)
+    assert gates[0].number == "V1" and gates[0].verdict == FAIL
+    assert summary["alpha"] is None
+
+
+def test_gates_refuse_rather_than_default_when_ridge_or_bracket_are_absent():
+    rows = [{"n": n, "launches": 5,
+             "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, 0.5)}
+            for n in (1, 2, 3, 4)]
+    payload = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
+               "block_m": 32, "cache_control": "all", "rows": rows}
+    gates, _ = score_counter_run(payload)
+    by = {g.number: g for g in gates}
+    assert by["C2"].verdict == REFUSE
+    assert by["C3"].verdict == REFUSE
+    assert by["C2"].invalidates and by["C3"].invalidates
+
+
+def test_full_scoring_picks_the_single_surviving_anchor():
+    truth = 0.47
+    rows = [{"n": n, "launches": 5,
+             "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, truth)}
+            for n in (1, 2, 3, 4, 6, 8)]
+    payload = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
+               "block_m": 32, "cache_control": "all", "ridge": 145.81,
+               "anchors": {"published": 0.6473, "t1": 0.4522, "n3": 0.7047},
+               "bracket": [0.4522, 0.6313], "rows": rows}
+    gates, summary = score_counter_run(payload)
+    assert summary["alpha"] == pytest.approx(truth)
+    assert summary["survivors"] == ["t1"]
+    assert all(g.verdict == PASS for g in gates)
+
+
+def test_byte_model_gate_fails_when_n1_traffic_is_wrong():
+    """The gate that has never been run: if R(1) is not one weight read, alpha
+    is not a re-read fraction and every published number loses its units."""
+    rows = [{"n": n, "launches": 5,
+             "dram_bytes_read": 1.7 * predicted_read_bytes(MIXTRAL, 32, n, 0.5)}
+            for n in (1, 2, 3, 4)]
+    payload = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
+               "block_m": 32, "cache_control": "all", "rows": rows}
+    gates = {g.number: g for g in score_counter_run(payload)[0]}
+    assert gates["V2"].verdict == FAIL
+    assert "units of alpha" in gates["V2"].invalidates
+
+
+def test_tile_cap_gate_fails_only_below_the_block_specific_threshold():
+    """The cap a counter alpha implies is `2 BM W / (b dR/dn)`, with the
+    once-read share a/W restored, so `cap < ridge` is `alpha > BM/ridge - a/W`:
+    0.210 at BLOCK_M=32 and 0.420 at 64 on the A100's own ridge (a/W is 0.0093
+    and 0.0186). A single hardcoded threshold would pass one and silently
+    misjudge the other, and the study's `2 BM / (alpha b)` reading, which drops
+    a/W, would put an alpha between the two thresholds on the wrong side.
+    """
+    def gate(bm, alpha, **extra):
+        rows = [{"n": n, "launches": 5,
+                 "dram_bytes_read": predicted_read_bytes(MIXTRAL, bm, n, alpha)}
+                for n in (1, 2, 3, 4)]
+        payload = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
+                   "block_m": bm, "cache_control": "all", "ridge": 145.81,
+                   "rows": rows, **extra}
+        return {g.number: g for g in score_counter_run(payload)[0]}["C3"]
+
+    def run(bm, alpha):
+        return gate(bm, alpha).verdict
+
+    assert run(32, 0.30) == PASS      # 0.30 > 0.210, the cap holds
+    assert run(32, 0.15) == FAIL      # below it, the cap claim would be withdrawn
+    assert run(64, 0.50) == PASS      # 0.50 > 0.420
+    assert run(64, 0.30) == FAIL
+
+    # THE FLIP. An alpha just under the uncorrected threshold BM/ridge = 0.2195
+    # but above the corrected one: `2 BM / (alpha b)` = 146.3 says the tile
+    # reaches the ridge; the measured slope's cap, 139.9, says it does not.
+    a_over_w = activation_bytes_per_tile(MIXTRAL, 32) / weight_bytes_total(MIXTRAL)
+    boundary = 32 / 145.81 - a_over_w / 2
+    cap, uncorrected = cap_from_counter(MIXTRAL, 32, boundary)
+    assert uncorrected > 145.81 > cap
+    assert run(32, boundary) == PASS
+    # ...and the gate says which number decided it and what the other one is.
+    g = gate(32, boundary)
+    assert f"cap {cap:.1f}" in g.measured and f"upper bound {uncorrected:.1f}" in g.measured
+    assert any("UPPER BOUND" in line for line in g.lines)
+    assert any("no level in it" in line for line in g.lines)
+
+
+def test_the_counter_cap_is_finite_at_alpha_zero_and_below_the_uncorrected_reading():
+    """`ai_cap` is infinite at alpha = 0 because it names only the weight
+    re-read; a tile still carries its own activations, so the traffic slope's
+    cap is finite. And at every alpha the corrected cap is below the study's
+    reading by exactly the once-read share."""
+    cap0, unc0 = cap_from_counter(MIXTRAL, 32, 0.0)
+    assert math.isinf(unc0) and math.isfinite(cap0)
+    a_over_w = activation_bytes_per_tile(MIXTRAL, 32) / weight_bytes_total(MIXTRAL)
+    for alpha in (0.05, 0.3, 0.558, 1.0):
+        cap, unc = cap_from_counter(MIXTRAL, 32, alpha)
+        assert cap < unc
+        assert cap == pytest.approx(32.0 / (alpha + a_over_w))
+    with pytest.raises(ValueError, match="not positive"):
+        cap_from_counter(MIXTRAL, 32, -1.0)
+
+
+def test_the_registered_anchors_are_bracketed_through_cap_from_fitted():
+    """The anchors are B/(A+B) LADDER fits, so the cap each implies is the
+    study's reading divided by (1 + phi + delta), retraction (a), and with
+    alpha_a unmeasured that is a bracket: alpha_a = 1 is the low end, alpha_a = 0
+    the high end, delta = 0 the generous end, and both ends sit below the
+    uncorrected figure. An anchor too small for the alpha_a = 1 end is
+    REFUSED at that end rather than clamped."""
+    br = anchor_cap_bracket(MIXTRAL, 32, 64, 0.647)
+    assert br.low is not None and br.high is not None
+    assert br.low < br.high < br.uncorrected == pytest.approx(32 / 0.647)
+    assert br.high == pytest.approx(br.uncorrected / (1 + 0.0089), rel=1e-3)
+    assert br.low == pytest.approx(br.uncorrected / (1 + 0.5078), rel=1e-3)
+    assert not br.refused
+    # phi/(1+phi) at alpha_a = 1 is 0.337: a fitted 0.30 cannot have come from
+    # the three-term model with a full activation re-read.
+    low = anchor_cap_bracket(MIXTRAL, 32, 64, 0.30)
+    assert low.low is None and low.high is not None
+    assert "alpha_a=1" in low.refused and "REFUSED" in low.render()
+
+    # On the gate: with block_n the anchors are bracketed, without it the line
+    # says so rather than assuming the sweep's 64.
+    rows = [{"n": n, "launches": 5,
+             "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, 0.5)}
+            for n in (1, 2, 3, 4)]
+    base = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
+            "block_m": 32, "cache_control": "all", "ridge": 145.81, "rows": rows,
+            "anchors": {"published": 0.6473, "t1": 0.4522, "n3": 0.7047}}
+    with_bn = {g.number: g for g in score_counter_run({**base, "block_n": 64})[0]}["C3"]
+    assert sum("alpha_a=1" in line for line in with_bn.lines) == 3
+    without = {g.number: g for g in score_counter_run(base)[0]}["C3"]
+    assert any("REFUSED rather than assumed 64" in line for line in without.lines)
+
+
+# --------------------------------------------------------------------------
+# The route probe, off the box.
+# --------------------------------------------------------------------------
+
+def test_probe_capabilities_never_guesses():
+    """On a machine with no /proc it must say so, not report sys_admin False --
+    "no evidence" and "the capability is absent" are different answers."""
+    caps = probe_capabilities()
+    assert "available" in caps
+    if not caps["available"]:
+        assert "sys_admin" not in caps
+
+
+def test_probe_capabilities_reads_both_counter_bits():
+    """CAP_PERFMON as well as CAP_SYS_ADMIN, because either opens the gate.
+
+    Until 2026-09-15 only bit 21 was read, so a container holding the weaker
+    capability that would have sufficed was reported identically to one holding
+    nothing, and the operator was sent to ask for the capability providers
+    refuse.
+
+    THE WIDTH IS READ OFF THE RAW FIELD AND THIS TEST READS THE SAME FIELD.
+    A first draft asserted `cap_eff_bits == 4 * len(cap_eff) - 8`, deriving the
+    width from `hex(mask)`, which strips leading zeros. Linux prints `CapEff`
+    in sixteen digits, so that assertion is 64 == 32 on every Linux box and
+    could only ever have passed here, where there is no `/proc/self/status` and
+    the branch does not run. The relation the code implements is against the
+    FIELD, so this reads the field.
+    """
+    caps = probe_capabilities()
+    if not caps["available"]:
+        assert "perfmon" not in caps
+        return
+    assert set(caps) == {"available", "cap_eff", "cap_eff_field", "cap_eff_bits",
+                         "sys_admin", "perfmon"}
+    field = next(line.split()[1] for line in
+                 Path("/proc/self/status").read_text().splitlines()
+                 if line.startswith("CapEff:"))
+    assert caps["cap_eff_field"] == field
+    assert caps["cap_eff_bits"] == 4 * len(field)
+    mask = int(field, 16)
+    assert int(caps["cap_eff"], 16) == mask
+    assert caps["perfmon"] is bool(mask >> 38 & 1)
+    assert caps["sys_admin"] is bool(mask >> 21 & 1)
+
+
+def test_route_verdict_distinguishes_the_four_failures():
+    open_ = route_verdict({}, {}, {"present": True, "counters_read": True,
+                                   "metric": NCU_METRICS[0], "metric_value": 4.19e6,
+                                   "cause": "counters readable: ..."},
+                          {"present": True, "importer_present": True})
+    assert open_[0] == "OPEN"
+
+    blocked_cap = route_verdict({"available": True, "sys_admin": False, "perfmon": False,
+                                 "cap_eff": "0xa80425fb",
+                                 "cap_eff_field": "00000000a80425fb",
+                                 "cap_eff_bits": 64},
+                                {"available": True, "restrict": 1},
+                                {"present": True, "counters_read": False,
+                                 "permission_refused": True,
+                                 "cause": "ERR_NVGPUCTRPERM: counters gated"},
+                                {"present": True, "importer_present": True})
+    assert blocked_cap[0] == "BLOCKED"
+    assert any("SYS_ADMIN" in n and "PERFMON" in n for n in blocked_cap[1])
+    assert any("RestrictProfilingToAdminUsers=1" in n for n in blocked_cap[1])
+    # The narrower ask is named first, because it is the one a provider grants.
+    ask = next(n for n in blocked_cap[1] if "PERFMON" in n and "SYS_ADMIN" in n)
+    assert ask.index("--cap-add=PERFMON") < ask.index("--cap-add=SYS_ADMIN")
+    # THE MASK IS REPORTED, AND NOT A CLAIM ABOUT ITS WIDTH. A note saying the
+    # field "cannot represent bit 38" stood here until 2026-09-15 and could
+    # never fire: `cap_eff_bits` is the width of the raw /proc field, which
+    # Linux prints as sixteen digits whatever the value, so the guard
+    # `cap_eff_bits <= 38` was reachable only from a hand-built dict like this
+    # one. `perfmon` is a measurement of bit 38 on any real box.
+    mask_note = next(n for n in blocked_cap[1] if "capability mask read" in n)
+    assert "00000000a80425fb" in mask_note and "64 bits" in mask_note
+    assert "bit 38) is clear" in mask_note and "bit 21) is clear" in mask_note
+    assert not any("cannot represent" in n for n in blocked_cap[1])
+
+    # The combination that means "stop retrying and read the output".
+    odd = route_verdict({"available": True, "sys_admin": False, "perfmon": True},
+                        {"available": True, "restrict": 0},
+                        {"present": True, "counters_read": False,
+                         "permission_refused": True,
+                         "cause": "ERR_NVGPUCTRPERM: counters gated"},
+                        {"present": True, "importer_present": True})
+    assert odd[0] == "BLOCKED"
+    assert any("ALREADY allows" in n for n in odd[1])
+
+    # The pod's actual failure: nsys present, importer absent, no ncu at all.
+    importer = route_verdict({}, {}, {"present": False, "why": "no ncu on PATH"},
+                             {"present": True, "importer_present": False})
+    assert importer[0] == "REFUSE"
+    assert any("its importer" in n for n in importer[1])
+
+
+def test_a_box_with_no_cuda_device_refuses_and_does_not_report_blocked():
+    """"We could not ask" is not "the answer is no".
+
+    BLOCKED is CLAIM_FAIL, which the ledger files as a FINDING and never
+    retries. A box where the probe interpreter could not launch a kernel has
+    established nothing about counter permission, so it must land in REFUSE,
+    which scores no gate at all.
+    """
+    for word in (PK.NO_TORCH, PK.NO_CUDA_DEVICE, PK.LAUNCH_FAILED, "NO_MARKER"):
+        verdict, notes = route_verdict(
+            {"available": True, "sys_admin": False, "perfmon": False},
+            {"available": False, "why": "no params file"},
+            {"present": True, "counters_read": False, "probe_kernel": word,
+             "probe_kernel_detail": "planted",
+             "cause": "no CUDA device at all: planted"},
+            {"present": True, "importer_present": True})
+        assert verdict == REFUSE, word
+        assert any("UNTESTED" in n for n in notes), word
+
+
+# --------------------------------------------------------------------------
+# The probe kernel, and the /bin/true defect it replaces.
+# --------------------------------------------------------------------------
+
+def _code_strings(text: str) -> set[str]:
+    """Every string constant this module EXECUTES, docstrings excluded."""
+    import ast
+    tree = ast.parse(text)
+    docstrings = {id(node.value) for node in ast.walk(tree)
+                  if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+                  and isinstance(node.value.value, str)}
+    return {node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and id(node) not in docstrings}
+
+
+def _plant_ncu(monkeypatch, *, log: str, stdout: str = "", rc: int = 0):
+    """Stand in for one `ncu` invocation: write `log` where --log-file says."""
+    import scripts.dram_counter_route as DCR
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: f"/usr/bin/{name}-stub")
+    seen: list[list[str]] = []
+
+    def fake_run(argv, timeout=60):
+        del timeout
+        seen.append(list(argv))
+        if "--version" in argv:
+            return 0, "ncu 2025.1.1.0\n", ""
+        Path(argv[argv.index("--log-file") + 1]).write_text(log)
+        return rc, stdout, ""
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    return seen
+
+
+def test_the_probe_profiles_a_real_kernel_and_bin_true_is_gone(monkeypatch):
+    """THE DEFECT, pinned in the shape a grep cannot drift past.
+
+    `ncu --metrics <m> /bin/true` launches no CUDA kernel, so the permission
+    check never happens and ncu exits 0 having read nothing. The probe must run
+    a real file on disk that launches a kernel, and `/bin/true` must not survive
+    as an executable string anywhere in this script.
+
+    PARSED, NOT GREPPED. The prose in this file names `/bin/true` on purpose --
+    it is the incident this probe was rewritten against, and a test that
+    forbade the word would forbid recording why. So the check is over the
+    module's string CONSTANTS with its docstrings removed: a comment or a
+    docstring may say it, code may not.
+    """
+    import scripts.dram_counter_route as DCR
+    assert "/bin/true" not in _code_strings(Path(DCR.__file__).read_text())
+    seen = _plant_ncu(monkeypatch, log=canned_ncu_csv(
+        calls=1, read_per_call=4.19e6, write_per_call=4.19e6,
+        hit_pct=1.0, ns_per_call=1e5))
+    info = DCR.probe_ncu()
+    argv = next(a for a in seen if "--version" not in a)
+    assert argv[-1] == str(DCR.NCU_PROBE_KERNEL)
+    assert Path(argv[-1]).exists(), "the probe kernel is a real file on disk"
+    assert argv[-2] == DCR.sys.executable
+    assert "--launch-count" in argv and argv[argv.index("--launch-count") + 1] == "1"
+    assert "--csv" in argv and "--page" in argv and "raw" in argv
+    assert info["counters_read"] is True
+
+
+def test_the_probe_reports_open_only_when_a_number_came_back(monkeypatch):
+    """A NUMBER, not a positive one.
+
+    The question is whether the driver let ncu report the counter, and a
+    counter that honestly reads 0 for a launch has been reported. Requiring a
+    positive value would make the verdict depend on which launch ncu picked,
+    which is the kind of coupling that put `/bin/true` in here.
+    """
+    log = canned_ncu_csv(calls=1, read_per_call=4.19e6, write_per_call=1.0,
+                         hit_pct=2.0, ns_per_call=1e5)
+    _plant_ncu(monkeypatch, log=log, stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    import scripts.dram_counter_route as DCR
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is True
+    assert info["metric"] == NCU_METRICS[0]
+    assert isinstance(info["metric_value"], float)
+    assert info["cause"].startswith("counters readable")
+    assert counter_route_is_open(info)
+
+
+def test_a_counter_that_read_zero_is_a_reading_and_the_route_is_open(monkeypatch):
+    """The value the test above is NAMED for, and nothing planted it until now.
+
+    `test_the_probe_reports_open_only_when_a_number_came_back` plants 4.19e6, a
+    positive value, so the property its docstring argues for -- that ZERO is a
+    reading -- was pinned by nothing, and a `values[0] > 0` hardening would
+    have passed the whole suite. It matters on the real pod: `--launch-count 1`
+    profiles the FIRST launch, and a write-only launch reads no DRAM at all, so
+    a legitimate 0 is a shape this probe can actually see.
+    """
+    log = ('"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
+           '"0","probe","dram__bytes_read.sum","byte","0"\n')
+    _plant_ncu(monkeypatch, log=log, stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    import scripts.dram_counter_route as DCR
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is True
+    assert info["metric_value"] == 0.0
+    assert counter_route_is_open(info)
+    assert route_verdict({}, {}, info, {"present": True, "importer_present": True})[0] \
+        == "OPEN"
+
+
+def test_the_self_test_scores_the_probe_worlds_off_gpu():
+    """`--self-test` is the pod's only off-GPU check of the logic that gates
+    240 booked minutes, and it had no probe section until 2026-09-15: the
+    verdict logic was exercised only by this file, which the pod never runs,
+    while `arm_verify counter_plan` named `--dry-run` and `--bracket`.
+
+    The planted worlds go through the SAME `probe_reading` the live probe hands
+    its child's bytes to, so this is not a second copy of the rules."""
+    rows = DCR.self_test_probe()
+    assert len(rows) == 5
+    assert all(passed for _label, passed, _detail in rows), rows
+    details = " ".join(d for _l, _p, d in rows)
+    assert "verdict OPEN exit 0" in details
+    assert "verdict BLOCKED exit 1" in details
+    assert "verdict REFUSE exit 2" in details
+
+
+def test_a_metric_ncu_refused_to_supply_is_not_a_readable_counter(monkeypatch):
+    """`n/a` is the shape of a counter the replay could not supply. It must not
+    read as 0.0 and it must not read as OPEN: the whole parser exists because a
+    zero that was never measured fits every gate downstream."""
+    import scripts.dram_counter_route as DCR
+    log = ('"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
+           '"0","probe","dram__bytes_read.sum","byte","n/a"\n')
+    _plant_ncu(monkeypatch, log=log,
+               stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is False
+    assert info["metric_value"] is None
+    assert "no readable dram__bytes_read.sum" in info["cause"]
+
+
+def test_the_2026_09_published_probe_shape_is_no_longer_open(monkeypatch):
+    """The exact payload both published sessions carried, replayed.
+
+    `results/published/2026-09-*-nvidia_h200-gaps-session/session/counter_route.json`
+    records `returncode 0`, `output_head "==WARNING== No kernels were
+    profiled."` and `cause "attached with no permission error"`, and the
+    session booked four pod-hours on that word. The same bytes must now come
+    back not-open.
+    """
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, log="==WARNING== No kernels were profiled.\n", rc=0)
+    info = DCR.probe_ncu()
+    assert info["returncode"] == 0
+    assert info["counters_read"] is False
+    assert not counter_route_is_open(info)
+    assert route_verdict({}, {}, info, {"present": True, "importer_present": True})[0] \
+        == REFUSE
+
+
+def test_a_launched_kernel_that_ncu_did_not_profile_is_not_open(monkeypatch):
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, log="==WARNING== No kernels were profiled.\n",
+               stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is False
+    assert "profiled NO kernels" in info["cause"]
+
+
+def test_err_nvgpuctrperm_is_reported_as_a_fact_about_the_pod(monkeypatch):
+    """It is a measured refusal, not a broken instrument.
+
+    The log ncu wrote on the 2026-09-15 pod, verbatim in shape: it connected,
+    it refused the counter, and the application returned an error code. That is
+    a CLAIM refuted by the box, which the shared table files as finished.
+    """
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, rc=1, log=(
+        "==PROF== Connected to process 5183 (/usr/bin/python3.12)\n"
+        "==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access "
+        "NVIDIA GPU Performance Counters on the target device 0.\n"
+        "==PROF== Disconnected from process 5183\n"
+        "==ERROR== The application returned an error code (1).\n"))
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is False
+    assert "fact about the pod" in info["cause"]
+    verdict, _ = route_verdict({"available": True, "sys_admin": False, "perfmon": False},
+                               {"available": True, "restrict": 1}, info,
+                               {"present": True, "importer_present": True})
+    assert verdict == "BLOCKED"
+
+
+def test_a_box_with_no_cuda_device_says_so_and_claims_nothing(monkeypatch):
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, rc=1, log="==WARNING== No kernels were profiled.\n",
+               stdout=f"{PK.MARKER} {PK.NO_CUDA_DEVICE} torch.cuda.is_available() is False")
+    info = DCR.probe_ncu()
+    assert info["probe_kernel"] == PK.NO_CUDA_DEVICE
+    assert info["counters_read"] is False
+    assert "no CUDA device at all" in info["cause"]
+    assert "NOTHING about counter permission" in info["cause"]
+
+
+def test_one_predicate_decides_the_route_and_both_call_sites_call_it():
+    """Rule 3, as a test. The route-open rule was `cause.startswith("attached")`
+    written out twice, in `route_verdict` and in `do_run`'s pre-flight, so the
+    probe's verdict and the runner's gate were one rule at two sites. Both now
+    call `counter_route_is_open` and the prose test is gone from the file.
+    """
+    import ast
+
+    import scripts.dram_counter_route as DCR
+    text = Path(DCR.__file__).read_text()
+    # The retired rule was `cause.startswith("attached")`. The needle is the
+    # string constant, taken out of the parsed module, because the docstring
+    # that records the retirement quotes the whole expression.
+    assert "attached" not in _code_strings(text)
+    tree = ast.parse(text)
+    callers = {fn.name for fn in ast.walk(tree)
+               if isinstance(fn, ast.FunctionDef)
+               and any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                       and n.func.id == "counter_route_is_open"
+                       for n in ast.walk(fn))}
+    assert {"route_verdict", "do_run"} <= callers, callers
+
+
+def test_the_probe_kernel_module_names_its_four_worlds_and_only_one_passes():
+    assert set(PK.WORDS) == {PK.LAUNCHED, PK.NO_TORCH, PK.NO_CUDA_DEVICE,
+                             PK.LAUNCH_FAILED}
+    assert len(PK.WORDS) == len(set(PK.WORDS))
+    for word in PK.WORDS:
+        assert probe_kernel_word(f"{PK.MARKER} {word} detail here") == (word, "detail here")
+    # An unknown word is not silently accepted as a launch.
+    assert probe_kernel_word(f"{PK.MARKER} SOMETHING_ELSE x") == ("", "")
+    assert probe_kernel_word("no marker anywhere") == ("", "")
+
+
+def test_the_probe_kernel_never_raises_and_only_launched_exits_zero(capsys):
+    """It runs on whatever the pod has, including a box with no card.
+
+    A probe that throws on a machine with no CUDA turns "no device here" into a
+    traceback, which `exit_codes` reads as CLAIM_FAIL -- a refuted claim about
+    counters, from a box that was never asked. This laptop has no CUDA device,
+    so the assertion is on the CONTRACT and not on which word comes back.
+    """
+    word, detail = PK.probe()
+    assert word in PK.WORDS
+    assert isinstance(detail, str) and detail
+    rc = PK.main()
+    printed = capsys.readouterr().out.strip()
+    assert printed.startswith(f"{PK.MARKER} {word}")
+    assert probe_kernel_word(printed) == (word, detail)
+    assert (rc == 0) == (word == PK.LAUNCHED)
+
+
+def test_the_parse_refusals_do_not_prescribe_flags_ncu_argv_already_passes():
+    """R1's advice reached an operator and sent them nowhere.
+
+    `parse_ncu_csv`'s refusals told the reader to "Profile with --csv --page
+    raw", which `ncu_argv` already does, and R1 is the one line of this file's
+    output that a human on a pod reads.
+    """
+    import scripts.dram_counter_route as DCR
+    argv = ncu_argv("ncu", "all", Path("/tmp/x.csv"))
+    assert "--csv" in argv and "--page" in argv and "--log-file" in argv
+    for bad in ("--csv --page raw and read the log file",
+                "Profile with --csv --page raw, which emits the column"):
+        assert not any(bad in s for s in _code_strings(Path(DCR.__file__).read_text()))
+    with pytest.raises(CounterRunRefused, match="NOT A FLAG PROBLEM"):
+        parse_ncu_csv("nothing that looks like a header at all\n")
+
+
+# --------------------------------------------------------------------------
+# End to end, on the repository's own published data.
+# --------------------------------------------------------------------------
+
+def test_the_a100_cell_still_reproduces_the_three_anchors():
+    """The cell the plan used to register, and the one docs/COUNTERS.md still does.
+
+    0.452 / 0.647 / 0.705 are the numbers the brief quotes. If a republish moves
+    them this test says so before docs/COUNTERS.md is quoted at anyone. It is no
+    longer the plan's cell: no counter route has ever been open on an A100 this
+    study can rent, so the plan moved to the H200 twin on 2026-09-10 and this
+    constant stayed behind to keep the page honest.
+    """
+    assert A100_REPORT.exists(), f"{A100_REPORT} is gone; the page has no cell"
+    rep = json.loads(A100_REPORT.read_text())
+    ladder = rep["ladder"]["32"]
+    anc = anchors_from_points(ladder["points"], ladder["memory_points"])
+    assert anc.t1 == pytest.approx(0.452, abs=0.002)
+    assert anc.published == pytest.approx(0.647, abs=0.002)
+    assert anc.n3 == pytest.approx(0.705, abs=0.002)
+    # And the refit must reproduce the published slope, which is what makes the
+    # published line the line under test rather than a different one.
+    assert anc.slope == pytest.approx(ladder["slope_memory"], rel=1e-9)
+
+
+def test_the_plan_is_registered_on_the_card_whose_route_is_open():
+    """The default cell is the H200 twin, and the H200 is where --probe said OPEN.
+
+    Registering a plan on a card that cannot run it is how this arm spent two
+    weeks: `counter_plan` returned P1 PASS on the H200 while the cell it printed
+    named nvidia_a100_sxm4_80gb. The default card, the default report and the
+    calibration the ridge comes from must now be one card.
+    """
+    ap = build_parser()
+    defaults = ap.parse_args([])
+    assert defaults.card == "nvidia_h200"
+    assert Path(defaults.report) == DEFAULT_REPORT
+    assert "nvidia_h200" in DEFAULT_REPORT.name or "h200" in str(DEFAULT_REPORT)
+    assert DEFAULT_REPORT.exists()
+    rep = json.loads(DEFAULT_REPORT.read_text())
+    assert rep["model"] == "mixtral-8x7b"
+    assert rep["fixed"]["GROUP_SIZE_M"] == 16 and rep["fixed"]["BLOCK_SIZE_N"] == 64
+    ladder = rep["ladder"][str(defaults.block_m)]
+    assert ladder["memory_points"] >= 3, "the default BLOCK_M has no memory branch here"
+
+
+def test_every_prediction_reads_this_card_s_own_2026_09_10_calibration():
+    """The recalibration moved the ridge and the peak; nothing here may be typed.
+
+    `measured_nvidia_h200.yaml` was rewritten on 2026-09-10 (ridge 152.8 ->
+    155.93, bf16 peak 668.5 -> 682.09, GEMM clock 1485 -> 1470). A test that
+    pins the old figures instead of reading the file is stale by construction,
+    so this reads the file and asserts the code returns what the file says.
+    """
+    cal = yaml.safe_load(
+        (REPO / "moe" / "bench" / "hardware" / "measured_nvidia_h200.yaml").read_text())
+    ridge, src = measured_ridge("nvidia_h200")
+    assert ridge == pytest.approx(
+        cal["compute_dense_tflops"]["bf16"] / cal["memory"]["bandwidth_tb_s"], rel=1e-12)
+    assert "measured_nvidia_h200.yaml" in src
+    gbps, bsrc = measured_bandwidth_gbps("nvidia_h200")
+    assert gbps == pytest.approx(cal["memory"]["bandwidth_tb_s"] * 1000.0, rel=1e-12)
+    assert cal["detail"]["ceiling_pattern"] in bsrc
+    # And the published report this plan registers against carries the STALE
+    # ridge, which is exactly why the plan reads the yaml and not the report.
+    assert json.loads(DEFAULT_REPORT.read_text())["ridge"] != pytest.approx(ridge, rel=1e-6)
+
+
+def test_bracket_over_published_data_is_non_vacuous_and_finds_the_a100_violations():
+    """The counter-free result, asserted rather than described.
+
+    Four A100 fits assert a memory branch faster than the A100's pin rate. All
+    four are BLOCK_M=32 with a swizzle, and none of the G=1 fits is among them,
+    which is the shape the swizzle explanation predicts.
+    """
+    a100 = REPO / "results/published/2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
+    rows = bracket_directory(a100)
+    assert len(rows) >= 12, "examined too few fits to conclude anything"
+    above = [r for r in rows
+             if r["published"] > r["hi"] * (1 + r["fit_err"])]
+    assert len(above) == 4
+    assert all(r["block_m"] == 32 and r["group_m"] > 1 for r in above)
+    # Every bracket must at least be a real interval.
+    assert all(r["lo"] < r["hi"] for r in rows)
+    assert all(0.0 < r["achieved_frac_peak"] < 1.0 for r in rows)
+
+
+def test_bn256_arm_is_excluded_from_the_bracket():
+    """The BLOCK_SIZE_N=256 arm was withdrawn on both cards; nothing derived
+    from it may enter a published bracket."""
+    a100 = REPO / "results/published/2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
+    assert all(r["block_n"] != 256 for r in bracket_directory(a100))
+
+
+# --------------------------------------------------------------------------
+# The CLI contract.
+# --------------------------------------------------------------------------
+
+def test_main_refuses_two_modes_at_once(capsys):
+    assert main(["--dry-run", "--bracket"]) == exit_codes.REFUSED
+    assert "REFUSE" in capsys.readouterr().out
+
+
+def test_main_refuses_no_mode_at_all(capsys):
+    assert main([]) == exit_codes.REFUSED
+    assert "REFUSE" in capsys.readouterr().out
+
+
+def test_dry_run_prints_predictions_and_a_cost(capsys):
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "PREDICTIONS, registered here" in out
+    assert "COST, of the plan as extended." in out
+    assert "dram__bytes_read.sum" in out
+    # The plan must name THIS card's own ridge, computed from the 2026-09-10
+    # calibration in the tree, and never the 152.8 the published reports carry.
+    ridge, _ = measured_ridge("nvidia_h200")
+    assert f"ridge {ridge:.2f} FLOP/byte" in out
+    assert "ridge 152.8 " not in out and "ridge 160.3" not in out
+    # THE RECIPE RUNS ON THE CURRENT INSTRUMENT. `timing.warm_until` refuses
+    # `warmup_ms <= 0` and `--iters` is retired, so the "--warmup 0 --iters 1"
+    # recipe this printed until 2026-09-03 could not run; the launch count is
+    # the instrument's, read back from the profile, never an assumed one.
+    assert "--warmup 0 --iters 1" not in out
+    commands = [line for line in out.splitlines() if line.strip().startswith("--")]
+    assert commands and not any("--iters" in line or "--warmup 0" in line
+                                for line in commands)
+    assert "warmup + iters x trials" in out
+    assert '"calls": 11' in out and "never by" in out
+    # C3 is registered as a bracket per anchor, through cap_from_fitted.
+    assert "C3, REGISTERED" in out
+    assert out.count("at alpha_a=1") == 3 and "delta = 0" in out
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    bm = build_parser().parse_args([]).block_m
+    thresh = bm / ridge - activation_bytes_per_tile(cfg, bm) / weight_bytes_total(cfg)
+    assert f"BM/ridge - a/W = {thresh:.4f}" in out
+
+
+def test_dry_run_prices_the_extended_plan_and_names_its_run_commands(capsys):
+    """The plan is five cells now, not one, and the cost line says five.
+
+    It priced one cell over two cache modes and called that the experiment. The
+    contrast that decides section 2 needs BLOCK_N=32 and BLOCK_N=128 at one
+    BLOCK_M, and statement (3) needs a GROUP_SIZE_M=1 cell, so the invocation
+    count and the hours are five times what they were and the line must say so
+    rather than quietly costing the old plan.
+    """
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    tiles = build_parser().parse_args([]).tiles
+    assert f"5 cells x {len(tiles)} tile counts x 2 cache modes = {5 * len(tiles) * 2}" in out
+    # One --run command per cell, each carrying the cell's own knobs.
+    runs = [ln for ln in out.splitlines() if "--run --card" in ln]
+    assert len(runs) == 5
+    assert "--block-n 32" in out and "--block-n 128" in out
+    assert "--group-m 1 --num-stages 3" in out
+    # The flush launches are gone from the cost because --run turns the flush
+    # off; pricing them while letting their traffic into the answer was the bug.
+    assert "L2-flush launches" not in out
+
+
+def test_dry_run_registers_both_rivals_and_says_which_outcome_means_which(capsys):
+    """The separation, and the reading rule, both printed before anything runs.
+
+    The two rivals are 3.86 GB against 2.06 GB per M-tile at BLOCK_M=64 under
+    TRAFFIC and identical under TIME. Both numbers are re-derived from the
+    committed session ladders, so this asserts the printed figures equal the
+    figures `contrast_plan` computes rather than a pair of constants.
+    """
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "THE CONTRAST, registered." in out
+    assert "CONTRAST A" in out and "CONTRAST B" in out
+    cells = {c.name: c for c in contrast_plan(64)}
+    gbps, _ = measured_bandwidth_gbps("nvidia_h200")
+    W = weight_bytes_total(MIXTRAL)
+    stream = weight_stream_ms(W, gbps)
+    lo = cells["bn32-g16-m64"].traffic_bytes_per_tile(stream, W)
+    hi = cells["bn128-g16-m64"].traffic_bytes_per_tile(stream, W)
+    assert f"{lo / 1e9:.2f} GB against {hi / 1e9:.2f} GB per M-tile" in out
+    assert lo / 1e9 == pytest.approx(3.86, abs=0.01)
+    assert hi / 1e9 == pytest.approx(2.06, abs=0.01)
+    assert "TIME    predicts the ratio 1.000" in out
+    assert "a ratio near 1.000 means it is time" in out
+    assert "belongs in the byte model" in out
+
+
+def test_self_test_mode_passes(capsys):
+    assert main(["--self-test"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "SELF TEST PASS" in out
+    lines = exit_codes.parse_result_lines(out)
+    assert [(ln.kind, ln.name, ln.verdict) for ln in lines] == [("VALIDITY", "S1", "PASS")]
+    assert exit_codes.classify_text(out) == exit_codes.DONE
+
+
+def test_bracket_mode_runs_and_reports_both_violation_kinds(capsys):
+    """CLAIM_FAIL, and that is the ANSWER.
+
+    B1 and B2 are registered to fail -- published alphas above their own pin-rate
+    bound is the finding this mode exists to report -- and B3 is registered to
+    fail because the bracket is not tight enough to replace a counter. The exit
+    code stood at `0 if <condition> else 0` until 2026-09-02, both branches
+    DONE, so no gate here could reach it. CLAIM_FAIL (1) is a result the driver
+    files as finished and never retries, which is exactly right for a refutation.
+    """
+    assert main(["--bracket"]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    assert "ABOVE" in out and "GATE B1" in out
+    assert "28 identifiable fits" in out or "identifiable fits" in out
+    # ONE RESULT LINE PER GATE, and the log implies the code the process
+    # returned. Until 2026-09-03 this mode printed zero RESULT lines beside
+    # exit 1 and `classify_text` raised on its own log.
+    lines = exit_codes.parse_result_lines(out)
+    assert [ln.name for ln in lines] == ["B0", "B1", "B2", "B3"]
+    assert exit_codes.classify_text(out) == exit_codes.CLAIM_FAIL
+
+
+# --------------------------------------------------------------------------
+# Provenance. Failure mode 4: a JSON nobody can attribute to a commit, a
+# machine or a set of knobs is an anecdote, and --bracket is this file's one
+# advertised RESULT.
+# --------------------------------------------------------------------------
+
+def test_every_json_this_script_writes_carries_provenance_and_a_run_id(tmp_path):
+    """Both `--out` payloads, checked by running the modes rather than by
+    reading the source.
+
+    Before 2026-09-02 `--probe` wrote
+    `['capabilities','module_flag','ncu','notes','nsys','verdict']` and
+    `--bracket` wrote `['gates','rows']`: no commit, no card, no timestamp, no
+    knobs. `--probe` describes a MACHINE and named none, so two pods' probes
+    were indistinguishable.
+    """
+    for argv, out, instrument in (
+            (["--probe"], tmp_path / "probe.json", PROBE_INSTRUMENT),
+            (["--bracket"], tmp_path / "bracket.json", INSTRUMENT)):
+        main([*argv, "--out", str(out)])
+        doc = json.loads(out.read_text())
+        for key in ("git_sha", "gpu_name", "instrument", "ridge_source",
+                    "bandwidth_source", "provenance", "run_id"):
+            assert key in doc, (argv, key)
+        assert doc["instrument"] == instrument
+        assert doc["provenance"]["git_sha"], "the commit that produced it"
+        assert doc["provenance"]["utc"]
+        # The block NAMES what it could not determine rather than guessing it.
+        assert isinstance(doc["provenance"]["missing"], dict)
+
+
+def test_the_instrument_is_never_the_timing_basis(tmp_path):
+    """Nothing in this file times a kernel. `--bracket` and `--analyse` are
+    arithmetic over rows other runs measured and `--probe` reads a machine's
+    configuration, so stamping `moe.bench.timing.TIMING_BASIS` on any of them
+    would describe an apparatus that never ran -- the defect the audit found in
+    two sibling `--synthetic` paths."""
+    from moe.bench import timing
+    assert INSTRUMENT != timing.TIMING_BASIS
+    assert PROBE_INSTRUMENT != timing.TIMING_BASIS
+    assert "no-kernel-timed" in INSTRUMENT and "nothing-timed" in PROBE_INSTRUMENT
+    # `--run` DOES touch the device, and it still is not the timing basis: under
+    # --replay-mode kernel every launch is replayed, so the durations it records
+    # are replay time and joining them to the unprofiled ladder's wall clock
+    # would compare two apparatuses. The string has to say so.
+    assert RUN_INSTRUMENT != timing.TIMING_BASIS
+    assert "replay-mode-kernel" in RUN_INSTRUMENT
+    assert "NOT timing.TIMING_BASIS" in RUN_INSTRUMENT
+
+
+def test_the_run_id_separates_the_knobs_each_mode_actually_reads():
+    """Two `--bracket` runs over different `--published` sets, and two
+    `--analyse` runs with different `--anchor` overrides, overwrote each other
+    in silence: `--out` is a bare operator-chosen path and nothing in the file
+    said which knobs produced it."""
+    args = build_parser().parse_args(["--bracket"])
+    other = build_parser().parse_args(["--bracket", "--published", "a", "b"])
+    assert run_id_for("bracket", args, NO_CARD) != run_id_for("bracket", other, NO_CARD)
+    assert run_id_for("bracket", args, NO_CARD) == run_id_for("bracket", args, NO_CARD)
+
+    one = build_parser().parse_args(["--analyse", "run.json"])
+    two = build_parser().parse_args(["--analyse", "run.json",
+                                     "--anchor", "t1", "0.4522"])
+    one.anchor = [(k, float(v)) for k, v in (one.anchor or [])]
+    two.anchor = [(k, float(v)) for k, v in two.anchor]
+    assert run_id_for("analyse", one, NO_CARD) != run_id_for("analyse", two, NO_CARD)
+    # ...and the card is the id's first component, so two pods cannot share one.
+    assert run_id_for("probe", args, "NVIDIA H200").startswith("nvidia_h200-")
+    assert (run_id_for("probe", args, "NVIDIA H200")
+            != run_id_for("probe", args, "NVIDIA A100-SXM4-80GB"))
+
+
+def test_stamping_refuses_to_layer_a_second_provenance_block():
+    """The FAIL branch of `stamped`: a payload that already carries one of the
+    audit's five keys with a different value is a collision, not a merge."""
+    args = build_parser().parse_args(["--bracket"])
+    with pytest.raises(PV.ProvenanceCollision):
+        stamped({"git_sha": "0" * 40}, mode="bracket", args=args, card=NO_CARD,
+                instrument=INSTRUMENT)
+
+
+# --------------------------------------------------------------------------
+# The exit-code table. Failure mode 5: an ANSWER filed as a broken instrument.
+# --------------------------------------------------------------------------
+
+def test_a_blocked_counter_route_is_an_answer_and_not_a_validity_failure(
+        monkeypatch, capsys):
+    """`return 0 if verdict == "OPEN" else 3` is what stood here.
+
+    3 is INVALID in the shared table -- "measured, then a VALIDITY gate failed,
+    nothing quotable" -- so the finding this arm exists to obtain, that ncu is
+    blocked by a host module flag a tenant cannot change, was filed as a broken
+    instrument and latched the row for every resume. Then it returned DONE for
+    BLOCKED with no RESULT line at all, so the log implied nothing and the
+    driver's summary printed "NOT scored" beside a finished arm. The probe is
+    now one scored CLAIM gate, "a counter route is open": OPEN passes it and
+    BLOCKED is the world refuting it, CLAIM_FAIL, which the table defines as a
+    result the ledger files as finished and never retries. REFUSE, where the
+    machine did not say enough to name a route, scores nothing and is
+    REFUSED (2). In every case the log's RESULT lines imply the code returned.
+    """
+    import scripts.dram_counter_route as DCR
+    for verdict, expected in (("OPEN", exit_codes.DONE),
+                              ("BLOCKED", exit_codes.CLAIM_FAIL),
+                              (REFUSE, exit_codes.REFUSED)):
+        monkeypatch.setattr(DCR, "route_verdict",
+                            lambda *a, _v=verdict: (_v, ["planted"]))
+        assert DCR.main(["--probe"]) == expected, verdict
+        out = capsys.readouterr().out
+        lines = exit_codes.parse_result_lines(out)
+        if expected == exit_codes.REFUSED:
+            assert lines == [], "a refusal scored a gate"
+        else:
+            assert [(ln.name, ln.verdict) for ln in lines] == [
+                ("P1", "PASS" if verdict == "OPEN" else "FAIL")]
+            assert exit_codes.classify_text(out) == expected
+
+
+def test_analyse_maps_validity_and_claim_the_way_the_shared_table_does(tmp_path, capsys):
+    """The two codes were INVERTED: 1 for a VALIDITY failure and 3 for a CLAIM
+    failure. 1 is CLAIM_FAIL, which the driver files as finished, so an unsound
+    counter run was recorded as a refuted claim; 3 is INVALID, which would have
+    latched a perfectly good refutation."""
+    def payload(rows):
+        return {"device": "NVIDIA A100-SXM4-80GB", "model": "mixtral-8x7b",
+                "block_m": 32, "cache_control": "all", "rows": rows}
+
+    # Fewer than four tile counts fails V1, the non-vacuity gate: INVALID.
+    thin = tmp_path / "thin.json"
+    thin.write_text(json.dumps(payload(
+        [{"n": 1, "launches": 5, "dram_bytes_read": 2.8e9}])))
+    assert main(["--analyse", str(thin)]) == exit_codes.INVALID
+    thin_out = capsys.readouterr().out
+    assert [ln.name for ln in exit_codes.parse_result_lines(thin_out)] == ["V1"]
+    assert exit_codes.classify_text(thin_out) == exit_codes.INVALID
+
+    # A clean run at a planted alpha passes everything: DONE.
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps(payload(
+        [{"n": n, "launches": 5,
+          "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, 0.558)}
+         for n in (1, 2, 3, 4)])))
+    # ...and every VALIDITY gate passes. C2 and C3 come back UNKNOWN (this file
+    # spells it REFUSE) because the payload carries no bracket and no ridge, and
+    # UNKNOWN counts AGAINST a gate: the claim was not established, so
+    # CLAIM_FAIL, never DONE. A check that examined nothing reports no failures.
+    assert main(["--analyse", str(good)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    # ...and the log says the same thing the code does, one line per gate.
+    assert [ln.name for ln in exit_codes.parse_result_lines(out)] == [
+        "V1", "V2", "V3", "V4", "C1", "C2", "C3"]
+    assert exit_codes.classify_text(out) == exit_codes.CLAIM_FAIL
+
+
+def test_anchors_dataclass_is_pure_arithmetic():
+    """No hidden state: the three properties are functions of the six fields."""
+    a = Anchors(block_m=32, t1_ms=2.0, intercept=0.5, slope=1.0,
+                intercept_n3=0.4, slope_n3=1.1)
+    assert a.published == pytest.approx(1.0 / 1.5)
+    assert a.t1 == pytest.approx(0.5)
+    assert a.n3 == pytest.approx(1.1 / 1.5)
+    assert not math.isnan(sum(a.as_dict().values()))
+
+
+# --------------------------------------------------------------------------
+# The document and the code must not drift apart.
+# --------------------------------------------------------------------------
+
+def test_counters_doc_quotes_the_numbers_the_code_computes():
+    """docs/COUNTERS.md prints constants that this module derives.
+
+    A document is the one artifact nothing else checks, so the four numbers it
+    leans on hardest are asserted here. If the byte model moves, this fails and
+    the page gets corrected instead of quietly going stale.
+    """
+    doc = (REPO / "docs" / "COUNTERS.md").read_text()
+    assert f"{weight_bytes_total(MIXTRAL):,}" in doc          # 2,818,572,288 B
+    assert f"{activation_bytes_per_tile(MIXTRAL, 32):,}" in doc  # 26,214,400 B
+    # This card's own ridge, and the stale H200 default the page tells you not to use.
+    assert "145.81" in doc and "160.3" in doc
+    # The bracket the page registers against. It is the A100 cell, which this
+    # module no longer defaults to: the page still describes the A100
+    # registration and updating it is a docs/COUNTERS.md edit, filed rather than
+    # made here because that file is not this slice's to touch.
+    assert "A100-SXM4-80GB" in doc
+    rep = json.loads(A100_REPORT.read_text())["ladder"]["32"]
+    anc = anchors_from_points(rep["points"], rep["memory_points"])
+    lo, hi = physical_bracket(anc.slope, anc.t1_ms, weight_bytes_total(MIXTRAL),
+                              activation_bytes_per_tile(MIXTRAL, 32),
+                              DATASHEET_PEAK_GBPS["nvidia_a100_sxm4_80gb"])
+    assert f"{lo:.4f}" in doc and f"{hi:.4f}" in doc
+
+
+# --------------------------------------------------------------------------
+# Where --out lands. Failure mode 3: output written where .gitignore silently
+# drops it, which has already cost this repo every published plot of ten arms.
+# --------------------------------------------------------------------------
+
+def test_git_visibility_distinguishes_ignored_kept_and_unverifiable():
+    """Three answers, not two. `--bracket` is the mode this file's own header
+    calls the one that produces a result, so its JSON is meant to be kept."""
+    assert "IGNORED by git" in git_visibility(REPO / "results" / "b.json")
+    assert "WILL KEEP" in git_visibility(
+        REPO / "results" / "published" / "b.json")
+    outside = git_visibility(Path("/definitely/not/a/work/tree/b"))
+    assert "UNVERIFIED" in outside
+    assert "WILL KEEP" not in outside
+
+
+def test_every_out_write_site_reports_its_git_visibility():
+    """A rule that is applied at one of two write sites is not applied.
+
+    Checked structurally rather than by running both modes, because `--probe`
+    needs a machine to probe. Each `write_text` on `--out` must be followed by
+    the visibility line before the function returns.
+    """
+    text = (REPO / "scripts" / "dram_counter_route.py").read_text()
+    # Four since the 2026-09-10 repair: --bracket, --probe, --run (the mode that
+    # writes the file every other mode only talks about) and --contrast (the
+    # mode that scores the ratio across those files). Seven since 2026-09-24:
+    # the r3-arms family writes a page per G, a census and an --analyse summary.
+    # Eight since 2026-09-25: --floor writes the on-chip floor's counters.
+    assert text.count("out.write_text(") == 8
+    assert text.count("git_visibility(out)") == 8
+
+
+# --------------------------------------------------------------------------
+# --run's parser. Every one of these is a wrong NUMBER if it is not caught,
+# never a crash, which is why the parser is exercised off the GPU and before a
+# pod is rented rather than for the first time on a metered box.
+# --------------------------------------------------------------------------
+
+PLANTED = {"calls": 11, "read_per_call": 2.84e9, "write_per_call": 1.1e8,
+           "hit_pct": 4.2, "ns_per_call": 1.95e6}
+
+
+def test_parser_reads_a_canned_profile_launch_by_launch():
+    launches = parse_ncu_csv(canned_ncu_csv(**PLANTED))
+    assert len(launches) == PLANTED["calls"] * 4          # marker + 2 GEMM + reduction
+    assert len({ln.launch_id for ln in launches}) == len(launches)
+    assert all(set(ln.metrics) == set(NCU_METRICS) for ln in launches)
+
+
+def test_parser_converts_the_units_ncu_rescaled_rather_than_adding_them():
+    """ncu prints whatever unit keeps a number readable, and the prefixes are
+    decimal. Adding an Mbyte row to a byte row lands a factor of a million out,
+    which fits an affine line as happily as the truth."""
+    raw = parse_ncu_csv(canned_ncu_csv(**PLANTED, read_unit="Mbyte"))
+    plain = parse_ncu_csv(canned_ncu_csv(**PLANTED, read_unit="byte"))
+    a = sum(ln.metrics["dram__bytes_read.sum"] for ln in raw)
+    b = sum(ln.metrics["dram__bytes_read.sum"] for ln in plain)
+    assert a == pytest.approx(b, rel=1e-12)
+    assert b == pytest.approx(PLANTED["read_per_call"] * PLANTED["calls"], rel=1e-12)
+
+
+def test_parser_refuses_a_unit_it_has_never_been_shown():
+    csv_text = canned_ncu_csv(**PLANTED).replace('"byte"', '"kibibyte"', 1)
+    with pytest.raises(CounterRunRefused, match="never been shown"):
+        parse_ncu_csv(csv_text)
+
+
+def test_parser_refuses_a_metric_ncu_returned_as_not_available():
+    text = canned_ncu_csv(**PLANTED)
+    line = [ln for ln in text.splitlines() if "dram__bytes_read.sum" in ln][0]
+    text = text.replace(line, line.rsplit(",", 1)[0] + ',"n/a"', 1)
+    with pytest.raises(CounterRunRefused, match="never defaulted to 0.0"):
+        parse_ncu_csv(text)
+
+
+def test_parser_refuses_output_with_no_header_and_output_with_no_launch_id():
+    with pytest.raises(CounterRunRefused, match="no ncu CSV header"):
+        parse_ncu_csv("==PROF== Connected to process 1\nnothing here is a table\n")
+    with pytest.raises(CounterRunRefused, match="no 'ID' column"):
+        parse_ncu_csv(canned_ncu_csv(**PLANTED).replace('"ID"', '"Index"', 1))
+
+
+def test_parser_refuses_a_launch_id_that_is_not_unique():
+    """Two launches merged into one halves the traffic the count then divides."""
+    text = canned_ncu_csv(**PLANTED).splitlines()
+    doubled = "\n".join(text + [text[3]])
+    with pytest.raises(CounterRunRefused, match="twice"):
+        parse_ncu_csv(doubled + "\n")
+
+
+def test_parser_ignores_metrics_nobody_registered():
+    extra = '"1","1","python","k","sm__cycles_elapsed.sum","cycle","5"'
+    launches = parse_ncu_csv(canned_ncu_csv(**PLANTED) + extra + "\n")
+    assert all("sm__cycles_elapsed.sum" not in ln.metrics for ln in launches)
+
+
+# --------------------------------------------------------------------------
+# The per-call normalisation, which is the whole reason --run is a mode.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("calls", [11, 22, 57, 200])
+def test_bytes_are_divided_by_the_call_count_counted_from_the_profile(calls):
+    """A synthetic profile with a KNOWN call count, at four counts.
+
+    Every field is per call, so the SAME per-call traffic profiled over 11 calls
+    and over 200 must reduce to the same number. Dividing by an assumed 1 would
+    scale with `calls` and still be monotone, still be affine, and still pass
+    every gate but the n=1 one.
+    """
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": calls})),
+                             calls_floor=10)
+    assert row["calls"] == calls
+    assert row["launches"] == calls * 4
+    assert row["dram_bytes_read"] == pytest.approx(PLANTED["read_per_call"], rel=1e-12)
+    assert row["dram_bytes_write"] == pytest.approx(PLANTED["write_per_call"], rel=1e-12)
+    assert row["gpu_time_ns"] == pytest.approx(PLANTED["ns_per_call"], rel=1e-12)
+    assert row["gemm_launches_per_call"] == 2.0
+    assert sum(row["by_kernel"].values()) == pytest.approx(PLANTED["read_per_call"],
+                                                           rel=1e-12)
+
+
+def test_the_call_count_is_counted_and_not_taken_from_the_caller():
+    """The count comes from the launch list, so a profile with more calls in it
+    than the caller expected still reduces correctly."""
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": 41})),
+                             calls_floor=10)
+    assert row["calls"] == 41 and row["calls_floor"] == 10
+
+
+def test_a_missing_metric_refuses_and_never_becomes_zero():
+    with pytest.raises(CounterRunRefused, match="never taken as 0.0"):
+        normalise_per_call(
+            parse_ncu_csv(canned_ncu_csv(**PLANTED,
+                                         drop_metric="dram__bytes_write.sum")),
+            calls_floor=10)
+
+
+def test_a_call_count_at_or_below_the_cells_own_floor_refuses():
+    """The instrument runs warmup calls on top of iters x trials, so a count that
+    does not EXCEED the floor means the marker is not one-per-call."""
+    with pytest.raises(CounterRunRefused, match="must EXCEED the floor"):
+        normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": 8})),
+                           calls_floor=10)
+    with pytest.raises(CounterRunRefused, match="must EXCEED the floor"):
+        normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": 10})),
+                           calls_floor=10)
+
+
+def test_a_profile_with_no_marker_kernel_refuses_and_prints_what_it_saw():
+    with pytest.raises(CounterRunRefused) as exc:
+        normalise_per_call(
+            parse_ncu_csv(canned_ncu_csv(**PLANTED, marker="something_else")),
+            calls_floor=10)
+    assert CALL_MARKER in str(exc.value)
+    assert "something_else" in str(exc.value)     # the names it DID contain
+
+
+def test_the_l2_hit_rate_is_labelled_as_the_weighted_mean_it_is():
+    """A rate cannot be summed and this one is not sector weighted, because the
+    sector counts are not among the four registered metrics. Say so in the row."""
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**PLANTED)), calls_floor=10)
+    assert row["l2_read_hit_pct"] == pytest.approx(PLANTED["hit_pct"])
+    assert row["l2_read_hit_pct_range"] == [PLANTED["hit_pct"], PLANTED["hit_pct"]]
+    assert "NOT a sector-weighted rate" in row["l2_read_hit_pct_basis"]
+
+
+def test_the_self_test_mode_exercises_the_parser_and_reports_both_refusals(capsys):
+    """Acceptance: --self-test drives the parser end to end and the two planted
+    faults REFUSE. A self-test that only ever feeds the parser good input has
+    tested nothing that will happen on a pod."""
+    assert main(["--self-test"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    # The parser's own section, counted inside its own section rather than over
+    # the whole log: --self-test grew a contrast section on 2026-09-10 whose
+    # mislabelled-payload row also refuses, and a whole-log count of refusals
+    # would have been satisfied by the wrong three.
+    # BOUNDED AT BOTH ENDS since 2026-09-24: the r3-arms family's section,
+    # printed after the probe's, refuses three planted attributions of its own.
+    parser = out.split("THE RUNNER'S PARSER AND ITS PER-CALL DIVISION")[1]
+    parser = parser.split("THE PROBE'S VERDICT AND EXIT CODE")[0]
+    assert "planted MISSING metric on one launch" in parser
+    assert "planted WRONG call count, 8 against a floor of 10" in parser
+    assert "planted profile with no marker kernel at all" in parser
+    assert parser.count("REFUSED as required") == 3
+    contrast = out.split("THE CONTRAST SCORER")[1].split(
+        "THE RUNNER'S PARSER AND ITS PER-CALL DIVISION")[0]
+    assert contrast.count("REFUSED as required") == 1
+    assert "FAIL" not in out and "SELF TEST PASS" in out
+
+
+# --------------------------------------------------------------------------
+# What --run would write, and the recipe it would run.
+# --------------------------------------------------------------------------
+
+def test_the_schema_block_and_the_writer_name_the_same_keys():
+    """The page and the code, bound in both directions.
+
+    A key in the block and not in the writer is a page describing a file nobody
+    writes; a key in the writer and not in the block is a field no reader was
+    told about. This module had the first defect already: the block said
+    num_stages 3 while the sweep's FIXED said 4.
+    """
+    for key in COUNTER_TOP_KEYS + COUNTER_ROW_KEYS:
+        assert f'"{key}":' in COUNTER_SCHEMA_TEXT, f"{key} is not in the schema block"
+    # and the reader's own required set is a subset of what the writer produces
+    assert {"device", "model", "block_m", "cache_control", "rows"} <= set(COUNTER_TOP_KEYS)
+
+
+def test_the_writer_produces_every_key_the_reader_refuses_to_default(tmp_path):
+    args = build_parser().parse_args([])
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**PLANTED)), calls_floor=10)
+    row["n"] = 1
+    payload = build_counter_payload(
+        args, ridge=155.93, ridge_source="measured_nvidia_h200.yaml",
+        anchors={"published": 0.66}, bracket=(0.62, 0.98), contrast=None, rows=[row])
+    assert set(COUNTER_TOP_KEYS) <= set(payload)
+    # and --analyse consumes it without raising on a partial run
+    gates, _summary = score_counter_run(payload)
+    assert [g.number for g in gates][:1] == ["V1"]
+    del tmp_path
+
+
+def test_the_writer_refuses_a_row_the_schema_says_must_carry_a_field():
+    args = build_parser().parse_args([])
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**PLANTED)), calls_floor=10)
+    row["n"] = 1
+    row.pop("l2_read_hit_pct")
+    with pytest.raises(CounterRunRefused, match="never written as 0.0"):
+        build_counter_payload(args, ridge=155.93, ridge_source="x",
+                              anchors={"published": 0.66}, bracket=(0.6, 0.9),
+                              contrast=None, rows=[row])
+
+
+def test_the_wrapped_sweep_turns_the_software_flush_off():
+    """The instrument's L2 flush is a 240 MB read and a profiler counts it.
+
+    `moe.bench.timing.L2Flusher` reads four times this card's L2 once per timed
+    iteration. Under ncu that is a launch like any other and its DRAM reads land
+    in the same total as the kernel under test: at ten iterations, 2.4 GB against
+    a 2.82 GB weight read. It is CONSTANT in n, so the slope gate, the
+    monotonicity gate and the residual gate all pass and only the n=1 byte-model
+    gate would notice, which would be read as the byte model being wrong. ncu's
+    own --cache-control sets the cache state under the profiler, which is why
+    that is the swept parameter and the software flush is not a second one.
+    """
+    args = build_parser().parse_args(["--block-m", "64", "--num-stages", "3"])
+    argv = sweep_argv(args, 4, Path("/tmp/out"))
+    assert "--no-l2-flush" in argv
+    assert argv[argv.index("--num-stages") + 1] == "3"
+    assert argv[argv.index("--tiles") + 1] == "64"          # exactly one tile height
+    assert argv[argv.index("--r-max") + 1] == "256"         # 4 tiles x 64 rows
+    assert argv[argv.index("--row-step") + 1] == "256"      # one cell, not a ladder
+    assert argv[argv.index("--step-probes") + 1] == "0"
+
+
+def test_the_run_id_separates_a_cache_mode_and_a_call_marker():
+    """Two runs that differ only in the cache mode or the marker are two
+    different measurements and must not overwrite each other in silence."""
+    base = build_parser().parse_args([])
+    other = build_parser().parse_args(["--cache-control", "none"])
+    marker = build_parser().parse_args(["--call-marker", "sgl_moe_align_block_size"])
+    ids = {run_id_for("run", a, "NVIDIA H200") for a in (base, other, marker)}
+    assert len(ids) == 3
+
+
+def test_run_refuses_before_touching_the_gpu(capsys):
+    assert main(["--run"]) == exit_codes.REFUSED
+    assert "needs --out" in capsys.readouterr().out
+    assert main(["--run", "--out", "/tmp/nothing-will-be-written.json"]) == \
+        exit_codes.REFUSED
+    assert "no counter could be read" in capsys.readouterr().out
+    assert not Path("/tmp/nothing-will-be-written.json").exists()
+
+
+def test_run_is_one_mode_among_the_six(capsys):
+    assert main(["--run", "--dry-run"]) == exit_codes.REFUSED
+    assert "--run" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# The contrast, re-derived from the committed 2026-09-10 corpus.
+# --------------------------------------------------------------------------
+
+def test_contrast_reproduces_the_analysis_separation_from_the_committed_cells():
+    """3.86 GB against 2.06 GB per M-tile at BLOCK_M=64, re-fitted here.
+
+    These are the figures the 2026-09-10 analysis pre-registers the contrast
+    on. Nothing is transcribed: the slopes come out of
+    results/published/2026-09-10-.../bn_decomposition/*/cells.csv with the
+    synthesis's own estimator (median per tread, OLS on the medians) and the
+    denominator is the triad rate THAT RUN recorded in its report.json, not
+    the tree's current ruler: the figures are the 2026-09-10 cells', and the
+    ruler has moved since (4374.3 -> 4378.0 GB/s on 2026-09-21, which is
+    0.085% and enough to trip a four-place pin). test_docs reads the same
+    report the same way.
+    """
+    cells = {c.name: c for c in contrast_plan(64)}
+    run = sorted((REPO / "results" / "published").glob(
+        "2026-09-10-*gaps-session/results/bn_decomposition/*/report.json"))
+    assert run, "the 2026-09-10 bn_decomposition report is not in the tree"
+    gbps = json.loads(run[0].read_text())["bandwidth_gbps"]
+    W = weight_bytes_total(MIXTRAL)
+    stream = weight_stream_ms(W, gbps)
+    lo, hi = cells["bn32-g16-m64"], cells["bn128-g16-m64"]
+    assert lo.w(stream) == pytest.approx(1.368, abs=0.002)
+    assert hi.w(stream) == pytest.approx(0.731, abs=0.002)
+    assert lo.traffic_bytes_per_tile(stream, W) / 1e9 == pytest.approx(3.86, abs=0.01)
+    assert hi.traffic_bytes_per_tile(stream, W) / 1e9 == pytest.approx(2.06, abs=0.01)
+    # The discriminator is a RATIO of two measured slopes and carries no
+    # bandwidth at all, which is why it survives a recalibration.
+    assert lo.slope_ms / hi.slope_ms == pytest.approx(1.870, abs=0.005)
+
+
+def test_the_contrast_carries_a_group_size_m_1_cell_and_a_matched_partner():
+    """Statement (3): the per-M-tile cost is a function of the schedule, so the
+    plan cannot be all-G=16. The pair must be matched on everything else."""
+    cells = {c.name: c for c in contrast_plan(64)}
+    g1, g16 = cells["s3w8g1-m64"], cells["s3w8g16-m64"]
+    assert g1.group_m == 1 and g16.group_m == 16
+    assert (g1.block_m, g1.block_n, g1.num_stages, g1.num_warps) == \
+           (g16.block_m, g16.block_n, g16.num_stages, g16.num_warps)
+    assert g1.arm == g16.arm == "occupancy_vs_swizzle"
+    gbps, _ = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    assert g1.w(stream) == pytest.approx(1.204, abs=0.002)
+    assert g16.w(stream) == pytest.approx(0.918, abs=0.002)
+
+
+def test_the_bn_contrast_is_read_at_the_block_m_it_is_asked_for():
+    """Not pinned to 64: the same two rivals exist at BLOCK_M=32 and the plan
+    must re-derive them rather than reprint the BLOCK_M=64 pair."""
+    at64 = {c.name: c for c in contrast_plan(64)}
+    at32 = {c.name: c for c in contrast_plan(32)}
+    assert "bn32-g16-m32" in at32 and "bn32-g16-m64" in at64
+    assert at32["bn32-g16-m32"].slope_ms != at64["bn32-g16-m64"].slope_ms
+    # the schedule pair is BLOCK_M=64 at both, because the occupancy arm ran
+    # only that tile height, and it says so by carrying block_m 64.
+    assert at32["s3w8g1-m64"].block_m == 64
+
+
+def test_corpus_slope_refuses_a_ladder_it_cannot_fit():
+    run = one_run_dir(GAPS_SESSION / "bn_decomposition")
+    with pytest.raises(CorpusMissing, match="a slope needs three"):
+        corpus_slope(run / "cells.csv", {"block_n": 999, "block_m": 64})
+    with pytest.raises(CorpusMissing, match="no column"):
+        corpus_slope(run / "cells.csv", {"not_a_column": 1})
+    with pytest.raises(CorpusMissing, match="not in this tree"):
+        corpus_slope(run / "nope.csv", {"block_n": 32})
+
+
+def test_one_run_dir_refuses_an_arm_that_is_not_here(tmp_path):
+    with pytest.raises(CorpusMissing, match="has no corpus"):
+        one_run_dir(tmp_path / "absent_arm")
+    (tmp_path / "two" / "a").mkdir(parents=True)
+    (tmp_path / "two" / "b").mkdir(parents=True)
+    with pytest.raises(CorpusMissing, match="refusing to pick one"):
+        one_run_dir(tmp_path / "two")
+
+
+def test_one_profiled_tile_count_reduces_to_one_schema_row(tmp_path, monkeypatch):
+    """The whole of `--run`'s per-cell path, with ncu and the sweep stubbed.
+
+    This is the code that would otherwise execute for the first time on a
+    metered box: build the two command lines, read the log ncu wrote, read the
+    row the sweep wrote, take the call floor out of it, and reduce. The stub
+    writes a canned profile with 11 marker launches and a cells.csv claiming
+    iters 10 and trials 1, so the floor is 10 and the count clears it by the one
+    warmup call the instrument always makes.
+    """
+    import scripts.dram_counter_route as DCR
+
+    def fake_run(argv, timeout=60):
+        assert argv[0] == "ncu-stub"
+        log = Path(argv[argv.index("--log-file") + 1])
+        out_dir = Path(argv[argv.index("--out") + 1])
+        assert "--no-l2-flush" in argv
+        log.write_text(canned_ncu_csv(**PLANTED))
+        run = out_dir / "block_m_crossing" / "someid"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "cells.csv").write_text(
+            "block_m,tiles_per_expert,ms_p50,iters,trials,status\n"
+            "64,4,0.94,10,1,ok\n")
+        del timeout
+        return 0, "", ""
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    args = build_parser().parse_args(["--block-m", "64"])
+    row = DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+    assert row["n"] == 4 and row["rows_per_expert"] == 256
+    assert row["calls"] == 11 and row["calls_floor"] == 10
+    assert row["dram_bytes_read"] == pytest.approx(PLANTED["read_per_call"], rel=1e-12)
+    assert row["sweep_iters"] == 10 and row["sweep_trials"] == 1
+    assert set(COUNTER_ROW_KEYS) <= set(row)
+
+
+def test_a_profile_spanning_two_cells_refuses_rather_than_averaging_them(
+        tmp_path, monkeypatch):
+    """Two ok rows under one profile means the byte total spans two geometries
+    and the tile count the row claims is not the only one in it."""
+    import scripts.dram_counter_route as DCR
+
+    def fake_run(argv, timeout=60):
+        Path(argv[argv.index("--log-file") + 1]).write_text(canned_ncu_csv(**PLANTED))
+        run = Path(argv[argv.index("--out") + 1]) / "block_m_crossing" / "id"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "cells.csv").write_text(
+            "block_m,tiles_per_expert,ms_p50,iters,trials,status\n"
+            "64,4,0.94,10,1,ok\n64,8,1.88,10,1,ok\n")
+        del timeout
+        return 0, "", ""
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    args = build_parser().parse_args(["--block-m", "64"])
+    with pytest.raises(CounterRunRefused, match="spans two geometries"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+
+def test_an_ncu_that_wrote_no_log_refuses_with_its_own_stderr(tmp_path, monkeypatch):
+    import scripts.dram_counter_route as DCR
+    monkeypatch.setattr(DCR, "_run",
+                        lambda argv, timeout=60: (1, "", "ERR_NVGPUCTRPERM"))
+    args = build_parser().parse_args(["--block-m", "64"])
+    with pytest.raises(CounterRunRefused, match="ERR_NVGPUCTRPERM"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+
+def _ladder_capture(argv, timeout=60):
+    """A ladder capture that writes the canned profile and the sweep's one
+    row, as `test_one_profiled_tile_count_reduces_to_one_schema_row` plants."""
+    del timeout
+    Path(argv[argv.index("--log-file") + 1]).write_text(canned_ncu_csv(**PLANTED))
+    run = Path(argv[argv.index("--out") + 1]) / "block_m_crossing" / "someid"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "cells.csv").write_text("block_m,tiles_per_expert,ms_p50,iters,trials,status\n"
+                                   "64,4,0.94,10,1,ok\n")
+    return 0, "", ""
+
+
+def test_a_ladder_rerun_never_reduces_the_last_capture(tmp_path, monkeypatch):
+    """The fourth capture site (second review, 2026-09-25): the ladder
+    family's `profile_one_tile_count` never deleted its last log or its
+    sweep's cells.csv, and checked only that the log existed. A rerun into
+    the same profile dir whose ncu died before writing reduced the LAST
+    capture as this one's; one whose sweep died before its row read the last
+    row's call floor. Each now refuses."""
+    import scripts.dram_counter_route as DCR
+    args = build_parser().parse_args(["--block-m", "64"])
+    monkeypatch.setattr(DCR, "_run", _ladder_capture)
+    assert DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)["calls"] == 11
+    monkeypatch.setattr(DCR, "_run", lambda argv, timeout=60: (1, "", "ERR_NVGPUCTRPERM"))
+    with pytest.raises(CounterRunRefused, match="wrote no counters-n4"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+    def log_only(argv, timeout=60):
+        del timeout
+        Path(argv[argv.index("--log-file") + 1]).write_text(canned_ncu_csv(**PLANTED))
+        return 0, "", ""
+    monkeypatch.setattr(DCR, "_run", _ladder_capture)
+    DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+    monkeypatch.setattr(DCR, "_run", log_only)
+    with pytest.raises(CounterRunRefused, match="0 cells.csv under"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+
+def test_the_stamped_contrast_matches_the_cell_on_its_pipeline_depth_too(
+        tmp_path, monkeypatch):
+    """The hinge and the schedule pair's G=16 cell are one geometry at two
+    depths, so a match on geometry alone stamps one arm's prediction on the
+    other arm's cell. Checked by asking for depth 3 and depth 4 at the same
+    BLOCK_M, BLOCK_N and GROUP_SIZE_M and requiring two different predictions.
+    """
+    cells = contrast_plan(64)
+    hinge = next(c for c in cells if c.name == "bn64-g16-m64")
+    occ = next(c for c in cells if c.name == "s3w8g16-m64")
+    assert (hinge.block_m, hinge.block_n, hinge.group_m) == \
+           (occ.block_m, occ.block_n, occ.group_m)
+    assert hinge.num_stages != occ.num_stages
+    assert hinge.slope_ms != occ.slope_ms
+    del tmp_path, monkeypatch
+
+
+# --------------------------------------------------------------------------
+# THE 2026-09-10 REPAIR. Four defects found by review of the commit that built
+# the runner, each one a gate or a parser that would have produced a wrong
+# reading on the metered box rather than a crash.
+# --------------------------------------------------------------------------
+
+def _h200_payload(alpha_name: str, *, block_m: int = 64, anchors=None) -> dict:
+    """A counter payload for the cell the plan registers, planted ON an anchor.
+
+    The point of planting exactly on an anchor is that this is what a SUCCESSFUL
+    run looks like: the ladder and the counter agree. Anything the gates say
+    about it, they say about a measurement that worked.
+    """
+    anc, _rep = DCR.anchors_from_report(DEFAULT_REPORT, block_m)
+    registered = anchors if anchors is not None else anc.as_dict()
+    alpha = registered[alpha_name]
+    ridge, _src = measured_ridge("nvidia_h200")
+    lo, hi = physical_bracket(anc.slope, anc.t1_ms, weight_bytes_total(MIXTRAL),
+                              activation_bytes_per_tile(MIXTRAL, block_m),
+                              DATASHEET_PEAK_GBPS["nvidia_h200"])
+    return {"device": "nvidia_h200", "model": "mixtral-8x7b", "dtype": "bf16",
+            "group_m": 16, "block_n": 64, "block_k": 64, "num_warps": 8,
+            "num_stages": 4, "block_m": block_m, "cache_control": "all",
+            "ridge": ridge, "anchors": registered, "bracket": [lo, hi],
+            "rows": [{"n": n, "calls": 11, "calls_floor": 10, "launches": 44,
+                      "dram_bytes_read": predicted_read_bytes(MIXTRAL, block_m, n, alpha),
+                      "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+                      "gpu_time_ns": 1.95e6, "by_kernel": {}}
+                     for n in (1, 2, 3, 4, 6, 8)]}
+
+
+def test_c1_cannot_be_asked_for_one_survivor_on_the_cell_the_plan_registers():
+    """The blocking defect: C1 was pre-determined to FAIL on this cell.
+
+    The H200 anchors span 0.0393 end to end, narrower than C1's own 0.05
+    survival window, so a measurement landing ON an anchor leaves all three
+    standing. The gate asked for exactly one and returned FAIL with the
+    diagnosis "the cell was badly chosen", which was true and was known before
+    the run: --dry-run's own text says the anchors agree to 0.04. The
+    registration now decides which question the cell carries.
+    """
+    payload = _h200_payload("n3")
+    spread = max(payload["anchors"].values()) - min(payload["anchors"].values())
+    assert spread < C1_TOLERANCE, "this test is about a cluster narrower than the window"
+    gates, summary = score_counter_run(payload)
+    c1 = next(g for g in gates if g.number == "C1")
+    assert summary["c1_mode"] == "clustered"
+    assert len(summary["survivors"]) == 3, "the old rule's FAIL, still visible"
+    assert c1.verdict == PASS
+    assert "cannot separate" in c1.claim
+    assert any("NOT DISCRIMINATING" in line for line in c1.lines)
+
+
+def test_a_successful_measurement_of_that_cell_exits_done(tmp_path, capsys):
+    """The consequence the operator would have read on the pod: exit 1.
+
+    Scored end to end through --analyse, because the exit code is what the
+    session driver files the arm under and CLAIM_FAIL is "measured, the world
+    disagreed". The world did not disagree; the gate could not pass.
+    """
+    path = tmp_path / "h200.json"
+    path.write_text(json.dumps(_h200_payload("n3")))
+    assert main(["--analyse", str(path)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C1")
+    assert line.verdict == "PASS"
+    assert exit_codes.classify_text(out) == exit_codes.DONE
+
+
+def test_the_a100_cell_keeps_the_question_it_can_answer(tmp_path, capsys):
+    """And the repair is not a loosening: on a cell whose anchors ARE separated,
+    C1 still demands exactly one survivor, and two survivors still FAIL."""
+    a100 = {"published": 0.6473, "t1": 0.4522, "n3": 0.7047}
+    reg = c1_registration(a100)
+    assert reg.separating and reg.min_gap > C1_TOLERANCE
+    assert reg.verdict(["t1"]) == PASS
+    assert reg.verdict(["t1", "n3"]) == FAIL
+    assert reg.verdict([]) == FAIL
+    # ...and a clustered cell's FAIL is every anchor refuted, which is a result
+    # and not an instrument failure, so C1 stays a CLAIM gate in both modes.
+    payload = _h200_payload("n3")
+    payload["rows"] = [{"n": n, "calls": 11, "calls_floor": 10, "launches": 44,
+                        "dram_bytes_read": predicted_read_bytes(MIXTRAL, 64, n, 0.05),
+                        "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+                        "gpu_time_ns": 1.95e6, "by_kernel": {}}
+                       for n in (1, 2, 3, 4, 6, 8)]
+    path = tmp_path / "refuted.json"
+    path.write_text(json.dumps(payload))
+    assert main(["--analyse", str(path)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C1")
+    assert line.verdict == "FAIL"
+    del capsys
+
+
+def test_c1_refuses_a_payload_that_registered_no_anchor_at_all():
+    """A gate with nothing to compare against examined nothing. It used to score
+    FAIL with "survivors none", which reads as three refuted anchors."""
+    payload = _h200_payload("n3")
+    payload.pop("anchors")
+    gates, _summary = score_counter_run(payload)
+    c1 = next(g for g in gates if g.number == "C1")
+    assert c1.verdict == REFUSE
+    assert c1.scored()[2] == exit_codes.UNKNOWN
+
+
+def test_the_plan_registers_c1_before_anything_runs(capsys):
+    """Said at registration time, on the cell the plan actually holds, so the
+    operator does not discover it from a gate on a rented box."""
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "C1, REGISTERED" in out
+    assert "NOT DISCRIMINATING" in out
+    anc, _rep = DCR.anchors_from_report(DEFAULT_REPORT, 64)
+    reg = c1_registration(anc.as_dict())
+    assert f"{reg.min_gap:.4f}" in out and f"{C1_TOLERANCE:.2f}" in out
+
+
+def test_the_parser_requires_the_unit_column_the_way_it_requires_the_id():
+    """The parser's one defence against ncu's per-launch rescaling was optional.
+
+    `Metric Unit` was picked up `if name in header`, so a CSV without the column
+    left `unit` empty, and the byte tables mapped "" to 1.0. A file whose bytes
+    ncu had already rescaled to Mbyte read as bytes: a factor of 1e6 low, still
+    perfectly affine in n, and therefore invisible to V3, V4 and every gate but
+    the n=1 one.
+    """
+    head = '"ID","Kernel Name","Metric Name","Metric Value"'
+    rows = [head]
+    for launch in range(1, 12):
+        kernel = CALL_MARKER if launch % 4 == 1 else "fused_moe_kernel"
+        for metric in NCU_METRICS:
+            rows.append(f'"{launch}","{kernel}","{metric}","2840.0"')
+    with pytest.raises(CounterRunRefused, match="Metric Unit"):
+        parse_ncu_csv("\n".join(rows))
+    # and a blank unit CELL, on a header that does carry the column, refuses too
+    blank = ['"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"',
+             f'"1","{CALL_MARKER}","dram__bytes_read.sum","","2840.0"']
+    with pytest.raises(CounterRunRefused, match="never been shown"):
+        parse_ncu_csv("\n".join(blank))
+    assert all("" not in units for _canon, units in DCR.NCU_METRIC_UNITS.values())
+
+
+def test_the_schedule_pairs_knobs_are_read_off_the_committed_rows():
+    """Two call sites, one estimator: the BLOCK_N cells read their knobs from
+    their arm's report and the schedule pair typed theirs from the setting
+    string. The typed values were right, and nothing would have said so if a
+    republish had moved a pipeline depth."""
+    run = one_run_dir(GAPS_SESSION / "occupancy_vs_swizzle")
+    for setting, group_m in (("s3w8g1", 1), ("s3w8g16", 16)):
+        knobs = corpus_knobs(run / "cells.csv", {"setting": setting, "block_m": 64},
+                             ("group_m", "num_stages", "num_warps"))
+        cell = next(c for c in contrast_plan(64) if c.name == f"{setting}-m64")
+        assert (cell.group_m, cell.num_stages, cell.num_warps) == (
+            knobs["group_m"], knobs["num_stages"], knobs["num_warps"])
+        assert knobs["group_m"] == group_m
+        assert "cells.csv" in cell.knob_source
+    # a column the rows do not carry, and a selection spanning two values of
+    # one, both refuse rather than picking whichever sorted first.
+    with pytest.raises(CorpusMissing, match="no column"):
+        corpus_knobs(run / "cells.csv", {"setting": "s3w8g1"}, ("block_n",))
+    with pytest.raises(CorpusMissing, match="that is two cells"):
+        corpus_knobs(run / "cells.csv", {"block_m": 64}, ("group_m",))
+
+
+def test_the_occupancy_arms_block_n_is_read_and_its_source_named():
+    """The arm records its BLOCK_SIZE_N inside the text of the gate that checks
+    it and nowhere as a field, so the reader says which of the two it used."""
+    run = one_run_dir(GAPS_SESSION / "occupancy_vs_swizzle")
+    report = json.loads((run / "report.json").read_text())
+    block_n, source = occupancy_block_n(report)
+    assert block_n == 64 and "report.json" in source
+    fallback, source = occupancy_block_n({"no": "pin here"})
+    assert fallback == 64 and "FIXED" in source
+
+
+def test_the_plan_id_separates_two_cards():
+    """`--card` became a first-class knob and was not in the id, so the same
+    cell planned for the A100 and for the H200 produced one string while every
+    prediction under it differed."""
+    h200 = build_parser().parse_args([])
+    a100 = build_parser().parse_args(["--card", "nvidia_a100_sxm4_80gb"])
+    assert plan_id(h200) != plan_id(a100)
+    assert plan_id(h200).startswith("nvidia_h200-")
+    assert plan_id(h200) == plan_id(build_parser().parse_args([]))
+
+
+# --------------------------------------------------------------------------
+# --contrast. The reading the extended plan exists to take, which no single
+# payload contains and which nothing scored until this repair.
+# --------------------------------------------------------------------------
+
+def _pair_payloads(tmp_path, *, lo_dr=None, hi_dr=None, lo_cache="all",
+                   hi_cache="all", stamped_cell=None) -> tuple[Path, Path]:
+    cells = contrast_plan(64)
+    pair = contrast_pairs(cells)[0]
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    W = weight_bytes_total(MIXTRAL)
+    lo_dr = pair.lo.traffic_bytes_per_tile(stream, W) if lo_dr is None else lo_dr
+    hi_dr = pair.hi.traffic_bytes_per_tile(stream, W) if hi_dr is None else hi_dr
+    lo = tmp_path / "lo.json"
+    hi = tmp_path / "hi.json"
+    lo.write_text(json.dumps(synthetic_counter_payload(
+        pair.lo, lo_dr, cache_control=lo_cache, stamped_cell=stamped_cell)))
+    hi.write_text(json.dumps(synthetic_counter_payload(
+        pair.hi, hi_dr, cache_control=hi_cache)))
+    return lo, hi
+
+
+def test_the_contrast_is_scored_across_two_payloads_and_names_the_rival(tmp_path, capsys):
+    """Acceptance for the mode: a TRAFFIC world reads as TRAFFIC.
+
+    Until this repair `--analyse` scored ONE payload and the discriminator was a
+    ratio ACROSS two, so the operator came off the pod with five scored cells
+    and section 2's arithmetic to do by hand against the printed predictions.
+    """
+    lo, hi = _pair_payloads(tmp_path)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    names = [ln.name for ln in exit_codes.parse_result_lines(out)]
+    assert names == ["X0", "XA-all"]
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "PASS" and "TRAFFIC" in line.detail
+    pair = contrast_pairs(contrast_plan(64))[0]
+    assert f"{pair.traffic_ratio:.3f}" in out
+    assert exit_codes.classify_text(out) == exit_codes.DONE
+
+
+def test_a_time_world_reads_as_time_and_not_as_a_failed_traffic_prediction(
+        tmp_path, capsys):
+    """The other rival is an ANSWER, not a failure: identical reads at both
+    BLOCK_N mean the missing term is time and no byte model can hold it."""
+    _lo, hi = _pair_payloads(tmp_path)
+    same = json.loads(hi.read_text())["rows"][1]["dram_bytes_read"]
+    del same
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    pair = contrast_pairs(contrast_plan(64))[0]
+    dr = pair.hi.traffic_bytes_per_tile(stream, weight_bytes_total(MIXTRAL))
+    lo, hi = _pair_payloads(tmp_path, lo_dr=dr, hi_dr=dr)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "PASS" and "TIME" in line.detail
+
+
+def test_a_ratio_between_the_two_rivals_refutes_both_as_stated(tmp_path, capsys):
+    """Anything in between is reported as the split it is, not rounded to the
+    nearer rival."""
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    pair = contrast_pairs(contrast_plan(64))[0]
+    dr = pair.hi.traffic_bytes_per_tile(stream, weight_bytes_total(MIXTRAL))
+    lo, hi = _pair_payloads(tmp_path, lo_dr=dr * 1.4, hi_dr=dr)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "FAIL" and "neither" in line.detail
+
+
+def test_a_pair_nobody_ran_is_refused_and_never_scored_unknown(tmp_path, capsys):
+    """The C1 defect's own shape, not repeated here: a gate for a contrast that
+    has no payloads would be UNKNOWN, which counts against the run, so a plan
+    run half through would report CLAIM_FAIL for the half it never took."""
+    cells = contrast_plan(64)
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    W = weight_bytes_total(MIXTRAL)
+    paths = []
+    for name in ("bn32-g16-m64", "s3w8g1-m64"):
+        cell = next(c for c in cells if c.name == name)
+        p = tmp_path / f"{name}.json"
+        p.write_text(json.dumps(synthetic_counter_payload(
+            cell, cell.traffic_bytes_per_tile(stream, W))))
+        paths.append(p)
+    assert main(["--contrast", *[str(p) for p in paths]]) == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert exit_codes.parse_result_lines(out) == []
+    assert "no registered pair is complete" in out
+    # and one file is not a contrast at all
+    assert main(["--contrast", str(paths[0])]) == exit_codes.REFUSED
+
+
+def test_pairs_are_matched_inside_one_cache_mode(tmp_path, capsys):
+    """ncu's --cache-control sets the cache state, so a ratio taken across two
+    cache modes is a ratio between two apparatuses."""
+    lo, hi = _pair_payloads(tmp_path, lo_cache="all", hi_cache="none")
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.REFUSED
+    assert "no registered pair is complete" in capsys.readouterr().out
+
+
+def test_the_stamped_cell_name_is_read_back_rather_than_trusted(tmp_path, capsys):
+    """`build_counter_payload` stamped `contrast` into every payload and nothing
+    ever read it back. A payload whose stamp and whose knobs disagree is one of
+    the two, and the ratio may not be taken under either name."""
+    lo, hi = _pair_payloads(tmp_path, stamped_cell="bn128-g16-m64")
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    assert "stamped contrast says" in out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.kind == "VALIDITY" and line.verdict == "FAIL"
+
+
+def test_a_ratio_over_a_payload_whose_own_gates_failed_is_invalid(tmp_path, capsys):
+    """Validity voids the claims above it, ACROSS files as well as inside one."""
+    lo, hi = _pair_payloads(tmp_path)
+    payload = json.loads(lo.read_text())
+    payload["rows"][2]["dram_bytes_read"] = payload["rows"][0]["dram_bytes_read"]
+    lo.write_text(json.dumps(payload))
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.verdict == "FAIL"
+    assert "V3" in out
+
+
+def test_two_payloads_for_one_cell_and_cache_mode_are_a_collision(tmp_path):
+    """Argument order would otherwise choose which of two measurements the ratio
+    was taken over."""
+    lo, hi = _pair_payloads(tmp_path)
+    twin = tmp_path / "lo-again.json"
+    twin.write_text(lo.read_text())
+    args = build_parser().parse_args(
+        ["--contrast", str(lo), str(twin), str(hi)])
+    rows, _cells = contrast_rows([lo, twin, hi])
+    assert len(rows) == 3
+    assert DCR.do_contrast(args) == exit_codes.INVALID
+
+
+def test_the_measured_slope_is_the_ratio_and_carries_no_bandwidth(tmp_path):
+    """The discriminator is two measured slopes divided: no byte model, no
+    weight total, no card rate, so a recalibration cannot move it."""
+    lo, hi = _pair_payloads(tmp_path)
+    dr_lo, resid = measured_dr_dn(json.loads(lo.read_text()))
+    dr_hi, _resid = measured_dr_dn(json.loads(hi.read_text()))
+    pair = contrast_pairs(contrast_plan(64))[0]
+    assert resid < 1e-9
+    assert dr_lo / dr_hi == pytest.approx(pair.traffic_ratio, rel=1e-9)
+    assert dr_lo / dr_hi == pytest.approx(pair.lo.slope_ms / pair.hi.slope_ms, rel=1e-9)
+    # a payload with fewer than three tile counts has no slope and says so
+    thin = json.loads(lo.read_text())
+    thin["rows"] = thin["rows"][:2]
+    with pytest.raises(CounterRunRefused, match="a slope needs three"):
+        measured_dr_dn(thin)
+
+
+def test_the_pairs_the_plan_prints_are_the_pairs_the_scorer_reads(capsys):
+    """One registration, two readers. The plan printed CONTRAST A and B out of
+    inline literals and the scorer would have had its own copy."""
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    for pair in contrast_pairs(contrast_plan(64)):
+        assert f"CONTRAST {pair.label}" in out
+        assert f"{pair.traffic_ratio:.3f}" in out
+        assert pair.separates(CONTRAST_TOLERANCE)
+        assert "SEPARATING" in out
+    assert "--contrast" in out, "the recipe must name the mode that scores it"
+
+
+def test_a_pair_whose_rivals_overlap_is_registered_not_failed():
+    """The C1 fix applied at the second call site. A pair whose two predictions
+    both fit inside the scoring window cannot decide, and `separates` is the
+    check that says so before a box is rented."""
+    cells = contrast_plan(64)
+    pair = contrast_pairs(cells)[0]
+    assert pair.separates(0.05)
+    # widen the window to 60% and the two acceptance bands overlap, so there
+    # are ratios no reading can attribute
+    assert not pair.separates(0.60)
+    verdict, which = pair.read(1.5, 0.60)
+    assert verdict == REFUSE and "does not separate" in which
+    # and at the registered window the same ratio attributes to neither, which
+    # is a FAIL and a result rather than an undecidable gate
+    assert pair.read(1.5, CONTRAST_TOLERANCE)[0] == FAIL
+
+
+def test_the_contrast_json_carries_provenance_and_its_own_instrument(tmp_path):
+    """Every JSON this script writes goes through `stamped`, the fourth write
+    site included."""
+    lo, hi = _pair_payloads(tmp_path)
+    out = tmp_path / "contrast.json"
+    assert main(["--contrast", str(lo), str(hi), "--out", str(out)]) == exit_codes.DONE
+    doc = json.loads(out.read_text())
+    for key in ("git_sha", "gpu_name", "instrument", "provenance", "run_id"):
+        assert key in doc
+    assert doc["instrument"] == CONTRAST_INSTRUMENT
+    assert "no-kernel-timed" in CONTRAST_INSTRUMENT
+    assert doc["tolerance"] == CONTRAST_TOLERANCE
+    assert doc["run_id"].startswith(NO_CARD.replace("-", "_")[:4]) or doc["run_id"]
+    one = build_parser().parse_args(["--contrast", str(lo), str(hi)])
+    two = build_parser().parse_args(["--contrast", str(lo)])
+    assert run_id_for("contrast", one, NO_CARD) != run_id_for("contrast", two, NO_CARD)
+
+
+def test_contrast_is_one_mode_among_the_seven(capsys):
+    """Two modes at once still refuses, and the refusal names the new one."""
+    assert main(["--contrast", "a.json", "--bracket"]) == exit_codes.REFUSED
+    assert "--contrast" in capsys.readouterr().out
+
+
+def test_a_ratio_across_two_cards_is_not_a_contrast(tmp_path, capsys):
+    """The pair varies one knob; a payload from another card varies the card
+    too, and the ratio would carry that difference silently."""
+    lo, hi = _pair_payloads(tmp_path)
+    other = json.loads(hi.read_text())
+    other["device"] = "nvidia_a100_sxm4_80gb"
+    hi.write_text(json.dumps(other))
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    assert "values of device" in out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.verdict == "FAIL"
+
+
+# ==========================================================================
+# BOTH OF ncu's CSV LAYOUTS (2026-09-24). No live ncu CSV has ever been
+# captured in this repository, and `--csv --page raw` may print one row per
+# launch and metric (LONG, what the parser was written against) or one row
+# per launch with a units row under the header (WIDE). Both are read.
+# ==========================================================================
+
+def _wide_csv(rows: list[dict], units: dict[str, str]) -> str:
+    """A planted `--csv --page raw` WIDE page: a header, a units row, one row
+    per launch."""
+    metrics = list(units)
+    fixed = ["ID", "Process ID", "Process Name", "Kernel Name"]
+    out = ["==PROF== Connected to process 1 (python)",
+           ",".join(f'"{c}"' for c in fixed + metrics),
+           ",".join(['""'] * len(fixed) + [f'"{units[m]}"' for m in metrics])]
+    for i, row in enumerate(rows):
+        out.append(",".join(f'"{c}"' for c in (str(i), "1", "python", row["kernel"]))
+                   + "," + ",".join(f'"{row[m]}"' for m in metrics))
+    return "\n".join(out) + "\n"
+
+
+def test_the_parser_reads_a_wide_raw_page_and_converts_its_units_row():
+    """ncu's raw CSV may be WIDE (one row per launch, a units row under the
+    header), and nothing in this repository has ever captured one. The parser
+    reads it launch by launch, converting each column by the unit its units
+    row names: Mbyte is a million bytes, not one."""
+    text = _wide_csv([{"kernel": "fused_moe_kernel", "dram__bytes_read.sum": "2.5",
+                       "gpu__time_duration.sum": "1.5"},
+                      {"kernel": "fused_moe_kernel", "dram__bytes_read.sum": "3.0",
+                       "gpu__time_duration.sum": "2.0"}],
+                     {"dram__bytes_read.sum": "Mbyte", "gpu__time_duration.sum": "usecond"})
+    launches = parse_ncu_csv(text)
+    assert [ln.launch_id for ln in launches] == ["0", "1"]
+    assert launches[0].metrics["dram__bytes_read.sum"] == pytest.approx(2.5e6)
+    assert launches[1].metrics["gpu__time_duration.sum"] == pytest.approx(2.0e3)
+    assert DCR.ncu_csv_layout(text)[0] == DCR.CSV_WIDE
+    assert DCR.ncu_csv_layout(canned_ncu_csv(**PLANTED))[0] == DCR.CSV_LONG
+
+
+def test_the_probe_reads_open_off_a_wide_raw_page():
+    """THE FALSE NEGATIVE THIS CLOSES. On a box whose counters work, a probe
+    that parsed only the long layout read a wide page as "no ncu CSV header"
+    and said REFUSE: the gate that decides a booking, wrong the other way."""
+    wide = _wide_csv([{"kernel": "probe", "dram__bytes_read.sum": "4194304"}],
+                     {"dram__bytes_read.sum": "byte"})
+    info = DCR.probe_reading("/planted/ncu", "planted", 0,
+                             f"{PK.MARKER} {PK.LAUNCHED} planted: one add_", "", wide)
+    assert info["counters_read"] is True and info["metric_value"] == 4194304.0
+    verdict, _notes = route_verdict({}, {}, info, {"present": False})
+    assert verdict == "OPEN"
+
+
+def test_a_wide_page_without_its_units_row_refuses():
+    """The units row is the wide layout's `Metric Unit` column: without it a
+    value ncu rescaled cannot be reduced, so the page refuses."""
+    text = ('"ID","Kernel Name","dram__bytes_read.sum"\n'
+            '"0","fused_moe_kernel","2.5"\n')
+    with pytest.raises(CounterRunRefused, match="no units row"):
+        parse_ncu_csv(text)
+    with pytest.raises(CounterRunRefused, match="no 'ID' column"):
+        parse_ncu_csv('"Kernel Name","dram__bytes_read.sum"\n"","byte"\n"k","1"\n')
+
+
+def test_sector_units_and_the_explicit_unitless_launch_entry():
+    """Sectors convert by their prefix; a launch attribute is read with no
+    unit, because it is registered unitless; an empty unit on a byte or a
+    sector metric still refuses; and only `launch__*` metrics are registered
+    unitless."""
+    text = _wide_csv([{"kernel": "fused_moe_kernel",
+                       "lts__t_sectors_srcunit_tex_op_read.sum": "2",
+                       "launch__grid_size": "7168"}],
+                     {"lts__t_sectors_srcunit_tex_op_read.sum": "Msector",
+                      "launch__grid_size": ""})
+    (launch,) = parse_ncu_csv(text)
+    assert launch.metrics["lts__t_sectors_srcunit_tex_op_read.sum"] == pytest.approx(2e6)
+    assert launch.metrics["launch__grid_size"] == 7168.0
+    for metric in ("dram__bytes_read.sum", "lts__d_sectors_fill_device.sum"):
+        with pytest.raises(CounterRunRefused, match="never been shown"):
+            parse_ncu_csv(_wide_csv([{"kernel": "k", metric: "1"}], {metric: ""}))
+    with pytest.raises(CounterRunRefused, match="never been shown"):
+        parse_ncu_csv(_wide_csv([{"kernel": "k", "launch__grid_size": "1"}],
+                                {"launch__grid_size": "kilogram"}))
+    unitless = [m for m, (_c, units) in DCR.NCU_LAUNCH_UNITS.items() if "" in units]
+    assert unitless and all(m.startswith("launch__") for m in unitless)
+    assert all(m.startswith("launch__") for m in DCR.NCU_LAUNCH_UNITS)
+    assert all("" not in units for _c, units in DCR.NCU_METRIC_UNITS.values())
+
+
+def test_a_soft_metric_that_cannot_be_read_is_recorded_and_a_hard_one_refuses():
+    """RECORDED metrics are parsed soft: an unreadable cell lands in
+    `Launch.unreadable` and never refuses the page. Every other metric still
+    refuses the whole parse on an unreadable cell."""
+    units = {"dram__bytes_read.sum": "byte", "launch__registers_per_thread": "furlong"}
+    text = _wide_csv([{"kernel": "k", "dram__bytes_read.sum": "10",
+                       "launch__registers_per_thread": "128"}], units)
+    (launch,) = parse_ncu_csv(text, soft=frozenset({"launch__registers_per_thread"}))
+    assert "launch__registers_per_thread" in launch.unreadable
+    assert launch.metrics == {"dram__bytes_read.sum": 10.0}
+    with pytest.raises(CounterRunRefused, match="furlong"):
+        parse_ncu_csv(text)
+
+
+# ==========================================================================
+# THE R3 ARMS UNDER A DRAM COUNTER (`--family r3-arms`), 2026-09-24.
+#
+# Everything below runs off any GPU. The child and ncu are planted; every
+# other step (the plan, the schedule, the parse, the attribution, the
+# reduction, the page, the gates) is the code `--run --family r3-arms` runs.
+# ==========================================================================
+
+sys.path.insert(0, str(REPO / "scripts"))
+import private_weight_reference as R3  # noqa: E402,I001
+
+
+def test_the_byte_model_is_read_from_its_owners():
+    """W from `routed_expert_weight_bytes_by_gemm`, and one tread's operand
+    reads E x BM x (H + F) x b by construction: the family re-derives
+    neither."""
+    from moe.bench import weights as WEIGHTS
+    cfg = MIXTRAL
+    byte = DCR.r3_byte_model(cfg, "bf16", 32)
+    by = WEIGHTS.routed_expert_weight_bytes_by_gemm(cfg, "bf16")
+    assert (byte["W_w1"], byte["W_w2"]) == (by["w1"], by["w2"])
+    assert byte["W"] == weight_bytes_total(cfg)
+    assert (byte["operand_per_tile_w1"] + byte["operand_per_tile_w2"]
+            == cfg.num_experts * 32 * (cfg.hidden_size + cfg.intermediate_size) * 2)
+
+
+def _vllm_pid_walk(e: int, n: int, g: int, num_pid_n: int = 5, dead: int = 3) -> float:
+    """vLLM v0.27.1's pid mapping, walked here independently of the module:
+    every CTA of the grid, the expert of its pid_m, and the group it reads in."""
+    num_pid_m = e * n + dead
+    per_group = g * num_pid_n
+    pairs = set()
+    for pid in range(num_pid_m * num_pid_n):
+        group_id = pid // per_group
+        first_pid_m = group_id * g
+        group_size_m = min(num_pid_m - first_pid_m, g)
+        pid_m = first_pid_m + ((pid % per_group) % group_size_m)
+        if pid_m < e * n:
+            pairs.add((pid_m // n, group_id))
+    return len(pairs) / e
+
+
+def test_group_reads_is_vllms_pid_mapping_walked_by_brute_force():
+    for e in (8, 64):
+        for n in range(1, 9):
+            for g in (1, 2, 3, 4, 8, 16, 64):
+                assert DCR.group_reads(e, n, g) == pytest.approx(
+                    _vllm_pid_walk(e, n, g), abs=1e-12), (e, n, g)
+                assert DCR.pid_mapping_reads(e, n, g) == pytest.approx(
+                    DCR.group_reads(e, n, g), abs=1e-12)
+
+
+def _planted_manifest(g: int = 4, **plan_over):
+    plan = dict(DCR.planted_r3_plan(g), **plan_over)
+    return plan, DCR.planted_r3_manifest(plan, device_uuid="planted")
+
+
+def test_attribution_is_exact_and_refuses_an_extra_launch_a_missing_one_and_a_swap():
+    _plan, manifest = _planted_manifest()
+    good = parse_ncu_csv(DCR.canned_r3_csv(manifest, "group", group_m=4))
+    attributed = DCR.attribute_launches(good, manifest)
+    assert len(attributed) == manifest["launch_count"] == 90
+    assert [a["gemm"] for a in attributed[:4]] == ["w1", "w2", "w1", "w2"]
+    for knob, needle in (({"extra_launch": True}, "EXACTLY"),
+                         ({"drop_launch": 7}, "EXACTLY"),
+                         ({"swap_grid_at": 10}, "ran a grid of")):
+        text = DCR.canned_r3_csv(manifest, "group", group_m=4, **knob)
+        with pytest.raises(CounterRunRefused, match=needle):
+            DCR.attribute_launches(parse_ncu_csv(text), manifest)
+
+
+@pytest.mark.parametrize("calls", [3, 5])
+def test_per_call_bytes_are_recovered_from_the_launch_list(calls):
+    """PER CALL is one fused_experts call, w1 launch plus w2 launch, averaged
+    over the cell's K calls; K is read off the manifest and counted off the
+    list. At K=3 and K=5 the reduction returns the planted per-call bytes."""
+    plan = DCR.r3_plan(model="mixtral-8x7b", dtype="bf16", block_m=32, block_n=64,
+                       num_stages=4, group_m=4, treads=DCR.R3_TREADS, kind="measure",
+                       arms=R3.ARMS, calls=calls, warmups=2, profile_dir=Path("p"),
+                       stem="g4")
+    manifest = DCR.planted_r3_manifest(plan, device_uuid="planted")
+    launches = parse_ncu_csv(DCR.canned_r3_csv(manifest, "group", group_m=4),
+                             soft=frozenset(DCR.R3_RECORDED_METRICS))
+    cells = DCR.r3_reduce_cells(DCR.attribute_launches(launches, manifest), manifest,
+                                DCR.R3_ALL_METRICS)
+    for cell in cells:
+        assert cell["calls"] == calls and len(cell["per_call_values"]) == calls
+        planted = [sum(DCR.r3_world_launch(
+            "group", MIXTRAL, block_m=32, group_m=4, arm=cell["arm"], n=cell["n"],
+            gemm=g, call=i, calls=calls, grid=cell["grid"][g])["dram__bytes_read.sum"]
+            for g in ("w1", "w2")) for i in range(calls)]
+        assert cell["per_call_values"] == pytest.approx(planted, rel=1e-12)
+        assert cell["per_call"]["dram_bytes_read"] == pytest.approx(
+            statistics.fmean(planted), rel=1e-12)
+        for g in ("w1", "w2"):
+            assert cell["per_gemm_values"][g] == pytest.approx([DCR.r3_world_launch(
+                "group", MIXTRAL, block_m=32, group_m=4, arm=cell["arm"], n=cell["n"],
+                gemm=g, call=i, calls=calls, grid=cell["grid"][g])["dram__bytes_read.sum"]
+                for i in range(calls)], rel=1e-12)
+
+
+def _gates(page) -> dict:
+    return {g["number"]: g["verdict"] for g in page["gates"]}
+
+
+def _page_exit(page) -> int:
+    return exit_codes.classify((g["kind"], g["number"], exit_codes.UNKNOWN
+                                if g["verdict"] == REFUSE else g["verdict"])
+                               for g in page["gates"])
+
+
+#: Every planted world, at the G it is scored at. Listed here rather than read
+#: off `R3_WORLDS` so that each case collects, and fails on its own, on a
+#: tree without the family; the test holds the two lists equal.
+WORLD_CASES = (("group", 1), ("group", 4), ("no-reuse", 4),
+               ("private-reads-copy-0", 4), ("declaration", 4), ("noisy", 4),
+               ("request-mismatch", 4), ("request-coalesced", 4), ("uncarded", 4),
+               ("activation-thrash", 64))
+
+
+@pytest.mark.parametrize(("world", "group_m"), WORLD_CASES)
+def test_each_planted_world_scores_its_registered_exit(world, group_m):
+    """GROUP: every validity gate and C1/C2/C3/C6 PASS, exit 0 (C3 is asked at
+    G=1 only). NO-REUSE: C1 FAIL, exit 1. PRIVATE-READS-COPY-0: V5 FAIL, exit
+    3. DECLARATION +5%: V7. NOISY 2%: V3. REQUEST-MISMATCH: V6. REQUEST-
+    COALESCED, the GH200's shape on the planted sm_90 card (SHARED and NATIVE
+    counting 5% under their loads at n >= 2): exit 0. UNCARDED: V0."""
+    assert {w for w, _g in WORLD_CASES} == set(DCR.R3_WORLDS)
+    _why, want, gate = DCR.R3_WORLDS[world]
+    page = DCR.planted_r3_page(world, group_m)
+    verdicts = _gates(page)
+    assert _page_exit(page) == want, verdicts
+    if gate is not None:
+        assert verdicts[gate] == FAIL, verdicts
+    for spared in DCR.R3_WORLD_NOT_FAIL.get(world, ()):
+        assert spared in verdicts and verdicts[spared] != FAIL, (spared, verdicts)
+    if world == "group":
+        assert all(v == PASS for v in verdicts.values()), verdicts
+        want_claims = {"C1", "C2", "C6"} | ({"C3"} if group_m == 1 else set())
+        assert want_claims <= set(verdicts)
+
+
+def test_the_self_test_scores_each_world_at_the_g_the_cases_name():
+    """`--self-test` and this file score the planted worlds at the same G."""
+    for world in DCR.R3_WORLDS:
+        assert (tuple(sorted(g for w, g in WORLD_CASES if w == world))
+                == tuple(sorted(DCR.R3_WORLD_GROUPS.get(world, (4,))))), world
+
+
+def _result(page, name: str) -> str:
+    """The verdict gate `name`'s RESULT line prints, in the shared spelling."""
+    gate = next(DCR.Gate(**g) for g in page["gates"] if g["number"] == name)
+    return gate.scored()[2]
+
+
+def test_an_activation_thrash_at_g64_is_not_a_group_model_refutation():
+    """D1, 2026-09-24. The byte model charges each GEMM's A operand once per
+    M-tile; the kernel requests it once per N-tile CTA, and at G=64 every
+    column pass walks every live M-tile, so where that pass outgrows the L2
+    the repeats reach DRAM. The planted world reads EXACTLY the group model's
+    weights in SHARED and n in PRIVATE and re-reads activations in both
+    (PRIVATE more). Before this date the page passed every validity gate,
+    FAILED C2 (a group-model refutation) and printed alpha(64) above 0. Now
+    C2 reads UNKNOWN, C1 holds, the alpha bracket contains the model's
+    slope, and C6 names PRIVATE's excess as bytes."""
+    page = DCR.planted_r3_page("activation-thrash", 64)
+    verdicts = _gates(page)
+    assert all(g["verdict"] == PASS for g in page["gates"] if g["kind"] == "VALIDITY")
+    assert verdicts["C1"] == PASS and verdicts["C6"] == FAIL
+    assert verdicts["C2"] == REFUSE and _result(page, "C2") == exit_codes.UNKNOWN
+    assert _page_exit(page) == exit_codes.CLAIM_FAIL
+    est = page["estimates"]
+    model = [DCR.group_reads(8, n, 64) for n in DCR.R3_TREADS]
+    truth = ols(list(DCR.R3_TREADS), model)[1]
+    for part in ("total", "w1", "w2"):
+        lo, hi = est["alpha_bracket"][part]
+        assert lo - 1e-12 <= truth <= hi + 1e-12, (part, lo, hi, truth)
+    assert est["alpha_slope"]["w2"] > truth + DCR.R3_GROUP_TOL, \
+        "the upper edge still reads the re-reads as weights; the bracket is what moved"
+    for n in DCR.R3_TREADS:
+        lo, hi = est["q_S_bracket"]["w2"][str(n)]
+        assert lo - 1e-9 <= DCR.group_reads(8, n, 64) <= hi + 1e-9, (n, lo, hi)
+
+
+def test_activation_bytes_on_a_group_page_are_not_scored_as_weight_reads():
+    """The same defect, planted with nothing the fix added: a G=64 page whose
+    SHARED weights read the group model exactly, with activation re-reads
+    added to both arms' w2 at n >= 2 (PRIVATE's no smaller, its slabs being
+    wider). Before 2026-09-24 C2 read FAIL, a group-model refutation."""
+    page = DCR.planted_r3_page("group", 64)
+    byte = DCR.r3_byte_model(MIXTRAL, "bf16", 32)
+    passes = {"native": 6, "shared": 6, "private": 10}
+    for cell in page["cells"]:
+        if cell["n"] < 2:
+            continue
+        extra = passes[cell["arm"]] * cell["n"] * byte["operand_per_tile_w2"]
+        gemm = cell["per_gemm"]["w2"]
+        gemm["dram_bytes_read"] += extra
+        gemm["l2_fill_device_sectors"] += extra / DCR.L2_SECTOR_BYTES
+        gemm["l2_read_miss_sectors"] += extra / DCR.L2_SECTOR_BYTES
+        cell["per_call"]["dram_bytes_read"] += extra
+        cell["per_call_values"] = [v + extra for v in cell["per_call_values"]]
+    gates, summary = DCR.score_r3_page(page)
+    verdicts = {g.number: g.verdict for g in gates}
+    assert all(v == PASS for k, v in verdicts.items() if k.startswith("V")), verdicts
+    assert summary["estimates"]["q_S"]["w2"]["6"] > DCR.R3_W2_CEILING, \
+        "q_S itself sits above C2's ceiling; the verdict must not read it as weights"
+    assert verdicts["C2"] != FAIL and verdicts["C1"] == PASS, verdicts
+    lo, hi = summary["estimates"]["alpha_bracket"]["w2"]
+    assert lo - 1e-12 <= 0.0 <= hi + 1e-12
+
+
+def test_the_weight_bracket_takes_privates_excess_off_shared(monkeypatch):
+    """e = q_P - n (clamped at 0) per GEMM and tread, and SHARED's weight-only
+    q is [q_S - e, q_S]; the scorer's C1 and C2 read those edges."""
+    page = DCR.planted_r3_page("activation-thrash", 64)
+    q = DCR.r3_q(page)
+    e, lo, hi = DCR.r3_weight_bracket(q, DCR.R3_TREADS)
+    for part in ("total", "w1", "w2"):
+        for n in DCR.R3_TREADS:
+            assert e[part][n] == pytest.approx(max(q["private"][part][n] - n, 0.0))
+            assert (lo[part][n], hi[part][n]) == pytest.approx(
+                (q["shared"][part][n] - e[part][n], q["shared"][part][n]))
+    q["private"]["w2"][2] = 2.0 - 1e-6
+    assert DCR.r3_weight_bracket(q, DCR.R3_TREADS)[0]["w2"][2] == 0.0
+
+
+def _spread_calls(cell: dict, gemm: str, rel: float) -> None:
+    """One GEMM's K=3 calls at mean x (1 - rel, 1, 1 + rel): the mean kept."""
+    m = cell["per_gemm"][gemm]["dram_bytes_read"]
+    cell["per_gemm_values"][gemm] = [m * (1 - rel), m, m * (1 + rel)]
+
+
+def test_v3_gates_n1_and_the_bracket_carries_a_deeper_spread():
+    """2026-09-25, the first A100 pages: at n >= 2 SHARED's and NATIVE's w2
+    moved up to 6.8% between identical calls (L2 reuse that follows the order
+    tiles run in) while every n=1 cell repeated within 0.51%, and V3 voided
+    three of five pages. A deeper spread now widens SHARED's bracket to its
+    farthest call; a spread at n=1, where no weight slab is read twice, still
+    voids the page."""
+    page = DCR.planted_r3_page("group", 1)
+    _gates0, before = DCR.score_r3_page(page)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    _spread_calls(cells[("shared", 3)], "w2", 0.03)
+    gates, after = DCR.score_r3_page(page)
+    assert {g.number: g.verdict for g in gates}["V3"] == PASS
+    step = 0.03 * cells[("shared", 3)]["per_gemm"]["w2"]["dram_bytes_read"] / \
+        DCR.r3_byte_model(MIXTRAL, "bf16", 32)["W_w2"]
+    (lo0, hi0), (lo1, hi1) = (x["estimates"]["q_S_bracket"]["w2"]["3"] for x in (before, after))
+    assert hi1 == pytest.approx(hi0 + step, abs=1e-4)
+    assert lo1 == pytest.approx(lo0 - step, abs=1e-4)
+    a0, a1 = before["estimates"]["alpha_bracket"]["w2"], after["estimates"]["alpha_bracket"]["w2"]
+    assert a1[0] < a0[0] and a1[1] > a0[1]
+    _spread_calls(cells[("shared", 1)], "w2", 0.0075)
+    assert {g.number: g.verdict for g in DCR.score_r3_page(page)[0]}["V3"] == FAIL
+
+
+def test_v7_holds_each_gemm_to_its_own_repeat_spread():
+    """2026-09-25, the A100 G=1 page: NATIVE's w2 read +1.52% against SHARED's at
+    n=2, where w2's own calls spread 1.33%, and V7 failed against 1.09%, a
+    tolerance sized from the per-call TOTAL, which w1's steady bytes dilute.
+    V7 now reads the GEMM's own spread and NATIVE's calls sit inside the
+    bracket; the planted 5% declaration on quiet calls still fails it."""
+    page = DCR.planted_r3_page("group", 4)
+    native = next(c for c in page["cells"] if (c["arm"], c["n"]) == ("native", 2))
+    gemm = native["per_gemm"]["w2"]
+    for field in ("dram_bytes_read", "l2_fill_device_sectors", "l2_read_miss_sectors"):
+        gemm[field] *= 1.015
+    _spread_calls(native, "w2", 0.01)
+    gates, summary = DCR.score_r3_page(page)
+    assert {g.number: g.verdict for g in gates}["V7"] == PASS
+    byte = DCR.r3_byte_model(MIXTRAL, "bf16", 32)
+    top = (max(native["per_gemm_values"]["w2"]) - 2 * byte["operand_per_tile_w2"]) / byte["W_w2"]
+    assert summary["estimates"]["q_S_bracket"]["w2"]["2"][1] == pytest.approx(top, rel=1e-9)
+    assert _gates(DCR.planted_r3_page("declaration", 4))["V7"] == FAIL
+
+
+def test_the_page_prints_shareds_own_bracket_beside_the_pooled_one():
+    """Owner, 2026-09-26: NATIVE stays pooled into SHARED's bracket, and the
+    page also prints SHARED's own, with every gate that reads otherwise on it.
+    NATIVE's w2 at n=2 planted 1.5% high with its calls 1% apart (inside V7)
+    widens the pooled bracket past SHARED's own, which lies inside it; no gate
+    moves here, so the line says so. On SHARED alone nothing is scored twice."""
+    page = DCR.planted_r3_page("group", 4)
+    native = next(c for c in page["cells"] if (c["arm"], c["n"]) == ("native", 2))
+    for field in ("dram_bytes_read", "l2_fill_device_sectors", "l2_read_miss_sectors"):
+        native["per_gemm"]["w2"][field] *= 1.015
+    _spread_calls(native, "w2", 0.01)
+    gates, summary = DCR.score_r3_page(page)
+    est = summary["estimates"]
+    pooled, alone = est["alpha_bracket"]["w2"], est["alpha_bracket_shared"]["w2"]
+    assert pooled[0] <= alone[0] and alone[1] <= pooled[1]
+    assert pooled != alone and "SHARED or NATIVE" in est["alpha_bracket_note"]
+    assert summary["shared_alone"] == {}
+    line = next(x for x in DCR.r3_page_lines(page, gates, summary) if "own calls alone" in x)
+    assert f"w2 [{alone[0]:.4f}, {alone[1]:.4f}]" in line
+    assert "every gate reads the same on it" in line and "changes no verdict" in line
+    gates1, summary1 = DCR.score_r3_page(page, pool=DCR.R3_SHARED_ALONE)
+    assert "shared_alone" not in summary1
+    assert summary1["estimates"]["alpha_bracket"]["w2"] == alone
+    assert not any("own calls alone" in x for x in DCR.r3_page_lines(page, gates1, summary1))
+
+
+_GH200_G16 = (REPO / "results/published/2026-09-25-nvidia_gh200_480gb-session/results"
+              "/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g16.json")
+
+
+@pytest.mark.skipif(not _GH200_G16.exists(), reason="the GH200 session is not in this tree")
+def test_the_gh200_g16_page_names_the_claim_pooling_hides():
+    """The one Lambda page where pooling moved a gate (2026-09-26): on the
+    GH200 at G=16, C2 (SHARED's w2 reads never exceed the group model's
+    count) reads REFUSE on the pooled bracket and FAIL on SHARED's own calls.
+    The page's verdicts are the pooled ones; the line names the other."""
+    page = json.loads(_GH200_G16.read_text())
+    gates, summary = DCR.score_r3_page(page)
+    assert {g.number: g.verdict for g in gates}["C2"] == "REFUSE"
+    assert summary["shared_alone"] == {"C2": ["REFUSE", FAIL]}
+    line = next(x for x in DCR.r3_page_lines(page, gates, summary) if "own calls alone" in x)
+    assert "gates that read otherwise on it: C2 FAIL (pooled REFUSE)" in line
+
+
+def test_a_page_reduced_before_per_gemm_values_scores_on_the_means():
+    """Pages written before 2026-09-25 carry no `per_gemm_values`: their GEMM
+    edges are the means, V3 reads the per-call total at n=1 and V7 the
+    total's spread, and a sound page still passes every gate."""
+    page = DCR.planted_r3_page("group", 4)
+    for cell in page["cells"]:
+        del cell["per_gemm_values"]
+    edges = DCR.r3_call_edges(page)
+    assert all(edges[a][g][n] == (0.0, 0.0) for a in edges for g in ("w1", "w2")
+               for n in edges[a][g])
+    gates, _summary = DCR.score_r3_page(page)
+    assert all(g.verdict == PASS for g in gates), {g.number: g.verdict for g in gates}
+
+
+def _scored(page) -> dict:
+    """The page's verdicts rescored from its cells (`_gates` reads the stored ones)."""
+    return {g.number: g.verdict for g in DCR.score_r3_page(page)[0]}
+
+
+def _set_calls(cell: dict, gemm: str, rels) -> None:
+    """One GEMM's K calls at its planted mean x (1 + rel_i), and every field
+    the reduction derives from them (the GEMM's means, the per-call totals,
+    their mean) rewritten to agree, as `r3_reduce_cells` would have."""
+    gem = cell["per_gemm"][gemm]
+    base = gem["dram_bytes_read"]
+    cell["per_gemm_values"][gemm] = [base * (1 + r) for r in rels]
+    scale = statistics.fmean(cell["per_gemm_values"][gemm]) / base
+    for field in ("dram_bytes_read", "l2_fill_device_sectors", "l2_read_miss_sectors"):
+        gem[field] *= scale
+    cell["per_call_values"] = [sum(cell["per_gemm_values"][g][i] for g in ("w1", "w2"))
+                               for i in range(len(rels))]
+    cell["per_call"]["dram_bytes_read"] = sum(cell["per_gemm"][g]["dram_bytes_read"]
+                                              for g in ("w1", "w2"))
+
+
+def test_a_page_without_per_gemm_values_is_held_at_every_tread():
+    """Review of 74f8d97: a page reduced before 2026-09-25 lists no per-GEMM
+    calls, so its GEMM brackets are the means. With V3 gated at n=1 only, the
+    published A100 G=16 page went INVALID to scored with alpha_w2 [-0.1007,
+    0.1920], inside the [-0.1089, 0.1954] its own profiles give. Such a page
+    is held at every tread again; with the lists the same calls widen the
+    bracket and C2 reads UNKNOWN instead of a PASS on the means."""
+    page = DCR.planted_r3_page("group", 4)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    _set_calls(cells[("shared", 3)], "w2", (-0.08, 0.0, 0.08))
+    listed = _scored(page)
+    assert listed["V3"] == PASS and listed["C2"] == REFUSE
+    for cell in page["cells"]:
+        del cell["per_gemm_values"]
+    gates = {g.number: g for g in DCR.score_r3_page(page)[0]}
+    assert gates["V3"].verdict == FAIL
+    assert "shared/3" in gates["V3"].measured
+    assert any("--reduce-only" in line for line in gates["V3"].lines)
+
+
+def test_c5_at_g4_and_c6_read_the_k_calls_not_their_mean():
+    """Review of 74f8d97: V3 no longer voids a spread at n >= 2, and C5 at
+    G >= 4 (the byte ratio) and C6 (PRIVATE's excess) read the K-call means,
+    so one faulty call passed a page whose other calls fail: a SHARED call
+    20% low at n=6 turned C5 FAIL to PASS, and a PRIVATE call 15% low turned
+    C6 FAIL to PASS, every VALIDITY gate passing. Both now read the K calls'
+    extremes and say UNKNOWN where the calls straddle the threshold."""
+    page = DCR.planted_r3_page("group", 4)
+    d = page["design"]
+    ratio = DCR.r3_estimates(page)["alpha_ratio"]
+    design = {"model": d["model"], "dtype": d["dtype"], "block_m": d["block_m"],
+              "pinned.BLOCK_SIZE_N": d["block_n"], "pinned.BLOCK_SIZE_K": d["block_k"],
+              "pinned.num_warps": d["num_warps"], "pinned.num_stages": d["num_stages"]}
+    timed = {4: [{"G": 4, "clock_mhz": None, "duty": 0.25, "mean": ratio - 0.005,
+                  "sd": 0.0, "interval": None, "edge": ratio - 0.005, "edge_basis": "planted",
+                  "runs": [], "cards": [DCR.R3_PLANTED_CARD["slug"]],
+                  "uuids": [DCR.R3_PLANTED_CARD["uuid"]], "design": design,
+                  "windows": [1]}]}
+
+    def verdicts(p) -> dict:
+        return {g.number: g.verdict for g in DCR.score_r3_page(p, timed=timed)[0]}
+
+    assert verdicts(page)["C5"] == FAIL
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    for g in ("w1", "w2"):
+        _set_calls(cells[("shared", 6)], g, (0.0, 0.0, -0.20))
+    got = verdicts(page)
+    assert got["V3"] == PASS and got["V7"] == PASS and got["V8"] == PASS
+    assert got["C5"] == REFUSE
+    page = DCR.planted_r3_page("group", 4)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    for g in ("w1", "w2"):
+        _set_calls(cells[("private", 6)], g, (0.05, 0.05, 0.05))
+    assert _scored(page)["C6"] == FAIL
+    for g in ("w1", "w2"):
+        _set_calls(cells[("private", 6)], g, (0.0, 0.0, -0.15))
+    got = _scored(page)
+    assert got["V3"] == PASS and got["V5"] == PASS and got["C6"] == REFUSE
+
+
+def test_v7_fails_arms_whose_calls_do_not_overlap_however_noisy_the_gemm():
+    """The spread-scaled V7 tolerance has no ceiling once V3 stops capping the
+    spread at n >= 2: on the A100 G=1 page it reached 20%. A NATIVE whose every
+    w2 call reads 10% above SHARED's, against SHARED calls spread +-2.5%, sits
+    inside 3 x 5% = 15% and passed; the calls do not overlap, which is a
+    different call whatever the spread. Calls that do overlap still pass."""
+    page = DCR.planted_r3_page("group", 4)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    _set_calls(cells[("shared", 3)], "w2", (-0.025, 0.0, 0.025))
+    _set_calls(cells[("native", 3)], "w2", (-0.02, 0.0, 0.02))
+    assert _scored(page)["V7"] == PASS
+    _set_calls(cells[("native", 3)], "w2", (0.10, 0.10, 0.10))
+    gates = {g.number: g for g in DCR.score_r3_page(page)[0]}
+    assert gates["V7"].verdict == FAIL
+    assert "n=3 w2 calls apart by" in gates["V7"].measured
+
+
+def _requests(page, arm: str, ns, factor: float, gemms=("w1", "w2")) -> None:
+    """One arm's requested L2 read sectors at treads `ns`, scaled by `factor`."""
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    for n in ns:
+        for g in gemms:
+            cells[(arm, n)]["per_gemm"][g]["l2_tex_read_sectors"] *= factor
+
+
+def _v6(page) -> DCR.Gate:
+    """V6 rescored from the page's cells."""
+    return next(g for g in DCR.score_r3_page(page)[0] if g.number == "V6")
+
+
+_DEEP = tuple(n for n in DCR.R3_TREADS if n > 1)
+
+
+def test_v6_holds_only_the_arms_that_are_one_call_on_a_card_that_coalesces_l2_reads():
+    """2026-09-25, the five GH200 pages (sm_90). Their requested count sat
+    0.21% to 10.15% below the loads, most likely Hopper's L2 Request
+    Coalescer merging reads before the L2 counts them, and at n >= 2 PRIVATE,
+    whose tiles read their own copies, counted 4.0% to 6.2% above SHARED at
+    G = 2, 4 and 16: V6 voided all five pages on it. On the planted sm_90
+    card that shape (5%, SHARED and NATIVE alike) now passes, V6 holding
+    SHARED against PRIVATE at n=1 and NATIVE against SHARED at every tread, and
+    the GATE prints the three-arm gap it did not gate; 0.7% more from PRIVATE
+    at n=1, where it is one call with SHARED, still fails at 0.5% (inside
+    NATIVE's wider tolerance, so the pair keeps its own); and on a card that
+    counts every load (sm_80: the five A100 pages agree within 0.0012%) the
+    same 5% is a different call and fails."""
+    page = DCR.planted_r3_page("request-coalesced", 4)
+    gate = _v6(page)
+    assert gate.verdict == PASS, gate.measured
+    assert gate.measured.startswith("12 comparisons held"), gate.measured
+    assert any("most likely" in line and "one call (both route every tile to copy 0)"
+               in line for line in gate.lines), gate.lines
+    assert any(line.startswith("not gated") and "widest gap is 5.2632%" in line
+               for line in gate.lines), gate.lines
+    _requests(page, "private", (1,), 1.007, ("w2",))
+    gate = _v6(page)
+    assert gate.verdict == FAIL
+    assert "n=1 w2 SHARED against PRIVATE 0.7000% over 0.5%" in gate.measured
+    page = DCR.planted_r3_page("request-coalesced", 4)
+    page["card"]["capability"] = "8.0"
+    gate = _v6(page)
+    assert gate.verdict == FAIL and "n=2 w1 three arms 5.2632%" in gate.measured
+    assert gate.lines == []
+
+
+def test_v6_holds_native_against_shared_where_their_live_pids_agree():
+    """At G <= 16 NATIVE's narrower declaration only drops dead tiles from the
+    tail, so every live tile keeps SHARED's pid: the same tiles in the same
+    launch order under another declaration, within 0.36% in 40 GH200 cells and
+    0.96% in 40 H100 cells, with a small lean the two cards share, so not one
+    call. V6 holds them there on a coalescing card at 1.3% at every tread
+    (`R3_REQUEST_NATIVE_TOL`, 3.9 sd of the two 3-call means' difference on
+    the H100), so an arm issuing other loads still fails: NATIVE 1.4% high at
+    n=1, SHARED 3% short at n >= 2 (the fault that would inflate the study's
+    reuse), NATIVE 2% high at n >= 2. NATIVE 1.2% high at n=1 and 1.15% high
+    at n >= 2 pass, which pins the one tolerance at every tread and at 1.3%,
+    not the 0.5% of a one-call pair or the first draft's 1%."""
+    for change, want in ((("native", (1,), 1.014), FAIL),
+                         (("native", (1,), 1.012), PASS),
+                         (("shared", _DEEP, 0.97), FAIL),
+                         (("native", _DEEP, 1.02), FAIL),
+                         (("native", _DEEP, 1.0115), PASS),
+                         (("native", _DEEP, 1.008), PASS)):
+        page = DCR.planted_r3_page("group", 4)
+        _requests(page, *change)
+        gate = _v6(page)
+        assert gate.verdict == want, (change, gate.measured)
+        assert not any("NATIVE at" in line for line in gate.lines), gate.lines
+    page = DCR.planted_r3_page("group", 4)
+    _requests(page, "native", _DEEP, 1.02)
+    assert "n=2 w1 NATIVE against SHARED 2.0000% over 1.3%" in _v6(page).measured
+    # A cell whose grid is gone (V1 fails such a page) is not shown to keep
+    # SHARED's pids: V6 does not hold NATIVE there, and says so, not a KeyError.
+    page = DCR.planted_r3_page("group", 4)
+    for cell in page["cells"]:
+        if cell["arm"] == "native":
+            cell.pop("grid", None)
+    gate = _v6(page)
+    assert gate.verdict == PASS, gate.measured
+    assert any("and NATIVE at n=1 w1, n=1 w2" in line and "(no grid on the page; V1 fails "
+               "it)" in line for line in gate.lines), gate.lines
+    assert not any("its live tiles run at other pids" in line for line in gate.lines)
+
+
+def test_v6_leaves_native_to_v7_where_its_live_pids_differ():
+    """GH200 G=64: NATIVE's group is its whole 8n + 8 rows against SHARED's
+    64, the dead tiles sit inside each column pass, and its count sat 0.58% to
+    3.30% from SHARED's with the calls apart in all 10 cells (w1 1.2% below at
+    n=1). The live tiles run at other pids, so on a coalescing card V6 does not
+    hold NATIVE there and says so; V7 holds it on DRAM bytes. On a card that
+    counts every load it is held, and 1.2% fails."""
+    page = DCR.planted_r3_page("group", 64)
+    _requests(page, "native", DCR.R3_TREADS, 0.988, ("w1",))
+    gate = _v6(page)
+    assert gate.verdict == PASS, gate.measured
+    assert gate.measured.startswith("2 comparisons held"), gate.measured
+    assert any("NATIVE at every tread (its live tiles run at other pids" in line
+               for line in gate.lines), gate.lines
+    page["card"]["capability"] = "8.0"
+    assert _v6(page).verdict == FAIL
+
+
+def test_v6_cannot_see_a_deeper_private_difference_through_the_coalescer():
+    """What reading the count through a coalescer costs, pinned so that it
+    changes on purpose: at n >= 2 PRIVATE's tiles read their own copies, so no
+    arm is one call with it, and PRIVATE issuing 1% more loads there passes V6
+    on an sm_90 card, which says what PRIVATE rests on instead; on an sm_80
+    card, which counts every load, it fails. A page that carries a load count
+    taken before the coalescer would let V6 hold it (docs/COUNTERS.md 6.8)."""
+    page = DCR.planted_r3_page("group", 4)
+    _requests(page, "private", _DEEP, 1.01)
+    gate = _v6(page)
+    assert gate.verdict == PASS
+    assert any(line.startswith("not held: PRIVATE at n >= 2") and "V5, V7 and V9" in line
+               for line in gate.lines), gate.lines
+    page["card"]["capability"] = "8.0"
+    assert _v6(page).verdict == FAIL
+
+
+def test_the_v6_rule_is_read_off_the_cards_compute_capability():
+    """`r3_coalesces`: True from compute capability 9.0 (Hopper; a later
+    architecture takes the rule unmeasured), False below it, None where the
+    card block carries no capability in the major.minor form the capture
+    writes. Such a page is held at every tread, as on a card that counts every
+    load, and the GATE says why without claiming V0 fails it unless the
+    capability is missing; a coalescing page with no n=1 tread, the one tread
+    PRIVATE is held at there, fails V6."""
+    for cap, want in (("9.0", True), ("10.0", True), ("12.0", True), (" 9.0 ", True),
+                      ("8.0", False), ("8.9", False), ("7.5", False)):
+        assert DCR.r3_coalesces({"capability": cap}) is want, cap
+    for card in (None, {}, {"capability": None}, {"capability": ""},
+                 {"capability": "sm_90"}, {"capability": "9"}, {"capability": "90"},
+                 {"capability": "GH100"}, {"capability": "9.0.1"}):
+        assert DCR.r3_coalesces(card) is None, card
+    page = DCR.planted_r3_page("request-coalesced", 4)
+    page["card"]["capability"] = None
+    got = _scored(page)
+    assert got["V0"] == FAIL and got["V6"] == FAIL
+    assert any("names no compute capability (V0 fails such a page)" in line
+               for line in _v6(page).lines)
+    page["card"]["capability"] = "sm_90"
+    got = _scored(page)
+    assert got["V0"] == PASS and got["V6"] == FAIL
+    assert any("'sm_90' is not the major.minor form" in line
+               and "V0" not in line for line in _v6(page).lines)
+    page = DCR.planted_r3_page("group", 4)
+    page["design"]["treads"] = [n for n in page["design"]["treads"] if n != 1]
+    page["cells"] = [c for c in page["cells"] if c["n"] != 1]
+    gate = _v6(page)
+    assert gate.verdict == FAIL and "no n=1 tread" in gate.measured
+
+
+def _live_pids(rows: int, npn: int, group_m: int, live: int) -> dict:
+    """{(pid_m, pid_n): pid} for the live M-tiles, walking vLLM v0.27.1's pid
+    mapping over a `rows` x `npn` grid pid by pid."""
+    out, in_group = {}, group_m * npn
+    for pid in range(rows * npn):
+        first = pid // in_group * group_m
+        size = min(rows - first, group_m)
+        pid_m = first + (pid % in_group) % size
+        if pid_m < live:
+            out[(pid_m, (pid % in_group) // size)] = pid
+    return out
+
+
+def test_r3_same_live_pids_matches_a_walk_of_vllms_pid_mapping():
+    """`r3_same_live_pids` is exact: against a pid-by-pid walk of the
+    mapping, at every G and tread, for NATIVE's 8n + 8 rows against SHARED's
+    8n + 70 and for row counts that leave the last live group partial in one
+    grid and whole in the other. On the planted pages NATIVE and SHARED agree
+    at G <= 16 at every tread and GEMM, and at G=64 at none."""
+    design = dict(DCR.planted_r3_page("group", 4)["design"])
+    npn = DCR.pid_n_count(MODEL_CONFIGS[design["model"]].hidden_size, int(design["block_n"]))
+    for g_m in (1, 2, 3, 4, 16, 32, 64):
+        design["group_m"] = g_m
+        for n in (1, 2, 3, 4, 6):
+            live = MODEL_CONFIGS[design["model"]].num_experts * n
+            for rows_a, rows_b in ((live + 8, live + 70), (live, live + 64),
+                                   (live + 1, live + 5), (live + 3, live + 3)):
+                want = (_live_pids(rows_a, npn, g_m, live)
+                        == _live_pids(rows_b, npn, g_m, live))
+                got = DCR.r3_same_live_pids(design, rows_a * npn, rows_b * npn, "w2", n)
+                assert got is want, (g_m, n, rows_a, rows_b)
+    for g_m, want in ((1, True), (2, True), (4, True), (16, True), (64, False)):
+        page = DCR.planted_r3_page("group", g_m)
+        cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+        for n in DCR.R3_TREADS:
+            for g in ("w1", "w2"):
+                assert DCR.r3_same_live_pids(page["design"], cells[("native", n)]["grid"][g],
+                                             cells[("shared", n)]["grid"][g], g, n) is want
+
+
+def test_the_r3_dry_run_says_where_v6_holds_the_arms(capsys):
+    """The dry run's registered gates are the second place V6's rule is
+    written down; it names both rules and where each applies."""
+    assert main(["--dry-run", "--family", "r3-arms"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "V6 requested L2 sectors equal within 0.5%: all three arms at every tread" in out
+    assert "on a card that counts every load; on one that coalesces L2 reads" in out
+    assert "SHARED against PRIVATE at n=1, which are one call, within 0.5%, and NATIVE" in out
+    assert "against SHARED where their live pids agree, within 1.3% at every tread" in out
+
+
+def test_ols_slope_bounds_hold_every_series_inside_the_brackets():
+    """The slope bracket is exact: every series inside the per-tread brackets
+    has its OLS slope inside it, and its two ends are reached."""
+    import random
+    rng = random.Random(20260924)
+    xs = list(DCR.R3_TREADS)
+    for _ in range(200):
+        lo = [rng.uniform(-1, 3) for _ in xs]
+        hi = [v + rng.uniform(0, 2) for v in lo]
+        bottom, top = DCR.ols_slope_bounds(xs, lo, hi)
+        for _ in range(20):
+            ys = [rng.uniform(a, b) for a, b in zip(lo, hi, strict=True)]
+            assert bottom - 1e-12 <= ols(xs, ys)[1] <= top + 1e-12
+        mean = statistics.fmean(xs)
+        up = [b if x > mean else a for x, a, b in zip(xs, lo, hi, strict=True)]
+        down = [a if x > mean else b for x, a, b in zip(xs, lo, hi, strict=True)]
+        assert ols(xs, up)[1] == pytest.approx(top, abs=1e-12)
+        assert ols(xs, down)[1] == pytest.approx(bottom, abs=1e-12)
+
+
+def test_a_two_sided_claim_on_a_straddling_bracket_is_unknown_not_fail():
+    """Both edges fail, on opposite sides: the value may sit inside the band,
+    so that is no verdict. A bracket wholly outside is FAIL, wholly inside
+    PASS, and one tread's outright FAIL fails a claim made at every tread."""
+    assert DCR.bracket_verdict(0.5, 1.5, 0.95, 1.05) is None
+    assert DCR.bracket_verdict(0.96, 1.04, 0.95, 1.05) == PASS
+    assert DCR.bracket_verdict(1.06, 1.5, 0.95, 1.05) == FAIL
+    assert DCR.bracket_verdict(0.5, 0.9, 0.95, 1.05) == FAIL
+    assert DCR.bracket_verdict(1.0, 1.1, ceiling=1.05) is None
+    assert DCR.claim_over_treads({1: PASS, 2: None}) == REFUSE
+    assert DCR.claim_over_treads({1: PASS, 2: None, 3: FAIL}) == FAIL
+    assert DCR.claim_over_treads({1: PASS, 2: PASS}) == PASS
+
+
+def _column_pass_walk(e: int, n: int, g: int, k: int, bm: int, bn: int, b: int,
+                      arm: str, num_pid_n: int = 3, dead: int = 5) -> int:
+    """vLLM v0.27.1's pid mapping walked independently of the module: the
+    bytes of A tiles and weight slabs each (group, column) touches, the
+    largest of them."""
+    num_pid_m = e * n + dead
+    per_group = g * num_pid_n
+    touched: dict[tuple[int, int], tuple[set, set]] = {}
+    for pid in range(num_pid_m * num_pid_n):
+        group_id = pid // per_group
+        first = group_id * g
+        size = min(num_pid_m - first, g)
+        pid_m = first + ((pid % per_group) % size)
+        pid_n = (pid % per_group) // size
+        if pid_m >= e * n:
+            continue
+        a_set, w_set = touched.setdefault((group_id, pid_n), (set(), set()))
+        a_set.add(pid_m)
+        w_set.add((pid_m // n, pid_m % n) if arm == "private" else pid_m // n)
+    return max(len(a) * bm * k * b + len(w) * bn * k * b for a, w in touched.values())
+
+
+def test_r3_exposure_is_one_column_pass_of_vllms_pid_mapping():
+    """`r3_exposure`'s working set is the largest (group, column) pass of the
+    pid mapping, walked by brute force: every live M-tile's A plus one slab
+    per expert (SHARED) or per M-tile (PRIVATE)."""
+    cfg = MIXTRAL
+    for g in (1, 2, 4, 16, 64):
+        for n in (1, 2, 3, 4, 6):
+            exp = DCR.r3_exposure(cfg, "bf16", 32, 64, g, n)
+            for gemm in ("w1", "w2"):
+                k = DCR.r3_gemm_geometry(cfg, gemm)[0]
+                for arm in ("shared", "private"):
+                    assert exp[gemm][arm]["working_set"] == _column_pass_walk(
+                        8, n, g, k, 32, 64, 2, arm), (g, n, gemm, arm)
+    ceiling = DCR.r3_activation_ceiling(32, 64, 2 * cfg.intermediate_size)
+    assert ceiling == pytest.approx((32 / 64) * (1 - 64 / (2 * cfg.intermediate_size)))
+
+
+def test_the_dry_run_names_the_exposed_cells_before_anything_runs(capsys):
+    """The dry run prints `r3_exposure`'s working set per (G, GEMM, arm, n) and,
+    per target card, the cells its L2 does not hold, all computed here."""
+    assert main(["--dry-run", "--family", "r3-arms"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "ACTIVATION RE-READS, named before anything runs" in out
+    groups = list(DCR.R3_GROUPS) + [DCR.R3_OPTIONAL_GROUP]
+    for g in groups:
+        exp = {n: DCR.r3_exposure(MIXTRAL, "bf16", 32, 64, g, n) for n in DCR.R3_TREADS}
+        for gemm in ("w1", "w2"):
+            live_a = [exp[n][gemm]["private"]["a_bytes"] for n in DCR.R3_TREADS]
+            assert live_a == [exp[n][gemm]["shared"]["a_bytes"] for n in DCR.R3_TREADS]
+            row = f"  G={g:<3}{gemm} {'A':<8}" + "".join(f"{v / 2 ** 20:>9.1f}"
+                                                        for v in live_a)
+            assert row in out, row
+            for arm in ("shared", "private"):
+                row = f"  G={g:<3}{gemm} {arm.upper():<8}" + "".join(
+                    f"{exp[n][gemm][arm]['working_set'] / 2 ** 20:>9.1f}" for n in DCR.R3_TREADS)
+                assert row in out, row
+    block = out[out.index("  NOT HELD, by card"):]
+    for card, l2 in DCR.R3_TARGET_L2.items():
+        assert f"    {card}, {l2 / 2 ** 20:g} MiB L2" in block
+    h100 = block[:block.index(list(DCR.R3_TARGET_L2)[1])]
+    exp = {n: DCR.r3_exposure(MIXTRAL, "bf16", 32, 64, 64, n) for n in DCR.R3_TREADS}
+    ns = [f"{n}!" if w == "BEYOND" else str(n) for n in DCR.R3_TREADS
+          for w in [DCR.exposure_word(exp[n]["w2"]["shared"]["working_set"],
+                                      DCR.R3_TARGET_L2["H100 SXM5"])] if w != "held"]
+    assert ns and f"      G=64 w2 SHARED n={','.join(ns)}" in h100
+
+
+def test_a_planted_g4_staircase_with_its_n4_drop_is_valid():
+    """The group model predicts q(4) = 1 < q(3) = 1.5 at G=4. The ladder
+    family's monotone (V3) and affine (V4) gates would void that page; the
+    r3-arms family does not apply them to SHARED, and every validity gate of
+    the planted staircase passes."""
+    page = DCR.planted_r3_page("group", 4)
+    q = page["estimates"]["q_S"]["total"]
+    assert q["4"] < q["3"], q
+    assert q["3"] == pytest.approx(DCR.group_reads(8, 3, 4), abs=1e-3)
+    validity = [g for g in page["gates"] if g["kind"] == "VALIDITY"]
+    assert validity and all(g["verdict"] == PASS for g in validity)
+    claims = " ".join(g["claim"] for g in page["gates"]).lower()
+    assert "monoton" not in claims and "affine" not in claims
+
+
+def test_c1_at_g1_is_not_asked_without_the_occupancy_limits():
+    """The G=1 claim needs the co-residency window, which needs the page's own
+    occupancy; with the limits unproven the claim is NOT ASKED, not failed."""
+    page = DCR.planted_r3_page("group", 1)
+    for cell in page["cells"]:
+        for g in ("w1", "w2"):
+            cell["recorded"][g] = {}
+    gates, summary = DCR.score_r3_page(page)
+    assert "C1" not in [g.number for g in gates]
+    assert any(s.startswith("C1 at G=1") for s in summary["not_asked"])
+
+
+def test_the_page_header_names_the_payloads_card_and_an_uncarded_page_fails_v0():
+    page = DCR.planted_r3_page("group", 4)
+    gates, summary = DCR.score_r3_page(page)
+    first = DCR.r3_page_lines(page, gates, summary)[0]
+    card = page["card"]
+    assert first == DCR.card_line(card)
+    assert first.startswith(f"CARD {card['name']} ({card['slug']}, {DCR.board(card['uuid'])},")
+    assert card["uuid"] not in first
+    assert first.endswith("every number here is THIS card's; not one of the study's four "
+                          "cards.")
+    bare = DCR.planted_r3_page("uncarded", 4)
+    assert _gates(bare)["V0"] == FAIL
+    assert DCR.card_line(bare["card"]).startswith("CARD none")
+
+
+def test_the_card_line_names_each_cards_role_among_the_studys_four():
+    """Owner, 2026-09-25: the study has four cards, each keeping its own
+    numbers, never averaged. Until 2026-09-26 every page's first line said
+    "the study's timing pages are nvidia_h200", one card for all four. The line
+    now names the card's own role from `STUDY_CARDS`, keyed by the slug the
+    live card block computes, or says it is none of the four, and every number
+    stays THIS card's. The card block carries the role (`study_role`)."""
+    assert DCR.STUDY_CARDS == {
+        "nvidia_gh200_480gb": "the primary card",
+        "nvidia_h100_80gb_hbm3": "the second Hopper",
+        "nvidia_a100_sxm4_40gb": "the non-Hopper control (bytes only)",
+        "nvidia_h200": "the fourth card (timing only, on RunPod)"}
+    for name in ("NVIDIA GH200 480GB", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-40GB",
+                 "NVIDIA H200"):
+        slug = PV.card_slug(name)
+        card = dict(DCR.R3_PLANTED_CARD, name=name, slug=slug)
+        assert DCR.card_line(card).endswith(
+            "every number here is THIS card's; one of the study's four cards: "
+            f"{DCR.STUDY_CARDS[slug]}."), name
+    planted = DCR.card_line(DCR.R3_PLANTED_CARD)
+    assert planted.endswith("THIS card's; not one of the study's four cards.")
+    assert "timing pages" not in planted and "nvidia_h200" not in planted
+    assert "study_role" in DCR.R3_CARD_KEYS and DCR.R3_PLANTED_CARD["study_role"] is None
+    assert "same_card_as_study" not in DCR.R3_CARD_KEYS
+    assert "no number here can be given to any of the study's four cards" in \
+        DCR.card_line(None)
+    doc = (REPO / "docs" / "COUNTERS.md").read_text()
+    for slug in DCR.STUDY_CARDS:
+        assert f"| `{slug}` | {DCR.study_role(slug)} |" in doc, slug
+
+
+def test_the_r3_schema_text_and_the_writer_name_the_same_keys():
+    for key in DCR.R3_TOP_KEYS + DCR.R3_CELL_KEYS:
+        assert f'"{key}"' in DCR.R3_SCHEMA_TEXT, key
+    page = DCR.planted_r3_page("group", 4)
+    args = build_parser().parse_args(["--run", "--family", "r3-arms", "--group-m", "4"])
+    DCR.resolve_r3_defaults(args, ["--group-m", "4"])
+    stamped_page = stamped(page, mode="r3-run", args=args, card=page["card"]["name"],
+                           instrument=DCR.R3_RUN_INSTRUMENT)
+    DCR.check_r3_page(stamped_page)
+    assert set(DCR.R3_TOP_KEYS) <= set(stamped_page)
+    for key in ("census", "proof"):
+        gone = dict(stamped_page)
+        del gone[key]
+        with pytest.raises(CounterRunRefused, match=key):
+            DCR.check_r3_page(gone)
+
+
+def test_the_r3_dry_run_prints_the_group_model_group_reads_computes(capsys):
+    assert main(["--dry-run", "--family", "r3-arms"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    treads = list(DCR.R3_TREADS)
+    rows = {}
+    for line in out.splitlines():
+        m = re.match(r"^  G=(\d+)\s+((?:[\d.]+\s*)+)$", line)
+        if m:
+            vals = [float(v) for v in m.group(2).split()]
+            if len(vals) == len(treads) + 1:
+                rows[int(m.group(1))] = vals
+    groups = list(DCR.R3_GROUPS) + [DCR.R3_OPTIONAL_GROUP]
+    assert sorted(rows) == sorted(groups)
+    for g in groups:
+        want = [DCR.group_reads(8, n, g) for n in treads]
+        assert rows[g][:-1] == pytest.approx([round(v, 4) for v in want], abs=1e-9)
+        assert rows[g][-1] == pytest.approx(round(ols(treads, want)[1], 4), abs=1e-9)
+
+
+def test_the_r3_dry_run_prints_the_ncu_argv_the_run_builds_and_prices_it(capsys):
+    assert main(["--dry-run", "--family", "r3-arms"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    argv_lines = [ln for ln in out.splitlines() if ln.strip().startswith("G=")
+                  and " ncu " in ln]
+    assert len(argv_lines) == len(DCR.R3_GROUPS) + 1
+    for line in argv_lines:
+        for flag in ("--cache-control all", "--replay-mode kernel",
+                     "-k regex:^fused_moe_kernel$", "--launch-skip", "--launch-count",
+                     "--export", "--clock-control base", "--counter-child"):
+            assert flag in line, (flag, line)
+    sched = R3.counter_schedule(DCR.planted_r3_plan(4))
+    assert f"--launch-skip {sched.launch_skip} " in argv_lines[0]
+    assert f"--launch-count {sched.launch_count} " in argv_lines[0]
+    per_g = DCR.r3_cost_s(sched.launch_count)
+    assert f"= {per_g / 60:.1f} min" in out
+    assert f"{len(DCR.R3_GROUPS)} G: {len(DCR.R3_GROUPS) * per_g / 60:.0f} min" in out
+    assert "CARD: DECIDED ON THE BOX" in out and "--card is not read" in out
+    assert "git config --global --add safe.directory <checkout>" in out, \
+        "the plan names the step the commit refusal needs under a sudo counter door"
+
+
+def test_the_r3_dry_run_refuses_a_tread_outside_r3s_ladder(capsys):
+    assert main(["--dry-run", "--family", "r3-arms", "--tiles", "1,2,3,10"]) \
+        == exit_codes.REFUSED
+    assert "not a subset of R3's ladder" in capsys.readouterr().out
+
+
+#: The commit a written planted page names, as `stamped` would put one on a
+#: page `--run` writes: `--analyse` joins pages of one commit, and refuses a
+#: join over pages that name none.
+PLANTED_COMMIT = "0000000planted"
+
+
+def _write_pages(tmp_path, specs) -> list[Path]:
+    paths = []
+    for world, g, over in specs:
+        page = DCR.planted_r3_page(world, g)
+        page["git_sha"] = PLANTED_COMMIT
+        for key, value in over.items():
+            page["card"][key] = value
+        path = tmp_path / f"r3c-g{g}-{world}-{len(paths)}.json"
+        path.write_text(json.dumps(page))
+        paths.append(path)
+    return paths
+
+
+def test_analyse_scores_one_r3_page_and_its_first_line_is_the_card(tmp_path, capsys):
+    (path,) = _write_pages(tmp_path, [("no-reuse", 4, {})])
+    assert main(["--analyse", str(path)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    assert out.splitlines()[0].startswith(f"CARD {DCR.R3_PLANTED_CARD['name']}")
+    assert exit_codes.classify_text(out) == exit_codes.CLAIM_FAIL
+
+
+def test_analyse_over_several_pages_prints_the_alpha_table(tmp_path, capsys):
+    paths = _write_pages(tmp_path, [("group", 4, {}), ("group", 1, {})])
+    out_json = tmp_path / "summary.json"
+    assert main(["--analyse", *map(str, paths), "--out", str(out_json)]) \
+        == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert out.splitlines()[0].startswith("CARD ")
+    assert "ALPHA(G) OVER 2 PAGES" in out
+    doc = json.loads(out_json.read_text())
+    assert [p["group_m"] for p in doc["pages"]] == [1, 4]
+    assert doc["instrument"] == DCR.R3_ANALYSE_INSTRUMENT
+
+
+def test_analyse_refuses_two_card_uuids(tmp_path, capsys):
+    paths = _write_pages(tmp_path, [("group", 4, {}),
+                                    ("group", 1, {"uuid": "another-card"})])
+    assert main(["--analyse", *map(str, paths)]) == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert "card UUID" in out and exit_codes.parse_result_lines(out) == []
+    assert DCR.board("another-card") in out and "another-card" not in out
+
+
+def _timed_report(tmp_path, g: int, ratio: float, seed: int, *, clock=None,
+                  uuid=None, cells=None, **over) -> Path:
+    """A measured, VALID R3 report.json at G, with the planted page's design:
+    R3's own `pinned_config` at the page's BLOCK_N and num_stages, so no knob
+    is typed here, and the planted page's card (2026-09-26: C5 reads its own
+    card's timing only). Its 90% interval is the ratio +-0.001. `clock`
+    plants every `treads_table` row's `sm_clock_load_mhz` (None plants no
+    table); `uuid` writes R3's DEVICE file beside the report; `cells`, a list
+    of `(sm_clock_load_mhz, status)`, writes a cells.csv beside it that R3's
+    own `read_samples` reads (None writes none). `over` replaces any
+    top-level key."""
+    plan = DCR.planted_r3_plan(g)
+    rep = {"experiment": "private_weight_reference", "synthetic": False,
+           "card": DCR.R3_PLANTED_CARD["slug"], "seed": seed, "ratio": ratio,
+           "ratio_interval": [ratio - 0.001, ratio + 0.001], "ratio_interval_pct": 90.0,
+           "model": plan["model"], "dtype": plan["dtype"], "block_m": plan["block_m"],
+           "pinned": R3.pinned_config(plan["block_n"], g, plan["num_stages"]),
+           "duty": 0.25, "claim_min_tread": 1,
+           "gates": [{"tag": "V1", "kind": "VALIDITY", "verdict": PASS},
+                     {"tag": "C1", "kind": "CLAIM", "verdict": FAIL}]}
+    if clock is not None:
+        rep["treads_table"] = [{"arm": arm, "tiles": n, "sm_clock_load_mhz": clock}
+                               for arm in R3.ARMS for n in DCR.R3_TREADS]
+    rep.update(over)
+    run = tmp_path / f"timed-g{g}-s{seed}-{len(list(tmp_path.glob('timed-*')))}"
+    run.mkdir()
+    if uuid is not None:
+        (run / R3.DEVICE_FILE).write_text(uuid + "\n")
+    if cells is not None:
+        head = ("arm,repeat,block_m,tiles,rows_per_expert,tokens,copies,experts_declared,"
+                "ms_p50,sm_clock_load_mhz,status")
+        (run / "cells.csv").write_text("\n".join(
+            [head] + [f"shared,{i},32,1,32,128,1,72,0.85,{mhz},{status}"
+                      for i, (mhz, status) in enumerate(cells)]) + "\n")
+    path = run / "report.json"
+    path.write_text(json.dumps(rep))
+    return path
+
+
+def test_c5_compares_the_bytes_with_the_timed_pages_it_reads(tmp_path, capsys):
+    """C5 is the same card's (SAME-CARD since 2026-09-26), asked only with
+    --timed-reference, and every number it compares with is read from those
+    files. At G >= 4 the group world's byte
+    ratio sits far below any floored time ratio (PASS); at G=1 the group
+    world's co-resident w2 sharing puts alpha(1) below a bracket whose lower
+    edge the planted timed pages put above it (FAIL, a finding)."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    page = json.loads(g4.read_text())
+    ratio = DCR.r3_estimates(page)["alpha_ratio"]
+    timed = [_timed_report(tmp_path, 4, ratio + 0.5, s) for s in (0, 1)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, timed)]) \
+        == exit_codes.DONE
+    out = capsys.readouterr().out
+    c5 = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C5")
+    assert c5.verdict == PASS and "SAME-CARD" in out and "CROSS-CARD" not in out
+    (g1,) = _write_pages(tmp_path, [("group", 1, {})])
+    alpha1 = DCR.r3_estimates(json.loads(g1.read_text()))["alpha_slope"]["total"]
+    timed1 = [_timed_report(tmp_path, 1, min(alpha1 + 0.05, 0.999), s) for s in (0, 1)]
+    assert main(["--analyse", str(g1), "--timed-reference", *map(str, timed1)]) \
+        == exit_codes.CLAIM_FAIL
+    c5 = next(ln for ln in exit_codes.parse_result_lines(capsys.readouterr().out)
+              if ln.name == "C5")
+    assert c5.verdict == FAIL
+
+
+def test_c5_joins_only_measured_valid_timed_pages_of_the_pages_own_kernel(
+        tmp_path, capsys):
+    """Until 2026-09-24 `load_timed_reference` read the ratio, G, the card, the
+    seed and the window, and nothing else, so C5 scored bytes against a timed
+    ratio from another tile, model, dtype or pinned block, or from a planted
+    or INVALID report. Each of those is now refused before any page is
+    scored, the runs pooled at one G must share their design and window, and
+    the same-card lines name each run's duty and fit window. Two duties at one
+    G are two regimes (2026-09-26): each scored on its own, never pooled."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    ratio = DCR.r3_estimates(json.loads(g4.read_text()))["alpha_ratio"]
+    pinned = R3.pinned_config(DCR.planted_r3_plan(4)["block_n"], 4,
+                              DCR.planted_r3_plan(4)["num_stages"])
+    refused = {
+        "another BLOCK_M": {"block_m": 2 * DCR.planted_r3_plan(4)["block_m"]},
+        "another model": {"model": "mixtral-8x22b"},
+        "another dtype": {"dtype": "fp16"},
+        "another BLOCK_N": {"pinned": dict(pinned, BLOCK_SIZE_N=2 * pinned["BLOCK_SIZE_N"])},
+        "another num_stages": {"pinned": dict(pinned, num_stages=pinned["num_stages"] - 1)},
+        "a planted report": {"synthetic": True},
+        "an INVALID report": {"gates": [{"tag": "V5", "kind": "VALIDITY",
+                                         "verdict": FAIL}]},
+        "no gates at all": {"gates": []},
+    }
+    for label, over in refused.items():
+        timed = [_timed_report(tmp_path, 4, ratio + 0.5, s, **over) for s in (0, 1)]
+        assert main(["--analyse", str(g4), "--timed-reference", *map(str, timed)]) \
+            == exit_codes.REFUSED, label
+        out = capsys.readouterr().out
+        assert "REFUSED: --timed-reference" in out, label
+        assert exit_codes.parse_result_lines(out) == [], label
+    mixed = [_timed_report(tmp_path, 4, ratio + 0.5, 0),
+             _timed_report(tmp_path, 4, ratio + 0.5, 1, duty=1.0)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, mixed)]) \
+        == exit_codes.DONE
+    names = {ln.name for ln in exit_codes.parse_result_lines(capsys.readouterr().out)}
+    assert {"C5@unclocked/duty0.25", "C5@unclocked/duty1"} <= names and "C5" not in names
+    wider = [_timed_report(tmp_path, 4, ratio + 0.5, 0),
+             _timed_report(tmp_path, 4, ratio + 0.5, 1, claim_min_tread=2)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, wider)]) \
+        == exit_codes.REFUSED
+    assert "differ in claim_min_tread" in capsys.readouterr().out
+    timed = [_timed_report(tmp_path, 4, ratio + 0.5, s) for s in (0, 1)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, timed)]) \
+        == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "duty 0.25, fit window n >= 1" in out and "timed at duty 0.25" in out
+    page = json.loads(g4.read_text())
+    ref = DCR.load_timed_reference(
+        [_timed_report(tmp_path, 4, ratio + 0.5, 0, block_m=64)], card=page["card"])
+    gates, summary = DCR.score_r3_page(page, timed=ref)
+    assert "C5" not in [g.number for g in gates]
+    assert any(s.startswith("C5: the timed reports at G=4 are another kernel")
+               for s in summary["not_asked"])
+
+
+def test_c5_refuses_another_cards_timing_and_names_both_boards(tmp_path, capsys):
+    """Owner, 2026-09-26: C5 was labelled CROSS-CARD and compared a Lambda
+    card's bytes with the H200's timed ratios. Each of the study's cards keeps
+    its own numbers, so a timed report whose card slug is not the pages' is
+    REFUSED before any page is scored, the refusal naming both boards (the timed
+    one read off R3's DEVICE file beside its report) by their hash tags, never
+    by UUID. The same card on another board is the same card: joined, the
+    SAME-CARD line naming both boards. A reference from another card handed to
+    the scorer directly asks no C5."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    page = json.loads(g4.read_text())
+    ratio = DCR.r3_estimates(page)["alpha_ratio"]
+    h200 = [_timed_report(tmp_path, 4, ratio + 0.5, s, card="nvidia_h200",
+                          uuid="h200-board") for s in (0, 1)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, h200)]) \
+        == exit_codes.REFUSED
+    out = " ".join(capsys.readouterr().out.split())
+    assert "REFUSED: --timed-reference" in out
+    assert f"was timed on nvidia_h200 ({DCR.board('h200-board')})" in out
+    card = DCR.R3_PLANTED_CARD
+    assert f"the counter pages are {card['slug']} ({DCR.board(card['uuid'])})" in out
+    assert "h200-board" not in out and card["uuid"] not in out
+    assert exit_codes.parse_result_lines(out) == []
+    unread = [_timed_report(tmp_path, 4, ratio + 0.5, 0, card="nvidia_h200")]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, unread)]) \
+        == exit_codes.REFUSED
+    assert "(board unread: no DEVICE file beside the report)" in capsys.readouterr().out
+    board = [_timed_report(tmp_path, 4, ratio + 0.5, s, uuid="planted-9999") for s in (0, 1)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, board)]) \
+        == exit_codes.DONE
+    out = " ".join(capsys.readouterr().out.split())
+    assert f"SAME-CARD: the timed reports and this page are both {card['slug']}" in out
+    assert "planted-9999" not in out and card["uuid"] not in out
+    assert (f"timed on {DCR.board('planted-9999')}, this page's {DCR.board(card['uuid'])}: "
+            "another "
+            "board of the same card") in out
+    ref = DCR.load_timed_reference(board, card=page["card"])
+    ref[4][0]["cards"] = ["nvidia_h200"]
+    gates, summary = DCR.score_r3_page(page, timed=ref)
+    assert "C5" not in [g.number for g in gates]
+    assert any(s.startswith("C5: the timed reports at G=4 are another card's")
+               for s in summary["not_asked"]), summary["not_asked"]
+
+
+def test_c5_never_pools_two_clock_regimes_and_one_run_reads_its_own_interval(
+        tmp_path, capsys):
+    """2026-09-26. The H100's three VALID G=1 reports on Lambda are all seed 0,
+    timed under locks read at 1980, 1800 and 1710 MHz, and C5 pooled them as
+    three seeds of one ratio. The pooling key is now G, the timed cells'
+    median SM clock to the 15 MHz step, and the duty: two clocks are two
+    references and two gates, each named by its regime, and runs at one
+    regime still pool (the mean less their seed sd). With one run the seed sd
+    is 0, so the edge is the lower end of that run's own 90% interval: a byte
+    ratio above that end and below the point passed against the point, and
+    fails against the interval. One run with no interval is refused."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    page = json.loads(g4.read_text())
+    r_lo, r_hi = DCR.r3_estimates(page)["alpha_ratio_bracket"]
+    timed = r_hi + 0.01
+    one = _timed_report(tmp_path, 4, timed, 0, clock=1710.0,
+                        ratio_interval=[r_lo - 0.005, timed + 0.005])
+    ref = DCR.load_timed_reference([one], card=page["card"])
+    (only,) = ref[4]
+    assert (only["sd"], only["edge"], only["clock_mhz"]) == (0.0, r_lo - 0.005, 1710.0)
+    assert "one run, so no seed sd: the lower end of its own 90% interval" in only["edge_basis"]
+    assert {g.number: g.verdict for g in DCR.score_r3_page(page, timed=ref)[0]}["C5"] == FAIL
+    split = [_timed_report(tmp_path, 4, timed, 0, clock=c) for c in (1712.0, 1965.0)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, split)]) \
+        == exit_codes.DONE
+    out = capsys.readouterr().out
+    names = [ln.name for ln in exit_codes.parse_result_lines(out) if ln.name.startswith("C5")]
+    assert names == ["C5@1710MHz/duty0.25", "C5@1965MHz/duty0.25"], names
+    assert "timed at 1710 MHz, duty 0.25" in " ".join(out.split())
+    seeds = [_timed_report(tmp_path, 4, timed + 0.01 * s, s, clock=1710.0) for s in range(3)]
+    (pooled,) = DCR.load_timed_reference(seeds, card=page["card"])[4]
+    ratios = [timed + 0.01 * s for s in range(3)]
+    assert len(pooled["runs"]) == 3 and pooled["interval"] is None
+    assert pooled["sd"] == pytest.approx(statistics.stdev(ratios))
+    assert pooled["edge"] == pytest.approx(statistics.fmean(ratios) - statistics.stdev(ratios))
+    assert DCR.timed_report_clock({"treads_table": [{"sm_clock_load_mhz": 1712.0},
+                                                    {"sm_clock_load_mhz": 1703.0},
+                                                    {"sm_clock_load_mhz": None}]}) \
+        == (1710.0, DCR.R3_TIMED_CLOCK_ROWS)
+    assert DCR.timed_report_clock({}) == (None, DCR.R3_TIMED_CLOCK_NONE)
+    bare = [_timed_report(tmp_path, 4, timed, 0, ratio_interval=None)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, bare)]) \
+        == exit_codes.REFUSED
+    assert "carries no ratio_interval" in capsys.readouterr().out
+
+
+def test_c5_is_registered_at_g2_under_the_floor_rule_and_not_at_g3(tmp_path):
+    """2026-09-26: the G=2 timed SHARED ladder zig-zags with the byte
+    staircase, so G=2 is partly floored, and C5 there is the G >= 4 rule, the
+    byte ratio below the timed ratio. Until then G=2 read "no registered C5".
+    G=3 stays un-registered, and its not-asked line says why."""
+    page = DCR.planted_r3_page("group", 2)
+    ratio = DCR.r3_estimates(page)["alpha_ratio"]
+    for timed, verdict in ((ratio + 0.5, PASS), (ratio - 0.05, FAIL)):
+        ref = DCR.load_timed_reference(
+            [_timed_report(tmp_path, 2, timed, s) for s in (0, 1)], card=page["card"])
+        gates, summary = DCR.score_r3_page(page, timed=ref)
+        c5 = next(g for g in gates if g.number == "C5")
+        assert c5.verdict == verdict and c5.claim == "the byte ratio sits below the timed ratio"
+        assert any("registered at G=2 on 2026-09-26" in line for line in c5.lines)
+        assert not any(s.startswith("C5") for s in summary["not_asked"])
+    page3 = DCR.planted_r3_page("group", 3)
+    ref3 = DCR.load_timed_reference([_timed_report(tmp_path, 3, ratio + 0.5, 0)],
+                                    card=page3["card"])
+    gates3, summary3 = DCR.score_r3_page(page3, timed=ref3)
+    assert not any(g.number.startswith("C5") for g in gates3)
+    why = next(s for s in summary3["not_asked"] if s.startswith("C5"))
+    assert why.startswith("C5: no registered C5 at G=3: ") and "G=2 (2026-09-26)" in why
+    assert "no G of the plan" in why
+    # A timed page at G=3 WAS read here: the line says none had been when C5
+    # was registered, never that none has been (the 2026-09-26 review).
+    assert "no timed page at it had been read when C5 was registered" in why
+    assert "no timed page has been read at it" not in why
+    # With no timed page at G=3 the line still says why G=3 is not registered.
+    ref4 = DCR.load_timed_reference([_timed_report(tmp_path, 4, ratio + 0.5, 0)],
+                                    card=page3["card"])
+    (none3,) = [s for s in DCR.score_r3_page(page3, timed=ref4)[1]["not_asked"]
+                if s.startswith("C5")]
+    assert none3.startswith("C5: no timed reference page at G=3, and no registered C5 at "
+                            "G=3: "), none3
+    assert "no G of the plan" in none3
+    (none4,) = [s for s in DCR.score_r3_page(DCR.planted_r3_page("group", 4),
+                                             timed={})[1]["not_asked"] if s.startswith("C5")]
+    assert none4 == "C5: no timed reference page at G=4"
+
+
+def test_a_timed_run_read_twice_is_refused_and_one_seed_scores_its_intervals(
+        tmp_path, capsys):
+    """2026-09-26 review. The loader counted runs, not seeds: one report named
+    twice, or two reruns at one seed, pooled as "the mean less its seed sd"
+    with sd 0, so C5 scored the bare point the one-run interval rule was
+    written to remove. R3's `load_replicates` refuses a replicate named twice,
+    or one whose run id or provenance stamp another carries, and so does this
+    loader now. Two DISTINCT runs at one seed score against the lowest lower
+    end of their own intervals: here that end sits below the byte ratio's
+    bracket, where the point (the old edge) sat above it, so C5 reads FAIL
+    where it read PASS. A seed a report does not record makes no second one."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    page = json.loads(g4.read_text())
+    r_lo, r_hi = DCR.r3_estimates(page)["alpha_ratio_bracket"]
+    timed = r_hi + 0.01
+    one = _timed_report(tmp_path, 4, timed, 0, clock=1710.0)
+    assert main(["--analyse", str(g4), "--timed-reference", str(one), str(one)]) \
+        == exit_codes.REFUSED
+    out = " ".join(capsys.readouterr().out.split())
+    assert "REFUSED: --timed-reference" in out and f"{one} is named twice" in out
+    assert exit_codes.parse_result_lines(out) == []
+    prov = {"utc": "2026-09-25T08:13:37+00:00", "hostname": "planted-host"}
+    copies = {"run id": [dict(run_id="r3-planted-0"), dict(run_id="r3-planted-0")],
+              "provenance stamp": [dict(run_id="a", provenance=prov),
+                                   dict(run_id="b", provenance=prov)]}
+    for what, overs in copies.items():
+        paths = [_timed_report(tmp_path, 4, timed, 0, clock=1710.0, **o) for o in overs]
+        with pytest.raises(DCR.CounterRunRefused, match=f"the same {what}"):
+            DCR.load_timed_reference(paths, card=page["card"])
+    reruns = [_timed_report(tmp_path, 4, timed, 0, clock=1710.0, run_id=f"rerun-{i}",
+                            ratio_interval=iv)
+              for i, iv in enumerate(([timed - 0.001, timed + 0.001],
+                                      [r_lo - 0.005, timed + 0.002]))]
+    (ref,) = DCR.load_timed_reference(reruns, card=page["card"])[4]
+    assert (ref["sd"], ref["edge"], ref["seeds"]) == (0.0, r_lo - 0.005, [0])
+    assert ref["interval"] == [r_lo - 0.005, timed + 0.002]
+    assert ref["edge_basis"].startswith("2 runs at one seed, 0, so no seed sd: the lowest "
+                                        "lower end of their own 90% intervals")
+    c5 = next(g for g in DCR.score_r3_page(page, timed={4: [ref]})[0] if g.number == "C5")
+    assert c5.verdict == FAIL, c5.measured
+    unseeded = [_timed_report(tmp_path, 4, timed, None, clock=1710.0,
+                              run_id=f"unseeded-{i}") for i in (0, 1)]
+    (bare,) = DCR.load_timed_reference(unseeded, card=page["card"])[4]
+    assert bare["seeds"] == [] and "at no recorded seed" in bare["edge_basis"]
+    seeds = [_timed_report(tmp_path, 4, timed, s, clock=1710.0) for s in (0, 1)]
+    (two,) = DCR.load_timed_reference(seeds, card=page["card"])[4]
+    assert two["edge_basis"] == "the mean less its seed sd over 2 runs at seeds 0, 1"
+
+
+def test_c5_at_g1_scores_one_runs_interval_not_its_point(tmp_path):
+    """With one timed run at G=1 the edge alpha(1) is held to is the lower end
+    of that run's own interval, not the run's point (2026-09-26 review: only
+    G=4 was tested, and a mutation to the point passed). Here the point sits
+    above alpha(1)'s whole bracket (FAIL against it) and the interval's lower
+    end below it (PASS)."""
+    page = DCR.planted_r3_page("group", 1)
+    got_lo, got_hi = DCR.r3_estimates(page)["alpha_bracket"]["total"]
+    point = got_hi + 0.02
+    assert point < DCR.R3_ALPHA1_CEILING
+    ref = DCR.load_timed_reference(
+        [_timed_report(tmp_path, 1, point, 0, ratio_interval=[got_lo - 0.01, point + 0.001])],
+        card=page["card"])
+    c5 = next(g for g in DCR.score_r3_page(page, timed=ref)[0] if g.number == "C5")
+    assert c5.verdict == PASS, c5.measured
+    assert f"against [{got_lo - 0.01:.4f}, 1.0]" in c5.measured
+    assert DCR.bracket_verdict(got_lo, got_hi, point, DCR.R3_ALPHA1_CEILING) == FAIL
+
+
+def test_the_timed_clock_is_the_median_of_the_usable_cells_then_of_the_rows(tmp_path):
+    """The regime's clock is the median `sm_clock_load_mhz` of the report's
+    usable timed cells, read off the cells.csv beside it, to the 15 MHz step;
+    only without one does it fall back to the `treads_table` rows, and the
+    regime then says so (2026-09-26 review: the rows were read first, and a
+    mean passed the tests). Five skewed cells, 1695 x 3 and 1800 x 2, have a
+    median of 1695 and a mean that rounds to 1740; a failed cell at 3000 is
+    not usable, and the rows' 1965 is not read beside the cells."""
+    skew = [(1695.0, "ok")] * 3 + [(1800.0, "ok")] * 2
+    rows = [{"arm": "shared", "tiles": n, "sm_clock_load_mhz": 1965.0} for n in range(5)]
+    cells = _timed_report(tmp_path, 4, 0.7, 0, cells=skew + [(3000.0, "failed")],
+                          treads_table=rows)
+    rep = json.loads(cells.read_text())
+    assert DCR.timed_report_clock(rep, cells) == (1695.0, DCR.R3_TIMED_CLOCK_CELLS)
+    table = [{"sm_clock_load_mhz": mhz} for mhz, _status in skew]
+    only_rows = _timed_report(tmp_path, 4, 0.7, 1, treads_table=table)
+    assert DCR.timed_report_clock(json.loads(only_rows.read_text()), only_rows) \
+        == (1695.0, DCR.R3_TIMED_CLOCK_ROWS)
+    card = DCR.planted_r3_page("group", 4)["card"]
+    (by_cells,) = DCR.load_timed_reference([cells], card=card)[4]
+    (by_rows,) = DCR.load_timed_reference([only_rows], card=card)[4]
+    assert DCR.timed_regime_word(by_cells) == "1695 MHz, duty 0.25"
+    assert DCR.timed_regime_word(by_rows) == (
+        "1695 MHz, duty 0.25 (the clock read off the treads_table rows of 1 of its 1 "
+        "runs: no usable clocked cell in a cells.csv beside them)")
+
+
+def test_c5_says_whether_bytes_and_time_were_read_at_one_clock_and_on_one_board(tmp_path):
+    """C5's lines are where a reader learns whether a page's bytes and its
+    timing were read at one clock and on one board (2026-09-26 review: neither
+    line was tested). A page locked at 1710 against reports timed at 1710 on
+    the page's own board reads "one clock" and "the same board"; the same
+    reports against the base-clock page, or a page locked a step off, read
+    "not shown to be the timed clock"."""
+    page = DCR.planted_r3_page("group", 4)
+    uuid = page["card"]["uuid"]
+    ref = DCR.load_timed_reference(
+        [_timed_report(tmp_path, 4, 0.9, s, clock=1710.0, uuid=uuid) for s in (0, 1)],
+        card=page["card"])
+
+    def lines(p) -> str:
+        c5 = next(g for g in DCR.score_r3_page(p, timed=ref)[0] if g.number == "C5")
+        return " ".join(" ".join(c5.lines).split())
+    locked = lines(_at_lock(json.loads(json.dumps(page)), 1710.0))
+    assert "counted at an nvidia-smi lock of 1710 MHz (ncu --clock-control none): one " \
+           "clock" in locked
+    assert f"timed on {DCR.board(uuid)}, this page's {DCR.board(uuid)}: the same board" \
+        in locked
+    base = lines(page)
+    assert "counted at ncu's base clock (--clock-control base): not shown to be the " \
+           "timed clock" in base
+    off = lines(_at_lock(json.loads(json.dumps(page)), 1740.0))
+    assert "lock of 1740 MHz (ncu --clock-control none): not shown to be the timed " \
+           "clock" in off
+
+
+def test_the_self_test_runs_the_family_worlds(capsys):
+    assert main(["--self-test"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "THE R3-ARMS FAMILY" in out
+    for world in DCR.R3_WORLDS:
+        line = next(ln for ln in out.splitlines() if f"planted {world} world" in ln)
+        assert " PASS " in line, line
+    assert "group_reads against vLLM's pid mapping by brute force" in out
+
+
+# the probe and the run, with ncu and the child planted.
+
+def _plant_family_ncu(monkeypatch, *, names: str, log: str, rc: int = 0):
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: f"/usr/bin/{name}-stub")
+    seen: list[list[str]] = []
+
+    def fake_run(argv, timeout=60):
+        del timeout
+        seen.append(list(argv))
+        if "--version" in argv:
+            return 0, "ncu 2026.1.0.0\n", ""
+        if "--query-metrics" in argv:
+            return 0, names, ""
+        Path(argv[argv.index("--log-file") + 1]).write_text(log)
+        return rc, f"{PK.MARKER} {PK.LAUNCHED} planted: one add_", ""
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    return seen
+
+
+def _family_probe_log(metrics) -> str:
+    row = {"kernel": "probe"}
+    units = {}
+    for m in metrics:
+        units[m] = DCR.unit_table(m)[0]
+        row[m] = "7"
+    return _wide_csv([row], units)
+
+
+def test_the_family_probe_asks_the_whole_list_and_drops_what_the_chip_lacks(monkeypatch):
+    """The chip's list decides the hardware counters; the `launch__*`
+    attributes are asked whether or not the list names them, because the
+    probe's own launch is what proves them."""
+    lacking = "lts__t_sectors_srcunit_ltcfabric"
+    offered = [DCR.metric_base(m) for m in DCR.R3_ALL_METRICS
+               if DCR.metric_base(m) != lacking and not m.startswith("launch__")]
+    asked = [m for m in DCR.R3_ALL_METRICS if DCR.metric_base(m) != lacking]
+    seen = _plant_family_ncu(monkeypatch, names="\n".join(f"{b}  some description"
+                                                         for b in offered),
+                             log=_family_probe_log(asked))
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    probe = next(a for a in seen if "--log-file" in a)
+    assert probe[probe.index("--metrics") + 1].split(",") == asked
+    assert info["counters_read"] and counter_route_is_open(info)
+    assert info["metrics_dropped"] == ["lts__t_sectors_srcunit_ltcfabric.sum"]
+    assert info["metrics_proven"] == asked and info["csv_layout"] == DCR.CSV_WIDE
+    verdict, notes = route_verdict({}, {}, info, {"present": False})
+    assert verdict == "OPEN" and "--census-only" in notes[0]
+
+
+def test_the_family_probe_refuses_when_the_chip_lacks_a_strict_metric(monkeypatch):
+    offered = [DCR.metric_base(m) for m in DCR.R3_ALL_METRICS
+               if m != "lts__t_sectors_srcunit_tex_op_read.sum"]
+    seen = _plant_family_ncu(monkeypatch, names=" ".join(offered), log="")
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    assert not counter_route_is_open(info)
+    assert "STRICT" in info["cause"] and not any("--log-file" in a for a in seen)
+    assert route_verdict({}, {}, info, {"present": False})[0] == REFUSE
+
+
+def test_the_family_probe_needs_every_strict_metric_not_one(monkeypatch):
+    """A probe that proves dram__bytes_read readable says nothing about the
+    sector and launch metrics the pages are gated on: one STRICT metric
+    missing from the probe's launch is not OPEN."""
+    names = " ".join(DCR.metric_base(m) for m in DCR.R3_ALL_METRICS)
+    _plant_family_ncu(monkeypatch, names=names,
+                      log=_family_probe_log(["dram__bytes_read.sum"]))
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    assert not info["counters_read"] and not counter_route_is_open(info)
+
+
+def test_the_family_probe_asks_strict_alone_once_when_the_whole_list_reads_nothing(
+        monkeypatch):
+    """With no metric list to go by, the whole list is asked; if that reads no
+    counter for a reason other than ERR_NVGPUCTRPERM (a name this ncu does not
+    know refuses the whole invocation), the STRICT list alone is asked once
+    more, and the first attempt is recorded."""
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: f"/usr/bin/{name}-stub")
+    asked: list[str] = []
+
+    def fake_run(argv, timeout=60):
+        del timeout
+        if "--version" in argv:
+            return 0, "ncu 2026.1.0.0\n", ""
+        if "--query-metrics" in argv:
+            return 1, "", "==ERROR== planted: no list"
+        metrics = argv[argv.index("--metrics") + 1].split(",")
+        asked.append(argv[argv.index("--metrics") + 1])
+        log = argv[argv.index("--log-file") + 1]
+        if len(metrics) > len(DCR.R3_STRICT_METRICS):
+            Path(log).write_text("==ERROR== Failed to find metric planted\n")
+        else:
+            Path(log).write_text(_family_probe_log(DCR.R3_STRICT_METRICS))
+        return 0, f"{PK.MARKER} {PK.LAUNCHED} planted: one add_", ""
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    assert asked == [",".join(DCR.R3_ALL_METRICS), ",".join(DCR.R3_STRICT_METRICS)]
+    assert counter_route_is_open(info) and "first_attempt" in info
+    assert info["metrics_proven"] == list(DCR.R3_STRICT_METRICS)
+    assert info["metrics_query"].startswith("ncu --query-metrics exited 1")
+    assert [a["counters_read"] for a in info["attempts"]] == [False, True]
+
+
+def _plant_probe_asks(monkeypatch, *, names: str, refuse) -> list[list[str]]:
+    """An ncu whose metric query lists `names` and whose probe invocation reads
+    every metric it is asked for, unless `refuse(metrics)` returns the error
+    line that refuses the whole invocation. Returns each probe ask's metrics."""
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: f"/usr/bin/{name}-stub")
+    asked: list[list[str]] = []
+
+    def fake_run(argv, timeout=60):
+        del timeout
+        if "--version" in argv:
+            return 0, "ncu 2026.1.0.0\n", ""
+        if "--query-metrics" in argv:
+            return 0, names, ""
+        metrics = argv[argv.index("--metrics") + 1].split(",")
+        asked.append(metrics)
+        error = refuse(metrics)
+        Path(argv[argv.index("--log-file") + 1]).write_text(
+            error or _family_probe_log(metrics))
+        return 0, f"{PK.MARKER} {PK.LAUNCHED} planted: one add_", ""
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    return asked
+
+
+#: The metric list of a chip that offers every hardware counter the family
+#: asks. The `launch__*` attributes are not held to the list, so it omits them.
+_HARDWARE_LIST = "\n".join(f"{DCR.metric_base(m)}  planted" for m in DCR.R3_ALL_METRICS
+                           if not m.startswith("launch__"))
+
+
+def test_a_readable_list_and_one_unknown_launch_name_still_reads_open(monkeypatch):
+    """The `launch__*` names pass the list check unverified, so one this ncu
+    does not know refuses the whole first ask on a box whose counters work.
+    Until 2026-09-24 the retry ran only when the list could not be read, so
+    this box read REFUSE and `--run` refused with it. The probe now asks
+    again whatever the list said: STRICT plus the list-verified metrics, and
+    every ask is recorded."""
+    bad = "launch__occupancy_limit_registers"
+    asked = _plant_probe_asks(
+        monkeypatch, names=_HARDWARE_LIST,
+        refuse=lambda ms: f"==ERROR== Failed to find metric {bad}\n" if bad in ms else "")
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    verified = [m for m in DCR.R3_ALL_METRICS
+                if m not in DCR.R3_STRICT_METRICS and not m.startswith("launch__")]
+    assert asked == [list(DCR.R3_ALL_METRICS), list(DCR.R3_STRICT_METRICS) + verified]
+    assert info["counters_read"] and counter_route_is_open(info)
+    assert info["metrics_proven"] == asked[-1]
+    assert [a["metrics"] for a in info["attempts"]] == asked
+    assert [a["counters_read"] for a in info["attempts"]] == [False, True]
+    assert bad in info["attempts"][0]["ncu_error"] and bad in info["first_attempt"]
+    left_out = [m for m in DCR.R3_ALL_METRICS
+                if m.startswith("launch__") and m not in DCR.R3_STRICT_METRICS]
+    assert left_out and all(m in info["metrics_unproven"] for m in left_out)
+    verdict, notes = route_verdict({}, {}, info, {"present": False})
+    assert verdict == "OPEN" and "attempt 1 (" in notes[1], notes
+
+
+def test_the_retries_end_at_strict_alone_or_at_a_permission_refusal(monkeypatch):
+    """When STRICT plus the verified metrics also reads nothing, STRICT alone
+    is asked last; ERR_NVGPUCTRPERM on any ask is the box's answer and ends
+    the retries there."""
+    extra = set(DCR.R3_ALL_METRICS) - set(DCR.R3_STRICT_METRICS)
+    asked = _plant_probe_asks(
+        monkeypatch, names=_HARDWARE_LIST,
+        refuse=lambda ms: ("==ERROR== Failed to find metric planted\n"
+                           if extra & set(ms) else ""))
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    assert len(asked) == 3 and asked[-1] == list(DCR.R3_STRICT_METRICS)
+    assert counter_route_is_open(info) and len(info["attempts"]) == 3
+    assert info["metrics_proven"] == list(DCR.R3_STRICT_METRICS)
+    asked = _plant_probe_asks(
+        monkeypatch, names=_HARDWARE_LIST,
+        refuse=lambda ms: "==ERROR== ERR_NVGPUCTRPERM - The user does not have "
+                          "permission to access NVIDIA GPU Performance Counters\n")
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    assert len(asked) == 1 and info["permission_refused"]
+    assert len(info["attempts"]) == 1 and "first_attempt" not in info
+
+
+def test_the_ladder_probe_and_argv_are_unchanged():
+    """`--family ladder` is byte-identical: its probe asks its one metric and
+    `ncu_argv` is the list it always was, now built through the one
+    `ncu_common_flags` both families call."""
+    assert DCR.ncu_probe_argv("ncu", Path("/l.csv")) == [
+        "ncu", "--metrics", NCU_METRICS[0], "--launch-count", "1",
+        "--target-processes", "all", "--csv", "--page", "raw", "--log-file", "/l.csv",
+        "--", DCR.sys.executable, str(DCR.NCU_PROBE_KERNEL)]
+    assert ncu_argv("ncu", "all", Path("/x.csv")) == [
+        "ncu", "--metrics", ",".join(NCU_METRICS), "--replay-mode", "kernel",
+        "--cache-control", "all", "--csv", "--page", "raw", "--target-processes",
+        "all", "--log-file", "/x.csv"]
+    import inspect
+    for fn in (DCR.ncu_argv, DCR.r3_ncu_argv):
+        assert "ncu_common_flags(" in inspect.getsource(fn), fn.__name__
+    assert build_parser().parse_args([]).family == DCR.LADDER_FAMILY
+
+
+def _planted_open() -> dict:
+    """What `probe_ncu(R3_FAMILY)` returns on a box whose family is OPEN."""
+    return {"present": True, "binary": "/planted/ncu", "version": "planted",
+            "counters_read": True, "permission_refused": False,
+            "family": DCR.R3_FAMILY, "metrics_proven": list(DCR.R3_ALL_METRICS),
+            "metrics_unproven": {}, "metrics_dropped": [], "cause": "planted"}
+
+
+def _plant_the_box(monkeypatch, *, world="group", card=None, probe=None):
+    """The box: ncu open for the family, a planted card, and an ncu whose
+    capture runs a planted child (it writes the manifest the plan names) and
+    whose --import prints the planted world's CSV for that manifest."""
+    card = dict(DCR.R3_PLANTED_CARD) if card is None else card
+    probe = _planted_open() if probe is None else probe
+    calls: list[list[str]] = []
+
+    def probe_ncu(family=None, clock_control=None):
+        # Recorded beside the argv as `["probe_ncu", family, clock control]`,
+        # so a test reads the clock control each probe was asked at.
+        calls.append(["probe_ncu", str(family), str(clock_control)])
+        return dict(probe)
+    monkeypatch.setattr(DCR, "probe_ncu", probe_ncu)
+    monkeypatch.setattr(DCR, "live_card_block", lambda: card)
+    monkeypatch.setattr(DCR, "r3_stack_versions",
+                        lambda: {"torch": "t", "triton": "tr", "vllm": "v", "python": "p"})
+
+    def fake_run(argv, timeout=60):
+        del timeout
+        calls.append(list(argv))
+        if "--counter-child" in argv:
+            plan_path = Path(argv[argv.index("--counter-child") + 1])
+            plan = json.loads(plan_path.read_text())
+            manifest = DCR.planted_r3_manifest(plan, device_uuid=card["uuid"])
+            Path(plan["manifest"]).write_text(json.dumps(manifest))
+            Path(argv[argv.index("--export") + 1]).write_text(json.dumps(
+                {"plan": str(plan_path)}))
+            return 0, "==PROF== planted capture\n", ""
+        if "--import" in argv:
+            meta = json.loads(Path(argv[argv.index("--import") + 1]).read_text())
+            plan = json.loads(Path(meta["plan"]).read_text())
+            manifest = json.loads(Path(plan["manifest"]).read_text())
+            return 0, DCR.canned_r3_csv(manifest, world, group_m=plan["group_m"]), ""
+        raise AssertionError(f"unplanted ncu call {argv}")
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    return calls
+
+
+def test_the_r3_run_end_to_end_on_planted_ncu_output(tmp_path, monkeypatch, capsys):
+    """The census, then one G's page, then --analyse over it: every step but
+    the child and ncu is the shipped code, and the page is VALID."""
+    calls = _plant_the_box(monkeypatch)
+    census = tmp_path / "session" / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only",
+                 "--out", str(census)]) == exit_codes.DONE
+    cen = json.loads(census.read_text())
+    assert cen["gemms_per_call_measured"] == R3.GEMMS_PER_CALL
+    assert cen["card"]["uuid"] == DCR.R3_PLANTED_CARD["uuid"] and cen["commit"]
+    capture = next(a for a in calls if "--counter-child" in a)
+    assert capture[capture.index("--launch-skip") + 1] == "0"
+    assert "--launch-count" not in capture, "the census caps nothing"
+    capsys.readouterr()
+    page_path = tmp_path / "results" / "r3c-g4.json"
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4",
+                 "--census", str(census), "--out", str(page_path)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert out.splitlines()[0] == DCR.card_line(DCR.R3_PLANTED_CARD)
+    page = json.loads(page_path.read_text())
+    assert set(DCR.R3_TOP_KEYS) <= set(page)
+    assert page["design"]["group_m"] == 4 and page["design"]["launch_count"] == 90
+    assert page["run_id"].startswith(DCR.R3_PLANTED_CARD["slug"])
+    assert page["instrument"] == DCR.R3_RUN_INSTRUMENT
+    profiles = page_path.parent / "r3c-g4.profiles"
+    for name in ("g4.plan.json", "g4.manifest.json", "g4.ncu-rep", "g4.csv"):
+        assert (profiles / name).exists(), name
+    assert main(["--analyse", str(page_path)]) == exit_codes.DONE
+
+
+def test_a_page_is_rebuilt_from_its_profiles_with_no_card_and_no_child(
+        tmp_path, monkeypatch, capsys):
+    """THE CAPTURE AND THE REDUCTION ARE SPLIT: after a capture, the page is
+    rebuilt from `<out>.profiles` alone (off the box, after a parser fix) and
+    carries the capture's card, stack, argv and commit. Neither the probe nor
+    the card nor the child is asked; with no ncu on PATH the CSV the capture
+    reduced is read."""
+    _plant_the_box(monkeypatch)
+    census = tmp_path / "census.json"
+    page_path = tmp_path / "r3c-g4.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page_path)]) == exit_codes.DONE
+    first = json.loads(page_path.read_text())
+    page_path.unlink()
+
+    def off_the_box(*a, **k):
+        raise AssertionError("--reduce-only asked the box")
+    for name in ("probe_ncu", "live_card_block", "r3_stack_versions", "_run"):
+        monkeypatch.setattr(DCR, name, off_the_box)
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    capsys.readouterr()
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(census), "--out", str(page_path)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert out.splitlines()[0] == DCR.card_line(DCR.R3_PLANTED_CARD)
+    again = json.loads(page_path.read_text())
+    assert again["cells"] == first["cells"] and again["card"] == first["card"]
+    assert again["ncu"]["argv"] == first["ncu"]["argv"]
+    assert again["ncu"]["capture_commit"] == first["ncu"]["capture_commit"]
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "16",
+                 "--census", str(census), "--out", str(page_path)]) == exit_codes.REFUSED
+    assert "no capture to reduce" in capsys.readouterr().out
+    # A run whose --out is its own census refuses before it asks the box,
+    # because a capture deletes its --out first (2026-09-25): the census stays.
+    before = census.read_bytes()
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(census)]) == exit_codes.REFUSED
+    assert "--out is the census" in capsys.readouterr().out
+    assert census.read_bytes() == before
+    # And a census that is gone (a census rerun whose capture failed deletes
+    # it) is a refusal here, not a traceback.
+    census.unlink()
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(census), "--out", str(page_path)]) == exit_codes.REFUSED
+    assert "cannot read the census" in capsys.readouterr().out
+
+
+def test_a_page_is_rebuilt_after_its_profiles_are_copied_off_the_box(
+        tmp_path, monkeypatch, capsys):
+    """2026-09-25, the Lambda A100 pages: the plan names its manifest by the
+    capture machine's absolute path (/home/ubuntu/...), so a rebuild on the
+    laptop found no manifest and crashed, the one case --reduce-only exists
+    for. The capture is moved here to a directory the plan never named."""
+    _plant_the_box(monkeypatch)
+    box = tmp_path / "box"
+    census = box / "census.json"
+    page_path = box / "r3c-g4.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page_path)]) == exit_codes.DONE
+    first = json.loads(page_path.read_text())
+    laptop = tmp_path / "laptop"
+    box.rename(laptop)
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    moved = laptop / "r3c-g4.json"
+    moved.unlink()
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(laptop / "census.json"), "--out",
+                 str(moved)]) == exit_codes.DONE
+    assert json.loads(moved.read_text())["cells"] == first["cells"]
+
+
+def test_the_r3_run_refuses_without_ncu_and_without_a_card(tmp_path, monkeypatch, capsys):
+    shut = {"present": False, "counters_read": False, "why": "no ncu on PATH"}
+    census = tmp_path / "census.json"
+    census.write_text("{}")
+    argv = ["--run", "--family", "r3-arms", "--group-m", "4", "--census", str(census),
+            "--out", str(tmp_path / "p.json")]
+    _plant_the_box(monkeypatch, probe=shut)
+    assert main(argv) == exit_codes.REFUSED
+    assert "no ncu on PATH" in capsys.readouterr().out
+    monkeypatch.setattr(DCR, "probe_ncu",
+                        lambda family=None, clock_control=None: _planted_open())
+    monkeypatch.setattr(DCR, "live_card_block", lambda: None)
+    assert main(argv) == exit_codes.REFUSED
+    assert "no card" in capsys.readouterr().out
+    assert not (tmp_path / "p.json").exists()
+
+
+def test_a_page_needs_its_g_and_a_census_from_this_card(tmp_path, monkeypatch, capsys):
+    _plant_the_box(monkeypatch)
+    out = str(tmp_path / "p.json")
+    assert main(["--run", "--family", "r3-arms", "--census", "c.json", "--out", out]) \
+        == exit_codes.REFUSED
+    assert "--group-m names it" in capsys.readouterr().out
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--out", out]) \
+        == exit_codes.REFUSED
+    assert "Run --census-only first" in capsys.readouterr().out
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    doc = json.loads(census.read_text())
+    doc["card"]["uuid"] = "another-card"
+    census.write_text(json.dumps(doc))
+    capsys.readouterr()
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", out]) == exit_codes.REFUSED
+    assert "is not this card" in capsys.readouterr().out
+    assert not Path(out).exists()
+
+
+#: What `provenance._git` returns when root runs git in a checkout its login
+#: user owns, which is what the sudo counter door does.
+_DUBIOUS = (None, None, None, "git rev-parse: fatal: detected dubious ownership in "
+                              "repository at '/home/ubuntu/moe/repo'")
+
+
+def test_no_census_or_page_is_written_or_joined_without_a_commit(
+        tmp_path, monkeypatch, capsys):
+    """A census licenses a page by commit, and `None == None` is not a match.
+    Until 2026-09-24 a tree git could not name (root in a user-owned checkout,
+    under the sudo counter door) wrote a census with `commit: None`, the page
+    compared None with None and was accepted, and `--analyse` joined pages
+    over the commit set {'None'}. Now the census and the page refuse, naming
+    provenance's reason and the safe.directory remedy; a census that names no
+    commit licenses no page; and a join over pages that name none refuses."""
+    _plant_the_box(monkeypatch)
+    census, page = tmp_path / "census.json", tmp_path / "r3c-g4.json"
+    real_git = PV._git
+    monkeypatch.setattr(PV, "_git", lambda root: _DUBIOUS)
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert "dubious ownership" in out and "safe.directory" in out
+    assert not census.exists()
+    monkeypatch.setattr(PV, "_git", real_git)
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    doc = json.loads(census.read_text())
+    assert doc["commit"]
+    capsys.readouterr()
+    monkeypatch.setattr(PV, "_git", lambda root: _DUBIOUS)
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page)]) == exit_codes.REFUSED
+    assert "safe.directory" in capsys.readouterr().out and not page.exists()
+    monkeypatch.setattr(PV, "_git", real_git)
+    doc["commit"] = None
+    census.write_text(json.dumps(doc))
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page)]) == exit_codes.REFUSED
+    assert "names no commit" in capsys.readouterr().out and not page.exists()
+    paths = _write_pages(tmp_path, [("group", 4, {}), ("group", 1, {})])
+    for p in paths:
+        bare = json.loads(p.read_text())
+        del bare["git_sha"]
+        p.write_text(json.dumps(bare))
+    assert main(["--analyse", *map(str, paths)]) == exit_codes.REFUSED
+    assert "name no commit" in capsys.readouterr().out
+
+
+def test_a_page_is_not_rebuilt_from_a_capture_or_a_tree_with_no_commit(
+        tmp_path, monkeypatch, capsys):
+    """`--reduce-only` writes a page too: it refuses a capture record that
+    names no commit and a reducing tree git cannot name."""
+    _plant_the_box(monkeypatch)
+    census, page = tmp_path / "census.json", tmp_path / "r3c-g4.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page)]) == exit_codes.DONE
+    page.unlink()
+    reduce = ["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+              "--census", str(census), "--out", str(page)]
+    real_git = PV._git
+    monkeypatch.setattr(PV, "_git", lambda root: _DUBIOUS)
+    capsys.readouterr()
+    assert main(reduce) == exit_codes.REFUSED
+    assert "safe.directory" in capsys.readouterr().out and not page.exists()
+    monkeypatch.setattr(PV, "_git", real_git)
+    record = tmp_path / "r3c-g4.profiles" / "g4.capture.json"
+    capture = json.loads(record.read_text())
+    capture["commit"] = None
+    record.write_text(json.dumps(capture))
+    assert main(reduce) == exit_codes.REFUSED
+    assert "names no commit" in capsys.readouterr().out and not page.exists()
+
+
+def test_the_family_flags_are_refused_where_they_mean_nothing(capsys):
+    assert main(["--dry-run", "--census-only"]) == exit_codes.REFUSED
+    assert main(["--dry-run", "--timed-reference", "x.json"]) == exit_codes.REFUSED
+    assert main(["--bracket", "--family", "r3-arms"]) == exit_codes.REFUSED
+    capsys.readouterr()
+
+
+def test_counters_doc_section_6_quotes_the_numbers_the_family_computes():
+    """docs/COUNTERS.md section 6 prints the r3-arms byte model and the group
+    model's table; both are recomputed here from the functions that own them,
+    so the page fails a test the day either moves."""
+    doc = (REPO / "docs" / "COUNTERS.md").read_text()
+    sec = doc[doc.index("## 6. The R3 arms under the counter"):]
+    byte = DCR.r3_byte_model(MIXTRAL, "bf16", 32)
+    for key in ("W", "W_w1", "W_w2", "operand_per_tile_w1", "operand_per_tile_w2"):
+        assert f"{byte[key]:,}" in sec, key
+    for g, qs, slope in DCR.r3_group_rows(8, DCR.R3_TREADS,
+                                          list(DCR.R3_GROUPS) + [DCR.R3_OPTIONAL_GROUP]):
+        row = f"| {g} | " + " | ".join(f"{v:.4f}" for v in qs) + f" | {slope:.4f} |"
+        assert row in sec, row
+    assert "`--family ladder` (the\ndefault) behaves exactly as before" in sec
+    assert "\u2014" not in sec, "no em-dash in the section"
+    for gemm in ("w1", "w2"):
+        k, n_cols = DCR.r3_gemm_geometry(MIXTRAL, gemm)
+        assert f"{DCR.r3_activation_ceiling(32, 64, n_cols):.4f} of W_{gemm}" in sec, gemm
+        for arm in ("shared", "private"):
+            row = f"| {gemm} {arm.upper()} | " + " | ".join(
+                f"{DCR.r3_exposure(MIXTRAL, 'bf16', 32, 64, 64, n)[gemm][arm]['working_set'] / 2 ** 20:.1f}"  # noqa: E501
+                for n in DCR.R3_TREADS) + " |"
+            assert row in sec, row
+    one = " ".join(sec.split())
+    first = {card: min(n for n in DCR.R3_TREADS if DCR.exposure_word(
+        DCR.r3_exposure(MIXTRAL, "bf16", 32, 64, 64, n)["w2"]["shared"]["working_set"],
+        l2) != "held") for card, l2 in DCR.R3_TARGET_L2.items()}
+    assert f"w2 is not held from n={first['H100 SXM5']}" in one
+    assert first["A100 40GB SXM4"] == 1 and "not even at n=1" in one
+
+
+# --------------------------------------------------------------------------
+# the first REAL ncu output this repo has (Lambda A100, ncu 2025.3.1)
+# --------------------------------------------------------------------------
+
+_REAL_WIDE = Path(__file__).resolve().parent / "fixtures" / "ncu" / "raw_wide_a100_ncu2025.3.1.csv"
+
+
+def test_the_real_ncu_2025_3_1_csv_parses_with_every_r3_arms_metric():
+    """Nsight Compute 2025.3.1 prints the raw page WIDE and spells the
+    duration's unit "ns". Until 2026-09-25 the time table knew only "nsecond",
+    so the probe on the first box whose counters were readable read REFUSE
+    ("unit 'ns' ... never been shown") and the preflight called a working box
+    NOT READY."""
+    text = _REAL_WIDE.read_text()
+    assert DCR._ncu_csv_header(text)[0] == DCR.CSV_WIDE
+    launches = DCR.parse_ncu_csv(text)
+    assert len(launches) == 2
+    fill, double = launches
+    # the doubling kernel reads its 2^26-float input once, plus a few KB
+    read = double.metrics["dram__bytes_read.sum"]
+    assert 2**26 * 4 <= read <= 2**26 * 4 * 1.001
+    assert double.metrics["gpu__time_duration.sum"] > 0
+    for m in DCR.R3_ALL_METRICS:
+        assert m in double.metrics or m in double.unreadable, m
+    for m in DCR.R3_STRICT_METRICS:
+        assert m in double.metrics, m
+
+
+def test_the_duration_accepts_both_spellings_and_scales_them_alike():
+    canon, table = DCR.unit_table("gpu__time_duration.sum")
+    assert canon == "nsecond"
+    for long, short in (("nsecond", "ns"), ("usecond", "us"), ("msecond", "ms"), ("second", "s")):
+        assert table[long] == table[short]
+    assert "" not in table, "an empty unit on a duration still refuses"
+
+
+# --------------------------------------------------------------------------
+# The floor counters (`--floor`): their own capture, never a page's.
+# --------------------------------------------------------------------------
+
+def test_the_floor_list_never_rides_on_a_page_and_every_unit_is_named():
+    """A page's replay passes are its cost, so no floor metric is in the page
+    ask; every floor metric is registered, in one of four units, none empty."""
+    assert not set(DCR.R3_FLOOR_METRICS) & set(DCR.R3_ALL_METRICS)
+    assert all(DCR.registered_metric(m) for m in DCR.R3_FLOOR_METRICS)
+    assert {DCR.unit_table(m)[0] for m in DCR.R3_FLOOR_METRICS} == {
+        "%", "cycle", "byte", "inst"}
+    assert all("" not in DCR.unit_table(m)[1] for m in DCR.R3_FLOOR_METRICS)
+    assert DCR.unit_table("sm__pipe_tensor_op_hmma_cycles_active.avg."
+                          "pct_of_peak_sustained_active")[0] == "%"
+
+
+def test_the_floor_ask_is_strict_plus_what_the_chip_lists_and_never_blind():
+    listed = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS}
+    asked, dropped, why = DCR.r3_floor_metrics(
+        frozenset(listed - {"smsp__inst_executed_op_ldgsts"}))
+    assert not why and asked[:len(DCR.R3_STRICT_METRICS)] == DCR.R3_STRICT_METRICS
+    assert dropped == ["smsp__inst_executed_op_ldgsts.sum"]
+    assert len(asked) == len(DCR.R3_STRICT_METRICS) + len(DCR.R3_FLOOR_METRICS) - 1
+    assert DCR.r3_floor_metrics(None)[2], "an unreadable list refuses"
+
+
+def test_the_floor_plan_is_native_only_and_profiles_sixteen_launches():
+    """Sixteen at the default treads (Mixtral 8x22B's); Mixtral 8x7B's w2 needs
+    two more treads for three cells of four waves, so 24 (2026-09-29)."""
+    plan = DCR.r3_floor_plan(64, profile_dir=Path("p"), model="mixtral-8x22b")
+    sched = R3.counter_schedule(plan)
+    assert plan["arms"] == [R3.NATIVE] and plan["treads"] == list(DCR.R3_FLOOR_TREADS)
+    assert sched.launch_count == R3.GEMMS_PER_CALL * DCR.R3_FLOOR_CALLS * 4 == 16
+    assert sched.launch_skip == R3.GEMMS_PER_CALL * DCR.R3_WARMUP_CALLS * 4
+    plan = DCR.r3_floor_plan(64, profile_dir=Path("p"))
+    assert plan["treads"] == [2, 3, 4, 6, 7, 8]
+    assert R3.counter_schedule(plan).launch_count == 24
+
+
+def test_floor_cells_average_the_calls_derive_the_clock_and_keep_bad_units_soft():
+    plan = DCR.r3_floor_plan(2, profile_dir=Path("p"))
+    manifest = DCR.planted_r3_manifest(plan, device_uuid="planted")
+    metrics = DCR.R3_STRICT_METRICS + DCR.R3_FLOOR_METRICS
+    units = {m: DCR.unit_table(m)[0] for m in metrics}
+    units["smsp__inst_executed_op_ldsm.sum"] = "furlong"
+    rows = []
+    for key, call, gemm, _warm in DCR.r3_launch_sequence(manifest):
+        row = {m: "50" for m in metrics}
+        row.update({"kernel": DCR.GEMM_MARKER,
+                    "launch__grid_size": str(manifest["grids"][key][gemm]),
+                    "gpu__time_duration.sum": "1000000",
+                    "sm__cycles_elapsed.avg": str(1.6e6 + 2e3 * call)})
+        rows.append(row)
+    launches = parse_ncu_csv(_wide_csv(rows, units),
+                             soft=frozenset(DCR.R3_FLOOR_METRICS))
+    cells = DCR.r3_floor_cells(DCR.attribute_launches(launches, manifest), manifest)
+    assert [(c["arm"], c["n"]) for c in cells] == [
+        ("native", n) for n in plan["treads"]]
+    w1 = cells[0]["per_gemm"]["w1"]
+    assert w1["sm__cycles_elapsed.avg"] == pytest.approx(1.601e6)
+    assert w1["sm_clock_mhz"] == pytest.approx(1601.0)
+    assert w1["smsp__issue_active.avg.pct_of_peak_sustained_active"] == 50.0
+    assert w1["smsp__inst_executed_op_ldsm.sum"] is None
+    assert w1["unreadable"] == ["smsp__inst_executed_op_ldsm.sum"]
+
+
+def test_floor_belongs_to_the_r3_run_and_is_neither_a_census_nor_a_reduction(capsys):
+    """Each refusal is its own guard's, by its text: on a box without ncu the
+    probe or a missing --group-m would refuse these commands for another
+    reason, and a box with ncu would then run a census and drop --floor."""
+    assert DCR.main(["--dry-run", "--floor"]) == exit_codes.REFUSED
+    assert "--floor belongs to --run or --dry-run --family r3-arms" in \
+        capsys.readouterr().out
+    for extra in ("--census-only", "--reduce-only"):
+        assert DCR.main(["--run", "--family", "r3-arms", "--floor", extra,
+                         "--out", "x.json"]) == exit_codes.REFUSED
+        assert "--floor is its own capture" in capsys.readouterr().out
+    assert DCR.main(["--run", "--family", "r3-arms", "--group-m", "64", "--floor",
+                     "--tiles", "2,3", "--out", "x.json"]) == exit_codes.REFUSED
+    assert "--floor profiles its own treads [2, 3, 4, 6, 7, 8]" in capsys.readouterr().out
+
+
+STALL_BASES = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS if "_stalled_" in m}
+
+
+def _floor_names(lacks=()) -> str:
+    """What `ncu --query-metrics` prints for a chip listing every floor and
+    page metric but the base names in `lacks`."""
+    every = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS + DCR.R3_ALL_METRICS}
+    return "\n".join(sorted(every - set(lacks)))
+
+
+def _floor_columns(text: str, returned, cell=None) -> str:
+    """The planted wide CSV plus a column for each floor metric in `returned`.
+    Each cell reads 50 in its own unit, unless `cell(metric, row)` returns
+    another string for it, `row` being that launch's own cells by column."""
+    import csv
+    lines = text.splitlines()
+    at = next(i for i, line in enumerate(lines) if line.startswith('"ID"'))
+    header = next(csv.reader([lines[at]]))
+    add = [m for m in DCR.R3_FLOOR_METRICS if m in set(returned)]
+    lines[at] += "".join(f',"{m}"' for m in add)
+    lines[at + 1] += "".join(f',"{DCR.unit_table(m)[0]}"' for m in add)
+    for i in range(at + 2, len(lines)):
+        row = dict(zip(header, next(csv.reader([lines[i]])), strict=True))
+        values = [(cell(m, row) if cell else None) or "50" for m in add]
+        lines[i] += "".join(f',"{v}"' for v in values)
+    return "\n".join(lines) + "\n"
+
+
+#: What the planted `nvidia-smi` prints for `R3_FLOOR_SMI_FIELDS`: one card at
+#: 1601 MHz under a 700 W cap, no clock event, persistence mode on.
+_SMI = "GPU-planted, 1601, 61.25, 700.00, 0x0000000000000000, Enabled\n"
+
+
+def _plant_the_floor(monkeypatch, *, lacks=(), child_uuid=None,
+                     returned=DCR.R3_FLOOR_METRICS, cell=None, capture_rc=0,
+                     capture_writes=True):
+    """The planted box, plus the chip's metric list, an nvidia-smi, an import
+    of a FLOOR report that returns the floor metrics in `returned` (see
+    `_floor_columns` for `cell`), and optionally a child that reports another
+    card's UUID in its manifest. Every capture (census, page or floor) exits
+    `capture_rc`; with `capture_writes=False` it dies before writing anything,
+    as ncu does on the /tmp lock-file refusal."""
+    calls = _plant_the_box(monkeypatch)
+    inner = DCR._run
+
+    def run(argv, timeout=60):
+        if "--query-metrics" in argv:
+            calls.append(list(argv))
+            return 0, _floor_names(lacks), ""
+        if argv[0] == "nvidia-smi":
+            calls.append(list(argv))
+            return 0, _SMI, ""
+        if "--counter-child" in argv and not capture_writes:
+            calls.append(list(argv))
+            return capture_rc, "", "==ERROR== planted: ncu stopped before the child ran\n"
+        rc, out, err = inner(argv, timeout=timeout)
+        if "--import" in argv and ".floor." in Path(argv[argv.index("--import") + 1]).name:
+            out = _floor_columns(out, returned, cell)
+        if child_uuid and "--counter-child" in argv:
+            plan = json.loads(Path(argv[argv.index("--counter-child") + 1]).read_text())
+            manifest = json.loads(Path(plan["manifest"]).read_text())
+            manifest["device"]["uuid"] = child_uuid
+            Path(plan["manifest"]).write_text(json.dumps(manifest))
+        if "--counter-child" in argv:
+            rc = capture_rc
+        return rc, out, err
+    monkeypatch.setattr(DCR, "_run", run)
+    return calls
+
+
+def test_a_decisive_floor_reading_the_chip_lacks_refuses_and_a_minor_one_does_not():
+    every = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS}
+    hmma = "sm__pipe_tensor_op_hmma_cycles_active"
+    assert not DCR.r3_floor_metrics(frozenset(every - {hmma}))[2], "its alternative is listed"
+    assert DCR.r3_floor_metrics(frozenset(every - {hmma, "sm__pipe_tensor_cycles_active"}))[2]
+    _asked, dropped, why = DCR.r3_floor_metrics(frozenset(every - STALL_BASES))
+    assert "long_scoreboard" in why and "mio_throttle" in why
+    assert len(dropped) == len(DCR.R3_STALL_REASONS)
+    minor = "smsp__warp_issue_stalled_drain_per_warp_active"
+    assert not DCR.r3_floor_metrics(frozenset(every - {minor}))[2], "a minor stall is a column"
+
+
+def test_the_floor_capture_end_to_end_at_the_base_clock_and_with_none(
+        tmp_path, monkeypatch, capsys):
+    """The page's base clock, then the one extra capture at `--clock-control
+    none`: each writes its own file, records its clock, and has its own id."""
+    calls = _plant_the_floor(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    bodies = {}
+    for clock in ("base", "none"):
+        out = tmp_path / f"r3f-g64-{clock}.json"
+        assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--census",
+                     str(census), "--floor", "--floor-clock", clock, "--out",
+                     str(out)]) == exit_codes.DONE
+        capture = [a for a in calls if "--counter-child" in a][-1]
+        assert capture[capture.index("--clock-control") + 1] == clock
+        # 2 GEMMs x 2 calls x Mixtral 8x7B's six floor treads (2026-09-29)
+        assert capture[capture.index("--launch-count") + 1] == "24"
+        # THE ASK ITSELF (2026-09-25 review): the planted import adds the floor
+        # columns to any `.floor.` report whatever ncu was asked, so only the
+        # argv shows the capture asked STRICT plus every floor metric listed.
+        want = [*DCR.R3_STRICT_METRICS, *DCR.R3_FLOOR_METRICS]
+        assert capture[capture.index("--metrics") + 1].split(",") == want
+        body = json.loads(out.read_text())
+        assert body["ncu"]["metrics_asked"] == want
+        assert body["kind"] == "floor" and body["ncu"]["clock_control"] == clock
+        assert f"clock-control-{clock}/" in body["instrument"]
+        assert [(c["arm"], c["n"]) for c in body["cells"]] == [
+            ("native", n) for n in (2, 3, 4, 6, 7, 8)]
+        assert body["plan"]["treads"] == [2, 3, 4, 6, 7, 8]
+        hmma = "sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active"
+        assert body["cells"][0]["per_gemm"]["w1"][hmma] == 50.0
+        assert body["ncu"]["metrics_missing"] == []
+        assert body["ncu"]["returncode"] == 0 and body["gates"] == []
+        assert body["clock"]["lock_mhz"] is None and body["clock"]["held"] is None
+        bodies[clock] = body
+    assert bodies["base"]["run_id"] != bodies["none"]["run_id"]
+    capsys.readouterr()
+    assert main(["--analyse", str(out)]) == exit_codes.REFUSED
+    assert "are not pages" in capsys.readouterr().out
+
+
+def test_the_floor_capture_with_the_null_kernel_end_to_end(tmp_path, monkeypatch, capsys):
+    """Rental 2 part 3: `--floor-null-kernel` puts ATen's spin_kernel after every
+    call. ncu's filter names it, the skip and the count carry it (3 launches a call),
+    the attribution expects it at exactly its slots, each cell records it apart as
+    `null`, V1 says so, and the HMMA check reads the GEMM launches only. Shape
+    metrics this chip's list lacks are not asked and are recorded as dropped."""
+    calls = _plant_the_floor(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    out = tmp_path / "r3f-g64.json"
+    assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+                 "--floor", "--floor-null-kernel", "--floor-shape-metrics",
+                 "--out", str(out)]) == exit_codes.DONE, capsys.readouterr().out[-2000:]
+    capture = [a for a in calls if "--counter-child" in a][-1]
+    assert capture[capture.index("-k") + 1] == DCR.R3_NULL_KERNEL_FILTER
+    assert capture[capture.index("--launch-count") + 1] == str(3 * 2 * 6)
+    assert capture[capture.index("--launch-skip") + 1] == str(3 * 2 * 6)
+    body = json.loads(out.read_text())
+    assert body["plan"]["null_kernel"] is True
+    assert all(set(c["per_gemm"]) == {"w1", "w2"} and c["null"]["calls"] == 2 for c in body["cells"])
+    v1 = [g for g in body["gates"] if g["number"] == "V1"]
+    assert v1 and v1[0]["verdict"] == "PASS" and "12 null kernels" in v1[0]["measured"]
+    listed = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS + DCR.R3_ALL_METRICS}
+    offered = [m for m in DCR.R3_FLOOR_SHAPE_METRICS if DCR.metric_base(m) in listed]
+    assert offered and set(offered) <= set(body["ncu"]["metrics_asked"])
+    assert body["ncu"]["shape_metrics_dropped"] == [m for m in DCR.R3_FLOOR_SHAPE_METRICS
+                                                    if m not in offered]
+    plain = tmp_path / "plain.json"
+    assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+                 "--floor", "--out", str(plain)]) == exit_codes.DONE
+    assert json.loads(plain.read_text())["run_id"] != body["run_id"]
+
+
+def test_a_page_at_another_block_k_with_partition_metrics_end_to_end(tmp_path, monkeypatch,
+                                                                     capsys):
+    """Rental 2 part 1: `--block-k 32` reaches the plan, the page's design and its run id
+    (the existing kernel's config value, nothing else), and `--partition-metrics` asks
+    the fabric's own sectors only where the chip lists them, recording what it dropped."""
+    calls = _plant_the_floor(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    pages = {}
+    for name, extra in (("plain", []), ("bk32", ["--block-k", "32", "--partition-metrics"])):
+        out = tmp_path / name / "r3c-g4.json"
+        rc = main(["--run", "--family", "r3-arms", "--group-m", "4", "--census", str(census),
+                   *extra, "--out", str(out)])
+        assert rc in (exit_codes.DONE, exit_codes.CLAIM_FAIL), capsys.readouterr().out[-1500:]
+        pages[name] = json.loads(out.read_text())
+        plan_path = Path([a for a in calls if "--counter-child" in a][-1][-1])
+        pages[name + "_plan"] = json.loads(plan_path.read_text())
+    assert pages["bk32"]["design"]["block_k"] == 32 and pages["plain"]["design"]["block_k"] == 64
+    assert pages["bk32_plan"]["block_k"] == 32 and "block_k" not in pages["plain_plan"]
+    assert pages["bk32"]["run_id"] != pages["plain"]["run_id"]
+    asked = pages["bk32"]["ncu"]["metrics_asked"]
+    assert not set(DCR.R3_PARTITION_METRICS) & set(asked)    # the planted chip lists none
+
+
+def test_a_floor_capture_missing_a_decisive_reading_writes_nothing(
+        tmp_path, monkeypatch, capsys):
+    """A minor reading no launch returned is listed in `metrics_missing`; a
+    decisive group no launch returned is INVALID, writes no file, and keeps
+    the report and the CSV."""
+    drain = "smsp__warp_issue_stalled_drain_per_warp_active.pct"
+    _plant_the_floor(monkeypatch,
+                     returned=[m for m in DCR.R3_FLOOR_METRICS if m != drain])
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    out = tmp_path / "r3f-g64.json"
+    floor = ["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+             "--floor", "--out", str(out)]
+    assert main(floor) == exit_codes.DONE
+    assert json.loads(out.read_text())["ncu"]["metrics_missing"] == [drain]
+    out.unlink()
+    _plant_the_floor(monkeypatch, returned=[m for m in DCR.R3_FLOOR_METRICS
+                                            if "_tensor_" not in m])
+    capsys.readouterr()
+    assert main(floor) == exit_codes.INVALID and not out.exists()
+    text = capsys.readouterr().out
+    assert "REFUSED: no measured launch of the floor capture returned" in text
+    assert "sm__pipe_tensor_cycles_active" in text and "long_scoreboard" not in text
+    profiles = tmp_path / "r3f-g64.profiles"
+    assert (profiles / "g64.floor.ncu-rep").exists() and (profiles / "g64.floor.csv").exists()
+
+
+def test_the_floor_refuses_before_any_capture_and_on_another_cards_child(
+        tmp_path, monkeypatch, capsys):
+    calls = _plant_the_floor(monkeypatch, lacks=STALL_BASES)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    out = tmp_path / "r3f-g64.json"
+    floor = ["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+             "--floor", "--out", str(out)]
+    captures = sum("--counter-child" in a for a in calls)
+    capsys.readouterr()
+    assert main(floor) == exit_codes.REFUSED
+    assert "Nothing was captured" in capsys.readouterr().out
+    assert sum("--counter-child" in a for a in calls) == captures and not out.exists()
+    _plant_the_floor(monkeypatch, child_uuid="GPU-another-card")
+    assert main(floor) == exit_codes.INVALID and not out.exists()
+
+
+def test_the_floor_name_check_needs_no_gpu_and_refuses_a_lost_decisive_group(
+        monkeypatch, capsys):
+    asked, lacks = [], set()
+
+    def query_only(argv, timeout=60):
+        assert "--query-metrics" in argv, argv
+        asked.append(list(argv))
+        return 0, _floor_names(lacks), ""
+
+    def no_box(*a, **k):
+        raise AssertionError("the name check asked the box")
+    monkeypatch.setattr(DCR, "_run", query_only)
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: "/planted/ncu")
+    for name in ("probe_ncu", "live_card_block"):
+        monkeypatch.setattr(DCR, name, no_box)
+    check = ["--dry-run", "--family", "r3-arms", "--floor", "--chip", "gh100"]
+    assert main(check) == exit_codes.DONE
+    assert asked[-1][-2:] == ["--chip", "gh100"]
+    lacks |= STALL_BASES
+    assert main(check) == exit_codes.REFUSED
+    assert "REFUSE" in capsys.readouterr().out
+    for stray in (["--chip", "gh100"], ["--floor-clock", "none"]):
+        assert main(["--dry-run", "--family", "r3-arms", *stray]) == exit_codes.REFUSED
+    capsys.readouterr()
+    assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--floor", "--chip",
+                 "gh100", "--out", "x.json"]) == exit_codes.REFUSED
+    assert "--chip belongs to --dry-run --floor" in capsys.readouterr().out
+
+
+def _a_census(tmp_path) -> Path:
+    """The census every floor capture below is licensed by, on the planted box."""
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    return census
+
+
+def _floor_argv(census: Path, out: Path, *extra: str) -> list[str]:
+    return ["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+            "--floor", *extra, "--out", str(out)]
+
+
+def test_a_rerun_whose_ncu_dies_never_rebuilds_from_the_last_capture(
+        tmp_path, monkeypatch, capsys):
+    """2026-09-25 review: nothing deleted the last capture's manifest and
+    report, so a rerun at the same --out whose ncu died before writing
+    anything rebuilt the census, the page or the floor from the LAST capture
+    and exited 0 under the new argv. `_r3_capture` now deletes them first, at
+    all three call sites, and each rerun is INVALID.
+
+    TWICE, because the floor refuses a nonzero exit before it looks for its
+    files: under an ncu that exits 1 that refusal alone voids the floor, and
+    emptying the floor's own `stale` list passed every test (second review).
+    An ncu that exits 0 and writes nothing reaches the floor's 'left no'
+    check, which only the deletion makes true.
+
+    THE RESULT FILE AT --out GOES TOO (owner, 2026-09-25), so each rerun
+    whose capture fails leaves none. The census reruns last: once its file is
+    gone, no page is licensed until a census passes, which the last lines
+    check."""
+    census = tmp_path / "census.json"
+    outs = {"census": census, "page": tmp_path / "r3c-g4.json",
+            "floor": tmp_path / "r3f-g64.json"}
+    runs = {"census": ["--run", "--family", "r3-arms", "--census-only", "--out",
+                       str(census)],
+            "page": ["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                     str(census), "--out", str(outs["page"])],
+            "floor": _floor_argv(census, outs["floor"])}
+    for rc, floor_says in ((1, "REFUSED: ncu exited 1 on the floor capture"),
+                           (0, "REFUSED: ncu exited 0 and the floor capture left no")):
+        _plant_the_floor(monkeypatch)
+        for name in ("census", "page", "floor"):
+            assert main(runs[name]) == exit_codes.DONE, (rc, name)
+            assert outs[name].exists(), (rc, name)
+        _plant_the_floor(monkeypatch, capture_rc=rc, capture_writes=False)
+        for name in ("page", "floor", "census"):
+            capsys.readouterr()
+            assert main(runs[name]) == exit_codes.INVALID, (rc, name)
+            text = capsys.readouterr().out
+            assert f"REFUSED: ncu exited {rc}" in text, (rc, name)
+            assert not outs[name].exists(), (rc, name, "the last result was left")
+            if name == "floor":
+                assert floor_says in text, rc
+        assert main(runs["page"]) == exit_codes.REFUSED, rc
+        assert "cannot read the census" in capsys.readouterr().out, rc
+
+
+def test_the_floor_records_its_capture_first_and_refuses_a_nonzero_ncu_exit(
+        tmp_path, monkeypatch, capsys):
+    """`g<G>.floor.capture.json` is written before anything the capture left
+    is read: ncu's return code, the argv, the card, the stack, the commit, the
+    ask, and an nvidia-smi reading either side. A nonzero return code is
+    INVALID even when the child finished and the report exists."""
+    _plant_the_floor(monkeypatch)
+    census = _a_census(tmp_path)
+    calls = _plant_the_floor(monkeypatch, capture_rc=1)
+    out = tmp_path / "r3f-g64.json"
+    capsys.readouterr()
+    assert main(_floor_argv(census, out)) == exit_codes.INVALID and not out.exists()
+    assert "REFUSED: ncu exited 1 on the floor capture" in capsys.readouterr().out
+    profiles = tmp_path / "r3f-g64.profiles"
+    record = json.loads((profiles / "g64.floor.capture.json").read_text())
+    assert record["returncode"] == 1 and record["commit"]
+    assert record["card"] == DCR.R3_PLANTED_CARD and record["stack"]["vllm"] == "v"
+    assert record["argv"][record["argv"].index("--launch-count") + 1] == "24"
+    assert record["metrics_asked"][:len(DCR.R3_STRICT_METRICS)] == list(DCR.R3_STRICT_METRICS)
+    assert [a[0] for a in calls].count("nvidia-smi") == 2
+    planted = ("GPU-planted", "1601", "61.25", "700.00", "0x0000000000000000", "Enabled")
+    for side in ("smi_before", "smi_after"):
+        assert record[side]["returncode"] == 0 and record[side]["utc"].endswith("Z")
+        assert record[side]["rows"] == [dict(zip(DCR.R3_FLOOR_SMI_FIELDS, planted,
+                                                 strict=True))]
+    assert (profiles / "g64.floor.ncu-rep").exists()
+
+
+def test_an_unreadable_tensor_group_is_invalid_end_to_end_and_the_record_is_kept(
+        tmp_path, monkeypatch, capsys):
+    """Both tensor-pipe names read n/a on every launch. The soft parse keeps
+    them out of the readings, the decisive check finds the group on no
+    launch, and the capture is INVALID with no file, keeping the report, the
+    CSV and the capture's own record."""
+    def tensor_na(metric, row):
+        return "n/a" if metric.startswith("sm__pipe_tensor") else None
+    _plant_the_floor(monkeypatch, cell=tensor_na)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64.json"
+    capsys.readouterr()
+    assert main(_floor_argv(census, out)) == exit_codes.INVALID and not out.exists()
+    text = capsys.readouterr().out
+    assert "REFUSED: no measured launch of the floor capture returned" in text
+    assert "sm__pipe_tensor_cycles_active" in text and "long_scoreboard" not in text
+    profiles = tmp_path / "r3f-g64.profiles"
+    for name in ("g64.floor.ncu-rep", "g64.floor.csv", "g64.floor.capture.json"):
+        assert (profiles / name).exists(), name
+    assert json.loads((profiles / "g64.floor.capture.json").read_text())["returncode"] == 0
+
+
+def test_the_floor_reads_its_own_columns_soft_end_to_end(tmp_path, monkeypatch):
+    """A minor floor column that reads n/a on every launch, and another that
+    reads n/a on one launch, cost those readings and nothing else: DONE, the
+    first in `metrics_missing`, both in the cells' `unreadable`. The capture's
+    soft parse is what makes that so: with it strict (the review's mutation,
+    `soft=frozenset()` in `r3_floor`) either one refuses the whole file."""
+    ldgsts = "smsp__inst_executed_op_ldgsts.sum"
+    drain = "smsp__warp_issue_stalled_drain_per_warp_active.pct"
+
+    def gaps(metric, row):
+        return "n/a" if metric == ldgsts or (metric == drain and row["ID"] == "0") else None
+    _plant_the_floor(monkeypatch, cell=gaps)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64.json"
+    assert main(_floor_argv(census, out)) == exit_codes.DONE
+    body = json.loads(out.read_text())
+    assert body["ncu"]["metrics_missing"] == [ldgsts]
+    w1, w2 = (body["cells"][0]["per_gemm"][g] for g in ("w1", "w2"))
+    assert w1["unreadable"] == [ldgsts, drain] and w2["unreadable"] == [ldgsts]
+    assert w1[drain] is None and w2[drain] == 50.0 and w1[ldgsts] is None
+
+
+def test_a_floor_whose_hmma_count_is_not_above_zero_writes_nothing(
+        tmp_path, monkeypatch, capsys):
+    """Zero is a number, so until 2026-09-25 a tensor reading of 0 counted as
+    decisive and the file was written. The HMMA instruction count is now a
+    decisive group of its own and must be above zero on every measured
+    launch: one launch at 0 is INVALID, named, and nothing is written. One
+    launch whose count reads n/a (the soft parse keeps it out of the
+    readings) is INVALID too, and named as unreadable, not as zero."""
+    hmma = DCR.R3_FLOOR_HMMA_COUNT
+    assert hmma in DCR.R3_FLOOR_METRICS and (hmma,) in DCR.R3_FLOOR_DECISIVE
+    out = tmp_path / "r3f-g64.json"
+    said = {"0": f"REFUSED: {hmma} is not above zero on every measured launch: "
+                 "launch(es) ['5'] read it at zero, so they retired no HMMA",
+            "n/a": f"REFUSED: {hmma} is not above zero on every measured launch: "
+                   "launch(es) ['5'] could not read it, which proves nothing"}
+    census = None
+    for reading, why in said.items():
+        def one_idle(metric, row, reading=reading):
+            return reading if metric == hmma and row["ID"] == "5" else None
+        _plant_the_floor(monkeypatch, cell=one_idle)
+        census = census or _a_census(tmp_path)
+        capsys.readouterr()
+        assert main(_floor_argv(census, out)) == exit_codes.INVALID, reading
+        assert not out.exists(), reading
+        text = capsys.readouterr().out
+        assert why in text, reading
+        assert ("read it at zero" in text) is (reading == "0"), reading
+
+
+def test_the_floor_lock_is_written_into_the_file_and_gated_on_independent_clocks(
+        tmp_path, monkeypatch, capsys):
+    """`--floor-lock-mhz F` goes into the file, and FL1 is the lock check
+    (`lock_gate.check_lock`, 2026-10-05): here, with no null kernel and no
+    base twin, nvidia-smi either side of the capture must read within one
+    15 MHz step of F, or the file is written with FL1 FAIL and exits INVALID.
+    The planted box's nvidia-smi and its counters both read 1601 MHz: a lock
+    of 1601 holds, 1710 does not, and the step's two edges are pinned just
+    inside and just outside. The old t0 + cycles / f fit is still computed
+    and stored (`clock.fit`, `lock_check.fit_off`) as a diagnostic: at 1710 it
+    names what the old gate named, and decides nothing. Each lock, and no
+    lock, is its own run id. The flag belongs to a capture at --floor-clock
+    none, and a lock must be above zero."""
+    def at_1601(metric, row):
+        if metric != "sm__cycles_elapsed.avg":
+            return None
+        return repr(1601.0 * float(row["gpu__time_duration.sum"]) / 1e3)
+    _plant_the_floor(monkeypatch, cell=at_1601)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64-lock.json"
+    ids = []
+    for lock, rc in (("1601", exit_codes.DONE),
+                     ("1615.9", exit_codes.DONE), ("1616.1", exit_codes.INVALID),
+                     ("1586.1", exit_codes.DONE), ("1585.9", exit_codes.INVALID),
+                     ("1710", exit_codes.INVALID)):
+        capsys.readouterr()
+        assert main(_floor_argv(census, out, "--floor-clock", "none",
+                                "--floor-lock-mhz", lock)) == rc, lock
+        fl1 = next(r for r in exit_codes.parse_result_lines(capsys.readouterr().out)
+                   if r.name == "FL1")
+        body = json.loads(out.read_text())
+        clock = body["clock"]
+        assert clock["lock_mhz"] == float(lock) and clock["band_mhz"] == 15.0, lock
+        assert clock["held"] is (rc == exit_codes.DONE), lock
+        assert fl1.verdict == (PASS if clock["held"] else FAIL), lock
+        assert clock["smi_before"]["rows"][0]["clocks.sm"] == "1601"
+        ids.append(body["run_id"])
+    assert clock["off_lock"] == ["before 1601, after 1601 MHz"]
+    assert clock["lock_check"]["fallback"].startswith("fallback: no null kernel and no base twin")
+    assert clock["lock_check"]["fit_off"] == [e for g in ("w1", "w2") for e in (
+        [f"{g} fitted 1601 MHz"] + [f"n={n} {g} 1601 MHz" for n in body["plan"]["treads"]])]
+    assert clock["fit"][0].startswith("w1 1601.0 MHz + ")
+    unlocked = tmp_path / "r3f-g64-none.json"
+    assert main(_floor_argv(census, unlocked, "--floor-clock", "none")) == exit_codes.DONE
+    ids.append(json.loads(unlocked.read_text())["run_id"])
+    assert len(set(ids)) == len(ids), ids
+    refusals = {("--floor-lock-mhz", "1710"): "belongs to --run --floor --floor-clock none",
+                ("--floor-clock", "none", "--floor-lock-mhz", "0"): "must be above zero"}
+    for extra, why in refusals.items():
+        capsys.readouterr()
+        assert main(_floor_argv(census, out, *extra)) == exit_codes.REFUSED, extra
+        assert why in capsys.readouterr().out, extra
+    assert main(["--dry-run", "--family", "r3-arms", "--floor", "--floor-clock", "none",
+                 "--floor-lock-mhz", "1710"]) == exit_codes.REFUSED
+
+
+def test_a_cell_whose_counters_name_no_clock_is_named_and_leaves_the_lock_check_standing(
+        tmp_path, monkeypatch, capsys):
+    """One launch's `sm__cycles_elapsed.avg` reads n/a. It is soft, so the
+    capture goes on, and the other launches return it, so its decisive group
+    is met; but that cell's mean, and so its counter clock, is None. Since
+    2026-10-05 the counters' clock decides nothing (`lock_gate`): FL1 reads
+    nvidia-smi, which held, so it PASSES, and the cell is named 'no clock' in
+    the printed fit diagnostic and among the cells left out of any per-cell
+    check (second review: the None branch stays exercised)."""
+    def at_1601_but_one(metric, row):
+        if metric != "sm__cycles_elapsed.avg":
+            return None
+        if row["ID"] == "0":
+            return "n/a"
+        return repr(1601.0 * float(row["gpu__time_duration.sum"]) / 1e3)
+    _plant_the_floor(monkeypatch, cell=at_1601_but_one)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64-lock.json"
+    capsys.readouterr()
+    assert main(_floor_argv(census, out, "--floor-clock", "none",
+                            "--floor-lock-mhz", "1601")) == exit_codes.DONE
+    fl1 = next(r for r in exit_codes.parse_result_lines(capsys.readouterr().out)
+               if r.name == "FL1")
+    body = json.loads(out.read_text())
+    check = body["clock"]["lock_check"]
+    assert fl1.verdict == PASS and body["clock"]["off_lock"] == []
+    assert check["fit_off"][0] == "n=2 w1 no clock"
+    assert not [e for e in check["fit_off"] if "no clock" not in e and "w1" in e]
+    assert "native/2 w1 no clock" in check["excluded"]
+    w1 = body["cells"][0]["per_gemm"]["w1"]
+    assert w1["sm_clock_mhz"] is None and "sm__cycles_elapsed.avg" in w1["unreadable"]
+
+
+# --------------------------------------------------------------------------
+# Byte pages at a held clock (`--page-clock`, `--page-lock-mhz`, 2026-09-26).
+# --------------------------------------------------------------------------
+
+def _plant_a_locked_page(monkeypatch, *, clock=None, lacks=()):
+    """The floor's planted box (the chip's metric list, an nvidia-smi at 1601
+    MHz) whose PAGE imports also return `sm__cycles_elapsed.avg` on every
+    launch, at `clock(row)` MHz over that launch's own duration (1601 when
+    `clock` is None; a None from it plants n/a). A census's and a floor's
+    imports carry no such column."""
+    calls = _plant_the_floor(monkeypatch, lacks=lacks)
+    inner = DCR._run
+
+    def cycles(_metric, row):
+        mhz = clock(row) if clock else 1601.0
+        return "n/a" if mhz is None else repr(mhz * float(row["gpu__time_duration.sum"]) / 1e3)
+
+    def run(argv, timeout=60):
+        rc, out, err = inner(argv, timeout=timeout)
+        if "--import" in argv:
+            name = Path(argv[argv.index("--import") + 1]).name
+            if not name.startswith("census") and ".floor." not in name:
+                out = _floor_columns(out, [DCR.R3_PAGE_CLOCK_METRIC], cycles)
+        return rc, out, err
+    monkeypatch.setattr(DCR, "_run", run)
+    return calls
+
+
+def _page_argv(census: Path, out: Path, *extra: str, g: int = 4) -> list[str]:
+    return ["--run", "--family", "r3-arms", "--group-m", str(g), "--census", str(census),
+            *extra, "--out", str(out)]
+
+
+def test_a_page_under_an_nvidia_smi_lock_records_it_and_v10_reads_it_back(
+        tmp_path, monkeypatch, capsys):
+    """Until 2026-09-26 only the floor could run under a lock, and every page
+    passed --clock-control base, so the GH200's bytes (ncu's base clock) and
+    its timed pages (a 1710 MHz lock) were read at two clocks. `--page-clock
+    none --page-lock-mhz F` passes `none` to the census's and the page's ncu,
+    writes the clock control and F into the page, its capture record and its
+    run id, asks the page's `sm__cycles_elapsed.avg` (never the census's), and
+    V10 reads the lock back (`lock_gate.check_lock`; here nvidia-smi either
+    side, one 15 MHz step). The planted box reads 1601 MHz: 1601 and 1615.9
+    hold, 1616.1 and 1710 do not (INVALID, the page written, the reading named,
+    the old fit printed beside it). The base page asks no clock and has no V10, and every clock and
+    lock is its own run id. `--reduce-only` rebuilds a locked page at the
+    CAPTURE's clock and lock, run id included."""
+    calls = _plant_a_locked_page(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--page-clock", "none",
+                 "--page-lock-mhz", "1601", "--out", str(census)]) == exit_codes.DONE
+    cen = json.loads(census.read_text())
+    assert (cen["ncu"]["clock_control"], cen["ncu"]["lock_mhz"]) == ("none", 1601.0)
+    assert cen["ncu"]["smi_before"]["rows"][0]["clocks.sm"] == "1601"
+    capture = [a for a in calls if "--counter-child" in a][-1]
+    assert capture[capture.index("--clock-control") + 1] == "none"
+    assert DCR.R3_PAGE_CLOCK_METRIC not in capture[capture.index("--metrics") + 1]
+    ids = [cen["run_id"]]
+    for lock, rc in (("1601", exit_codes.DONE), ("1615.9", exit_codes.DONE),
+                     ("1616.1", exit_codes.INVALID), ("1710", exit_codes.INVALID)):
+        out = tmp_path / f"r3c-g4-lock{lock}.json"
+        capsys.readouterr()
+        assert main(_page_argv(census, out, "--page-clock", "none",
+                               "--page-lock-mhz", lock)) == rc, lock
+        text = capsys.readouterr().out
+        v10 = next(r for r in exit_codes.parse_result_lines(text) if r.name == "V10")
+        assert v10.verdict == (PASS if rc == exit_codes.DONE else FAIL), lock
+        page = json.loads(out.read_text())
+        assert (page["ncu"]["clock_control"], page["ncu"]["lock_mhz"]) == ("none", float(lock))
+        assert page["ncu"]["smi_after"]["rows"][0]["clocks.sm"] == "1601"
+        assert page["instrument"] == DCR.R3_RUN_INSTRUMENT_AT.format(clock="none")
+        capture = [a for a in calls if "--counter-child" in a][-1]
+        assert capture[capture.index("--clock-control") + 1] == "none"
+        assert capture[capture.index("--metrics") + 1].split(",")[-1] == \
+            DCR.R3_PAGE_CLOCK_METRIC
+        assert DCR.r3_cell_clock_mhz(page["cells"][0], "w1") == pytest.approx(1601.0)
+        assert f"counted at an nvidia-smi lock of {float(lock):g} MHz" in text
+        ids.append(page["run_id"])
+    v10 = next(g for g in page["gates"] if g["number"] == "V10")
+    assert v10["measured"].startswith("off the lock: smi before 1601, after 1601 MHz OUT")
+    assert ("old fit, diagnostic only: w1 1601.0 MHz + 0.0 us over 15 cells; w2 1601.0 MHz"
+            in v10["measured"])
+    assert "would read FAIL (w1 fitted 1601 MHz; native/1 w1 1601 MHz" in v10["measured"]
+    base = tmp_path / "r3c-g4-base.json"
+    assert main(_page_argv(census, base)) == exit_codes.DONE
+    body = json.loads(base.read_text())
+    assert (body["ncu"]["clock_control"], body["ncu"]["lock_mhz"]) == ("base", None)
+    assert "smi_before" not in body["ncu"] and body["instrument"] == DCR.R3_RUN_INSTRUMENT
+    assert "V10" not in [g["number"] for g in body["gates"]]
+    assert DCR.R3_PAGE_CLOCK_METRIC not in body["ncu"]["metrics_asked"]
+    ids.append(body["run_id"])
+    assert len(set(ids)) == len(ids), ids
+    held = tmp_path / "r3c-g4-lock1601.json"
+    first = json.loads(held.read_text())
+    held.unlink()
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(census), "--out", str(held)]) == exit_codes.DONE
+    again = json.loads(held.read_text())
+    assert (again["ncu"]["clock_control"], again["ncu"]["lock_mhz"]) == ("none", 1601.0)
+    assert again["run_id"] == first["run_id"] and again["instrument"] == first["instrument"]
+    assert {g["number"]: g["verdict"] for g in again["gates"]}["V10"] == PASS
+
+
+def test_a_locked_cell_whose_counters_name_no_clock_is_named_by_v10(
+        tmp_path, monkeypatch, capsys):
+    """One launch's `sm__cycles_elapsed.avg` reads n/a. It is soft, so the page
+    is written, and that cell's counter clock is not shown: V10's printed fit
+    diagnostic names it `no clock`, and V10 itself, on nvidia-smi, PASSES.
+    A page at the card's own clock (`--page-clock none`, no lock) has no F and
+    no V10, and still records nvidia-smi either side of its capture."""
+    _plant_a_locked_page(monkeypatch, clock=lambda row: None if row["ID"] == "0" else 1601.0)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3c-g4.json"
+    capsys.readouterr()
+    assert main(_page_argv(census, out, "--page-clock", "none", "--page-lock-mhz",
+                           "1601")) == exit_codes.DONE
+    v10 = next(g for g in json.loads(out.read_text())["gates"] if g["number"] == "V10")
+    assert v10["verdict"] == PASS
+    assert v10["measured"].startswith("lock in force: smi before 1601, after 1601 MHz")
+    assert "native/1 w1 no clock" in v10["measured"]
+    assert "old fit, diagnostic only: w1 1601.0 MHz" in v10["measured"]
+    free = tmp_path / "r3c-g4-none.json"
+    assert main(_page_argv(census, free, "--page-clock", "none")) == exit_codes.DONE
+    body = json.loads(free.read_text())
+    assert (body["ncu"]["clock_control"], body["ncu"]["lock_mhz"]) == ("none", None)
+    assert "V10" not in [g["number"] for g in body["gates"]]
+    assert body["ncu"]["smi_before"]["returncode"] == 0
+
+
+def test_a_lock_on_a_chip_that_lists_no_cycle_counter_refuses_before_any_capture(
+        tmp_path, monkeypatch, capsys):
+    """V10 reads each cell's `sm__cycles_elapsed.avg`, and one metric name ncu
+    does not know aborts the whole capture, so a chip whose metric list does
+    not offer it refuses the locked page before its capture."""
+    calls = _plant_a_locked_page(monkeypatch, lacks={"sm__cycles_elapsed"})
+    census = _a_census(tmp_path)
+    captures = sum("--counter-child" in a for a in calls)
+    out = tmp_path / "r3c-g4.json"
+    capsys.readouterr()
+    assert main(_page_argv(census, out, "--page-clock", "none", "--page-lock-mhz",
+                           "1710")) == exit_codes.REFUSED
+    said = capsys.readouterr().out
+    assert "this chip's metric list does not offer it" in said and "Nothing was captured" in said
+    assert sum("--counter-child" in a for a in calls) == captures and not out.exists()
+
+
+def test_the_probe_before_a_capture_under_a_lock_sets_no_clock_either(
+        tmp_path, monkeypatch, capsys):
+    """2026-09-26 review. `do_run_r3` runs `probe_ncu` before every census,
+    page and floor, and the probe passed no `--clock-control`, so inside the
+    runbook's `nvidia-smi -lgc F,F` block ncu held its default, the base
+    clock, over the probe's launch and restored the clock after it. Whether
+    that restore keeps an nvidia-smi lock was never read off a box. The probe
+    now takes the capture's clock control: `none` beside `--page-clock none`
+    and `--floor-clock none`, in every ask it makes, recorded in its payload
+    and beside the capture (`probe_clock_control`); a base-clock capture's
+    probe passes nothing, as before."""
+    base = DCR.ncu_probe_argv("ncu", Path("/l.csv"))
+    held = DCR.ncu_probe_argv("ncu", Path("/l.csv"), clock_control="none")
+    at = base.index("--csv")
+    assert held == base[:at] + ["--clock-control", "none"] + base[at:]
+    offered = "\n".join(f"{DCR.metric_base(m)}  some description"
+                        for m in DCR.R3_ALL_METRICS if not m.startswith("launch__"))
+    for clock in (None, "none"):
+        seen = _plant_family_ncu(monkeypatch, names=offered,
+                                 log=_family_probe_log(DCR.R3_ALL_METRICS))
+        info = DCR.probe_ncu(DCR.R3_FAMILY, clock_control=clock)
+        asks = [a for a in seen if "--log-file" in a]
+        assert asks and info["counters_read"] and info["clock_control"] == clock
+        assert [a[a.index("--clock-control") + 1] if "--clock-control" in a else None
+                for a in asks] == [clock] * len(asks)
+    calls = _plant_a_locked_page(monkeypatch)
+
+    def probed() -> str:
+        return [c[2] for c in calls if c[0] == "probe_ncu"][-1]
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--page-clock", "none",
+                 "--page-lock-mhz", "1601", "--out", str(census)]) == exit_codes.DONE
+    assert probed() == "none"
+    assert json.loads(census.read_text())["ncu"]["probe_clock_control"] == "none"
+    runs = {("--page-clock", "none", "--page-lock-mhz", "1601"): "none",
+            ("--page-clock", "none"): "none", (): "None"}
+    for extra, want in runs.items():
+        out = tmp_path / f"r3c-g4-{len(extra)}.json"
+        assert main(_page_argv(census, out, *extra)) == exit_codes.DONE, extra
+        assert probed() == want, extra
+        page = json.loads(out.read_text())
+        assert str(page["ncu"]["probe_clock_control"]) == want, extra
+    for clock, want in (("none", "none"), ("base", "None")):
+        out = tmp_path / f"r3f-g64-{clock}.json"
+        assert main(_floor_argv(census, out, "--floor-clock", clock)) == exit_codes.DONE
+        assert probed() == want, clock
+        assert str(json.loads(out.read_text())["ncu"]["probe_clock_control"]) == want
+    capsys.readouterr()
+
+
+def test_a_base_clock_page_keeps_the_run_id_it_was_published_with():
+    """2026-09-26 review. A draft of `--page-clock` put `clock_control` into
+    every page's and census's run id, base included, so no published page's id
+    could be reproduced by a `--reduce-only` rebuild of its capture. The clock
+    control is a knob only when it is not the base clock, as the lock is only
+    when one is given: every r3-arms page and census in results/published/
+    gets back the id it carries, and a `none` page and a locked one still get
+    ids of their own."""
+    published = sorted((REPO / "results" / "published").glob("*/results/*-r3-counters/r3c-g*.json"))
+    censuses = sorted((REPO / "results" / "published").glob("*/session/census.json"))
+    assert len(published) >= 15 and len(censuses) >= 3
+    for path in published + censuses:
+        d = json.loads(path.read_text())
+        mode = "r3-census" if d.get("kind") == "census" else "r3-run"
+        argv = ["--run", "--family", "r3-arms",
+                *(["--census-only"] if mode == "r3-census"
+                  else ["--group-m", str(d["design"]["group_m"])]), "--out", "x.json"]
+        args = build_parser().parse_args(argv)
+        DCR.resolve_r3_defaults(args, argv)
+        assert DCR.run_id_for(mode, args, d["card"]["name"]) == d["run_id"], path
+        if mode == "r3-run":
+            ids = {d["run_id"]}
+            for clock, lock in (("none", None), ("none", 1710.0), ("none", 1800.0)):
+                args.page_clock, args.page_lock_mhz = clock, lock
+                ids.add(DCR.run_id_for(mode, args, d["card"]["name"]))
+            assert len(ids) == 4, path
+
+
+def test_the_page_clock_flags_are_refused_where_they_mean_nothing(capsys):
+    """Each refusal is its own guard's, by its text, before any box is asked."""
+    refusals = {
+        ("--run", "--family", "r3-arms", "--group-m", "4", "--page-lock-mhz", "1710"):
+            "--page-lock-mhz belongs to --run --family r3-arms --page-clock none",
+        ("--run", "--family", "r3-arms", "--group-m", "4", "--page-clock", "none",
+         "--page-lock-mhz", "0"): "must be above zero",
+        ("--run", "--family", "r3-arms", "--group-m", "64", "--floor", "--page-clock",
+         "none"): "--page-clock belongs to --run --family r3-arms, for a page or the census",
+        ("--run", "--family", "r3-arms", "--group-m", "4", "--reduce-only",
+         "--page-clock", "none"): "--reduce-only reads the capture's clock off its record",
+        ("--dry-run", "--family", "r3-arms", "--page-clock", "none"):
+            "--page-clock belongs to --run --family r3-arms",
+    }
+    for argv, why in refusals.items():
+        capsys.readouterr()
+        assert main([*argv, "--out", "x.json"]) == exit_codes.REFUSED, argv
+        assert why in capsys.readouterr().out, argv
+
+
+def _at_lock(page: dict, mhz: float | None) -> dict:
+    """`page` as one captured under an nvidia-smi lock of `mhz` (None: at the
+    card's own clock), its cells' recorded cycles at that clock, and the
+    nvidia-smi reading either side that every locked capture records (V10's
+    lock check reads it, `lock_gate.check_lock`)."""
+    page["ncu"].update(clock_control="none", lock_mhz=mhz)
+    if mhz is not None:
+        smi = {"returncode": 0, "rows": [{"clocks.sm": f"{mhz:g}"}]}
+        page["ncu"].update(smi_before=smi, smi_after=smi)
+    for cell in page["cells"]:
+        for g in ("w1", "w2"):
+            cell["recorded"][g][DCR.R3_PAGE_CLOCK_METRIC] = \
+                (mhz or 1601.0) * cell["per_gemm"][g]["gpu_time_ns"] / 1e3
+    return page
+
+
+def test_analyse_refuses_to_join_pages_of_two_clock_regimes(tmp_path, capsys):
+    """An alpha(G) table across ncu's base clock and a lock, or across two
+    locks, compares two apparatuses, not two G. Pages at one lock join, and
+    their V10 passes."""
+    for regimes, want in (((None, 1710.0), exit_codes.REFUSED),
+                          ((1800.0, 1710.0), exit_codes.REFUSED),
+                          (("free", 1710.0), exit_codes.REFUSED),
+                          ((1710.0, 1710.0), exit_codes.DONE)):
+        paths = _write_pages(tmp_path, [("group", 4, {}), ("group", 1, {})])
+        for path, lock in zip(paths, regimes, strict=True):
+            if lock is not None:
+                page = _at_lock(json.loads(path.read_text()),
+                                None if lock == "free" else lock)
+                path.write_text(json.dumps(page))
+        capsys.readouterr()
+        assert main(["--analyse", *map(str, paths)]) == want, regimes
+        out = capsys.readouterr().out
+        assert ("clock regime" in out) is (want == exit_codes.REFUSED), regimes
+    assert "counted at an nvidia-smi lock of 1710 MHz" in out
+    assert [r.verdict for r in exit_codes.parse_result_lines(out)
+            if r.name.endswith("V10")] == [PASS, PASS]
+
+
+def test_the_runbooks_lock_block_runs_flags_the_family_accepts(tmp_path, monkeypatch, capsys):
+    """docs/LAMBDA.md section 3's optional block takes a census and the pages
+    under the timed lock. Each of its dram_counter_route.py captures, with its
+    shell values filled in, passes every flag guard and reaches the box (here a
+    closed route, so it refuses there and nothing runs), at `--page-clock none`
+    and the block's F; the pages read the census the block wrote; and the
+    block's EXIT trap resets both ncu's and nvidia-smi's locks.
+
+    PASTE-SAFE (2026-09-26 review). Its last line kept a literal placeholder,
+    `<this card's R3 report.json files timed at F>`: pasted, `<` is a redirect
+    and the apostrophe opens a quote that never closes, so the shell sat at a
+    continuation prompt. The block and COUNTERS.md 6.13's now parse under
+    `bash -n`, and the score line takes the reports from `TIMED`, which bash
+    splits into `--timed-reference`'s files, or leaves out when it is empty."""
+    text = (REPO / "docs" / "LAMBDA.md").read_text()
+    head = text.index("**Optional: the byte pages again, at the timed lock**")
+    start = text.index("```bash", head)
+    block = text[start + len("```bash"):text.index("```\n", start + 7)]
+    counters = (REPO / "docs" / "COUNTERS.md").read_text()
+    c613 = counters.index("### 6.13 Byte pages at a held clock")
+    cstart = counters.index("```bash", c613)
+    for label, code in (("LAMBDA.md", block),
+                        ("COUNTERS.md 6.13", counters[cstart + 7:counters.index("```\n",
+                                                                                cstart + 7)])):
+        parsed = subprocess.run(["bash", "-n"], input=code, capture_output=True, text=True,
+                                timeout=60)
+        assert parsed.returncode == 0, (label, parsed.stderr)
+        assert "<this" not in code, label
+    score = next(line for line in block.replace("\\\n", " ").splitlines()
+                 if "dram_counter_route.py --analyse" in line)
+    for timed in (["/t/a/report.json", "/t/b/report.json"], []):
+        shell = (f'L={tmp_path}/L; TIMED="{" ".join(timed)}"; '
+                 + score.replace("python3 scripts/dram_counter_route.py", "printf '%s\\n'"))
+        got = subprocess.run(["bash", "-c", shell], capture_output=True, text=True,
+                             timeout=60)
+        assert got.returncode == 0, got.stderr
+        args = build_parser().parse_args(got.stdout.splitlines())
+        assert args.timed_reference == (timed or None), got.stdout
+        assert [Path(a).name for a in args.analyse] == [
+            f"r3c-g{g}.json" for g in (1, 2, 4, 64)]
+    trap = next(line for line in block.splitlines() if "EXIT" in line)
+    assert "ncu --clock-control reset" in trap and "nvidia-smi -rgc" in trap
+    lock = re.search(r"^F=(\d+)", block, re.M).group(1)
+    joined = block.replace("\\\n", " ")
+    shell = {"$F": lock, "$G": "4", "$S": str(tmp_path / "S"), "$L": str(tmp_path / "L"),
+             "$PY_VLLM": "python"}
+    captures = []
+    for line in joined.splitlines():
+        if "scripts/dram_counter_route.py --run" not in line:
+            continue
+        cmd = line.split("|", 1)[0]
+        for var, value in shell.items():
+            cmd = cmd.replace(var, value)
+        argv = [a for a in cmd.split("scripts/dram_counter_route.py", 1)[1].split()
+                if a != "2>&1"]
+        captures.append([a.strip('"') for a in argv])
+    assert len(captures) == 2 and "--census-only" in captures[0], captures
+    census_out = captures[0][captures[0].index("--out") + 1]
+    assert captures[1][captures[1].index("--census") + 1] == census_out
+    monkeypatch.setattr(DCR, "probe_ncu", lambda family=None, clock_control=None: {
+        "present": False, "counters_read": False, "why": "planted: a closed route"})
+    for argv in captures:
+        args = build_parser().parse_args(argv)
+        assert (args.page_clock, args.page_lock_mhz) == ("none", float(lock)), argv
+        capsys.readouterr()
+        assert main(argv) == exit_codes.REFUSED, argv
+        assert "planted: a closed route" in capsys.readouterr().out, argv
+
+
+def test_the_lock_fit_passes_a_planted_constant_offset_and_a_slip_does_not():
+    """The Lambda GH200 of 2026-09-27 held its 1710 MHz lock, and its cells'
+    own cycles / duration read 1624 to 1697 MHz, lowest on the shortest kernels,
+    so the per-cell V10 and FL1 failed a lock that held (time = 22.7 us + cycles
+    / 1705 MHz over the 54 GEMMs of its G=1 page). This plants a CONSTANT 22.7 us
+    offset and checks the fit reads through it. The real offset is not constant
+    (CORRECTED 2026-10-05: 0.3 us at 1005 MHz on rental 2's tp4 cells; see
+    scripts/lock_gate.py), which is why the fit is now a diagnostic, not a gate.
+    A real slip still fails: a clock that sagged to 1650 MHz moves the fitted
+    f, one cell that slipped sits off the line, and an overhead past 50 us or
+    below zero is not an overhead."""
+    lock = 1710.0
+    cycles = [4.8e5, 9.1e5, 1.3e6, 1.7e6, 2.4e6, 3.6e6, 5.4e6, 8.2e6]
+
+    def pts(mhz=1705.0, t0=22_700.0, slip=None):
+        return [(f"shared/{i} w1", c, t0 + 1e3 * c / (slip if i == 5 and slip else mhz))
+                for i, c in enumerate(cycles)]
+
+    naive = [1e3 * c / t for _, c, t in pts()]
+    assert min(naive) < lock - 15, "the planted overhead must fail the old per-cell rule"
+    off, fit = DCR.r3_lock_fit(pts(), "w1", lock)
+    assert off == [] and fit == "w1 1705.0 MHz + 22.7 us over 8 cells"
+    off, _ = DCR.r3_lock_fit(pts(mhz=1650.0), "w1", lock)
+    assert off[0] == "w1 fitted 1650 MHz"
+    off, _ = DCR.r3_lock_fit(pts(slip=1600.0), "w1", lock)   # the slip also tilts the fit
+    slipped = [e for e in off if e.startswith("shared/5 w1 ")]
+    assert slipped and int(slipped[0].split()[2]) < lock - 3 * 15
+    assert DCR.r3_lock_fit(pts(t0=80_000.0), "w1", lock)[0] == ["w1 offset 80.0 us"]
+    assert DCR.r3_lock_fit(pts(t0=-5_000.0), "w1", lock)[0][0] == "w1 offset -5.0 us"
+    off, fit = DCR.r3_lock_fit(pts()[:2], "w1", lock)
+    assert fit == "w1 per cell (too few cells to fit)" and off
+
+
+# --------------------------------------------------------------------------
+# THE FLOOR'S TREADS PER MODEL (2026-09-29): a GEMM whose grid runs few waves
+# gets treads deep enough for three cells of at least four waves.
+# --------------------------------------------------------------------------
+
+#: The verified models the driver's 9-copy declaration can run (E x 9 under
+#: the alignment's padded-expert bound), and the treads each one's floor gets.
+_FLOOR_MODELS = sorted(k for k, c in MODEL_CONFIGS.items()
+                       if c.verified and c.num_experts * 9 < 1024)
+_FLOOR_CHANGED = {"mixtral-8x7b": (2, 3, 4, 6, 7, 8),
+                  "jetmoe-8b": (2, 3, 4, 6, 9, 10, 11),
+                  "granite-3.0-3b-a800m": (2, 3, 4, 6, 7, 8),
+                  "mixtral-8x7b-tp8": (2, 3, 4, 6, 7, 8),
+                  "qwen2-57b-a14b-tp8": (2, 3, 4, 6, 7, 8),
+                  # added 2026-10-01 with their spec entries (rental 1)
+                  "mixtral-8x7b-tp2": (2, 3, 4, 6, 7, 8),
+                  "mixtral-8x7b-tp4": (2, 3, 4, 6, 7, 8),
+                  "granite-3.0-1b-a400m": (2, 3, 4, 6, 7, 8)}
+
+
+def _floor_ok(cfg, treads) -> bool:
+    scored = DCR.r3_floor_scored(cfg, treads, block_n=64)
+    return all(len(v) >= DCR.R3_FLOOR_MIN_CELLS for v in scored.values())
+
+
+def test_the_floor_waves_are_the_registered_ones():
+    """Live CTAs / (132 x occupancy): JetMoE's w2 runs 0.97 to 2.91 waves over
+    2..6 and Granite's w2 5.5, 7.3, 10.9 at 3, 4, 6 (docs/registered/README.md),
+    Mixtral 8x7B's w2 0.97 n."""
+    w = DCR.r3_floor_waves
+    jet, gran, mix = (MODEL_CONFIGS[m] for m in ("jetmoe-8b", "granite-3.0-3b-a800m",
+                                                 "mixtral-8x7b"))
+    assert [round(w(jet, n, "w2", block_n=64), 2) for n in (2, 6)] == [0.97, 2.91]
+    assert [round(w(gran, n, "w2", block_n=64), 1) for n in (3, 4, 6)] == [5.5, 7.3, 10.9]
+    assert round(w(mix, 1, "w2", block_n=64), 2) == 0.97
+    assert DCR._timing_model().ASSUMED_OCCUPANCY["9.0"] == {"w1": 5, "w2": 4}
+
+
+def test_the_floor_treads_are_the_default_unless_the_waves_need_more():
+    """Every model whose GEMMs already have three cells of four waves keeps
+    2, 3, 4, 6; the ones that do not get the shallowest treads past 6 that
+    give it, the default cells kept, ascending and under the cap."""
+    got = {m: DCR.r3_floor_treads(MODEL_CONFIGS[m], 32, 64) for m in _FLOOR_MODELS}
+    for m, treads in got.items():
+        cfg = MODEL_CONFIGS[m]
+        if _floor_ok(cfg, DCR.R3_FLOOR_TREADS):
+            assert treads == DCR.R3_FLOOR_TREADS, m
+        assert list(treads) == sorted(set(treads)), m
+        assert set(DCR.R3_FLOOR_TREADS) <= set(treads), m
+        assert max(treads) <= DCR.R3_FLOOR_MAX_TREADS, m
+    assert {m: t for m, t in got.items() if t != DCR.R3_FLOOR_TREADS} == _FLOOR_CHANGED
+    for m in ("jetmoe-8b", "mixtral-8x7b"):
+        assert not _floor_ok(MODEL_CONFIGS[m], DCR.R3_FLOOR_TREADS)
+        assert _floor_ok(MODEL_CONFIGS[m], got[m]), m
+    # the toy cannot reach four waves at any tread to the cap: nothing is added
+    assert got["toy"] == DCR.R3_FLOOR_TREADS
+
+
+def test_the_floor_treads_respect_the_cap(monkeypatch):
+    """At a cap of 10 JetMoE's w2 has two cells of four waves (9, 10), too few
+    to score, so no tread is bought for it; at 11 it has its three."""
+    jet = MODEL_CONFIGS["jetmoe-8b"]
+    monkeypatch.setattr(DCR, "R3_FLOOR_MAX_TREADS", 10)
+    assert DCR.r3_floor_treads(jet, 32, 64) == DCR.R3_FLOOR_TREADS
+    monkeypatch.setattr(DCR, "R3_FLOOR_MAX_TREADS", 11)
+    assert DCR.r3_floor_treads(jet, 32, 64) == (2, 3, 4, 6, 9, 10, 11)
+
+
+def test_the_floor_cap_is_r3s_native_ladder():
+    assert DCR.R3_FLOOR_MAX_TREADS == R3.NATIVE_COUNTER_MAX_TREADS == 16
+    assert DCR.R3_FLOOR_MAX_TREADS > R3.COUNTER_MAX_TREADS
+
+
+def test_the_floor_plan_takes_the_models_treads_and_r3_validates_it():
+    for m in _FLOOR_MODELS:
+        if m == "deepseek-v2-lite":      # R3 cannot form n = 1 at BLOCK_M 32
+            continue
+        plan = DCR.r3_floor_plan(64, profile_dir=Path("p"), model=m)
+        want = list(_FLOOR_CHANGED.get(m, DCR.R3_FLOOR_TREADS))
+        assert plan["arms"] == [R3.NATIVE] and plan["treads"] == want, m
+        assert R3.validate_counter_plan(plan) is MODEL_CONFIGS[m]
+        sched = R3.counter_schedule(plan)
+        assert sched.launch_count == R3.GEMMS_PER_CALL * DCR.R3_FLOOR_CALLS * len(want)
+    jet = DCR.r3_floor_plan(64, profile_dir=Path("p"), model="jetmoe-8b")
+    assert max(jet["treads"]) > jet["copies_declared"] == R3.COUNTER_MAX_TREADS
+    assert DCR.r3_floor_plan(64, profile_dir=Path("p"), model="jetmoe-8b",
+                             treads=(2, 3, 4, 6))["treads"] == [2, 3, 4, 6]
+
+
+def _floor_dry(monkeypatch, capsys, *extra) -> tuple[int, str]:
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    rc = DCR.main(["--dry-run", "--family", "r3-arms", "--floor", *extra])
+    return rc, capsys.readouterr().out
+
+
+def test_the_floor_dry_run_prints_the_models_treads_and_waves(monkeypatch, capsys):
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "jetmoe-8b")
+    assert rc == exit_codes.REFUSED and "no ncu on PATH" in out
+    assert "R3 FLOOR PLAN  jetmoe-8b  G=64" in out
+    assert "treads   [2, 3, 4, 6, 9, 10, 11] (NATIVE" in out
+    assert "w2 waves n=2 0.97" in out and "scored on n = 9, 10, 11" in out
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "mixtral-8x22b")
+    assert "treads   [2, 3, 4, 6] (NATIVE" in out
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "jetmoe-8b",
+                         "--floor-treads", "2", "3", "4", "6")
+    assert "treads   [2, 3, 4, 6] (NATIVE" in out
+    assert "NOT SCORABLE (0 cell(s) of >= 4 waves)" in out
+
+
+def test_floor_treads_is_refused_off_the_floor_and_out_of_order(monkeypatch, capsys):
+    for extra, needle in ((["--floor-treads", "6", "4"], "strictly ascending"),
+                          (["--floor-treads", "2", "17"], "strictly ascending"),
+                          (["--floor-treads", "0", "2"], "strictly ascending")):
+        rc, out = _floor_dry(monkeypatch, capsys, *extra)
+        assert rc == exit_codes.REFUSED and needle in out, (extra, out)
+    rc = DCR.main(["--dry-run", "--family", "r3-arms", "--floor-treads", "2", "3"])
+    assert rc == exit_codes.REFUSED
+    assert "--floor-treads belongs to --floor" in capsys.readouterr().out
+    # a tread R3 cannot form refuses through R3's own plan check
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "deepseek-v2-lite")
+    assert rc == exit_codes.REFUSED and "REFUSE: the floor plan for deepseek-v2-lite" in out
+
+
+def test_the_floor_ids_knob_is_the_models_treads():
+    """Two floor files at one G on models with different treads never share
+    an id, and a model at its default keeps the knob it always had."""
+    args = DCR.build_parser().parse_args(
+        ["--run", "--family", "r3-arms", "--floor", "--model", "jetmoe-8b"])
+    DCR.resolve_r3_defaults(args, [])
+    assert DCR.r3_floor_treads_for(args) == (2, 3, 4, 6, 9, 10, 11)
+    args.floor_treads = [2, 3, 4, 6]
+    assert DCR.r3_floor_treads_for(args) == (2, 3, 4, 6)
+    args.floor_treads, args.model = None, "mixtral-8x22b"
+    assert DCR.r3_floor_treads_for(args) == DCR.R3_FLOOR_TREADS

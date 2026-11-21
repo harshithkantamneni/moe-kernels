@@ -1,0 +1,3 @@
+COUNTER ROUTE r3-decode: mixtral-8x7b, page docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-tiles.json (sha256 8a61471f27676e51...), 6 (cell, arm), 3 calls + 2 warmups each, 36 profiled fused_moe_kernel launches (the warmups too: no launch skip), about 0.6 min
+  child: scripts/r3_decode.py --counter-child (vLLM's own tile, the spy's grids in the manifest)
+RESULT: VALIDITY grid PASS 6 cells, 60 launches attributed; /home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-mixtral-8x7b-dt-r3-counters/lock1710/r3d.json

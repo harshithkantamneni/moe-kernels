@@ -10,7 +10,13 @@ bandwidth, then
 Both sides are computed here from the same CSVs, so the hypothesis can fail.
 
     python scripts/efficiency_report.py /workspace/results/run_*_vllm.csv \
-        --ridge 160.3
+        --ridge 162.8
+
+162.8 is the H200's OWN bf16 ridge, `peak / bandwidth` off
+`moe/bench/hardware/measured_nvidia_h200.yaml`; pass the attached card's own
+figure (the A100's file gives 145.8). This line used to read `--ridge 160.3`,
+which is the low end of a withdrawn two-calibration band (md5 4d84542b) that
+was no card's ridge. `--ridge` is required and has no default.
 """
 from __future__ import annotations
 

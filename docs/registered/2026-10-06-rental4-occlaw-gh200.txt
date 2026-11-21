@@ -1,0 +1,101 @@
+REGISTERED 2026-10-06, before any rental-4 page: rental 4, 2026-10-06-rental4-occlaw-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: REVIEW.md part B' (sections 2, 3 and 7: every page carries the registered P_s, the max form, Little and the occupancy-rule values; pass if |e| <= 2% on the floor-bound treads n >= 4, per GEMM) with REANALYSIS.md 1a (MVA2 added, k64s8 added at occupancy 2)
+tool: scorer scripts/scoring/rental4/score_occlaw.py; r4common.page_c, law_c, ratio_pred
+
+predicted ratio to k64s4 (w1 / w2), per law:
+  k32s4   MVA2 1.4063/1.3548  LK 1.3637/1.324  PS 1.0/1.0  LITTLE 1.3637/1.324  OCC None/None
+  k128s4  MVA2 0.9991/0.9948  LK 1.0/1.0  PS 1.0/1.0  LITTLE 1.0/1.0  OCC None/None
+  k64s6   MVA2 1.0316/1.0235  LK 1.0/1.0  PS 1.0/1.0  LITTLE 1.0/1.0  OCC 1.0744/1.0403
+  k64s2   MVA2 1.005/1.0  LK 1.0/1.0  PS 1.0/1.0  LITTLE 2.0234/1.9116  OCC 1.0279/1.0
+  k64s3   MVA2 1.0/1.0  LK 1.0/1.0  PS 1.0/1.0  LITTLE 1.0338/1.0301  OCC 1.0/1.0
+  k64s8   MVA2 1.1508/1.1289  LK 1.0/1.0  PS 1.0/1.0  LITTLE 1.0/1.0  OCC 1.1675/1.121
+  laws on the SEEN points: {"MVA2": {"points": 10, "rms": 0.012783}, "LK": {"points": 10, "rms": 0.055302}, "PS": {"points": 10, "rms": 0.141394}, "LITTLE": {"points": 10, "rms": 0.064486}, "OCC": {"points": 6, "rms": 0.017101}}
+
+pages:
+  path: <date>-<card>-olmoe-1b-7b-<label>-r3-counters/lock1710/r3c-g64.json
+  base: k64s4
+  knobs:
+    k32s4: {"block_k": 32, "num_stages": 4}
+    k128s4: {"block_k": 128, "num_stages": 4}
+    k64s6: {"block_k": 64, "num_stages": 6}
+    k64s2: {"block_k": 64, "num_stages": 2}
+    k64s3: {"block_k": 64, "num_stages": 3}
+    k64s8: {"block_k": 64, "num_stages": 8}
+  design_check: each page's design block (block_k, num_stages) must equal its label's; else NOT SCORED
+statistic:
+  c_page: per (page, GEMM): c by least squares of sm__cycles_elapsed.avg = a_arm + ceil(N_live / 132) (S c + F_g) over NATIVE and SHARED cells n = 4..9 whose GEMM reads DRAM at <= 0.5 x 4022 GB/s (floor-bound), F_g held at CAL (w1 520, w2 979 clk); fewer than 3 such cells: NOT SCORED
+  r_meas: (S_knob c_knob + F) / (S_base c_base + F), the knob page over the same-board k64s4 page
+  e: r_meas / r_pred - 1 per law
+laws:
+  MVA2:
+    eta: 0.832
+    z0: 1503.751
+    z1: -1251.132
+    form: closed-queue MVA: occ CTAs, pipe service W(BK)/eta, delay Z = z0 + z1 BK/64 (>= 0)
+    label: SEEN-fitted (reanalysis kstep_law, 10 points, rms 1.28%): three parameters on four distinct (BK, occ), description not mechanism
+  LK:
+    eta: 0.805
+    L_k: 241.912
+    form: max(W(BK)/eta, L_k): a constant floor per k-step
+    label: SEEN-fitted (REVIEW.md section 2; reanalysis rms 5.53%)
+  PS:
+    c64: 344.1
+    form: c = c64 BK/64: the per-CTA main loop invariant in BK (the design's P_s)
+    label: CAL c (8x7B counters); the design's zero-refit principle
+  LITTLE:
+    eta: 0.805
+    L_k: 241.912
+    form: max(W(BK)/eta, L_mem/(stages - 1)), L_mem = 3 L_k: Little per stage
+    label: REVIEW.md section 2 rival; L_k SEEN-fitted
+  OCC:
+    c0: 302.0
+    lam: 200.0
+    form: c0 + lambda/occ at BK 64 only (the review's occupancy rule)
+    label: SEEN-fitted on three occupancies (PRINCIPLES.md section 4); says nothing off BK 64
+occupancy:
+  registered:
+    k64s4: {"w1": 5, "w2": 4}
+    k32s4: {"w1": 5, "w2": 5}
+    k128s4: {"w1": 3, "w2": 3}
+    k64s6: {"w1": 3, "w2": 3}
+    k64s2: {"w1": 4, "w2": 4}
+    k64s3: {"w1": 5, "w2": 4}
+    k64s8: {"w1": 2, "w2": 2}
+  basis: the SEEN cubins of these configs (moe.instrumented.cubin over results/published: registers and shared, the occupancy calculator); 252 of 252 GEMM records agree with ncu (PRINCIPLES.md)
+  rekey: the scorer reads each page's recorded launch__occupancy_limit_* minimum; where it differs from the registered value, the page's predictions are recomputed at the recorded occupancy by the registered law functions, and the page is labelled RE-KEYED
+predicted_ratio:
+  k32s4:
+    w1: {"MVA2": 1.406343, "LK": 1.363678, "PS": 1.0, "LITTLE": 1.363678, "OCC": null}
+    w2: {"MVA2": 1.354764, "LK": 1.323977, "PS": 1.0, "LITTLE": 1.323977, "OCC": null}
+  k128s4:
+    w1: {"MVA2": 0.999133, "LK": 1.0, "PS": 1.0, "LITTLE": 1.0, "OCC": null}
+    w2: {"MVA2": 0.994828, "LK": 1.0, "PS": 1.0, "LITTLE": 1.0, "OCC": null}
+  k64s6:
+    w1: {"MVA2": 1.031621, "LK": 1.0, "PS": 1.0, "LITTLE": 1.0, "OCC": 1.074436}
+    w2: {"MVA2": 1.023544, "LK": 1.0, "PS": 1.0, "LITTLE": 1.0, "OCC": 1.040337}
+  k64s2:
+    w1: {"MVA2": 1.004985, "LK": 1.0, "PS": 1.0, "LITTLE": 2.023361, "OCC": 1.027913}
+    w2: {"MVA2": 1.0, "LK": 1.0, "PS": 1.0, "LITTLE": 1.911646, "OCC": 1.0}
+  k64s3:
+    w1: {"MVA2": 1.0, "LK": 1.0, "PS": 1.0, "LITTLE": 1.033837, "OCC": 1.0}
+    w2: {"MVA2": 1.0, "LK": 1.0, "PS": 1.0, "LITTLE": 1.030143, "OCC": 1.0}
+  k64s8:
+    w1: {"MVA2": 1.150762, "LK": 1.0, "PS": 1.0, "LITTLE": 1.0, "OCC": 1.167481}
+    w2: {"MVA2": 1.128853, "LK": 1.0, "PS": 1.0, "LITTLE": 1.0, "OCC": 1.12101}
+rules:
+  per_page: a law is consistent on a (page, GEMM) when |e| <= 2%
+  law: FALSIFIED by any scored (page, GEMM) beyond 2%; SELECTED when consistent on every scored (page, GEMM), at least 8 of the 12 scored, and every other law FALSIFIED; else UNDECIDED with the survivors printed
+  OCC: scored on the BK 64 pages only (k64s6, k64s2, k64s3, k64s8)
+  printed: each law's rms over the scored (page, GEMM)
+gates: the counter page's V-gates by rental 2's two views; V6, V7 and V10 do not gate (cycles are read per GEMM, and V7 / V10 are the byte claims' gates)
+one_test: B' and the stamps K block share configurations (BK 32 / 64 / 128 and s8 on OLMoE G = 64): they are ONE test of the k-step law, reported together, never counted as two confirmations (build-r4-review section 5)
+labels:
+  k64s4: SEEN: OLMoE G = 64 at BK 64 s4 has a published page (2026-09-29), so the base page's cells are SEEN
+  knobs: BLIND-CALMODEL: no OLMoE G = 64 page at these knobs; OLMoE is a CAL model
+  in_sample: MVA2 is in-sample at the k32s4, k64s4 and k64s8 configurations (fitted on tp2 pages of those configs)
+  review_fix: build-r4-review section 3
+seen_data:
+  - every law's parameters are SEEN-fitted on rental 1 and 2's tp2 G = 64 pages (labelled per law)
+  - the occupancy table is read off SEEN cubins
+  - the k64s4 base is SEEN (2026-09-29 OLMoE G = 64 page); the six knob pages are BLIND-CALMODEL

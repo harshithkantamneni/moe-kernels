@@ -1,0 +1,22 @@
+RENTAL 2 PART 3 (the per-GEMM constant), 2026-10-01-rental2-const-gh200
+  K1: HOLDS fraction_over=0.1167
+  K2: HOLDS pooled=0.2545
+  K3: cycle form HOLDS, ns form FALSIFIED pooled_r=0.9214 pooled_rho_f=0.5965 sigma=0.07508
+  K4: HOLDS fraction_within_0.2u=0.95
+  K5: RECORD
+  mixtral-8x7b-tp8 base: w1 Z_f/u 0.279 clock 1374.919982442404; w2 Z_f/u 0.420 clock 1371.7039499404275
+  mixtral-8x7b-tp8 lock1710: w1 Z_f/u 0.286 clock 1680.150439535018; w2 Z_f/u 0.456 clock 1668.6252533428092
+  mixtral-8x7b-tp4 base: w1 Z_f/u 0.287 clock 1377.3632403446807; w2 Z_f/u 0.287 clock 1375.3035664301203
+  mixtral-8x7b-tp4 lock1710: w1 Z_f/u 0.302 clock 1690.0707390938367; w2 Z_f/u 0.310 clock 1678.020499339405
+  mixtral-8x7b-tp2 base: w1 Z_f/u 0.292 clock 1377.8607251443211; w2 Z_f/u 0.191 clock 1372.0393782007031
+  mixtral-8x7b-tp2 lock1710: w1 Z_f/u 0.315 clock 1697.1891432492107; w2 Z_f/u 0.198 clock 1685.9121152713974
+  mixtral-8x7b-tp4 lock1005: w1 Z_f/u 0.283 clock 1004.7015597581939; w2 Z_f/u 0.282 clock 1004.5052888007591
+  identification: INCONCLUSIVE
+  addendum 2026-10-02-rental2-addendum-gates: verdicts computed on ALL and CLEAN pages
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-floor-r3-counters/r3f-g64-lock1710.json: failed ['FL1']; ALL counted, CLEAN counted
+      lock check: null kernel median 1687.9 MHz, -1.29% of the 1710 MHz lock (within 3%: True); CLEAN reads no failure
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json: failed ['FL1']; ALL counted, CLEAN counted
+      lock check: null kernel median 1687.5 MHz, -1.32% of the 1710 MHz lock (within 3%: True); CLEAN reads no failure
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64-lock1710.json: failed ['FL1']; ALL counted, CLEAN counted
+      lock check: null kernel median 1684.4 MHz, -1.50% of the 1710 MHz lock (within 3%: True); CLEAN reads no failure
+    0 of 6 verdicts differ between ALL and CLEAN

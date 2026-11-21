@@ -1,0 +1,13 @@
+TILE CENSUS (A2): compile only, no lock, nothing timed; each model at its smallest whole tread
+tiles   128x128x64w8s3
+models  granite-3.0-1b-a400m granite-3.0-3b-a800m qwen2-57b-a14b-tp8
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  granite-3.0-1b-a400m: tread 128x128x64w8s3 n 1
+  granite-3.0-3b-a800m: tread 128x128x64w8s3 n 1
+  qwen2-57b-a14b-tp8: tread 128x128x64w8s3 n 1
+  128x128x64w8s3 granite-3.0-1b-a400m n 1: 2 configs
+  128x128x64w8s3 granite-3.0-3b-a800m n 1: 2 configs
+  128x128x64w8s3 qwen2-57b-a14b-tp8 n 1: 2 configs
+RESULT: VALIDITY census_path PASS 6 configs, 0 path mismatches, 0 errors
+RESULT: DESCRIPTIVE olmoe_n1_n3 DIFFERS NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED

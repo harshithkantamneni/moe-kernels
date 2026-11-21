@@ -1,0 +1,48 @@
+REGISTERED 2026-10-13, before any rental-7 page: rental 7, 2026-10-13-rental7-g1rule-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r7 DESIGN.md corrected by design-r7-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-13 (1 S_med plus the run guard, P20 printed beside; 2 Q1-H rivals scored apart from the copies clause; 3 the l2open byte page in, C 60 MiB, the 5% clause on skewed rows; 4 no second-K rerun; 5 fresh seeds on the same treads)
+tool: the scorer: scripts/scoring/rental7/r7common.py (rebuild, g1_rule, repeat_rows, dip_run, run_guard, lock_slip, clean_r7, clean_p20, p20_report, page_report), which rebuilds every histogram page from its cells.csv; scripts/gh200_model_session.sh plan key g1-rule (locked_r3 --min-clean-repeats 0). R3 (scripts/private_weight_reference.py) and scripts/locked_r3.py are rental 6's, byte-identical to its registered pins (R3 sha256 daa40706...), and get no new flag
+
+held report pages 17: stored G1 reproduced by r5-any 17; r5-any passes 10, r7-median-run3 17, P20 17; lost cells r7 0, P20 4
+sag endpoint: last 5 reads, every 3rd repeat: {'pages': 17, 'every sagged repeat out of its median (r7)': 17, 'G1 FAILS (r7)': 17, 'every cell lost': 0, 'slip predicate alone keeps at least 80% of the sags': 17, 'inflation of a sagged repeat %': 2.291667}
+sag endpoint: first 3 reads, every 3rd repeat: {'pages': 17, 'every sagged repeat out of its median (r7)': 17, 'G1 FAILS (r7)': 17, 'every cell lost': 0, 'slip predicate alone keeps at least 80% of the sags': 17, 'inflation of a sagged repeat %': 1.375}
+sag interior: reads 4 to 10, every 3rd repeat: {'pages': 17, 'every sagged repeat out of its median (r7)': 17, 'G1 FAILS (r7)': 17, 'every cell lost': 0, 'slip predicate alone keeps at least 80% of the sags': 11, 'inflation of a sagged repeat %': 3.208333}
+sag interior: reads 6 to 8, every 3rd repeat: {'pages': 17, 'every sagged repeat out of its median (r7)': 17, 'G1 FAILS (r7)': 17, 'every cell lost': 0, 'slip predicate alone keeps at least 80% of the sags': 17, 'inflation of a sagged repeat %': 1.375}
+sag interior: reads 5 to 9, repeat 0 of every cell: {'pages': 17, 'every sagged repeat out of its median (r7)': 17, 'G1 FAILS (r7)': 17, 'every cell lost': 0, 'slip predicate alone keeps at least 80% of the sags': 16, 'inflation of a sagged repeat %': 2.291667}
+sag board: reads 3 to 5 in every repeat: {'pages': 17, 'every sagged repeat out of its median (r7)': 17, 'G1 FAILS (r7)': 17, 'every cell lost': 17, 'slip predicate alone keeps at least 80% of the sags': 17, 'inflation of a sagged repeat %': 1.375}
+
+label: SEEN-DERIVED: the run length and the cap were read off the published held-lock pages (design-r7 1.1, 1.2; design-r7-review (a)); they are gate thresholds, not model constants
+rule:
+  where: the SCORER applies the rule to the page's cells.csv (one row per timed repeat: status, ms_p50, sm_clock_load_mhz, clock_drift_ok, host_bound and the repeat's clock_samples_mhz reads); it never reads R3's stored G1 or the stored row medians; a page whose cells.csv rows per cell differ from its report's repeat_rows, or with no cells.csv, no report or no lock_mhz, is NOT SCORED
+  read_cadence: one NVML SM-clock read per burst, taken as the host finishes enqueueing it; bursts 140 to 166 ms apart at duty 0.25, 15 reads per repeat (5 bursts x 3 trials); so a run of 3 reads spans about 0.46 s and a repeat about 2.3 s
+  dipped_read: a read more than one 15 MHz step under the lock: 1694 MHz or less at the 1710 lock (reads are integer MHz)
+  clean_repeat: status ok, ms_p50 > 0, NOT lock-slipped (the repeat's median clock, sm_clock_load_mhz, more than one 15 MHz step under the lock, rental 6's lock_slip) and NOT run-guarded (RUN_GUARD_READS = 3 or more CONSECUTIVE dipped reads of its 15); an isolated dipped read, at an end or inside the repeat, stays in; the endpoint DRIFT flag (first and last read more than 5% apart) is recorded only
+  cell: time, clock and host_bound: the median (any) over its clean repeats; VALID with at least 6 clean of its timed repeats, else LOST (rental 6's 6 of 9)
+  LOST_and_early_stop: R3 runs --slip-policy cell --min-clean-repeats 0 (the plan key): it times every repeat of every cell and never stops a cell or the page early, so R3's own r5-any LOST rule cannot cut a cell the scorer's rule keeps; the scorer applies 6 of 9 (design build review: at a 30% flag rate R3 at min-clean 6 truncates about 19% of cells and leaves 3.1% under 6 timed repeats; 0 at min-clean 0)
+  G1_drift_clause: G1 FAILS when the page's non-clean timed repeat rows (lock-slipped, run-guarded or not ok) exceed 10% of its timed repeat rows, every row counted (lost cells too); rental 6's 10% slipped-row cap is inside it
+  G1_clock_clauses: every kept cell's clock read and every kept cell within one 15 MHz step of the page's top kept clock (R3's G1 clock clauses, on the rebuilt cells)
+  views: a page whose G1 FAILS counts in ALL and is dropped in CLEAN (rental 2's rule 3)
+  constants:
+    RUN_GUARD_READS: 3
+    NON_CLEAN_CAP: 0.1
+    LOCK_STEP_MHZ: 15.0
+    P20_CEILING: 0.2
+    MIN_CLEAN: 6
+    READ_PERIOD_MS: [140, 166]
+p20_side_view:
+  status: DESCRIPTIVE, printed beside every rental-7 verdict; never a verdict
+  what: the owner's P20 proposal (publish-r6 DRIFT.md), rebuilt from the same cells.csv: today's exclusions (status ok, ms_p50 > 0, not drift-flagged, not slipped), its own cell medians, clocks, host flags and lost cells (6 of 9), and G1 with the same clock clauses on ITS kept cells and its own clocks, failing past 20% non-clean rows
+old_pages:
+  rule: R3 is byte-identical to rental 6's pin: every earlier page and every R3 output is unchanged
+  reproduction: R3's own r5-any histogram_gates on each published page's stored rows and cells.csv reproduces the stored G1 on 17 of 17 report pages
+  rental6_scorers: rental 6's three scorers on the published rental-6 session write their committed score files byte for byte (tests/test_rental7_g1rule.py)
+limits:
+  - a sag shorter than RUN_GUARD_READS consecutive reads (about 0.45 s) is seen by no rule (r5-any included, unless it touches an end): 2 consecutive reads at 1600 MHz in EVERY repeat bias a cell by up to 0.916667% and pass; in a minority of repeats the median does not move
+  - the reads are one NVML read per burst after the host enqueues it; under the held lock they do not price the trials (design-r7 1.1: slope +0.005, 95% [-0.005, +0.013]); a real sag is assumed to show in 3 or more consecutive reads
+  - the cap is rental 6's slip cap carried over; the held pages read at most 0.46% non-clean under r7
+plumbing:
+  R3_and_locked_r3: unchanged (registered pins); a rental-7 page is R3 at --slip-policy cell --min-clean-repeats 0, so its own G1 (r5-any) and medians are written as always and the scorer ignores both
+  driver: plan key g1-rule=r7-median-run3 (timed units with histogram= and slip-policy=cell only): locked_r3 --min-clean-repeats 0; the unit's R3 dry run carries --slip-policy cell --lock-mhz 1710 --min-clean-repeats 0, what locked_r3 hands R3
+  page_check: the scorer refuses (NOT SCORED) a page that did not run --slip-policy cell --min-clean-repeats 0
+seen_data:
+  - every held-lock histogram page through rental 6 (17 with reports) is SEEN; the rule was chosen on them

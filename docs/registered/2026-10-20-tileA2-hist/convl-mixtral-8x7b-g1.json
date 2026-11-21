@@ -1,0 +1,98 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "mixtral-8x7b",
+ "page": "convl-mixtral-8x7b-g1",
+ "shuffle_seed": 20261020,
+ "block_m": 32,
+ "group_m": 1,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 3,
+   "counts": [
+    95,
+    60,
+    107,
+    84,
+    114,
+    129,
+    89,
+    90
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 14.1973,
+    "seed": 20261050,
+    "B": 384,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.203725,
+     "max_mean": 1.34375,
+     "gini": 0.11263
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 3,
+   "counts": [
+    76,
+    101,
+    64,
+    105,
+    122,
+    108,
+    111,
+    81
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 4.0788,
+    "seed": 20261051,
+    "B": 384,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.194878,
+     "max_mean": 1.270833,
+     "gini": 0.108398
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 3,
+   "counts": [
+    96,
+    96,
+    96,
+    96,
+    96,
+    96,
+    96,
+    96
+   ],
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 3,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  }
+ ],
+ "synthetic": "COPIED cells (treads 3; labels PT, PW, uniform, balanced) of docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json, sha256 0ff9ed8eb05fefb101c7a0260a6cc1c5ed3009cec25a5f6670623ee1a520a9ed: CONV-L's G-1 DRAM-bound page (tileA2-convl); tile rental A2, scripts/scoring/tileA2/hist_a2.py"
+}

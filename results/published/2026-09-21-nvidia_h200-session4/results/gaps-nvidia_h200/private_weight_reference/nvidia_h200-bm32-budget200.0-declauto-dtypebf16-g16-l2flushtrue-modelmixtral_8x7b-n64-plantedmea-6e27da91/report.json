@@ -1,0 +1,1511 @@
+{
+  "experiment": "private_weight_reference",
+  "synthetic": false,
+  "card": "nvidia_h200",
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "block_m": 32,
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 16,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "treads": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "repeats": 9,
+  "alpha_refit": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "ridge": 151.4265937361704,
+  "ridge_source": "measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b",
+  "bandwidth_gbps": 4378.033255567562,
+  "bandwidth_source": "measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)",
+  "roof_tflops": 662.9506631542727,
+  "roof_source": "ridge 151.43 Op/B x bandwidth 4378.0 GB/s; ridge: measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b; bandwidth: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)",
+  "reference_clock_mhz": 1455.0,
+  "reference_clock_grade": "under-load",
+  "reference_clock_source": "NVIDIA H200 (measured): detail.gemm_clock.median_mhz = 1455 MHz, the median of the samples taken while the calibration's dense GEMM ran (bf16 GEMM)",
+  "weight_stream_ms": 0.6437987387180328,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 2818572288,
+    "weight_bytes": 25367150592,
+    "activation_bytes": 157286400,
+    "allowance": 3.0,
+    "flush_bytes": 251658240,
+    "flush_source": "timing.flush_mb_for_device(), this device's own L2 x 4",
+    "predicted_peak_bytes": 26090668032,
+    "device_free_bytes": 149559574528,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 6
+  },
+  "weight_delta_bytes": 25367150592,
+  "high_water_bytes": 25763554304,
+  "buffer_proof": {
+    "parts": {
+      "addresses": true,
+      "sentinels": true,
+      "same_layer": true,
+      "kernel_read": true,
+      "shared_blind": true
+    },
+    "detail": {
+      "addresses": "9 copies x 8 experts span 25367150592 bytes against 25367150592 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+      "sentinels": "wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+      "same_layer": "private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)",
+      "kernel_read": "every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=6 (never read): zeroing it left both outputs unchanged=True; c=7 (never read): zeroing it left both outputs unchanged=True; c=8 (never read): zeroing it left both outputs unchanged=True; c=1: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=2: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=3: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=4: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=5: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True",
+      "shared_blind": "the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output"
+    },
+    "synthetic": false,
+    "verdict": "PASS"
+  },
+  "ladders": {
+    "native": {
+      "points": [
+        [
+          1,
+          0.7766000181436539
+        ],
+        [
+          2,
+          1.3393919467926025
+        ],
+        [
+          3,
+          1.9259520173072815
+        ],
+        [
+          4,
+          2.462239980697632
+        ],
+        [
+          5,
+          3.066647946834564
+        ],
+        [
+          6,
+          3.6320319175720215
+        ]
+      ],
+      "intercept_ms": 0.20095575849215197,
+      "slope_ms": 0.5712918703045163,
+      "mean_rel_err": 0.0046835162298452795,
+      "across_repeat_spread": 0.0038956686319999547,
+      "excluded_drifted": 25
+    },
+    "shared": {
+      "points": [
+        [
+          1,
+          0.780672013759613
+        ],
+        [
+          2,
+          1.3445920050144196
+        ],
+        [
+          3,
+          1.928928017616272
+        ],
+        [
+          4,
+          2.4743359088897705
+        ],
+        [
+          5,
+          3.077280044555664
+        ],
+        [
+          6,
+          3.634335994720459
+        ]
+      ],
+      "intercept_ms": 0.20551147262255354,
+      "slope_ms": 0.5717654832771846,
+      "mean_rel_err": 0.003988505988983011,
+      "across_repeat_spread": 0.0035410901235385993,
+      "excluded_drifted": 21
+    },
+    "private": {
+      "points": [
+        [
+          1,
+          0.7806400060653687
+        ],
+        [
+          2,
+          1.5420560240745544
+        ],
+        [
+          3,
+          2.3001359701156616
+        ],
+        [
+          4,
+          3.058367967605591
+        ],
+        [
+          5,
+          3.815567970275879
+        ],
+        [
+          6,
+          4.613103866577148
+        ]
+      ],
+      "intercept_ms": 0.010869920253753662,
+      "slope_ms": 0.7640310611043658,
+      "mean_rel_err": 0.0035650882781768293,
+      "across_repeat_spread": 0.0014956305902397602,
+      "excluded_drifted": 14
+    }
+  },
+  "treads_table": [
+    {
+      "arm": "native",
+      "tiles": 1,
+      "rows_per_expert": 32,
+      "tokens": 128,
+      "copies": 1,
+      "experts_declared": 8,
+      "repeats": 8,
+      "ms_p50": 0.7766000181436539,
+      "achieved_tflops": 116.13998340045885,
+      "pct_of_roof": 0.17518646538171176,
+      "sm_clock_load_mhz": 1485.0,
+      "roof_at_cell_clock_tflops": 676.619748992505,
+      "pct_of_roof_at_cell_clock": 0.17164734486894992,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    },
+    {
+      "arm": "native",
+      "tiles": 2,
+      "rows_per_expert": 64,
+      "tokens": 256,
+      "copies": 1,
+      "experts_declared": 8,
+      "repeats": 3,
+      "ms_p50": 1.3393919467926025,
+      "achieved_tflops": 134.67949158867998,
+      "pct_of_roof": 0.20315160550241315,
+      "sm_clock_load_mhz": 1620.0,
+      "roof_at_cell_clock_tflops": 738.1306352645511,
+      "pct_of_roof_at_cell_clock": 0.1824602382753155,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 3,
+      "rows_per_expert": 96,
+      "tokens": 384,
+      "copies": 1,
+      "experts_declared": 8,
+      "repeats": 4,
+      "ms_p50": 1.9259520173072815,
+      "achieved_tflops": 140.49308457139463,
+      "pct_of_roof": 0.21192087493047884,
+      "sm_clock_load_mhz": 1665.0,
+      "roof_at_cell_clock_tflops": 758.6342640218998,
+      "pct_of_roof_at_cell_clock": 0.18519211593023824,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "rows_per_expert": 128,
+      "tokens": 512,
+      "copies": 1,
+      "experts_declared": 8,
+      "repeats": 5,
+      "ms_p50": 2.462239980697632,
+      "achieved_tflops": 146.52400078475705,
+      "pct_of_roof": 0.22101795643073371,
+      "sm_clock_load_mhz": 1725.0,
+      "roof_at_cell_clock_tflops": 785.9724356983644,
+      "pct_of_roof_at_cell_clock": 0.18642384151114064,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 5,
+      "rows_per_expert": 160,
+      "tokens": 640,
+      "copies": 1,
+      "experts_declared": 8,
+      "repeats": 6,
+      "ms_p50": 3.066647946834564,
+      "achieved_tflops": 147.05684313893903,
+      "pct_of_roof": 0.22182170003308074,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 779.1378927792483,
+      "pct_of_roof_at_cell_clock": 0.18874302546674415,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 6,
+      "rows_per_expert": 192,
+      "tokens": 768,
+      "copies": 1,
+      "experts_declared": 8,
+      "repeats": 3,
+      "ms_p50": 3.6320319175720215,
+      "achieved_tflops": 148.9981067285786,
+      "pct_of_roof": 0.22474991731610325,
+      "sm_clock_load_mhz": 1740.0,
+      "roof_at_cell_clock_tflops": 792.8069786174807,
+      "pct_of_roof_at_cell_clock": 0.1879374308591553,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 1,
+      "rows_per_expert": 32,
+      "tokens": 128,
+      "copies": 1,
+      "experts_declared": 72,
+      "repeats": 7,
+      "ms_p50": 0.780672013759613,
+      "achieved_tflops": 115.53419570100397,
+      "pct_of_roof": 0.17427269044622473,
+      "sm_clock_load_mhz": 1485.0,
+      "roof_at_cell_clock_tflops": 676.619748992505,
+      "pct_of_roof_at_cell_clock": 0.17075203003316972,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    },
+    {
+      "arm": "shared",
+      "tiles": 2,
+      "rows_per_expert": 64,
+      "tokens": 256,
+      "copies": 1,
+      "experts_declared": 72,
+      "repeats": 2,
+      "ms_p50": 1.3445920050144196,
+      "achieved_tflops": 134.15863381551603,
+      "pct_of_roof": 0.20236593953643348,
+      "sm_clock_load_mhz": 1605.0,
+      "roof_at_cell_clock_tflops": 731.2960923454348,
+      "pct_of_roof_at_cell_clock": 0.18345323490686027,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 3,
+      "rows_per_expert": 96,
+      "tokens": 384,
+      "copies": 1,
+      "experts_declared": 72,
+      "repeats": 7,
+      "ms_p50": 1.928928017616272,
+      "achieved_tflops": 140.27632818687584,
+      "pct_of_roof": 0.2115939178934537,
+      "sm_clock_load_mhz": 1665.0,
+      "roof_at_cell_clock_tflops": 758.6342640218998,
+      "pct_of_roof_at_cell_clock": 0.18490639671770276,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 4,
+      "rows_per_expert": 128,
+      "tokens": 512,
+      "copies": 1,
+      "experts_declared": 72,
+      "repeats": 5,
+      "ms_p50": 2.4743359088897705,
+      "achieved_tflops": 145.80771008811007,
+      "pct_of_roof": 0.21993749790424408,
+      "sm_clock_load_mhz": 1732.5,
+      "roof_at_cell_clock_tflops": 789.3897071579227,
+      "pct_of_roof_at_cell_clock": 0.1847094138243435,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 5,
+      "rows_per_expert": 160,
+      "tokens": 640,
+      "copies": 1,
+      "experts_declared": 72,
+      "repeats": 7,
+      "ms_p50": 3.077280044555664,
+      "achieved_tflops": 146.54875719805244,
+      "pct_of_roof": 0.22105529919946645,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 779.1378927792483,
+      "pct_of_roof_at_cell_clock": 0.18809091247673898,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 6,
+      "rows_per_expert": 192,
+      "tokens": 768,
+      "copies": 1,
+      "experts_declared": 72,
+      "repeats": 5,
+      "ms_p50": 3.634335994720459,
+      "achieved_tflops": 148.90364569542905,
+      "pct_of_roof": 0.2246074315499678,
+      "sm_clock_load_mhz": 1740.0,
+      "roof_at_cell_clock_tflops": 792.8069786174807,
+      "pct_of_roof_at_cell_clock": 0.1878182832788524,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 1,
+      "rows_per_expert": 32,
+      "tokens": 128,
+      "copies": 1,
+      "experts_declared": 72,
+      "repeats": 5,
+      "ms_p50": 0.7806400060653687,
+      "achieved_tflops": 115.5389328182181,
+      "pct_of_roof": 0.17427983595112792,
+      "sm_clock_load_mhz": 1500.0,
+      "roof_at_cell_clock_tflops": 683.4542919116213,
+      "pct_of_roof_at_cell_clock": 0.16905144087259408,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    },
+    {
+      "arm": "private",
+      "tiles": 2,
+      "rows_per_expert": 64,
+      "tokens": 256,
+      "copies": 2,
+      "experts_declared": 72,
+      "repeats": 4,
+      "ms_p50": 1.5420560240745544,
+      "achieved_tflops": 116.97929492558998,
+      "pct_of_roof": 0.17645248949448322,
+      "sm_clock_load_mhz": 1451.25,
+      "roof_at_cell_clock_tflops": 661.2420274244936,
+      "pct_of_roof_at_cell_clock": 0.1769084390797403,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    },
+    {
+      "arm": "private",
+      "tiles": 3,
+      "rows_per_expert": 96,
+      "tokens": 384,
+      "copies": 3,
+      "experts_declared": 72,
+      "repeats": 6,
+      "ms_p50": 2.3001359701156616,
+      "achieved_tflops": 117.63780192281145,
+      "pct_of_roof": 0.17744578663380325,
+      "sm_clock_load_mhz": 1425.0,
+      "roof_at_cell_clock_tflops": 649.2815773160403,
+      "pct_of_roof_at_cell_clock": 0.18118148740504122,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    },
+    {
+      "arm": "private",
+      "tiles": 4,
+      "rows_per_expert": 128,
+      "tokens": 512,
+      "copies": 4,
+      "experts_declared": 72,
+      "repeats": 8,
+      "ms_p50": 3.058367967605591,
+      "achieved_tflops": 117.96397839807811,
+      "pct_of_roof": 0.17793779379722435,
+      "sm_clock_load_mhz": 1425.0,
+      "roof_at_cell_clock_tflops": 649.2815773160403,
+      "pct_of_roof_at_cell_clock": 0.18168385261400802,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    },
+    {
+      "arm": "private",
+      "tiles": 5,
+      "rows_per_expert": 160,
+      "tokens": 640,
+      "copies": 5,
+      "experts_declared": 72,
+      "repeats": 9,
+      "ms_p50": 3.815567970275879,
+      "achieved_tflops": 118.19251277743408,
+      "pct_of_roof": 0.17828251685439517,
+      "sm_clock_load_mhz": 1425.0,
+      "roof_at_cell_clock_tflops": 649.2815773160403,
+      "pct_of_roof_at_cell_clock": 0.18203583299869822,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    },
+    {
+      "arm": "private",
+      "tiles": 6,
+      "rows_per_expert": 192,
+      "tokens": 768,
+      "copies": 6,
+      "experts_declared": 72,
+      "repeats": 8,
+      "ms_p50": 4.613103866577148,
+      "achieved_tflops": 117.31057763881147,
+      "pct_of_roof": 0.176952198947439,
+      "sm_clock_load_mhz": 1425.0,
+      "roof_at_cell_clock_tflops": 649.2815773160403,
+      "pct_of_roof_at_cell_clock": 0.18067750839896402,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": []
+    }
+  ],
+  "copies_declared": 9,
+  "path_census": {
+    "rows": [
+      [
+        "native",
+        1,
+        128,
+        256,
+        8,
+        "small-batch"
+      ],
+      [
+        "native",
+        2,
+        256,
+        512,
+        8,
+        "small-batch"
+      ],
+      [
+        "native",
+        3,
+        384,
+        768,
+        8,
+        "small-batch"
+      ],
+      [
+        "native",
+        4,
+        512,
+        1024,
+        8,
+        "block-scan"
+      ],
+      [
+        "native",
+        5,
+        640,
+        1280,
+        8,
+        "block-scan"
+      ],
+      [
+        "native",
+        6,
+        768,
+        1536,
+        8,
+        "block-scan"
+      ],
+      [
+        "shared",
+        1,
+        128,
+        256,
+        72,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        256,
+        512,
+        72,
+        "block-scan"
+      ],
+      [
+        "shared",
+        3,
+        384,
+        768,
+        72,
+        "block-scan"
+      ],
+      [
+        "shared",
+        4,
+        512,
+        1024,
+        72,
+        "block-scan"
+      ],
+      [
+        "shared",
+        5,
+        640,
+        1280,
+        72,
+        "block-scan"
+      ],
+      [
+        "shared",
+        6,
+        768,
+        1536,
+        72,
+        "block-scan"
+      ],
+      [
+        "private",
+        1,
+        128,
+        256,
+        72,
+        "block-scan"
+      ],
+      [
+        "private",
+        2,
+        256,
+        512,
+        72,
+        "block-scan"
+      ],
+      [
+        "private",
+        3,
+        384,
+        768,
+        72,
+        "block-scan"
+      ],
+      [
+        "private",
+        4,
+        512,
+        1024,
+        72,
+        "block-scan"
+      ],
+      [
+        "private",
+        5,
+        640,
+        1280,
+        72,
+        "block-scan"
+      ],
+      [
+        "private",
+        6,
+        768,
+        1536,
+        72,
+        "block-scan"
+      ]
+    ],
+    "refusals": [],
+    "switch_tread": {
+      "native": 4,
+      "shared": null,
+      "private": null
+    },
+    "hypothesis": {
+      "max_ids": 1024,
+      "max_experts": 64
+    }
+  },
+  "align_probe": {
+    "synthetic": false,
+    "note": "",
+    "cells": [
+      {
+        "label": "native",
+        "tread": 1,
+        "numel": 256,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.024927999824285507,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.37 iterations; host enqueue 0.0313 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 1,
+        "numel": 256,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.029023999348282814,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 1,
+        "numel": 256,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 512,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.02534399926662445,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.33 iterations; host enqueue 0.0310 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 512,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.029023999348282814,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 2,
+        "numel": 512,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.029120000079274178,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 3,
+        "numel": 768,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.02691200003027916,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.31 iterations; host enqueue 0.0312 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 3,
+        "numel": 768,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.028991999104619026,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 3,
+        "numel": 768,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.028991999104619026,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.029023999348282814,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.029055999591946602,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.028863999992609024,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0352 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.029023999348282814,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.02876799926161766,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0351 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.028863999992609024,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0352 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 1,
+        "numel": 256,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.02489599958062172,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.33 iterations; host enqueue 0.0311 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 1,
+        "numel": 256,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028896000236272812,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 1,
+        "numel": 256,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028831999748945236,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 512,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.02534399926662445,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.33 iterations; host enqueue 0.0311 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 512,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028991999104619026,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 2,
+        "numel": 512,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 3,
+        "numel": 768,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.02687999978661537,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.33 iterations; host enqueue 0.0310 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 3,
+        "numel": 768,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.0289280004799366,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 3,
+        "numel": 768,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028831999748945236,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.26 iterations; host enqueue 0.0352 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.028831999748945236,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028831999748945236,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0352 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028896000236272812,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.0289280004799366,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028991999104619026,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.0289280004799366,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.0289280004799366,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.028991999104619026,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.0289280004799366,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 1,
+        "numel": 256,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.02486399933695793,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.33 iterations; host enqueue 0.0311 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 1,
+        "numel": 256,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.02879999950528145,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0352 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 1,
+        "numel": 256,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.028831999748945236,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 512,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.025472000241279602,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.32 iterations; host enqueue 0.0312 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 512,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.02921600081026554,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0356 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 2,
+        "numel": 512,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.029120000079274178,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 3,
+        "numel": 768,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.026784000918269157,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.32 iterations; host enqueue 0.0311 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 3,
+        "numel": 768,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.028863999992609024,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0352 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 3,
+        "numel": 768,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.02908799983561039,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.029023999348282814,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 4,
+        "numel": 1024,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.028896000236272812,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.029023999348282814,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0355 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 5,
+        "numel": 1280,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "native",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.028960000723600388,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.27 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "shared",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.028896000236272812,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.29 iterations; host enqueue 0.0353 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      },
+      {
+        "label": "private",
+        "tread": 6,
+        "numel": 1536,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.028991999104619026,
+        "host_bound": true,
+        "host_note": "host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.28 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone"
+      }
+    ]
+  },
+  "declaration_fit": {
+    "switch_tread": 4,
+    "switch_source": "the cited hypothesis (tread 4); the probe resolved no step for native, so the hypothesis stands unconfirmed",
+    "step_ms": -0.012427234401305515,
+    "per_tile_ms": 0.002721961587667465,
+    "intercept_ms": -0.009526607890923817,
+    "per_tile_band": [
+      -0.01126402616500854,
+      0.008011944591999054
+    ],
+    "step_band": [
+      -0.022661858548720687,
+      0.03408059726158781
+    ],
+    "points": [
+      [
+        1,
+        -0.0040719956159591675
+      ],
+      [
+        2,
+        -0.005200058221817017
+      ],
+      [
+        3,
+        -0.0029760003089904785
+      ],
+      [
+        4,
+        -0.012095928192138672
+      ],
+      [
+        5,
+        -0.010632097721099854
+      ],
+      [
+        6,
+        -0.0023040771484375
+      ]
+    ],
+    "dof": 3
+  },
+  "ratio": 0.7483537154245121,
+  "ratio_interval": [
+    0.7435464721394452,
+    0.7504615362882583
+  ],
+  "ratio_interval_pct": 90.0,
+  "ratio_draws": 2000,
+  "ratio_corrected": 0.7463659856347646,
+  "outcome": "ABOVE-THE-REFIT-BAND",
+  "outcomes_partition": [
+    [
+      "ISSUE-AND-LATENCY",
+      0.0,
+      0.35,
+      "most of the per-M-tile cost is NOT weight traffic: giving every M-tile its own copy barely moved the time. The traffic model is the wrong KIND of model, and the study's negative result about alpha becomes a positive result about the mechanism."
+    ],
+    [
+      "BELOW-THE-REFIT-BAND",
+      0.35,
+      0.529,
+      "the re-read is real but smaller than the refit says: between the two registered worlds, and the page says so rather than rounding to one."
+    ],
+    [
+      "REFIT-CONFIRMED",
+      0.529,
+      0.588,
+      "the refit 0.558 is a traffic fraction after all, measured here without an assumed rate and without a fitted intercept."
+    ],
+    [
+      "ABOVE-THE-REFIT-BAND",
+      0.588,
+      0.85,
+      "the re-read is larger than the refit says: between the two registered worlds, and the page says so rather than rounding to one."
+    ],
+    [
+      "NO-REUSE",
+      0.85,
+      null,
+      "essentially the whole weight set is re-read per extra M-tile. The re-read is real and the traffic model's SHAPE was right even though its coefficient was not identifiable from timing."
+    ]
+  ],
+  "gates": [
+    {
+      "tag": "V0",
+      "kind": "VALIDITY",
+      "claim": "the run measured the grid it planned",
+      "verdict": "FAIL",
+      "measured": "102/162 cells, treads 6/6/6, drift 37.0%",
+      "gate": ">= 3 usable treads and >= 3 repeats per arm, no unrecovered failure, and DRIFT under 20% of the timed cells",
+      "consequence": "every ladder below was fitted on a grid with holes in it, and no slope, ratio or interval on this page may be quoted",
+      "detail": [
+        "102 of 162 planned cells measured and usable",
+        "usable treads per arm: native:6, shared:6, private:6 (of 6 planned)",
+        "fewest repeats behind any tread, per arm: native:3, shared:2, private:4 (of 9 planned, floor 3)",
+        "cells excluded because the clock DRIFTED across their own trials, and so absent from every ladder above: native:25, shared:21, private:14; 37.0% of the 162 timed cells against a ceiling of 20%",
+        "0 cell(s) failed and were not recovered"
+      ]
+    },
+    {
+      "tag": "V1",
+      "kind": "VALIDITY",
+      "claim": "the three arms ran one geometry over one tread set",
+      "verdict": "PASS",
+      "measured": "6 common treads at BLOCK_M=[32]",
+      "gate": "all three arms over the same treads at BLOCK_M=32, one token count per tread",
+      "consequence": "the ratio compares two ladders measured over different grids, and its value is a fact about the difference between the grids",
+      "detail": [
+        "treads per arm: native:[1, 2, 3, 4, 5, 6]; shared:[1, 2, 3, 4, 5, 6]; private:[1, 2, 3, 4, 5, 6]",
+        "tread set common to all three arms: [1, 2, 3, 4, 5, 6]",
+        "BLOCK_M seen in the rows: [32]",
+        "token count per tread is single-valued: yes",
+        "every usable row has rows_per_expert == tiles x BLOCK_M: yes"
+      ]
+    },
+    {
+      "tag": "V2",
+      "kind": "VALIDITY",
+      "claim": "the private arm allocated and READ distinct weight copies",
+      "verdict": "PASS",
+      "measured": "5 of 5 parts",
+      "gate": "all 5 parts of the proof",
+      "consequence": "the private ladder is not a no-reuse reference at all, and the ratio is a number about the apparatus",
+      "detail": [
+        "PASS     addresses: the n copies occupy disjoint contiguous address ranges spanning exactly n x the weight set, in both w1 and w2",
+        "         9 copies x 8 experts span 25367150592 bytes against 25367150592 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+        "PASS     sentinels: a distinct value written into each copy reads back from that copy and from no other, and the original bytes are restored before anything else reads them",
+        "         wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+        "PASS     kernel_read: zeroing ONE copy c at a time, for every c >= 1, changes EXACTLY the private output rows of the tokens routed to copy c and no others, so every tile reads its own copy and no tile reads another's",
+        "         every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=6 (never read): zeroing it left both outputs unchanged=True; c=7 (never read): zeroing it left both outputs unchanged=True; c=8 (never read): zeroing it left both outputs unchanged=True; c=1: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=2: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=3: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=4: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=5: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True",
+        "PASS     shared_blind: each of those zeroings leaves the shared arm's output bitwise unchanged, and restoring the copy restores the private output bitwise, so the changes above are the private mapping and not a corruption",
+        "         the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output",
+        "PASS     same_layer: with nothing zeroed, the private arm's output is bitwise equal to the shared arm's, so the relabelling computes the same layer",
+        "         private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)"
+      ]
+    },
+    {
+      "tag": "V3",
+      "kind": "VALIDITY",
+      "claim": "the device memory taken is the memory the plan predicted",
+      "verdict": "PASS",
+      "measured": "2 of 2 parts",
+      "gate": "weight allocation within 1% of prediction, high-water mark at or under the plan's ceiling",
+      "consequence": "the copies are not the copies the plan priced, so neither the no-reuse reference nor the cost of reaching it is what this page says",
+      "detail": [
+        "weight allocation: 25.3672 GB measured against 25.3672 GB predicted, 0.00% apart (gate 1%)",
+        "high-water mark: 25.7636 GB against the plan's ceiling 26.0907 GB (weights 25.3672 + 3.0x the modelled activation set 0.4719 + the instrument's L2 flush buffer 0.2517, all in GB)"
+      ]
+    },
+    {
+      "tag": "V4",
+      "kind": "VALIDITY",
+      "claim": "every fitted tread of both ladders is memory bound",
+      "verdict": "PASS",
+      "measured": "worst 22.5% of the fixed roof",
+      "gate": "< 95% of the fixed roof on every fitted tread of shared and private",
+      "consequence": "at least one ladder's slope is set by arithmetic and not by reads, which pulls the ratio toward 1.0 for a reason that is not reuse",
+      "detail": [
+        "roof 663.0 TFLOP/s, ridge 151.43 Op/B x bandwidth 4378.0 GB/s; ridge: measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b; bandwidth: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)",
+        "worst fitted tread of shared/private reaches 22.5% of it",
+        "own-clock issue efficiency is printed per tread in the ladder table and is scored by nothing here; scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency"
+      ]
+    },
+    {
+      "tag": "V5",
+      "kind": "VALIDITY",
+      "claim": "the declaration's own per-M-tile cost is bounded",
+      "verdict": "PASS",
+      "measured": "1.47% of the private slope at b's far edge, 1.05% at its near edge (point 0.36%)",
+      "gate": "PASS: the FAR edge of b's 90% band < 3% of the private slope. FAIL: its NEAR edge is over that bound, i.e. the whole band is. Otherwise UNKNOWN",
+      "consequence": "the wider declaration changes the per-M-tile cost itself, so the matched ratio is about a call the study does not make, and nothing on this page may be quoted as the study's alpha",
+      "detail": [
+        "slope(native)  0.571292 ms per M-tile  (the study's call: E declared)",
+        "slope(shared)  0.571765 ms per M-tile  (same bytes, addresses and order; E x n_decl declared)",
+        "slope(private) 0.764031 ms per M-tile",
+        "native - shared per tread, fitted as a + s 1{n >= 4} + b n over 6 treads (3 dof): b = +0.002722 ms per M-tile [-0.011264, +0.008012], s = -12.43 us [-22.66, +34.08] -- NATIVE's alignment step, taken OUT of b, a = -0.0095 ms",
+        "the switch tread came from the cited hypothesis (tread 4); the probe resolved no step for native, so the hypothesis stands unconfirmed",
+        "the raw slope gap native - shared is -0.000474 ms per M-tile (0.06% of the private slope); it carries the step at the design's leverage and is printed, not scored",
+        "declaration = b = +0.002722 ms per M-tile, which is 0.36% of the private slope",
+        "intercepts: native 0.2010 ms, shared 0.2055 ms -- the dead launches of the wider declaration belong HERE, as a constant, and are not scored",
+        "read b as the additive error bar on reading the ratio as the native call's: about +/-0.015 at the band's far edge, over and above the ratio's own bootstrap interval"
+      ]
+    },
+    {
+      "tag": "V6",
+      "kind": "VALIDITY",
+      "claim": "shared and private agree at n=1, where they are the same call",
+      "verdict": "PASS",
+      "measured": "0.004% gap",
+      "gate": "<= 2.0%",
+      "consequence": "one call timed twice does not agree with itself, so the difference between the two arms at depth is not attributable to traffic and the ratio is unreadable at any value",
+      "detail": [
+        "medians at n=1: native:0.7766 ms, shared:0.7807 ms, private:0.7806 ms",
+        "shared/private gap 0.004% of the faster",
+        "this is the floor the ratio's own difference has to stand above, measured on this card in this session",
+        "native sits -0.522% from shared here: the declaration's constant, RECORDED and not scored"
+      ]
+    },
+    {
+      "tag": "V7",
+      "kind": "VALIDITY",
+      "claim": "shared and private ran at the same clock at every tread",
+      "verdict": "FAIL",
+      "measured": "worst 18.10%, over at treads [1, 2, 3, 4, 5, 6]",
+      "gate": "<= 1% at every tread, clock read in both arms",
+      "consequence": "the two slopes were taken at different clocks on a card whose time moves with its clock, so the ratio carries a clock difference of unknown elasticity and may not be quoted",
+      "detail": [
+        "n=1: shared 1485 MHz, private 1500 MHz, 1.01% apart; native 1485 MHz",
+        "n=2: shared 1605 MHz, private 1451 MHz, 9.58% apart; native 1620 MHz",
+        "n=3: shared 1665 MHz, private 1425 MHz, 14.41% apart; native 1665 MHz",
+        "n=4: shared 1732 MHz, private 1425 MHz, 17.75% apart; native 1725 MHz",
+        "n=5: shared 1710 MHz, private 1425 MHz, 16.67% apart; native 1710 MHz",
+        "n=6: shared 1740 MHz, private 1425 MHz, 18.10% apart; native 1740 MHz"
+      ]
+    },
+    {
+      "tag": "V8",
+      "kind": "VALIDITY",
+      "claim": "the ratio arms take one alignment kernel along the ladder",
+      "verdict": "UNKNOWN",
+      "measured": "bias <= 0.0001, 0.0000 over the resolved steps, no step resolved",
+      "gate": "step bias on the ratio <= 0.01, from the probed series at the ratio arms' own declaration",
+      "consequence": "vLLM changes alignment kernel inside the ratio arms' ladder on this build, and the step it leaves -- in one of the two slopes or in both, which the page names -- is worth more than the budget; the ratio is not quotable at this declaration",
+      "detail": [
+        "native   best split at tread 6: step -1.55 us +/- 0.93 us (1 se), affine part 23.50 us + 4.5625 ns/id; RSS with the step 1.232e-06, without 2.379e-06; across-repeat spread 0.04 us; the step is NOT resolved against 3 se widened by 1.79 for the 5 split(s) the minimum was taken over, i.e. 15.36 us",
+        "         the hypothesis puts this declaration's switch at tread 4: no step resolved, so the hypothesis is not confirmed on this build",
+        "shared   best split at tread 6: step -0.13 us +/- 0.08 us (1 se), affine part 28.91 us + 0.0750 ns/id; RSS with the step 9.421e-09, without 1.722e-08; across-repeat spread 0.09 us; the step is NOT resolved against 3 se widened by 1.79 for the 5 split(s) the minimum was taken over, i.e. 1.34 us",
+        "         the hypothesis puts this declaration on one kernel throughout: no step resolved, consistent",
+        "private  best split at tread 2: step +0.27 us +/- 0.08 us (1 se), affine part 28.87 us + -0.1500 ns/id; RSS with the step 8.602e-09, without 4.301e-08; across-repeat spread 0.06 us; the step is NOT resolved against 3 se widened by 1.79 for the 5 split(s) the minimum was taken over, i.e. 1.28 us",
+        "         the hypothesis puts this declaration on one kernel throughout: no step resolved, consistent",
+        "slope(private ids) - slope(shared ids) = -0.058 us per tread (256 ids a tread), -0.00009 of the weight stream per tread: the alignment's counter asymmetry the plan page registers, MEASURED; printed, not scored",
+        "the ratio arms' steps: NEITHER arm resolved one; shared -0.13 us at 6, private +0.27 us at 2",
+        "the bias bound is pair_step_bias, ASSUMED ratio <= 1: the shared arm re-reads no more than the whole set per M-tile",
+        "shared's step: -0.13 us at tread 6, at leverage 0.143; private's step: +0.27 us at tread 2, at leverage 0.143; against a weight stream of 0.6438 ms (the denominator's own scale) they could move the ratio by at most 0.0001, and by 0.0000 over the RESOLVED steps alone, which is the number a FAIL is taken on",
+        "the instrument called 18 of 18 of shared's, 18 of 18 of private's probed cells HOST-BOUND at the ratio arms' declaration: host-bound: in 3 of 3 trials the GPU had fewer than 2 iterations of work queued when the host finished enqueueing (smallest backlog 0.30 iterations; host enqueue 0.0354 ms per call); the intervals include host enqueue time and the number is an upper bound on the kernel time; time the callable as a graph replay or through a fused launcher to measure the GPU alone",
+        "POSITIVE CONTROL NOT CONFIRMED: the probe's ratio cells were host-bound (36 of 36); NATIVE's switch is due at tread 4 and the probe resolved no step. UNKNOWN therefore means one specific thing: this probe could not see a kernel switch it was shown, so a flat ratio series from it certifies nothing, and a step in it is not evidence of a kernel switch either. What would close it is a timing that excludes the host: read the step from a profiler, or time the op under a CUDA graph",
+        "  ASSUMED: the host's enqueue cost does not itself step at that tread -- the dispatch is the same call at every tread and only numel and num_experts move"
+      ]
+    },
+    {
+      "tag": "C1",
+      "kind": "CLAIM",
+      "claim": "the re-read fraction, measured against a no-reuse reference, is the study's refit alpha",
+      "verdict": "FAIL",
+      "measured": "0.7484 [0.7435, 0.7505], ABOVE-THE-REFIT-BAND",
+      "gate": "PASS: point and whole interval inside ALPHA_BAND [0.529, 0.588); FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN",
+      "consequence": "the refit alpha is not the traffic fraction it is quoted as, and the page names which of the registered worlds it is instead",
+      "detail": [
+        "ratio = slope(shared) / slope(private) = 0.7484",
+        "90% percentile bootstrap interval [0.7435, 0.7505] over 2000 draws that produced a ratio",
+        "THE WORLD THIS LANDS IN: ABOVE-THE-REFIT-BAND",
+        "  the re-read is larger than the refit says: between the two registered worlds, and the page says so rather than rounding to one.",
+        "the registered partition, in full: ISSUE-AND-LATENCY [0.000, 0.350); BELOW-THE-REFIT-BAND [0.350, 0.529); REFIT-CONFIRMED [0.529, 0.588); ABOVE-THE-REFIT-BAND [0.588, 0.850); NO-REUSE [0.850, inf)",
+        "activation-corrected ratio 0.7464, printed only: it subtracts a MODELLED activation slope from both terms, and the raw number above is the one this arm was built to produce",
+        "NO BANDWIDTH AND NO INTERCEPT ENTER THIS NUMBER. It is one measured slope over another, taken minutes apart on one card at one tile in one kernel."
+      ]
+    },
+    {
+      "tag": "C2",
+      "kind": "CLAIM",
+      "claim": "the private arm's delivered weight-read rate is at or under the card's own ceiling",
+      "verdict": "PASS",
+      "measured": "3689.1 GB/s, w=1.1868",
+      "gate": "<= 4815.8 GB/s",
+      "consequence": "either the private arm did not read every copy (V2 answers that) or the calibrated bandwidth this study divides every slope by is not a ceiling",
+      "detail": [
+        "slope(private) 0.764031 ms per M-tile moves 2.8186 GB, so it delivered 3689.1 GB/s",
+        "the card's calibrated rate is 4378.0 GB/s (measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)); the gate allows 10% over it, i.e. 4815.8 GB/s",
+        "w(private) = 1.1868 weight-streams per M-tile at that rate; 1.0000 is what a full fresh read per tile at the calibrated rate would give, and the excess over 1 is the shortfall of the achieved rate against the calibrated one",
+        "THIS IS THE STUDY'S OWN DENOMINATOR, MEASURED. Every published w divides a slope by a stream time computed at an ASSUMED rate; this row says what that assumption was worth on this card in this kernel."
+      ]
+    }
+  ],
+  "git_sha": "81f80b7b803b07687a00ab691fb996f268796905",
+  "gpu_name": "NVIDIA H200",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "81f80b7b803b07687a00ab691fb996f268796905",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-22T00:01:25+00:00",
+    "hostname": "7c1721a195ce",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "595.91.07",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 151.4265937361704,
+    "ridge_source": "measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b",
+    "bandwidth": 4378.033255567562,
+    "bandwidth_source": "measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)",
+    "warmup_ms": 300.0,
+    "iters": 81,
+    "target_ms": 200.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}

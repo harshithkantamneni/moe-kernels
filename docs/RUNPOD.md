@@ -55,28 +55,47 @@ against a mismatch rather than answering a different question confidently. Pin
 the base venv:
 
 ```bash
-# edit scripts/setup_runpod.sh: setup_env base --system-site-packages
-#                           ->  setup_env base --python 3.12
 MOE_BASE_TORCH='torch==2.13.0' \
 MOE_TORCH_INDEX='https://download.pytorch.org/whl/cu130' \
-  bash scripts/setup_runpod.sh base
+  bash scripts/setup_runpod.sh --base-python 3.12 base
 ```
 
-Drop `--system-site-packages` when pinning the python version: inheriting the
-image's site-packages into a differently-versioned venv is incoherent. Check
-`nvidia-smi` first, since a cu130 wheel needs driver r580+; if the image is
-older, use the `cu128` index instead. The index must match the driver, not the
-image name.
+`--base-python` implies an isolated base venv (no `--system-site-packages`),
+and `bash scripts/setup_runpod.sh --dry-run --base-python 3.12 base` prints
+exactly what it would build, for free. Until 2026-09-02 this section told the
+operator to EDIT `scripts/setup_runpod.sh` (`setup_env base
+--system-site-packages` into `setup_env base --python 3.12`). That line no
+longer exists, and the edit was never a pin: it modified a tracked file, so
+`pod_session.sh` P1 failed and `driver.py` stamped `git_dirty=True` on every
+row of the session, which is why the alpha-0558, three-way and v2lite arms are
+100% dirty. The pin is a flag now and the session records which was used.
+Check `nvidia-smi` first, since a cu130 wheel needs driver r580+; if the image
+is older, use the `cu128` index instead. The index must match the driver, not
+the image name.
 
-**Recalibrate on each new pod.** `measured_nvidia_h200.yaml` matches by device
-NAME, so a second H200 pod silently reuses the first one's ceilings. Same part,
-so they should be close, but "measure this machine" is the whole methodology and
-the run takes about a minute:
+**Recalibrate on each new pod, and PUBLISH the result.** `measured_nvidia_h200.yaml`
+matches by device NAME, so a second H200 pod silently reuses the first one's
+ceilings. Same part, so they should be close, but "measure this machine" is
+the whole methodology (the H200's dense bf16 moved 7.1% between two sessions
+while its bandwidth held to 0.014%), and the run takes about three minutes:
 
 ```bash
-python scripts/calibrate_hardware.py     # -> measured_nvidia_h200.yaml
-git diff moe/bench/hardware/             # did the ceilings actually move?
+python scripts/calibrate_hardware.py --publish   # -> results/calibration/<run id>/measured_nvidia_h200.yaml
+                                                 #    AND moe/bench/hardware/measured_nvidia_h200.yaml
+git diff moe/bench/hardware/                     # did the ceilings actually move?
 ```
+
+`--publish` is the whole recipe. Without it the calibration lands only on an
+untracked path under `results/calibration/`, `git diff moe/bench/hardware/` is
+empty, the operator reads "the ceilings did not move", and
+`roofline.load_measured()` keeps returning the PREVIOUS pod's ruler for every
+row measured afterwards, labelled "measured on this machine". This section
+recommended exactly that no-op until 2026-09-03. The session driver,
+`scripts/h200_gaps_session.sh`, runs the published form as arm 0 and refuses
+the rest of the session unless the tracked yaml carries a `provenance.utc`
+stamp from this session AND the ledger says the arm was DONE
+(`docs/POD_RUNBOOK.md`). Commit the yaml with the session's results; it is the
+one tracked file the session is meant to change.
 
 **3. Bootstrap.** Clone into the volume so the repo survives the pod:
 
@@ -86,21 +105,55 @@ bash scripts/setup_runpod.sh
 ```
 
 First run installs and writes `requirements/resolved-*.txt`. **Commit those.**
-Every later session then installs the exact resolved set rather than
-re-resolving, and anyone reproducing your numbers gets the same environment.
+A later session installs FROM the resolved set when one is present and still
+true, and REFUSES when it has drifted from the top-level file, naming what
+drifted; `bash scripts/setup_runpod.sh --check` asks the same question from a
+laptop and spends nothing, and `--fresh` re-resolves on purpose. Until
+2026-09-02 this paragraph promised the resolved set was installed and no code
+path read it: a fresh volume re-resolved `base.txt`, whose top-level pins are
+unversioned, so a stranger's environment was whatever the index held that day.
+As this is written `resolved-base.txt` IS stale (it predates the `nvidia-ml-py`
+line and the `transformers<4.54` cap, and its `torch==2.13.0` carries no
+`+cu130` local tag, so the CUDA index is not encoded in it); the next pod fixes
+that with `--fresh`, and only a pod can, because the CUDA wheels are the thing
+being resolved.
 
-Later sessions detect an unchanged requirements file by content hash and finish
-in about a second.
+Later sessions detect an unchanged environment by its stamp,
+`$MOE_VENV_ROOT/.stamp-<env>`, and finish in about a second. The stamp records
+everything that decides what the venv holds: the requirements file's content
+hash, the venv's interpreter flags, and for base the torch pin and its index,
+so a changed index rebuilds and a changed interpreter recreates the venv. It is
+written only after every install step succeeded. From 75bd12a until 2026-09-24
+the stamp was read and never written, so every session rebuilt every
+environment.
 
 ## Every session after that
+
+Two drivers exist and they answer different questions. The sweep:
 
 ```bash
 cd /workspace/repo && bash scripts/run_all.sh --profile standard --max-minutes 45
 ```
 
-That does: pull, idempotent setup, **test suite**, smoke, sweep, plots, summary.
-The test suite runs before the sweep on purpose. A failure there costs seconds;
-discovering the same failure after an hour of benchmarking costs an hour.
+and the open experiments, every arm the driver registers in the order their
+results are read, with its own ledger and resume:
+
+```bash
+cd /workspace/repo && bash scripts/h200_gaps_session.sh --dry-run   # first, on the laptop
+cd /workspace/repo && bash scripts/h200_gaps_session.sh             # on the pod
+```
+
+That driver on its own is the standalone path. The next session is the
+alpha(G) chain, `scripts/alpha_g_chain.sh`, which runs the driver's
+preconditions inside its own ledger and R3 (the ratio arm) and R1 (the
+elasticity arm) at every G; its section of `docs/POD_RUNBOOK.md`, "The
+alpha(G) chain", is the command to book.
+
+`docs/POD_RUNBOOK.md` is the operator page for the driver and the chain. The
+sweep does: pull, idempotent setup, **test suite**, smoke, sweep, plots,
+summary. The test suite runs before the sweep on purpose. A failure there
+costs seconds; discovering the same failure after an hour of benchmarking
+costs an hour.
 
 Stop the pod when the summary prints. The volume keeps the environments, the
 caches, the traces, and the results.
@@ -176,8 +229,13 @@ git add traces/*.npz && git commit
 
 Traces are kilobytes. Model weights are never written to the repo.
 
-Mixtral is gated on Hugging Face. Accept the license and `huggingface-cli login`
-before the session, or the download fails after you have already started paying.
+Mixtral is NOT gated any more. `mistralai/Mixtral-8x7B-Instruct-v0.1` is
+apache-2.0, `model_info` reports `gated=False`, and `config.json` downloads with
+no credentials at all -- verified on an H200 pod on 2026-09-01. This document
+told you to accept a licence that no longer exists, which cost a session's worth
+of confusion; check `gated` rather than trusting either this line or the model
+card. A token is still worth setting, but for RATE and not for access: HF
+rate-limits anonymous transfers and step 0 pulls 93.4 GB.
 
 ### What fits on one H200 (141 GB, bf16)
 
@@ -236,28 +294,37 @@ gh auth login          # or set up a fine-grained PAT with contents:write
 If push fails the commit is still made locally, so nothing is lost; you can push
 later or copy the directory off with `runpodctl send`.
 
-## Profiling is not available, and what replaces it
+## Counters are not assumed, and what replaces them
 
-`ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`. GPU performance counters
-are gated behind a host kernel-module flag
+No `ncu` counter read has succeeded on a rented pod in this study. GPU
+performance counters are gated behind a host kernel-module flag
 (`NVreg_RestrictProfilingToAdminUsers=0`) that a container tenant cannot set,
-and RunPod containers are not privileged. Assume no counters and design around
-it rather than planning a session that discovers this at the console.
+or a capability (`CAP_PERFMON`, `CAP_SYS_ADMIN`) the provider grants the
+container. Two rented H200s attempted a read and both were refused with
+`ERR_NVGPUCTRPERM`: 2026-08-25 (`profiles/q2_kernel_names.txt`) and 2026-09-15
+(a pod holding neither capability); the 2026-09-09 and 2026-09-10 pods were
+never asked. Two pods are a record, not the platform:
+`python scripts/dram_counter_route.py --probe` answers for the pod it runs on in
+about fifteen seconds, and the alpha(G) chain runs it as its `counter-probe`
+step on every pass. Design every session around having no counters, so a
+refused probe changes nothing and an open one is a bonus.
 
-That means **actual DRAM traffic cannot be measured**, so the compulsory-bytes
+Without one, **actual DRAM traffic cannot be measured**, so the compulsory-bytes
 model cannot be validated directly. Three substitutes, none of which need
 counters:
 
 **1. Measure the ceilings instead of quoting them.**
 
 ```bash
-python scripts/calibrate_hardware.py
+python scripts/calibrate_hardware.py --publish
 ```
 
 STREAM-style copy, triad and write on buffers far larger than L2, plus a large
-square BF16 GEMM through cuBLAS. Writes
-`moe/bench/hardware/measured_<device>.yaml`, which `run_all.sh` creates
-automatically on a pod that lacks it. One file per device, so calibrating a
+square BF16 GEMM through cuBLAS. Writes an untracked copy under
+`results/calibration/<run id>/` and, with `--publish`, the tracked
+`moe/bench/hardware/measured_<device>.yaml` that `roofline.load_measured()`
+actually reads; `run_all.sh` creates the latter automatically on a pod that
+lacks it. One file per device, so calibrating a
 second GPU does not overwrite the first and an earlier sweep can still be
 re-plotted against its own roof. A sweep refuses to start against a calibration
 measured on a different part. Efficiency is then quoted against what this
@@ -288,13 +355,47 @@ not give you DRAM bytes, but it does give per-kernel timing attribution and
 launch overhead, which is exactly the evidence the eager-versus-graph question
 needs. If it runs, use it there.
 
-If direct traffic measurement ever becomes essential, it needs bare metal or a
-provider that grants privileged containers, not a different RunPod template.
+If direct traffic measurement ever becomes essential, the weaker ask comes
+first: NVIDIA's own ERR_NVGPUCTRPERM page names `--cap-add=SYS_ADMIN` on the
+container as the container-side remedy, one Linux capability per instance
+rather than a host module flag and a reboot, and nothing in this project has
+asked a provider for it yet (`docs/COUNTERS.md` section 2). Failing that it
+needs bare metal or a VM whose guest kernel you own, not a different RunPod
+template: `docs/LAMBDA.md` and `scripts/setup_vm.sh` set up such a VM (root,
+launched without a network filesystem), building its venvs through this
+page's `setup_runpod.sh` with `MOE_HOST_KIND=vm`. And before the `nsys` test above: the RunPod image ships a
+TARGET-ONLY Nsight Systems, without the `QdstrmImporter` that turns a capture
+into a report, so every 2026-09-01 attempt failed at conversion including the
+control that requested no metrics at all. Check for
+`host-linux-x64/QdstrmImporter` first, or install a current build
+(`docs/COUNTERS.md` section 1).
 
 ## Clock discipline
 
-The harness samples SM clock and temperature before and after every cell and
-flags rows where they drifted more than 5%. That records a symptom, not a
-control. If your provider permits it, lock clocks and enable persistence mode
+`moe/bench/timing.py` polls the SM clock from a background thread WHILE every
+cell's trials run and records two verdicts per row: LEVEL, the loaded clock is
+inside the band 0.95 to 1.05 of the clock this card's roof was measured at
+(`clock_level_ok`, with `clock_level_side` naming `low` or `high` on a
+failure), and DRIFT, the first and last under-load samples agree within 5% in
+either direction (`clock_drift_ok`). SINCE 2026-09-09, DRIFT alone excludes a
+row and the LEVEL side is recorded and excludes nothing. Under a 700 W cap the
+clock under load is set per tile by the kernel's own power draw, so `high` is
+the expected state of a memory-bound cell on the H200 (the calibration's memory
+load holds 1980 MHz) and `low` is the expected state of a hungry tile
+(BLOCK_M=128 holds a median 1395 MHz over 196 cells against the 1485 MHz GEMM
+reference); `docs/APPARATUS.md` section 1 has the per-tile table and the
+session that produced it. Neither side is an exclusion: what is wrong on both
+is the fixed-roof fraction, and `pct_of_roof_at_cell_clock` is the column to
+read beside it. Until 2026-09-09 this section said "Only LOW or DRIFT excludes
+a row", which excluded the study's two primary tiles from measurability on this
+card. LEVEL needs the reference clock from this card's
+published calibration, which is the second reason `--publish` above is not
+optional. Until 2026-09-02 this section said the harness sampled the clock
+"before and after every cell" and flagged a drift over 5% (retracted: that
+compared two idle-instant samples and fired on a drop, so it detected whether
+the first sample had caught the idle boost rather than throttling; on the
+alpha-0558 arm it flagged 91% of vLLM rows above T=4096 while flagged and
+unflagged replicates timed at ratio 0.998). Either flag records a symptom, not
+a control. If your provider permits it, lock clocks and enable persistence mode
 before a publication run, and note in the results what you locked them to. On
 rented hardware, thermal state is the largest source of run-to-run disagreement.

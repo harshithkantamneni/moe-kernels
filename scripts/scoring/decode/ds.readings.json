@@ -1,0 +1,5979 @@
+{
+ "what": "the decode settling rental DS's readings under the fourth addendum",
+ "addendum": "2026-11-04-decode-addendum4-gh200",
+ "POWER": {
+  "verdict": "READ",
+  "gpu_current_power_limit_w": 700.0,
+  "file": "results/published/2026-11-04-nvidia_gh200_480gb-decodeDS-session/session/power-set.txt",
+  "limit_w": 700.0,
+  "tolerance_w": 1.0
+ },
+ "label": "DESCRIPTIVE rental: every reading describes DS's pages; none is a model term, none is a STOP; the decode model form for the new blind will be chosen after DS, from DS's and CAL2's pages; it will be frozen and registered before any page of the three new blind models (Mixtral-8x22B, Qwen2-57B-A14B, Granite-3.0-1B-A400M), which remain unseen",
+ "PAGE": {
+  "jetmoe-8b": {
+   "verdict": "READ",
+   "refused_cells": [],
+   "python_patch": {
+    "label": "DESCRIPTIVE",
+    "page": "3.12.16",
+    "CAL2": "3.12.16"
+   }
+  },
+  "phi-3.5-moe": {
+   "verdict": "READ",
+   "refused_cells": [],
+   "python_patch": {
+    "label": "DESCRIPTIVE",
+    "page": "3.12.16",
+    "CAL2": "3.12.16"
+   }
+  },
+  "mixtral-8x7b": {
+   "verdict": "READ",
+   "refused_cells": [],
+   "python_patch": {
+    "label": "DESCRIPTIVE",
+    "page": "3.12.16",
+    "CAL2": "3.12.16"
+   }
+  },
+  "granite-3.0-3b-a800m": {
+   "verdict": "READ",
+   "refused_cells": [],
+   "python_patch": {
+    "label": "DESCRIPTIVE",
+    "page": "3.12.16",
+    "CAL2": "3.12.16"
+   }
+  },
+  "qwen1.5-moe-a2.7b": {
+   "verdict": "READ",
+   "refused_cells": [],
+   "python_patch": {
+    "label": "DESCRIPTIVE",
+    "page": "3.12.16",
+    "CAL2": "3.12.16"
+   }
+  },
+  "olmoe-1b-7b": {
+   "verdict": "READ",
+   "refused_cells": [],
+   "python_patch": {
+    "label": "DESCRIPTIVE",
+    "page": "3.12.16",
+    "CAL2": "3.12.16"
+   }
+  }
+ },
+ "CENSUS GATE": {
+  "verdict": "READ (COMPLETE)",
+  "errors": [],
+  "file": "results/published/2026-11-04-nvidia_gh200_480gb-decodeDS-session/results/2026-11-04-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ds/tile-census.json"
+ },
+ "CENSUS": {
+  "16x64x128w4s4": {
+   "verdict": "READ",
+   "occupancy": {
+    "w1": 3,
+    "w2": 3
+   }
+  },
+  "32x64x128w4s3": {
+   "verdict": "READ",
+   "occupancy": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "32x128x64w4s3": {
+   "verdict": "READ",
+   "occupancy": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "64x128x64w4s3": {
+   "verdict": "READ",
+   "occupancy": {
+    "w1": 3,
+    "w2": 3
+   }
+  }
+ },
+ "CENSUS CROSS-CHECK": {
+  "CAL2 census (occupancy rule, reported)": {
+   "16x64x128w4s4": "READ",
+   "32x64x128w4s3": "READ",
+   "32x128x64w4s3": "READ",
+   "64x128x64w4s3": "READ"
+  },
+  "verdict": "SAME",
+  "entries_compared": 48,
+  "differences": []
+ },
+ "PER-CTA STOP": {
+  "readings": [
+   "LADDERS",
+   "SUBWAVE",
+   "DRAIN",
+   "W1RATE"
+  ],
+  "verdict": "none"
+ },
+ "pages": {
+  "jetmoe-8b": "counted",
+  "phi-3.5-moe": "counted",
+  "mixtral-8x7b": "counted",
+  "granite-3.0-3b-a800m": "counted",
+  "qwen1.5-moe-a2.7b": "counted",
+  "olmoe-1b-7b": "counted"
+ },
+ "W1RATE": {
+  "tiles": {
+   "16x64x128w4s4": {
+    "verdict": "READ: OLS with one offset per ladder",
+    "counter_GBps": 3897.935805,
+    "ratio_to_v4d": 0.917911,
+    "ladders": [
+     "jetmoe-8b/T4",
+     "mixtral-8x7b/T4",
+     "phi-3.5-moe/T4",
+     "qwen1.5-moe-a2.7b/T8"
+    ],
+    "models": [
+     "jetmoe-8b",
+     "mixtral-8x7b",
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "rows": 10,
+    "offsets_us": {
+     "jetmoe-8b/T4": 9.842,
+     "mixtral-8x7b/T4": 17.132499,
+     "phi-3.5-moe/T4": 13.084643,
+     "qwen1.5-moe-a2.7b/T8": 11.045267
+    },
+    "se_counter_GBps": 16.338209,
+    "rms_us": 1.122757
+   },
+   "32x64x128w4s3": {
+    "verdict": "READ: OLS with one offset per ladder",
+    "counter_GBps": 3883.169056,
+    "ratio_to_v4d": 0.921402,
+    "ladders": [
+     "jetmoe-8b/T64",
+     "mixtral-8x7b/T64",
+     "phi-3.5-moe/T64"
+    ],
+    "models": [
+     "jetmoe-8b",
+     "mixtral-8x7b",
+     "phi-3.5-moe"
+    ],
+    "rows": 6,
+    "offsets_us": {
+     "jetmoe-8b/T64": 14.231401,
+     "mixtral-8x7b/T64": 29.322346,
+     "phi-3.5-moe/T64": 20.605562
+    },
+    "se_counter_GBps": 1.145763,
+    "rms_us": 0.120837
+   },
+   "32x128x64w4s3": {
+    "verdict": "READ: OLS with one offset per ladder",
+    "counter_GBps": 3873.214503,
+    "ratio_to_v4d": 0.92377,
+    "ladders": [
+     "mixtral-8x7b/T96",
+     "phi-3.5-moe/T96"
+    ],
+    "models": [
+     "mixtral-8x7b",
+     "phi-3.5-moe"
+    ],
+    "rows": 6,
+    "offsets_us": {
+     "mixtral-8x7b/T96": 47.841124,
+     "phi-3.5-moe/T96": 34.524621
+    },
+    "se_counter_GBps": 49.096016,
+    "rms_us": 8.070819
+   },
+   "64x128x64w4s3": {
+    "verdict": "READ: OLS with one offset per ladder",
+    "counter_GBps": 3787.314476,
+    "ratio_to_v4d": 0.944722,
+    "ladders": [
+     "mixtral-8x7b/T128",
+     "olmoe-1b-7b/T128",
+     "phi-3.5-moe/T128"
+    ],
+    "models": [
+     "mixtral-8x7b",
+     "olmoe-1b-7b",
+     "phi-3.5-moe"
+    ],
+    "rows": 6,
+    "offsets_us": {
+     "mixtral-8x7b/T128": 34.494383,
+     "olmoe-1b-7b/T128": 16.186277,
+     "phi-3.5-moe/T128": 32.102406
+    },
+    "se_counter_GBps": 13.896993,
+    "rms_us": 1.332271
+   }
+  },
+  "label": "DESCRIPTIVE: w1's counter marginal rate per decode tile; no model term"
+ },
+ "SUBWAVE": {
+  "tiles": {
+   "16x64x128w4s4": {
+    "qualifying_ladders": [
+     "jetmoe-8b/T4/w2",
+     "mixtral-8x7b/T4/w2",
+     "phi-3.5-moe/T4/w2"
+    ],
+    "models": [
+     "jetmoe-8b",
+     "mixtral-8x7b",
+     "phi-3.5-moe"
+    ],
+    "fit_ladders": [
+     "granite-3.0-3b-a800m/T4/w1",
+     "granite-3.0-3b-a800m/T4/w2",
+     "jetmoe-8b/T4/w2",
+     "mixtral-8x7b/T4/w2",
+     "phi-3.5-moe/T4/w2"
+    ],
+    "verdict": "READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder",
+    "r_cta_GBps": 53.828788,
+    "rows": 13,
+    "binding_rows": [
+     "jetmoe-8b/T4/w2 n 64"
+    ],
+    "offsets_us": {
+     "granite-3.0-3b-a800m/T4/w1": 9.725469,
+     "granite-3.0-3b-a800m/T4/w2": 7.521606,
+     "jetmoe-8b/T4/w2": 9.444888,
+     "mixtral-8x7b/T4/w2": 21.532429,
+     "phi-3.5-moe/T4/w2": 14.934496
+    },
+    "rms_rel": 0.033857,
+    "rms_rel_no_ceiling": 0.037105
+   },
+   "32x64x128w4s3": {
+    "qualifying_ladders": [
+     "jetmoe-8b/T64/w2",
+     "mixtral-8x7b/T64/w2"
+    ],
+    "models": [
+     "jetmoe-8b",
+     "mixtral-8x7b"
+    ],
+    "fit_ladders": [
+     "jetmoe-8b/T64/w2",
+     "mixtral-8x7b/T64/w2"
+    ],
+    "verdict": "READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder",
+    "r_cta_GBps": 24.378542,
+    "rows": 4,
+    "binding_rows": [
+     "jetmoe-8b/T64/w2 n 128"
+    ],
+    "offsets_us": {
+     "jetmoe-8b/T64/w2": 10.337991,
+     "mixtral-8x7b/T64/w2": 33.943002
+    },
+    "rms_rel": 0.029335,
+    "rms_rel_no_ceiling": 0.052403
+   },
+   "32x128x64w4s3": {
+    "qualifying_ladders": [
+     "phi-3.5-moe/T96/w2",
+     "qwen1.5-moe-a2.7b/T96/w1"
+    ],
+    "models": [
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "fit_ladders": [
+     "granite-3.0-3b-a800m/T96/w1",
+     "granite-3.0-3b-a800m/T96/w2",
+     "jetmoe-8b/T96/w2",
+     "mixtral-8x7b/T96/w2",
+     "phi-3.5-moe/T80/w2",
+     "phi-3.5-moe/T96/w2",
+     "qwen1.5-moe-a2.7b/T96/w1",
+     "qwen1.5-moe-a2.7b/T96/w2"
+    ],
+    "verdict": "READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder",
+    "r_cta_GBps": 37.68873,
+    "rows": 21,
+    "binding_rows": [
+     "jetmoe-8b/T96/w2 n 96"
+    ],
+    "offsets_us": {
+     "granite-3.0-3b-a800m/T96/w1": 10.654294,
+     "granite-3.0-3b-a800m/T96/w2": 9.562792,
+     "jetmoe-8b/T96/w2": 22.590571,
+     "mixtral-8x7b/T96/w2": 35.943122,
+     "phi-3.5-moe/T80/w2": 37.329632,
+     "phi-3.5-moe/T96/w2": 29.218883,
+     "qwen1.5-moe-a2.7b/T96/w1": 12.168008,
+     "qwen1.5-moe-a2.7b/T96/w2": 13.163901
+    },
+    "rms_rel": 0.020296,
+    "rms_rel_no_ceiling": 0.021619
+   },
+   "64x128x64w4s3": {
+    "qualifying_ladders": [
+     "jetmoe-8b/T128/w2",
+     "mixtral-8x7b/T128/w2",
+     "phi-3.5-moe/T128/w2"
+    ],
+    "models": [
+     "jetmoe-8b",
+     "mixtral-8x7b",
+     "phi-3.5-moe"
+    ],
+    "fit_ladders": [
+     "jetmoe-8b/T128/w2",
+     "mixtral-8x7b/T128/w2",
+     "phi-3.5-moe/T128/w2"
+    ],
+    "verdict": "READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder",
+    "r_cta_GBps": 46.861199,
+    "rows": 6,
+    "binding_rows": [
+     "jetmoe-8b/T128/w2 n 64"
+    ],
+    "offsets_us": {
+     "jetmoe-8b/T128/w2": 21.984334,
+     "mixtral-8x7b/T128/w2": 41.06195,
+     "phi-3.5-moe/T128/w2": 29.56291
+    },
+    "rms_rel": 0.051848,
+    "rms_rel_no_ceiling": 0.063488
+   }
+  },
+  "label": "DESCRIPTIVE: the per-CTA rate a few-CTA long-slab GEMM runs at within one wave; no model term"
+ },
+ "DRAIN": {
+  "tiles": {
+   "16x64x128w4s4": {
+    "verdict": "READ: weighted least squares, one offset per mixed ladder",
+    "q_us_per_byte": 1.1039810419610774e-05,
+    "r1_GBps": 90.581266,
+    "se_q_us_per_byte": 2.5422478645037347e-06,
+    "r_cta_GBps_used": 53.828788,
+    "ladders": [
+     "granite-3.0-3b-a800m/T4/w1",
+     "granite-3.0-3b-a800m/T4/w2",
+     "granite-3.0-3b-a800m/T8/w1",
+     "granite-3.0-3b-a800m/T8/w2",
+     "jetmoe-8b/T4/w1",
+     "olmoe-1b-7b/T4/w1",
+     "olmoe-1b-7b/T4/w2",
+     "olmoe-1b-7b/T8/w1",
+     "olmoe-1b-7b/T8/w2",
+     "qwen1.5-moe-a2.7b/T4/w1",
+     "qwen1.5-moe-a2.7b/T4/w2",
+     "qwen1.5-moe-a2.7b/T8/w1",
+     "qwen1.5-moe-a2.7b/T8/w2"
+    ],
+    "models": [
+     "granite-3.0-3b-a800m",
+     "jetmoe-8b",
+     "olmoe-1b-7b",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "rows": 32,
+    "crossing_rows": 17,
+    "offsets_us": {
+     "granite-3.0-3b-a800m/T4/w1": 9.657938,
+     "granite-3.0-3b-a800m/T4/w2": 7.738189,
+     "granite-3.0-3b-a800m/T8/w1": 9.664078,
+     "granite-3.0-3b-a800m/T8/w2": 8.280277,
+     "jetmoe-8b/T4/w1": 7.183596,
+     "olmoe-1b-7b/T4/w1": 10.086626,
+     "olmoe-1b-7b/T4/w2": 7.34866,
+     "olmoe-1b-7b/T8/w1": 10.221006,
+     "olmoe-1b-7b/T8/w2": 7.177534,
+     "qwen1.5-moe-a2.7b/T4/w1": 8.602535,
+     "qwen1.5-moe-a2.7b/T4/w2": 9.725301,
+     "qwen1.5-moe-a2.7b/T8/w1": 8.729693,
+     "qwen1.5-moe-a2.7b/T8/w2": 9.280768
+    },
+    "rms_rel": 0.027385,
+    "rms_rel_no_drain": 0.039187
+   },
+   "32x64x128w4s3": {
+    "verdict": "READ: weighted least squares, one offset per mixed ladder",
+    "q_us_per_byte": 2.1699399813002174e-05,
+    "r1_GBps": 46.084224,
+    "se_q_us_per_byte": 9.707357548085115e-06,
+    "r_cta_GBps_used": 24.378542,
+    "ladders": [
+     "granite-3.0-3b-a800m/T64/w1",
+     "granite-3.0-3b-a800m/T64/w2",
+     "phi-3.5-moe/T64/w2",
+     "qwen1.5-moe-a2.7b/T64/w1",
+     "qwen1.5-moe-a2.7b/T64/w2"
+    ],
+    "models": [
+     "granite-3.0-3b-a800m",
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "rows": 10,
+    "crossing_rows": 5,
+    "offsets_us": {
+     "granite-3.0-3b-a800m/T64/w1": 12.024274,
+     "granite-3.0-3b-a800m/T64/w2": 8.947071,
+     "phi-3.5-moe/T64/w2": 18.888727,
+     "qwen1.5-moe-a2.7b/T64/w1": 10.313853,
+     "qwen1.5-moe-a2.7b/T64/w2": 11.528691
+    },
+    "rms_rel": 0.035523,
+    "rms_rel_no_drain": 0.053276
+   },
+   "32x128x64w4s3": {
+    "verdict": "READ: weighted least squares, one offset per mixed ladder",
+    "q_us_per_byte": 1.4873838335205392e-05,
+    "r1_GBps": 67.232141,
+    "se_q_us_per_byte": 3.883381321384956e-06,
+    "r_cta_GBps_used": 37.68873,
+    "ladders": [
+     "jetmoe-8b/T96/w1",
+     "phi-3.5-moe/T80/w1",
+     "qwen1.5-moe-a2.7b/T96/w1"
+    ],
+    "models": [
+     "jetmoe-8b",
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "rows": 8,
+    "crossing_rows": 3,
+    "offsets_us": {
+     "jetmoe-8b/T96/w1": 12.081103,
+     "phi-3.5-moe/T80/w1": 21.005965,
+     "qwen1.5-moe-a2.7b/T96/w1": 11.972602
+    },
+    "rms_rel": 0.01973,
+    "rms_rel_no_drain": 0.042626
+   },
+   "64x128x64w4s3": {
+    "verdict": "READ: weighted least squares, one offset per mixed ladder",
+    "q_us_per_byte": 9.67222326231365e-06,
+    "r1_GBps": 103.388846,
+    "se_q_us_per_byte": 2.4315551173941916e-06,
+    "r_cta_GBps_used": 46.861199,
+    "ladders": [
+     "jetmoe-8b/T128/w1",
+     "olmoe-1b-7b/T128/w1",
+     "olmoe-1b-7b/T128/w2",
+     "qwen1.5-moe-a2.7b/T128/w1",
+     "qwen1.5-moe-a2.7b/T128/w2"
+    ],
+    "models": [
+     "jetmoe-8b",
+     "olmoe-1b-7b",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "rows": 12,
+    "crossing_rows": 7,
+    "offsets_us": {
+     "jetmoe-8b/T128/w1": 8.954492,
+     "olmoe-1b-7b/T128/w1": 10.841198,
+     "olmoe-1b-7b/T128/w2": 10.855644,
+     "qwen1.5-moe-a2.7b/T128/w1": 11.301823,
+     "qwen1.5-moe-a2.7b/T128/w2": 14.550668
+    },
+    "rms_rel": 0.020101,
+    "rms_rel_no_drain": 0.038334
+   }
+  },
+  "label": "DESCRIPTIVE: the one-slab drain past a wave boundary per tile; no model term"
+ },
+ "LADDERS": {
+  "label": "DESCRIPTIVE: the GEMM ladders as measured; no model",
+  "tiles": {
+   "16x64x128w4s4": {
+    "ladders": {
+     "granite-3.0-3b-a800m/T2/w1": [
+      {
+       "label": "S-T2-A8",
+       "A": 8,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 199040.0,
+       "B_bytes": 25189632.0,
+       "L_us": 13.504,
+       "Dc_us": 6.4623,
+       "F_us": 2.890501,
+       "X_us": 7.0417
+      }
+     ],
+     "granite-3.0-3b-a800m/T2/w2": [
+      {
+       "label": "S-T2-A8",
+       "A": 8,
+       "n": 192,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 67669.333333,
+       "B_bytes": 12617728.0,
+       "L_us": 10.4,
+       "Dc_us": 3.239062,
+       "F_us": 2.913428,
+       "X_us": 7.160938
+      }
+     ],
+     "granite-3.0-3b-a800m/T4/w1": [
+      {
+       "label": "S-T4-A8",
+       "A": 8,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 199424.0,
+       "B_bytes": 25195520.0,
+       "L_us": 16.32,
+       "Dc_us": 6.463811,
+       "F_us": 2.890501,
+       "X_us": 9.856189
+      },
+      {
+       "label": "S-T4-A16",
+       "A": 16,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 199040.0,
+       "B_bytes": 50364416.0,
+       "L_us": 22.4,
+       "Dc_us": 12.920792,
+       "F_us": 5.781002,
+       "X_us": 9.479208
+      },
+      {
+       "label": "S-T4-A32",
+       "A": 32,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 198848.0,
+       "B_bytes": 100701440.0,
+       "L_us": 37.152,
+       "Dc_us": 25.834556,
+       "F_us": 11.562004,
+       "X_us": 11.317444
+      }
+     ],
+     "granite-3.0-3b-a800m/T4/w2": [
+      {
+       "label": "S-T4-A8",
+       "A": 8,
+       "n": 192,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 67754.666667,
+       "B_bytes": 12633856.0,
+       "L_us": 11.072,
+       "Dc_us": 3.243203,
+       "F_us": 2.913428,
+       "X_us": 7.828797
+      },
+      {
+       "label": "S-T4-A16",
+       "A": 16,
+       "n": 384,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 67669.333333,
+       "B_bytes": 25217536.0,
+       "L_us": 13.536,
+       "Dc_us": 6.473525,
+       "F_us": 4.370142,
+       "X_us": 7.062475
+      },
+      {
+       "label": "S-T4-A32",
+       "A": 32,
+       "n": 768,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 67626.666667,
+       "B_bytes": 50386432.0,
+       "L_us": 22.976,
+       "Dc_us": 12.934563,
+       "F_us": 8.740284,
+       "X_us": 10.041437
+      }
+     ],
+     "granite-3.0-3b-a800m/T8/w1": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 200192.0,
+       "B_bytes": 25208320.0,
+       "L_us": 16.224,
+       "Dc_us": 6.467095,
+       "F_us": 2.890501,
+       "X_us": 9.756905
+      },
+      {
+       "label": "S-T8-A40",
+       "A": 40,
+       "n": 640,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 198963.2,
+       "B_bytes": 125881344.0,
+       "L_us": 43.488,
+       "Dc_us": 32.29436,
+       "F_us": 14.452505,
+       "X_us": 11.19364
+      }
+     ],
+     "granite-3.0-3b-a800m/T8/w2": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 192,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 67925.333333,
+       "B_bytes": 12667136.0,
+       "L_us": 11.104,
+       "Dc_us": 3.251746,
+       "F_us": 2.913428,
+       "X_us": 7.852254
+      },
+      {
+       "label": "S-T8-A40",
+       "A": 40,
+       "n": 960,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 67652.266667,
+       "B_bytes": 63005184.0,
+       "L_us": 27.904,
+       "Dc_us": 16.173889,
+       "F_us": 11.653712,
+       "X_us": 11.730111
+      }
+     ],
+     "jetmoe-8b/T16/w1": [
+      {
+       "label": "S-T16-A8",
+       "A": 8,
+       "n": 1408,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 264285.090909,
+       "B_bytes": 369198336.0,
+       "L_us": 106.336,
+       "Dc_us": 94.716372,
+       "F_us": 41.208035,
+       "X_us": 11.619628
+      }
+     ],
+     "jetmoe-8b/T16/w2": [
+      {
+       "label": "S-T16-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 724352.0,
+       "B_bytes": 184933120.0,
+       "L_us": 56.896,
+       "Dc_us": 47.473676,
+       "F_us": 19.936086,
+       "X_us": 9.422324
+      }
+     ],
+     "jetmoe-8b/T4/w1": [
+      {
+       "label": "S-T4-A2",
+       "A": 2,
+       "n": 352,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 264285.090909,
+       "B_bytes": 92311296.0,
+       "L_us": 31.456,
+       "Dc_us": 23.682098,
+       "F_us": 11.238555,
+       "X_us": 7.773902
+      },
+      {
+       "label": "S-T4-A3",
+       "A": 3,
+       "n": 528,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 264254.060606,
+       "B_bytes": 138452480.0,
+       "L_us": 44.64,
+       "Dc_us": 35.519436,
+       "F_us": 14.98474,
+       "X_us": 9.120564
+      },
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 704,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 264238.545455,
+       "B_bytes": 184591360.0,
+       "L_us": 56.896,
+       "Dc_us": 47.356183,
+       "F_us": 22.47711,
+       "X_us": 9.539817
+      },
+      {
+       "label": "S-T4-A8",
+       "A": 8,
+       "n": 1408,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 264215.272727,
+       "B_bytes": 369143808.0,
+       "L_us": 105.568,
+       "Dc_us": 94.702383,
+       "F_us": 41.208035,
+       "X_us": 10.865617
+      }
+     ],
+     "jetmoe-8b/T4/w2": [
+      {
+       "label": "S-T4-A2",
+       "A": 2,
+       "n": 64,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 724352.0,
+       "B_bytes": 46246400.0,
+       "L_us": 22.944,
+       "Dc_us": 11.871787,
+       "F_us": 9.968043,
+       "X_us": 11.072213
+      },
+      {
+       "label": "S-T4-A3",
+       "A": 3,
+       "n": 96,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 723882.666667,
+       "B_bytes": 69315840.0,
+       "L_us": 27.488,
+       "Dc_us": 17.79388,
+       "F_us": 9.968043,
+       "X_us": 9.69412
+      },
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 723648.0,
+       "B_bytes": 92385280.0,
+       "L_us": 32.8,
+       "Dc_us": 23.715973,
+       "F_us": 9.968043,
+       "X_us": 9.084027
+      },
+      {
+       "label": "S-T4-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 723296.0,
+       "B_bytes": 184662016.0,
+       "L_us": 56.608,
+       "Dc_us": 47.404082,
+       "F_us": 19.936086,
+       "X_us": 9.203918
+      }
+     ],
+     "jetmoe-8b/T8/w1": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 1408,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 264238.545455,
+       "B_bytes": 369160448.0,
+       "L_us": 105.856,
+       "Dc_us": 94.706652,
+       "F_us": 41.208035,
+       "X_us": 11.149348
+      }
+     ],
+     "jetmoe-8b/T8/w2": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 723648.0,
+       "B_bytes": 184752384.0,
+       "L_us": 57.248,
+       "Dc_us": 47.42728,
+       "F_us": 19.936086,
+       "X_us": 9.82072
+      }
+     ],
+     "mixtral-8x7b/T16/w1": [
+      {
+       "label": "S-T16-A8",
+       "A": 8,
+       "n": 3584,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 526409.142857,
+       "B_bytes": 1879452928.0,
+       "L_us": 502.944,
+       "Dc_us": 482.166208,
+       "F_us": 200.729801,
+       "X_us": 20.777792
+      }
+     ],
+     "mixtral-8x7b/T16/w2": [
+      {
+       "label": "S-T16-A8",
+       "A": 8,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 1838848.0,
+       "B_bytes": 941099008.0,
+       "L_us": 285.152,
+       "Dc_us": 241.586956,
+       "F_us": 97.74921,
+       "X_us": 43.565044
+      }
+     ],
+     "mixtral-8x7b/T4/w1": [
+      {
+       "label": "S-T4-A2",
+       "A": 2,
+       "n": 896,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 526409.142857,
+       "B_bytes": 469888000.0,
+       "L_us": 137.248,
+       "Dc_us": 120.547906,
+       "F_us": 50.18245,
+       "X_us": 16.700094
+      },
+      {
+       "label": "S-T4-A3",
+       "A": 3,
+       "n": 1344,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 526384.761905,
+       "B_bytes": 704793856.0,
+       "L_us": 200.256,
+       "Dc_us": 180.812074,
+       "F_us": 78.858136,
+       "X_us": 19.443926
+      },
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 1792,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 526372.571429,
+       "B_bytes": 939661824.0,
+       "L_us": 256.32,
+       "Dc_us": 241.066521,
+       "F_us": 100.3649,
+       "X_us": 15.253479
+      }
+     ],
+     "mixtral-8x7b/T4/w2": [
+      {
+       "label": "S-T4-A2",
+       "A": 2,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 1838848.0,
+       "B_bytes": 235142656.0,
+       "L_us": 87.52,
+       "Dc_us": 60.362829,
+       "F_us": 24.437302,
+       "X_us": 27.157171
+      },
+      {
+       "label": "S-T4-A3",
+       "A": 3,
+       "n": 192,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 1838250.666667,
+       "B_bytes": 352579328.0,
+       "L_us": 103.904,
+       "Dc_us": 90.509676,
+       "F_us": 48.874605,
+       "X_us": 13.394324
+      },
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 1837952.0,
+       "B_bytes": 470043136.0,
+       "L_us": 142.592,
+       "Dc_us": 120.66349,
+       "F_us": 48.874605,
+       "X_us": 21.92851
+      }
+     ],
+     "olmoe-1b-7b/T4/w1": [
+      {
+       "label": "S-T4-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 264704.0,
+       "B_bytes": 67146240.0,
+       "L_us": 27.488,
+       "Dc_us": 17.226102,
+       "F_us": 7.49237,
+       "X_us": 10.261898
+      },
+      {
+       "label": "S-T4-A32",
+       "A": 32,
+       "n": 1024,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 264320.0,
+       "B_bytes": 268482816.0,
+       "L_us": 80.384,
+       "Dc_us": 68.878204,
+       "F_us": 29.96948,
+       "X_us": 11.505796
+      }
+     ],
+     "olmoe-1b-7b/T4/w2": [
+      {
+       "label": "S-T4-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 133376.0,
+       "B_bytes": 33638656.0,
+       "L_us": 15.808,
+       "Dc_us": 8.635287,
+       "F_us": 4.615694,
+       "X_us": 7.172713
+      },
+      {
+       "label": "S-T4-A32",
+       "A": 32,
+       "n": 1024,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 133184.0,
+       "B_bytes": 134308352.0,
+       "L_us": 44.704,
+       "Dc_us": 34.47793,
+       "F_us": 18.462775,
+       "X_us": 10.22607
+      }
+     ],
+     "olmoe-1b-7b/T8/w1": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 265216.0,
+       "B_bytes": 67161600.0,
+       "L_us": 27.488,
+       "Dc_us": 17.230043,
+       "F_us": 7.49237,
+       "X_us": 10.257957
+      },
+      {
+       "label": "S-T8-A64",
+       "A": 64,
+       "n": 2048,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 264320.0,
+       "B_bytes": 536941568.0,
+       "L_us": 149.792,
+       "Dc_us": 137.750234,
+       "F_us": 59.93896,
+       "X_us": 12.041766
+      }
+     ],
+     "olmoe-1b-7b/T8/w2": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 133632.0,
+       "B_bytes": 33704448.0,
+       "L_us": 15.712,
+       "Dc_us": 8.652177,
+       "F_us": 4.615694,
+       "X_us": 7.059823
+      },
+      {
+       "label": "S-T8-A64",
+       "A": 64,
+       "n": 2048,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 133184.0,
+       "B_bytes": 268595968.0,
+       "L_us": 80.704,
+       "Dc_us": 68.950537,
+       "F_us": 36.92555,
+       "X_us": 11.753463
+      }
+     ],
+     "phi-3.5-moe/T16/w1": [
+      {
+       "label": "S-T16-A16",
+       "A": 16,
+       "n": 3200,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 526417.92,
+       "B_bytes": 1677998592.0,
+       "L_us": 448.192,
+       "Dc_us": 430.483896,
+       "F_us": 179.223037,
+       "X_us": 17.708104
+      }
+     ],
+     "phi-3.5-moe/T16/w2": [
+      {
+       "label": "S-T16-A16",
+       "A": 16,
+       "n": 1024,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 821648.0,
+       "B_bytes": 839423744.0,
+       "L_us": 230.912,
+       "Dc_us": 215.486176,
+       "F_us": 89.957939,
+       "X_us": 15.425824
+      }
+     ],
+     "phi-3.5-moe/T4/w1": [
+      {
+       "label": "S-T4-A2",
+       "A": 2,
+       "n": 400,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 526499.84,
+       "B_bytes": 209791232.0,
+       "L_us": 67.168,
+       "Dc_us": 53.82111,
+       "F_us": 28.675686,
+       "X_us": 13.34689
+      },
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 800,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 526417.92,
+       "B_bytes": 419517696.0,
+       "L_us": 120.448,
+       "Dc_us": 107.625604,
+       "F_us": 50.18245,
+       "X_us": 12.822396
+      }
+     ],
+     "phi-3.5-moe/T4/w2": [
+      {
+       "label": "S-T4-A2",
+       "A": 2,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 822048.0,
+       "B_bytes": 104981248.0,
+       "L_us": 43.008,
+       "Dc_us": 26.949449,
+       "F_us": 11.244742,
+       "X_us": 16.058551
+      },
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 821648.0,
+       "B_bytes": 209842944.0,
+       "L_us": 66.144,
+       "Dc_us": 53.868209,
+       "F_us": 22.489485,
+       "X_us": 12.275791
+      }
+     ],
+     "phi-3.5-moe/T8/w1": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 1600,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 526417.92,
+       "B_bytes": 839021312.0,
+       "L_us": 227.968,
+       "Dc_us": 215.247596,
+       "F_us": 93.195979,
+       "X_us": 12.720404
+      }
+     ],
+     "phi-3.5-moe/T8/w2": [
+      {
+       "label": "S-T8-A8",
+       "A": 8,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 821648.0,
+       "B_bytes": 419725312.0,
+       "L_us": 124.608,
+       "Dc_us": 107.746538,
+       "F_us": 44.97897,
+       "X_us": 16.861462
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T4/w1": [
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 176,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 264564.363636,
+       "B_bytes": 46174464.0,
+       "L_us": 20.544,
+       "Dc_us": 11.845876,
+       "F_us": 7.49237,
+       "X_us": 8.698124
+      },
+      {
+       "label": "S-T4-A16",
+       "A": 16,
+       "n": 704,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 264285.090909,
+       "B_bytes": 184593152.0,
+       "L_us": 58.112,
+       "Dc_us": 47.356642,
+       "F_us": 22.47711,
+       "X_us": 10.755358
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T4/w2": [
+      {
+       "label": "S-T4-A4",
+       "A": 4,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 182624.0,
+       "B_bytes": 23131904.0,
+       "L_us": 15.712,
+       "Dc_us": 5.938128,
+       "F_us": 2.946197,
+       "X_us": 9.773872
+      },
+      {
+       "label": "S-T4-A16",
+       "A": 16,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 182360.0,
+       "B_bytes": 92343552.0,
+       "L_us": 35.2,
+       "Dc_us": 23.705261,
+       "F_us": 11.784786,
+       "X_us": 11.494739
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T8/w1": [
+      {
+       "label": "S-T8-A4",
+       "A": 4,
+       "n": 176,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 264936.727273,
+       "B_bytes": 46190848.0,
+       "L_us": 20.768,
+       "Dc_us": 11.850079,
+       "F_us": 7.49237,
+       "X_us": 8.917921
+      },
+      {
+       "label": "S-T8-A16",
+       "A": 16,
+       "n": 704,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 264378.181818,
+       "B_bytes": 184612864.0,
+       "L_us": 57.472,
+       "Dc_us": 47.361699,
+       "F_us": 22.47711,
+       "X_us": 10.110301
+      },
+      {
+       "label": "S-T8-A32",
+       "A": 32,
+       "n": 1408,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 264285.090909,
+       "B_bytes": 369164800.0,
+       "L_us": 106.688,
+       "Dc_us": 94.707768,
+       "F_us": 41.208035,
+       "X_us": 11.980232
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T8/w2": [
+      {
+       "label": "S-T8-A4",
+       "A": 4,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 182976.0,
+       "B_bytes": 23176960.0,
+       "L_us": 15.232,
+       "Dc_us": 5.949694,
+       "F_us": 2.946197,
+       "X_us": 9.282306
+      },
+      {
+       "label": "S-T8-A16",
+       "A": 16,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 182448.0,
+       "B_bytes": 92390656.0,
+       "L_us": 35.232,
+       "Dc_us": 23.717353,
+       "F_us": 11.784786,
+       "X_us": 11.514647
+      },
+      {
+       "label": "S-T8-A32",
+       "A": 32,
+       "n": 1024,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 182360.0,
+       "B_bytes": 184667136.0,
+       "L_us": 58.08,
+       "Dc_us": 47.405396,
+       "F_us": 23.569572,
+       "X_us": 10.674604
+      }
+     ]
+    },
+    "mixed": [
+     "granite-3.0-3b-a800m/T4/w1",
+     "granite-3.0-3b-a800m/T4/w2",
+     "granite-3.0-3b-a800m/T8/w1",
+     "granite-3.0-3b-a800m/T8/w2",
+     "jetmoe-8b/T4/w1",
+     "olmoe-1b-7b/T4/w1",
+     "olmoe-1b-7b/T4/w2",
+     "olmoe-1b-7b/T8/w1",
+     "olmoe-1b-7b/T8/w2",
+     "qwen1.5-moe-a2.7b/T4/w1",
+     "qwen1.5-moe-a2.7b/T4/w2",
+     "qwen1.5-moe-a2.7b/T8/w1",
+     "qwen1.5-moe-a2.7b/T8/w2"
+    ],
+    "subwave": [
+     "jetmoe-8b/T4/w2",
+     "mixtral-8x7b/T4/w2",
+     "phi-3.5-moe/T4/w2"
+    ],
+    "verdict": "READ",
+    "w1_unpriced": null
+   },
+   "32x64x128w4s3": {
+    "ladders": {
+     "granite-3.0-3b-a800m/T64/w1": [
+      {
+       "label": "S-T64-A16",
+       "A": 16,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 206848.0,
+       "B_bytes": 50552320.0,
+       "L_us": 24.416,
+       "Dc_us": 13.018316,
+       "F_us": 8.437138,
+       "X_us": 11.397684
+      },
+      {
+       "label": "S-T64-A40",
+       "A": 40,
+       "n": 640,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 203161.6,
+       "B_bytes": 126080768.0,
+       "L_us": 51.712,
+       "Dc_us": 32.468524,
+       "F_us": 21.092845,
+       "X_us": 19.243476
+      }
+     ],
+     "granite-3.0-3b-a800m/T64/w2": [
+      {
+       "label": "S-T64-A16",
+       "A": 16,
+       "n": 384,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 70997.333333,
+       "B_bytes": 25713920.0,
+       "L_us": 15.328,
+       "Dc_us": 6.60095,
+       "F_us": 6.378045,
+       "X_us": 8.72705
+      },
+      {
+       "label": "S-T64-A40",
+       "A": 40,
+       "n": 960,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 70178.133333,
+       "B_bytes": 63469568.0,
+       "L_us": 28.224,
+       "Dc_us": 16.293099,
+       "F_us": 17.00812,
+       "X_us": 11.21588
+      }
+     ],
+     "jetmoe-8b/T64/w1": [
+      {
+       "label": "S-T64-A4",
+       "A": 4,
+       "n": 704,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 266984.727273,
+       "B_bytes": 184943616.0,
+       "L_us": 61.92,
+       "Dc_us": 47.62698,
+       "F_us": 32.804431,
+       "X_us": 14.29302
+      },
+      {
+       "label": "S-T64-A8",
+       "A": 8,
+       "n": 1408,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 266612.363636,
+       "B_bytes": 369453312.0,
+       "L_us": 109.312,
+       "Dc_us": 95.142217,
+       "F_us": 60.141457,
+       "X_us": 14.169783
+      }
+     ],
+     "jetmoe-8b/T64/w2": [
+      {
+       "label": "S-T64-A4",
+       "A": 4,
+       "n": 128,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 736256.0,
+       "B_bytes": 93744640.0,
+       "L_us": 40.544,
+       "Dc_us": 24.06493,
+       "F_us": 14.547955,
+       "X_us": 16.47907
+      },
+      {
+       "label": "S-T64-A8",
+       "A": 8,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 730624.0,
+       "B_bytes": 186018560.0,
+       "L_us": 58.08,
+       "Dc_us": 47.752316,
+       "F_us": 29.095909,
+       "X_us": 10.327684
+      }
+     ],
+     "mixtral-8x7b/T64/w1": [
+      {
+       "label": "S-T64-A4",
+       "A": 4,
+       "n": 1792,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 528969.142857,
+       "B_bytes": 941007616.0,
+       "L_us": 271.808,
+       "Dc_us": 242.329809,
+       "F_us": 146.478503,
+       "X_us": 29.478191
+      },
+      {
+       "label": "S-T64-A8",
+       "A": 8,
+       "n": 3584,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 528676.571429,
+       "B_bytes": 1880515840.0,
+       "L_us": 513.44,
+       "Dc_us": 484.273492,
+       "F_us": 292.957007,
+       "X_us": 29.166508
+      }
+     ],
+     "mixtral-8x7b/T64/w2": [
+      {
+       "label": "S-T64-A4",
+       "A": 4,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1853440.0,
+       "B_bytes": 473959680.0,
+       "L_us": 160.512,
+       "Dc_us": 121.668895,
+       "F_us": 71.330504,
+       "X_us": 38.843105
+      },
+      {
+       "label": "S-T64-A8",
+       "A": 8,
+       "n": 512,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1846272.0,
+       "B_bytes": 945352192.0,
+       "L_us": 263.424,
+       "Dc_us": 242.678779,
+       "F_us": 142.661009,
+       "X_us": 20.745221
+      }
+     ],
+     "olmoe-1b-7b/T64/w1": [
+      {
+       "label": "S-T64-A64",
+       "A": 64,
+       "n": 2048,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 267264.0,
+       "B_bytes": 537240320.0,
+       "L_us": 153.792,
+       "Dc_us": 138.350999,
+       "F_us": 87.478483,
+       "X_us": 15.441001
+      }
+     ],
+     "olmoe-1b-7b/T64/w2": [
+      {
+       "label": "S-T64-A64",
+       "A": 64,
+       "n": 2048,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 135680.0,
+       "B_bytes": 269530112.0,
+       "L_us": 83.68,
+       "Dc_us": 69.190339,
+       "F_us": 53.891343,
+       "X_us": 14.489661
+      }
+     ],
+     "phi-3.5-moe/T64/w1": [
+      {
+       "label": "S-T64-A4",
+       "A": 4,
+       "n": 800,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 529694.72,
+       "B_bytes": 420251392.0,
+       "L_us": 128.704,
+       "Dc_us": 108.223821,
+       "F_us": 73.239252,
+       "X_us": 20.480179
+      },
+      {
+       "label": "S-T64-A16",
+       "A": 16,
+       "n": 3200,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 528711.68,
+       "B_bytes": 1678667008.0,
+       "L_us": 453.024,
+       "Dc_us": 432.293053,
+       "F_us": 261.568756,
+       "X_us": 20.730947
+      }
+     ],
+     "phi-3.5-moe/T64/w2": [
+      {
+       "label": "S-T64-A4",
+       "A": 4,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 829696.0,
+       "B_bytes": 211382016.0,
+       "L_us": 75.2,
+       "Dc_us": 54.2633,
+       "F_us": 32.822491,
+       "X_us": 20.9367
+      },
+      {
+       "label": "S-T64-A16",
+       "A": 16,
+       "n": 1024,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 824896.0,
+       "B_bytes": 840745728.0,
+       "L_us": 232.96,
+       "Dc_us": 215.825539,
+       "F_us": 131.289965,
+       "X_us": 17.134461
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T64/w1": [
+      {
+       "label": "S-T64-A8",
+       "A": 8,
+       "n": 352,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 269218.909091,
+       "B_bytes": 92560128.0,
+       "L_us": 34.176,
+       "Dc_us": 23.836234,
+       "F_us": 16.402216,
+       "X_us": 10.339766
+      },
+      {
+       "label": "S-T64-A60",
+       "A": 60,
+       "n": 2640,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 266637.187879,
+       "B_bytes": 692367360.0,
+       "L_us": 193.568,
+       "Dc_us": 178.299567,
+       "F_us": 109.348104,
+       "X_us": 15.268433
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T64/w2": [
+      {
+       "label": "S-T64-A8",
+       "A": 8,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 187136.0,
+       "B_bytes": 46882816.0,
+       "L_us": 23.488,
+       "Dc_us": 12.03516,
+       "F_us": 8.599709,
+       "X_us": 11.45284
+      },
+      {
+       "label": "S-T64-A60",
+       "A": 60,
+       "n": 1920,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 184695.466667,
+       "B_bytes": 346805248.0,
+       "L_us": 106.112,
+       "Dc_us": 89.027428,
+       "F_us": 64.497816,
+       "X_us": 17.084572
+      }
+     ]
+    },
+    "mixed": [
+     "granite-3.0-3b-a800m/T64/w1",
+     "granite-3.0-3b-a800m/T64/w2",
+     "phi-3.5-moe/T64/w2",
+     "qwen1.5-moe-a2.7b/T64/w1",
+     "qwen1.5-moe-a2.7b/T64/w2"
+    ],
+    "subwave": [
+     "jetmoe-8b/T64/w2",
+     "mixtral-8x7b/T64/w2"
+    ],
+    "verdict": "READ",
+    "w1_unpriced": null
+   },
+   "32x128x64w4s3": {
+    "ladders": {
+     "granite-3.0-3b-a800m/T96/w1": [
+      {
+       "label": "S-T96-A32",
+       "A": 32,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 410624.0,
+       "B_bytes": 100984832.0,
+       "L_us": 36.768,
+       "Dc_us": 26.072615,
+       "F_us": 10.972289,
+       "X_us": 10.695385
+      },
+      {
+       "label": "S-T96-A40",
+       "A": 40,
+       "n": 320,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 408780.8,
+       "B_bytes": 126151936.0,
+       "L_us": 43.168,
+       "Dc_us": 32.570346,
+       "F_us": 16.458433,
+       "X_us": 10.597654
+      }
+     ],
+     "granite-3.0-3b-a800m/T96/w2": [
+      {
+       "label": "S-T96-A32",
+       "A": 32,
+       "n": 384,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 141312.0,
+       "B_bytes": 51147776.0,
+       "L_us": 22.72,
+       "Dc_us": 13.130006,
+       "F_us": 6.959812,
+       "X_us": 9.589994
+      },
+      {
+       "label": "S-T96-A40",
+       "A": 40,
+       "n": 480,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 140902.4,
+       "B_bytes": 63732224.0,
+       "L_us": 25.888,
+       "Dc_us": 16.360525,
+       "F_us": 9.279749,
+       "X_us": 9.527475
+      }
+     ],
+     "jetmoe-8b/T96/w1": [
+      {
+       "label": "S-T96-A6",
+       "A": 6,
+       "n": 528,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 533969.454545,
+       "B_bytes": 277293312.0,
+       "L_us": 84.864,
+       "Dc_us": 71.592552,
+       "F_us": 28.825913,
+       "X_us": 13.271448
+      },
+      {
+       "label": "S-T96-A8",
+       "A": 8,
+       "n": 704,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 533597.090909,
+       "B_bytes": 369568256.0,
+       "L_us": 113.312,
+       "Dc_us": 95.416419,
+       "F_us": 43.23887,
+       "X_us": 17.895581
+      }
+     ],
+     "jetmoe-8b/T96/w2": [
+      {
+       "label": "S-T96-A6",
+       "A": 6,
+       "n": 96,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1472512.0,
+       "B_bytes": 140603904.0,
+       "L_us": 61.76,
+       "Dc_us": 36.094044,
+       "F_us": 19.431774,
+       "X_us": 25.665956
+      },
+      {
+       "label": "S-T96-A8",
+       "A": 8,
+       "n": 128,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1466880.0,
+       "B_bytes": 186742528.0,
+       "L_us": 70.4,
+       "Dc_us": 47.938164,
+       "F_us": 19.431774,
+       "X_us": 22.461836
+      }
+     ],
+     "mixtral-8x7b/T96/w1": [
+      {
+       "label": "S-T96-A6",
+       "A": 6,
+       "n": 1344,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 1057938.285714,
+       "B_bytes": 1411361536.0,
+       "L_us": 408.096,
+       "Dc_us": 364.390233,
+       "F_us": 154.965948,
+       "X_us": 43.705767
+      },
+      {
+       "label": "S-T96-A7",
+       "A": 7,
+       "n": 1568,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 1057771.102041,
+       "B_bytes": 1646188800.0,
+       "L_us": 463.488,
+       "Dc_us": 425.018753,
+       "F_us": 169.053762,
+       "X_us": 38.469247
+      },
+      {
+       "label": "S-T96-A8",
+       "A": 8,
+       "n": 1792,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 1057645.714286,
+       "B_bytes": 1881064192.0,
+       "L_us": 547.008,
+       "Dc_us": 485.6597,
+       "F_us": 197.229389,
+       "X_us": 61.3483
+      }
+     ],
+     "mixtral-8x7b/T96/w2": [
+      {
+       "label": "S-T96-A6",
+       "A": 6,
+       "n": 192,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 3706880.0,
+       "B_bytes": 710530816.0,
+       "L_us": 225.504,
+       "Dc_us": 182.398425,
+       "F_us": 97.043795,
+       "X_us": 43.105575
+      },
+      {
+       "label": "S-T96-A7",
+       "A": 7,
+       "n": 224,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 3702784.0,
+       "B_bytes": 827711744.0,
+       "L_us": 245.792,
+       "Dc_us": 212.479621,
+       "F_us": 97.043795,
+       "X_us": 33.312379
+      },
+      {
+       "label": "S-T96-A8",
+       "A": 8,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 3699712.0,
+       "B_bytes": 945106176.0,
+       "L_us": 271.392,
+       "Dc_us": 242.615625,
+       "F_us": 97.043795,
+       "X_us": 28.776375
+      }
+     ],
+     "phi-3.5-moe/T80/w1": [
+      {
+       "label": "S-T80-A5",
+       "A": 5,
+       "n": 500,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1059389.44,
+       "B_bytes": 525075456.0,
+       "L_us": 152.672,
+       "Dc_us": 135.565809,
+       "F_us": 56.351254,
+       "X_us": 17.106191
+      },
+      {
+       "label": "S-T80-A6",
+       "A": 6,
+       "n": 600,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 1058952.533333,
+       "B_bytes": 630381568.0,
+       "L_us": 206.656,
+       "Dc_us": 162.754107,
+       "F_us": 70.439067,
+       "X_us": 43.901893
+      }
+     ],
+     "phi-3.5-moe/T80/w2": [
+      {
+       "label": "S-T80-A5",
+       "A": 5,
+       "n": 160,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1659392.0,
+       "B_bytes": 264367616.0,
+       "L_us": 108.32,
+       "Dc_us": 67.865089,
+       "F_us": 43.9971,
+       "X_us": 40.454911
+      },
+      {
+       "label": "S-T80-A6",
+       "A": 6,
+       "n": 192,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1657258.666667,
+       "B_bytes": 316716288.0,
+       "L_us": 115.104,
+       "Dc_us": 81.303373,
+       "F_us": 43.9971,
+       "X_us": 33.800627
+      }
+     ],
+     "phi-3.5-moe/T96/w1": [
+      {
+       "label": "S-T96-A6",
+       "A": 6,
+       "n": 600,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 1059389.44,
+       "B_bytes": 630649344.0,
+       "L_us": 205.536,
+       "Dc_us": 162.823242,
+       "F_us": 70.439067,
+       "X_us": 42.712758
+      },
+      {
+       "label": "S-T96-A8",
+       "A": 8,
+       "n": 800,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 1058734.08,
+       "B_bytes": 840278784.0,
+       "L_us": 246.176,
+       "Dc_us": 216.946101,
+       "F_us": 98.614694,
+       "X_us": 29.229899
+      },
+      {
+       "label": "S-T96-A16",
+       "A": 16,
+       "n": 1600,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_bytes": 1057751.04,
+       "B_bytes": 1679119104.0,
+       "L_us": 465.152,
+       "Dc_us": 433.520814,
+       "F_us": 183.141575,
+       "X_us": 31.631186
+      }
+     ],
+     "phi-3.5-moe/T96/w2": [
+      {
+       "label": "S-T96-A6",
+       "A": 6,
+       "n": 192,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1659392.0,
+       "B_bytes": 317155584.0,
+       "L_us": 114.752,
+       "Dc_us": 81.416144,
+       "F_us": 43.9971,
+       "X_us": 33.335856
+      },
+      {
+       "label": "S-T96-A8",
+       "A": 8,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1656192.0,
+       "B_bytes": 421931520.0,
+       "L_us": 133.504,
+       "Dc_us": 108.312888,
+       "F_us": 43.9971,
+       "X_us": 25.191112
+      },
+      {
+       "label": "S-T96-A16",
+       "A": 16,
+       "n": 512,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 1651392.0,
+       "B_bytes": 843008512.0,
+       "L_us": 240.608,
+       "Dc_us": 216.406412,
+       "F_us": 87.9942,
+       "X_us": 24.201588
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T96/w1": [
+      {
+       "label": "S-T96-A12",
+       "A": 12,
+       "n": 264,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 538437.818182,
+       "B_bytes": 138831360.0,
+       "L_us": 48.64,
+       "Dc_us": 35.843964,
+       "F_us": 14.412957,
+       "X_us": 12.796036
+      },
+      {
+       "label": "S-T96-A16",
+       "A": 16,
+       "n": 352,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 536948.363636,
+       "B_bytes": 184970752.0,
+       "L_us": 59.328,
+       "Dc_us": 47.756392,
+       "F_us": 21.619435,
+       "X_us": 11.571608
+      },
+      {
+       "label": "S-T96-A24",
+       "A": 24,
+       "n": 528,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 535458.909091,
+       "B_bytes": 277318656.0,
+       "L_us": 83.104,
+       "Dc_us": 71.599096,
+       "F_us": 28.825913,
+       "X_us": 11.504904
+      },
+      {
+       "label": "S-T96-A32",
+       "A": 32,
+       "n": 704,
+       "S": 528,
+       "wave": "crossing",
+       "b_bytes": 534714.181818,
+       "B_bytes": 369594112.0,
+       "L_us": 113.216,
+       "Dc_us": 95.423094,
+       "F_us": 43.23887,
+       "X_us": 17.792906
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T96/w2": [
+      {
+       "label": "S-T96-A12",
+       "A": 12,
+       "n": 192,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 374272.0,
+       "B_bytes": 70315264.0,
+       "L_us": 32.256,
+       "Dc_us": 18.050439,
+       "F_us": 10.629018,
+       "X_us": 14.205561
+      },
+      {
+       "label": "S-T96-A16",
+       "A": 16,
+       "n": 256,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 372864.0,
+       "B_bytes": 93383680.0,
+       "L_us": 36.768,
+       "Dc_us": 23.972269,
+       "F_us": 10.629018,
+       "X_us": 12.795731
+      },
+      {
+       "label": "S-T96-A24",
+       "A": 24,
+       "n": 384,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 371456.0,
+       "B_bytes": 139524096.0,
+       "L_us": 48.384,
+       "Dc_us": 35.81685,
+       "F_us": 15.943526,
+       "X_us": 12.56715
+      },
+      {
+       "label": "S-T96-A32",
+       "A": 32,
+       "n": 512,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_bytes": 370752.0,
+       "B_bytes": 185671424.0,
+       "L_us": 59.168,
+       "Dc_us": 47.663204,
+       "F_us": 21.258035,
+       "X_us": 11.504796
+      }
+     ]
+    },
+    "mixed": [
+     "jetmoe-8b/T96/w1",
+     "phi-3.5-moe/T80/w1",
+     "qwen1.5-moe-a2.7b/T96/w1"
+    ],
+    "subwave": [
+     "phi-3.5-moe/T96/w2",
+     "qwen1.5-moe-a2.7b/T96/w1"
+    ],
+    "verdict": "READ",
+    "w1_unpriced": null
+   },
+   "64x128x64w4s3": {
+    "ladders": {
+     "granite-3.0-3b-a800m/T120/w1": [
+      {
+       "label": "S-T120-A40",
+       "A": 40,
+       "n": 320,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 418816.0,
+       "B_bytes": 126234624.0,
+       "L_us": 44.224,
+       "Dc_us": 33.330906,
+       "F_us": 18.313305,
+       "X_us": 10.893094
+      }
+     ],
+     "granite-3.0-3b-a800m/T120/w2": [
+      {
+       "label": "S-T120-A40",
+       "A": 40,
+       "n": 480,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 149504.0,
+       "B_bytes": 63939840.0,
+       "L_us": 29.92,
+       "Dc_us": 16.413822,
+       "F_us": 11.120185,
+       "X_us": 13.506178
+      }
+     ],
+     "granite-3.0-3b-a800m/T128/w1": [
+      {
+       "label": "S-T128-A40",
+       "A": 40,
+       "n": 320,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 419430.4,
+       "B_bytes": 126260224.0,
+       "L_us": 43.872,
+       "Dc_us": 33.337666,
+       "F_us": 18.313305,
+       "X_us": 10.534334
+      }
+     ],
+     "granite-3.0-3b-a800m/T128/w2": [
+      {
+       "label": "S-T128-A40",
+       "A": 40,
+       "n": 480,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 149640.533333,
+       "B_bytes": 64005376.0,
+       "L_us": 29.76,
+       "Dc_us": 16.430645,
+       "F_us": 11.120185,
+       "X_us": 13.329355
+      }
+     ],
+     "jetmoe-8b/T128/w1": [
+      {
+       "label": "S-T128-A4",
+       "A": 4,
+       "n": 352,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 543650.909091,
+       "B_bytes": 185100544.0,
+       "L_us": 58.784,
+       "Dc_us": 48.873825,
+       "F_us": 23.510398,
+       "X_us": 9.910175
+      },
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 704,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 542161.454545,
+       "B_bytes": 369785600.0,
+       "L_us": 108.576,
+       "Dc_us": 97.637944,
+       "F_us": 47.020797,
+       "X_us": 10.938056
+      }
+     ],
+     "jetmoe-8b/T128/w2": [
+      {
+       "label": "S-T128-A4",
+       "A": 4,
+       "n": 64,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 1503232.0,
+       "B_bytes": 95190016.0,
+       "L_us": 54.176,
+       "Dc_us": 24.435969,
+       "F_us": 20.103691,
+       "X_us": 29.740031
+      },
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 1480704.0,
+       "B_bytes": 187467776.0,
+       "L_us": 69.92,
+       "Dc_us": 48.124341,
+       "F_us": 20.103691,
+       "X_us": 21.795659
+      }
+     ],
+     "mixtral-8x7b/T128/w1": [
+      {
+       "label": "S-T128-A4",
+       "A": 4,
+       "n": 896,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 1067300.571429,
+       "B_bytes": 941817344.0,
+       "L_us": 282.56,
+       "Dc_us": 248.676826,
+       "F_us": 103.363802,
+       "X_us": 33.883174
+      },
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 1792,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 1066130.285714,
+       "B_bytes": 1881652992.0,
+       "L_us": 531.936,
+       "Dc_us": 496.830407,
+       "F_us": 206.727605,
+       "X_us": 35.105593
+      }
+     ],
+     "mixtral-8x7b/T128/w2": [
+      {
+       "label": "S-T128-A4",
+       "A": 4,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 3743744.0,
+       "B_bytes": 477153024.0,
+       "L_us": 170.4,
+       "Dc_us": 122.488649,
+       "F_us": 49.553888,
+       "X_us": 47.911351
+      },
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 3715072.0,
+       "B_bytes": 946945792.0,
+       "L_us": 267.296,
+       "Dc_us": 243.087868,
+       "F_us": 99.107776,
+       "X_us": 24.208132
+      }
+     ],
+     "olmoe-1b-7b/T128/w1": [
+      {
+       "label": "S-T128-A16",
+       "A": 16,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 557056.0,
+       "B_bytes": 134774016.0,
+       "L_us": 46.016,
+       "Dc_us": 35.585642,
+       "F_us": 15.673599,
+       "X_us": 10.430358
+      },
+      {
+       "label": "S-T128-A32",
+       "A": 32,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 548864.0,
+       "B_bytes": 269131264.0,
+       "L_us": 89.472,
+       "Dc_us": 71.06124,
+       "F_us": 31.347198,
+       "X_us": 18.41076
+      },
+      {
+       "label": "S-T128-A64",
+       "A": 64,
+       "n": 1024,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 544768.0,
+       "B_bytes": 537579776.0,
+       "L_us": 155.904,
+       "Dc_us": 141.942207,
+       "F_us": 62.694395,
+       "X_us": 13.961793
+      }
+     ],
+     "olmoe-1b-7b/T128/w2": [
+      {
+       "label": "S-T128-A16",
+       "A": 16,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 286720.0,
+       "B_bytes": 69241088.0,
+       "L_us": 28.064,
+       "Dc_us": 17.774691,
+       "F_us": 9.024822,
+       "X_us": 10.289309
+      },
+      {
+       "label": "S-T128-A32",
+       "A": 32,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 282624.0,
+       "B_bytes": 136407552.0,
+       "L_us": 49.696,
+       "Dc_us": 35.01681,
+       "F_us": 18.049643,
+       "X_us": 14.67919
+      },
+      {
+       "label": "S-T128-A64",
+       "A": 64,
+       "n": 1024,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 280576.0,
+       "B_bytes": 270647552.0,
+       "L_us": 85.056,
+       "Dc_us": 69.477194,
+       "F_us": 36.099286,
+       "X_us": 15.578806
+      }
+     ],
+     "phi-3.5-moe/T128/w1": [
+      {
+       "label": "S-T128-A4",
+       "A": 4,
+       "n": 400,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 1070202.88,
+       "B_bytes": 420966656.0,
+       "L_us": 143.2,
+       "Dc_us": 111.151756,
+       "F_us": 59.06503,
+       "X_us": 32.048244
+      },
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 800,
+       "S": 396,
+       "wave": "multi-wave",
+       "b_bytes": 1067581.44,
+       "B_bytes": 840493824.0,
+       "L_us": 254.08,
+       "Dc_us": 221.923431,
+       "F_us": 103.363802,
+       "X_us": 32.156569
+      }
+     ],
+     "phi-3.5-moe/T128/w2": [
+      {
+       "label": "S-T128-A4",
+       "A": 4,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 1680384.0,
+       "B_bytes": 213047552.0,
+       "L_us": 89.536,
+       "Dc_us": 54.690855,
+       "F_us": 22.702238,
+       "X_us": 34.845145
+      },
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 1667584.0,
+       "B_bytes": 422747136.0,
+       "L_us": 127.392,
+       "Dc_us": 108.522263,
+       "F_us": 45.404476,
+       "X_us": 18.869737
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T128/w1": [
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 176,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 552587.636364,
+       "B_bytes": 92831488.0,
+       "L_us": 36.224,
+       "Dc_us": 24.511164,
+       "F_us": 15.673599,
+       "X_us": 11.712836
+      },
+      {
+       "label": "S-T128-A32",
+       "A": 32,
+       "n": 704,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 543650.909091,
+       "B_bytes": 369730304.0,
+       "L_us": 110.368,
+       "Dc_us": 97.623344,
+       "F_us": 47.020797,
+       "X_us": 12.744656
+      }
+     ],
+     "qwen1.5-moe-a2.7b/T128/w2": [
+      {
+       "label": "S-T128-A8",
+       "A": 8,
+       "n": 128,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_bytes": 388096.0,
+       "B_bytes": 47608832.0,
+       "L_us": 26.752,
+       "Dc_us": 12.221533,
+       "F_us": 5.811684,
+       "X_us": 14.530467
+      },
+      {
+       "label": "S-T128-A32",
+       "A": 32,
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_bytes": 379648.0,
+       "B_bytes": 186071552.0,
+       "L_us": 66.112,
+       "Dc_us": 47.76592,
+       "F_us": 23.246737,
+       "X_us": 18.34608
+      }
+     ]
+    },
+    "mixed": [
+     "jetmoe-8b/T128/w1",
+     "olmoe-1b-7b/T128/w1",
+     "olmoe-1b-7b/T128/w2",
+     "qwen1.5-moe-a2.7b/T128/w1",
+     "qwen1.5-moe-a2.7b/T128/w2"
+    ],
+    "subwave": [
+     "jetmoe-8b/T128/w2",
+     "mixtral-8x7b/T128/w2",
+     "phi-3.5-moe/T128/w2"
+    ],
+    "verdict": "READ",
+    "w1_unpriced": null
+   }
+  }
+ },
+ "CALLS": {
+  "per_model": {
+   "granite-3.0-3b-a800m": {
+    "align": {
+     "cells": 12,
+     "median_us": 8.624,
+     "min_us": 7.712,
+     "max_us": 20.224,
+     "median_by_T": {
+      "2": 8.0,
+      "4": 7.744,
+      "8": 8.48,
+      "64": 14.64,
+      "96": 17.6,
+      "120": 20.224,
+      "128": 8.704
+     }
+    },
+    "silu_and_mul": {
+     "cells": 12,
+     "median_us": 4.224,
+     "min_us": 3.776,
+     "max_us": 4.736,
+     "median_by_T": {
+      "2": 3.776,
+      "4": 3.776,
+      "8": 4.208,
+      "64": 4.24,
+      "96": 4.432,
+      "120": 4.704,
+      "128": 4.736
+     }
+    },
+    "moe_sum": {
+     "cells": 12,
+     "median_us": 4.24,
+     "min_us": 3.936,
+     "max_us": 4.8,
+     "median_by_T": {
+      "2": 4.032,
+      "4": 4.032,
+      "8": 4.192,
+      "64": 4.256,
+      "96": 4.528,
+      "120": 4.576,
+      "128": 4.8
+     }
+    }
+   },
+   "jetmoe-8b": {
+    "align": {
+     "cells": 12,
+     "median_us": 5.6,
+     "min_us": 4.704,
+     "max_us": 8.736,
+     "median_by_T": {
+      "4": 4.912,
+      "8": 4.736,
+      "16": 4.704,
+      "64": 6.208,
+      "96": 7.36,
+      "128": 8.64
+     }
+    },
+    "silu_and_mul": {
+     "cells": 12,
+     "median_us": 3.872,
+     "min_us": 3.392,
+     "max_us": 5.792,
+     "median_by_T": {
+      "4": 3.408,
+      "8": 3.52,
+      "16": 3.584,
+      "64": 4.176,
+      "96": 5.408,
+      "128": 5.776
+     }
+    },
+    "moe_sum": {
+     "cells": 12,
+     "median_us": 2.672,
+     "min_us": 2.496,
+     "max_us": 2.848,
+     "median_by_T": {
+      "4": 2.496,
+      "8": 2.656,
+      "16": 2.528,
+      "64": 2.688,
+      "96": 2.784,
+      "128": 2.848
+     }
+    }
+   },
+   "mixtral-8x7b": {
+    "align": {
+     "cells": 11,
+     "median_us": 6.464,
+     "min_us": 4.704,
+     "max_us": 8.128,
+     "median_by_T": {
+      "4": 4.736,
+      "16": 4.864,
+      "64": 6.448,
+      "96": 7.648,
+      "128": 8.016
+     }
+    },
+    "silu_and_mul": {
+     "cells": 11,
+     "median_us": 6.464,
+     "min_us": 5.344,
+     "max_us": 9.312,
+     "median_by_T": {
+      "4": 5.44,
+      "16": 5.6,
+      "64": 6.448,
+      "96": 9.056,
+      "128": 9.248
+     }
+    },
+    "moe_sum": {
+     "cells": 11,
+     "median_us": 2.976,
+     "min_us": 2.592,
+     "max_us": 3.36,
+     "median_by_T": {
+      "4": 2.688,
+      "16": 2.592,
+      "64": 2.928,
+      "96": 3.168,
+      "128": 3.344
+     }
+    }
+   },
+   "olmoe-1b-7b": {
+    "align": {
+     "cells": 8,
+     "median_us": 11.584,
+     "min_us": 7.872,
+     "max_us": 14.944,
+     "median_by_T": {
+      "4": 11.632,
+      "8": 11.696,
+      "64": 14.944,
+      "128": 8.128
+     }
+    },
+    "silu_and_mul": {
+     "cells": 8,
+     "median_us": 4.336,
+     "min_us": 3.552,
+     "max_us": 5.92,
+     "median_by_T": {
+      "4": 3.6,
+      "8": 3.968,
+      "64": 4.608,
+      "128": 5.92
+     }
+    },
+    "moe_sum": {
+     "cells": 8,
+     "median_us": 4.032,
+     "min_us": 3.648,
+     "max_us": 5.088,
+     "median_by_T": {
+      "4": 3.648,
+      "8": 3.728,
+      "64": 4.32,
+      "128": 4.992
+     }
+    }
+   },
+   "phi-3.5-moe": {
+    "align": {
+     "cells": 13,
+     "median_us": 7.456,
+     "min_us": 5.408,
+     "max_us": 9.216,
+     "median_by_T": {
+      "4": 5.584,
+      "8": 5.6,
+      "16": 5.408,
+      "64": 7.056,
+      "80": 7.472,
+      "96": 8.384,
+      "128": 9.088
+     }
+    },
+    "silu_and_mul": {
+     "cells": 13,
+     "median_us": 5.6,
+     "min_us": 3.52,
+     "max_us": 6.24,
+     "median_by_T": {
+      "4": 3.52,
+      "8": 3.648,
+      "16": 3.776,
+      "64": 4.464,
+      "80": 5.616,
+      "96": 5.856,
+      "128": 6.144
+     }
+    },
+    "moe_sum": {
+     "cells": 13,
+     "median_us": 3.04,
+     "min_us": 2.496,
+     "max_us": 3.392,
+     "median_by_T": {
+      "4": 2.496,
+      "8": 2.656,
+      "16": 2.56,
+      "64": 2.928,
+      "80": 3.056,
+      "96": 3.168,
+      "128": 3.36
+     }
+    }
+   },
+   "qwen1.5-moe-a2.7b": {
+    "align": {
+     "cells": 13,
+     "median_us": 11.776,
+     "min_us": 9.088,
+     "max_us": 13.92,
+     "median_by_T": {
+      "4": 9.104,
+      "8": 9.184,
+      "64": 11.632,
+      "96": 12.048,
+      "128": 13.84
+     }
+    },
+    "silu_and_mul": {
+     "cells": 13,
+     "median_us": 4.352,
+     "min_us": 3.456,
+     "max_us": 5.408,
+     "median_by_T": {
+      "4": 3.456,
+      "8": 3.648,
+      "64": 4.352,
+      "96": 4.848,
+      "128": 5.312
+     }
+    },
+    "moe_sum": {
+     "cells": 13,
+     "median_us": 3.648,
+     "min_us": 3.008,
+     "max_us": 4.128,
+     "median_by_T": {
+      "4": 3.088,
+      "8": 3.104,
+      "64": 3.632,
+      "96": 3.824,
+      "128": 4.08
+     }
+    }
+   }
+  },
+  "summary_lines": {
+   "silu_and_mul": {
+    "verdict": "READ: OLS on [1, x, B / 1 MB]",
+    "a_us": 3.67153,
+    "b_us_per_x": 4.18037369938274e-05,
+    "g_us_per_MB": 0.249555,
+    "se": [
+     0.08341281915492874,
+     1.5162225345874747e-05,
+     0.013952511537808568
+    ],
+    "models": [
+     "granite-3.0-3b-a800m",
+     "jetmoe-8b",
+     "mixtral-8x7b",
+     "olmoe-1b-7b",
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "x_range": [
+     512.0,
+     14336.0
+    ],
+    "rows": 69,
+    "rms_us": 0.460454
+   },
+   "moe_sum": {
+    "verdict": "READ: OLS on [1, x, B / 1 MB]",
+    "a_us": 1.8796,
+    "b_us_per_x": 0.00013297517354801178,
+    "g_us_per_MB": 0.218897,
+    "se": [
+     0.12030018941837138,
+     1.263190304808705e-05,
+     0.0349045943529685
+    ],
+    "models": [
+     "granite-3.0-3b-a800m",
+     "jetmoe-8b",
+     "mixtral-8x7b",
+     "olmoe-1b-7b",
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b"
+    ],
+    "x_range": [
+     4096.0,
+     16384.0
+    ],
+    "rows": 69,
+    "rms_us": 0.351659
+   }
+  },
+  "rows": [
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 8,
+    "us": 5.056
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 8,
+    "us": 3.392,
+    "x": 5632.0,
+    "B_bytes": 270336.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 8,
+    "us": 2.496,
+    "x": 4096.0,
+    "B_bytes": 49152.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 8,
+    "us": 4.992
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 8,
+    "us": 3.456,
+    "x": 5632.0,
+    "B_bytes": 270336.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 8,
+    "us": 2.624,
+    "x": 4096.0,
+    "B_bytes": 49152.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 8,
+    "us": 4.832
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 8,
+    "us": 3.392,
+    "x": 5632.0,
+    "B_bytes": 270336.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 8,
+    "us": 2.496,
+    "x": 4096.0,
+    "B_bytes": 49152.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 8,
+    "us": 4.704
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 8,
+    "us": 3.424,
+    "x": 5632.0,
+    "B_bytes": 270336.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 8,
+    "us": 2.496,
+    "x": 4096.0,
+    "B_bytes": 49152.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 8,
+    "us": 4.736
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 8,
+    "us": 3.52,
+    "x": 5632.0,
+    "B_bytes": 540672.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 8,
+    "us": 2.656,
+    "x": 4096.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 16,
+    "E": 8,
+    "us": 4.704
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 16,
+    "E": 8,
+    "us": 3.584,
+    "x": 5632.0,
+    "B_bytes": 1081344.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 16,
+    "E": 8,
+    "us": 2.528,
+    "x": 4096.0,
+    "B_bytes": 196608.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 8,
+    "us": 6.272
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 8,
+    "us": 4.192,
+    "x": 5632.0,
+    "B_bytes": 4325376.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 8,
+    "us": 2.688,
+    "x": 4096.0,
+    "B_bytes": 786432.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 8,
+    "us": 6.144
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 8,
+    "us": 4.16,
+    "x": 5632.0,
+    "B_bytes": 4325376.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 8,
+    "us": 2.688,
+    "x": 4096.0,
+    "B_bytes": 786432.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 8,
+    "us": 7.072
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 8,
+    "us": 5.344,
+    "x": 5632.0,
+    "B_bytes": 6488064.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 8,
+    "us": 2.784,
+    "x": 4096.0,
+    "B_bytes": 1179648.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 8,
+    "us": 7.648
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 8,
+    "us": 5.472,
+    "x": 5632.0,
+    "B_bytes": 6488064.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 8,
+    "us": 2.784,
+    "x": 4096.0,
+    "B_bytes": 1179648.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 8,
+    "us": 8.736
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 8,
+    "us": 5.792,
+    "x": 5632.0,
+    "B_bytes": 8650752.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 8,
+    "us": 2.848,
+    "x": 4096.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 8,
+    "us": 8.544
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 8,
+    "us": 5.76,
+    "x": 5632.0,
+    "B_bytes": 8650752.0
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 8,
+    "us": 2.848,
+    "x": 4096.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 16,
+    "us": 5.664
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 16,
+    "us": 3.52,
+    "x": 6400.0,
+    "B_bytes": 307200.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 16,
+    "us": 2.496,
+    "x": 8192.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 16,
+    "us": 5.504
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 16,
+    "us": 3.52,
+    "x": 6400.0,
+    "B_bytes": 307200.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 16,
+    "us": 2.496,
+    "x": 8192.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 16,
+    "us": 5.6
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 16,
+    "us": 3.648,
+    "x": 6400.0,
+    "B_bytes": 614400.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 16,
+    "us": 2.656,
+    "x": 8192.0,
+    "B_bytes": 196608.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T16-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 16,
+    "E": 16,
+    "us": 5.408
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T16-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 16,
+    "E": 16,
+    "us": 3.776,
+    "x": 6400.0,
+    "B_bytes": 1228800.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T16-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 16,
+    "E": 16,
+    "us": 2.56,
+    "x": 8192.0,
+    "B_bytes": 393216.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 16,
+    "us": 6.848
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 16,
+    "us": 4.448,
+    "x": 6400.0,
+    "B_bytes": 4915200.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 16,
+    "us": 2.912,
+    "x": 8192.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 16,
+    "us": 7.264
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 16,
+    "us": 4.48,
+    "x": 6400.0,
+    "B_bytes": 4915200.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 16,
+    "us": 2.944,
+    "x": 8192.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A5",
+    "arm": "native",
+    "class": "align",
+    "T": 80,
+    "E": 16,
+    "us": 7.488
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A5",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 80,
+    "E": 16,
+    "us": 5.6,
+    "x": 6400.0,
+    "B_bytes": 6144000.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A5",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 80,
+    "E": 16,
+    "us": 3.04,
+    "x": 8192.0,
+    "B_bytes": 1966080.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A6",
+    "arm": "native",
+    "class": "align",
+    "T": 80,
+    "E": 16,
+    "us": 7.456
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A6",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 80,
+    "E": 16,
+    "us": 5.632,
+    "x": 6400.0,
+    "B_bytes": 6144000.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A6",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 80,
+    "E": 16,
+    "us": 3.072,
+    "x": 8192.0,
+    "B_bytes": 1966080.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 16,
+    "us": 8.384
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 16,
+    "us": 6.048,
+    "x": 6400.0,
+    "B_bytes": 7372800.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 16,
+    "us": 3.104,
+    "x": 8192.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 16,
+    "us": 8.416
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 16,
+    "us": 5.856,
+    "x": 6400.0,
+    "B_bytes": 7372800.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 16,
+    "us": 3.168,
+    "x": 8192.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 16,
+    "us": 8.256
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 16,
+    "us": 5.76,
+    "x": 6400.0,
+    "B_bytes": 7372800.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 16,
+    "us": 3.2,
+    "x": 8192.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 16,
+    "us": 9.216
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 16,
+    "us": 6.048,
+    "x": 6400.0,
+    "B_bytes": 9830400.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 16,
+    "us": 3.392,
+    "x": 8192.0,
+    "B_bytes": 3145728.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 16,
+    "us": 8.96
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 16,
+    "us": 6.24,
+    "x": 6400.0,
+    "B_bytes": 9830400.0
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 16,
+    "us": 3.328,
+    "x": 8192.0,
+    "B_bytes": 3145728.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 8,
+    "us": 4.736
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 8,
+    "us": 5.44,
+    "x": 14336.0,
+    "B_bytes": 688128.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 8,
+    "us": 2.688,
+    "x": 8192.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 8,
+    "us": 4.768
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 8,
+    "us": 5.344,
+    "x": 14336.0,
+    "B_bytes": 688128.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 8,
+    "us": 2.688,
+    "x": 8192.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 8,
+    "us": 4.704
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 8,
+    "us": 5.504,
+    "x": 14336.0,
+    "B_bytes": 688128.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 8,
+    "us": 2.656,
+    "x": 8192.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 16,
+    "E": 8,
+    "us": 4.864
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 16,
+    "E": 8,
+    "us": 5.6,
+    "x": 14336.0,
+    "B_bytes": 2752512.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 16,
+    "E": 8,
+    "us": 2.592,
+    "x": 8192.0,
+    "B_bytes": 393216.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 8,
+    "us": 6.432
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 8,
+    "us": 6.432,
+    "x": 14336.0,
+    "B_bytes": 11010048.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 8,
+    "us": 2.976,
+    "x": 8192.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 8,
+    "us": 6.464
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 8,
+    "us": 6.464,
+    "x": 14336.0,
+    "B_bytes": 11010048.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 8,
+    "us": 2.88,
+    "x": 8192.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 8,
+    "us": 7.712
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 8,
+    "us": 8.992,
+    "x": 14336.0,
+    "B_bytes": 16515072.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 8,
+    "us": 3.136,
+    "x": 8192.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A7",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 8,
+    "us": 7.648
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A7",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 8,
+    "us": 9.056,
+    "x": 14336.0,
+    "B_bytes": 16515072.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A7",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 8,
+    "us": 3.264,
+    "x": 8192.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 8,
+    "us": 7.136
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 8,
+    "us": 9.056,
+    "x": 14336.0,
+    "B_bytes": 16515072.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 8,
+    "us": 3.168,
+    "x": 8192.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 8,
+    "us": 8.128
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 8,
+    "us": 9.184,
+    "x": 14336.0,
+    "B_bytes": 22020096.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 8,
+    "us": 3.328,
+    "x": 8192.0,
+    "B_bytes": 3145728.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 8,
+    "us": 7.904
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 8,
+    "us": 9.312,
+    "x": 14336.0,
+    "B_bytes": 22020096.0
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 8,
+    "us": 3.36,
+    "x": 8192.0,
+    "B_bytes": 3145728.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T2-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 2,
+    "E": 40,
+    "us": 8.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T2-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 2,
+    "E": 40,
+    "us": 3.776,
+    "x": 512.0,
+    "B_bytes": 49152.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T2-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 2,
+    "E": 40,
+    "us": 4.032,
+    "x": 12288.0,
+    "B_bytes": 55296.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 40,
+    "us": 7.808
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 40,
+    "us": 3.776,
+    "x": 512.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 40,
+    "us": 4.032,
+    "x": 12288.0,
+    "B_bytes": 110592.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 40,
+    "us": 7.712
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 40,
+    "us": 3.936,
+    "x": 512.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 40,
+    "us": 4.032,
+    "x": 12288.0,
+    "B_bytes": 110592.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 40,
+    "us": 7.744
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 40,
+    "us": 3.776,
+    "x": 512.0,
+    "B_bytes": 98304.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 40,
+    "us": 3.936,
+    "x": 12288.0,
+    "B_bytes": 110592.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 40,
+    "us": 8.416
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 40,
+    "us": 4.128,
+    "x": 512.0,
+    "B_bytes": 196608.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 40,
+    "us": 4.096,
+    "x": 12288.0,
+    "B_bytes": 221184.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A40",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 40,
+    "us": 8.544
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A40",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 40,
+    "us": 4.288,
+    "x": 512.0,
+    "B_bytes": 196608.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A40",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 40,
+    "us": 4.288,
+    "x": 12288.0,
+    "B_bytes": 221184.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 40,
+    "us": 14.592
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 40,
+    "us": 4.32,
+    "x": 512.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 40,
+    "us": 4.32,
+    "x": 12288.0,
+    "B_bytes": 1769472.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A40",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 40,
+    "us": 14.688
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A40",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 40,
+    "us": 4.16,
+    "x": 512.0,
+    "B_bytes": 1572864.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A40",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 40,
+    "us": 4.192,
+    "x": 12288.0,
+    "B_bytes": 1769472.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 40,
+    "us": 16.896
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 40,
+    "us": 4.416,
+    "x": 512.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 40,
+    "us": 4.48,
+    "x": 12288.0,
+    "B_bytes": 2654208.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A40",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 40,
+    "us": 18.304
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A40",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 40,
+    "us": 4.448,
+    "x": 512.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A40",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 40,
+    "us": 4.576,
+    "x": 12288.0,
+    "B_bytes": 2654208.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T120-A40",
+    "arm": "native",
+    "class": "align",
+    "T": 120,
+    "E": 40,
+    "us": 20.224
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T120-A40",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 120,
+    "E": 40,
+    "us": 4.704,
+    "x": 512.0,
+    "B_bytes": 2949120.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T120-A40",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 120,
+    "E": 40,
+    "us": 4.576,
+    "x": 12288.0,
+    "B_bytes": 3317760.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T128-A40",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 40,
+    "us": 8.704
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T128-A40",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 40,
+    "us": 4.736,
+    "x": 512.0,
+    "B_bytes": 3145728.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T128-A40",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 40,
+    "us": 4.8,
+    "x": 12288.0,
+    "B_bytes": 3538944.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 60,
+    "us": 9.12
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 60,
+    "us": 3.456,
+    "x": 1408.0,
+    "B_bytes": 135168.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 60,
+    "us": 3.072,
+    "x": 8192.0,
+    "B_bytes": 81920.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 60,
+    "us": 9.088
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 60,
+    "us": 3.456,
+    "x": 1408.0,
+    "B_bytes": 135168.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 60,
+    "us": 3.104,
+    "x": 8192.0,
+    "B_bytes": 81920.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A4",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 60,
+    "us": 9.184
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A4",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 60,
+    "us": 3.648,
+    "x": 1408.0,
+    "B_bytes": 270336.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A4",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 60,
+    "us": 3.008,
+    "x": 8192.0,
+    "B_bytes": 163840.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 60,
+    "us": 9.184
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 60,
+    "us": 3.648,
+    "x": 1408.0,
+    "B_bytes": 270336.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 60,
+    "us": 3.136,
+    "x": 8192.0,
+    "B_bytes": 163840.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A32",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 60,
+    "us": 9.184
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A32",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 60,
+    "us": 3.52,
+    "x": 1408.0,
+    "B_bytes": 270336.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A32",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 60,
+    "us": 3.104,
+    "x": 8192.0,
+    "B_bytes": 163840.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 60,
+    "us": 11.488
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 60,
+    "us": 4.352,
+    "x": 1408.0,
+    "B_bytes": 2162688.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 60,
+    "us": 3.648,
+    "x": 8192.0,
+    "B_bytes": 1310720.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A60",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 60,
+    "us": 11.776
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A60",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 60,
+    "us": 4.352,
+    "x": 1408.0,
+    "B_bytes": 2162688.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A60",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 60,
+    "us": 3.616,
+    "x": 8192.0,
+    "B_bytes": 1310720.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A12",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 60,
+    "us": 12.896
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A12",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 60,
+    "us": 4.928,
+    "x": 1408.0,
+    "B_bytes": 3244032.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A12",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 60,
+    "us": 3.904,
+    "x": 8192.0,
+    "B_bytes": 1966080.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 60,
+    "us": 12.032
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 60,
+    "us": 4.896,
+    "x": 1408.0,
+    "B_bytes": 3244032.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 60,
+    "us": 3.808,
+    "x": 8192.0,
+    "B_bytes": 1966080.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A24",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 60,
+    "us": 12.064
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A24",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 60,
+    "us": 4.8,
+    "x": 1408.0,
+    "B_bytes": 3244032.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A24",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 60,
+    "us": 3.84,
+    "x": 8192.0,
+    "B_bytes": 1966080.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "class": "align",
+    "T": 96,
+    "E": 60,
+    "us": 12.032
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 96,
+    "E": 60,
+    "us": 4.736,
+    "x": 1408.0,
+    "B_bytes": 3244032.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 96,
+    "E": 60,
+    "us": 3.776,
+    "x": 8192.0,
+    "B_bytes": 1966080.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 60,
+    "us": 13.92
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 60,
+    "us": 5.408,
+    "x": 1408.0,
+    "B_bytes": 4325376.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 60,
+    "us": 4.032,
+    "x": 8192.0,
+    "B_bytes": 2621440.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 60,
+    "us": 13.76
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 60,
+    "us": 5.216,
+    "x": 1408.0,
+    "B_bytes": 4325376.0
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 60,
+    "us": 4.128,
+    "x": 8192.0,
+    "B_bytes": 2621440.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 64,
+    "us": 11.616
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 64,
+    "us": 3.648,
+    "x": 1024.0,
+    "B_bytes": 196608.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 64,
+    "us": 3.648,
+    "x": 16384.0,
+    "B_bytes": 147456.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "class": "align",
+    "T": 4,
+    "E": 64,
+    "us": 11.648
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 4,
+    "E": 64,
+    "us": 3.552,
+    "x": 1024.0,
+    "B_bytes": 196608.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 4,
+    "E": 64,
+    "us": 3.648,
+    "x": 16384.0,
+    "B_bytes": 147456.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 64,
+    "us": 11.84
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 64,
+    "us": 4.064,
+    "x": 1024.0,
+    "B_bytes": 393216.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 64,
+    "us": 3.744,
+    "x": 16384.0,
+    "B_bytes": 294912.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A64",
+    "arm": "native",
+    "class": "align",
+    "T": 8,
+    "E": 64,
+    "us": 11.552
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A64",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 8,
+    "E": 64,
+    "us": 3.872,
+    "x": 1024.0,
+    "B_bytes": 393216.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A64",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 8,
+    "E": 64,
+    "us": 3.712,
+    "x": 16384.0,
+    "B_bytes": 294912.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T64-A64",
+    "arm": "native",
+    "class": "align",
+    "T": 64,
+    "E": 64,
+    "us": 14.944
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T64-A64",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 64,
+    "E": 64,
+    "us": 4.608,
+    "x": 1024.0,
+    "B_bytes": 3145728.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T64-A64",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 64,
+    "E": 64,
+    "us": 4.32,
+    "x": 16384.0,
+    "B_bytes": 2359296.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A16",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 64,
+    "us": 7.872
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A16",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 64,
+    "us": 5.92,
+    "x": 1024.0,
+    "B_bytes": 6291456.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A16",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 64,
+    "us": 5.088,
+    "x": 16384.0,
+    "B_bytes": 4718592.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 64,
+    "us": 8.288
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 64,
+    "us": 5.92,
+    "x": 1024.0,
+    "B_bytes": 6291456.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 64,
+    "us": 4.992,
+    "x": 16384.0,
+    "B_bytes": 4718592.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A64",
+    "arm": "native",
+    "class": "align",
+    "T": 128,
+    "E": 64,
+    "us": 8.128
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A64",
+    "arm": "native",
+    "class": "silu_and_mul",
+    "T": 128,
+    "E": 64,
+    "us": 5.888,
+    "x": 1024.0,
+    "B_bytes": 6291456.0
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A64",
+    "arm": "native",
+    "class": "moe_sum",
+    "T": 128,
+    "E": 64,
+    "us": 4.928,
+    "x": 16384.0,
+    "B_bytes": 4718592.0
+   }
+  ],
+  "label": "DESCRIPTIVE: the call kernels per model as measured; the summary lines are not a model term"
+ },
+ "REFUSED ROWS": {
+  "rule": "ROW SANITY: L and B finite and positive, B within 0.5 to 2 x n b (GEMM rows); class times finite and positive",
+  "rows": []
+ },
+ "ALIGN": {
+  "verdict": "READ",
+  "pages": {
+   "jetmoe-8b": "counted",
+   "phi-3.5-moe": "counted",
+   "mixtral-8x7b": "counted",
+   "granite-3.0-3b-a800m": "counted",
+   "qwen1.5-moe-a2.7b": "counted",
+   "olmoe-1b-7b": "counted"
+  },
+  "rows": [
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "E": 8,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.056
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "E": 8,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.992
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "E": 8,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.832
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.704
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 8,
+    "numel": 16,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.736
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T8-A8",
+    "arm": "decl",
+    "E": 32,
+    "T": 8,
+    "numel": 16,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 7.264
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 16,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.704
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T16-A8",
+    "arm": "decl",
+    "E": 32,
+    "T": 16,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 7.264
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "E": 8,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 6.272
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 6.144
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T64-A8",
+    "arm": "decl",
+    "E": 32,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 9.28
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "E": 8,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 7.072
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 7.648
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "E": 8,
+    "T": 128,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 8,
+    "align_us": 8.736
+   },
+   {
+    "model": "jetmoe-8b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 128,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 8,
+    "align_us": 8.544
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "E": 16,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.664
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "E": 16,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.504
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "E": 16,
+    "T": 8,
+    "numel": 16,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.6
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T8-A8",
+    "arm": "decl",
+    "E": 32,
+    "T": 8,
+    "numel": 16,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 7.296
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T16-A16",
+    "arm": "native",
+    "E": 16,
+    "T": 16,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.408
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T16-A16",
+    "arm": "decl",
+    "E": 32,
+    "T": 16,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 7.2
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "E": 16,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 6.848
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "E": 16,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 7.264
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T64-A16",
+    "arm": "decl",
+    "E": 32,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 8.544
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A5",
+    "arm": "native",
+    "E": 16,
+    "T": 80,
+    "numel": 160,
+    "path": "small-batch",
+    "iterations": 5,
+    "align_us": 7.488
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T80-A6",
+    "arm": "native",
+    "E": 16,
+    "T": 80,
+    "numel": 160,
+    "path": "small-batch",
+    "iterations": 5,
+    "align_us": 7.456
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "E": 16,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 8.384
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "E": 16,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 8.416
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "E": 16,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 8.256
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "E": 16,
+    "T": 128,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 8,
+    "align_us": 9.216
+   },
+   {
+    "model": "phi-3.5-moe",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "E": 16,
+    "T": 128,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 8,
+    "align_us": 8.96
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A2",
+    "arm": "native",
+    "E": 8,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.736
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A2",
+    "arm": "decl",
+    "E": 16,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.408
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A3",
+    "arm": "native",
+    "E": 8,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.768
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "E": 8,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.704
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T4-A4",
+    "arm": "decl",
+    "E": 16,
+    "T": 4,
+    "numel": 8,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.536
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T16-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 16,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 4.864
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T16-A8",
+    "arm": "decl",
+    "E": 16,
+    "T": 16,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 5.632
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A4",
+    "arm": "native",
+    "E": 8,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 6.432
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 64,
+    "numel": 128,
+    "path": "small-batch",
+    "iterations": 4,
+    "align_us": 6.464
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A6",
+    "arm": "native",
+    "E": 8,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 7.712
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A7",
+    "arm": "native",
+    "E": 8,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 7.648
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T96-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 96,
+    "numel": 192,
+    "path": "small-batch",
+    "iterations": 6,
+    "align_us": 7.136
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A4",
+    "arm": "native",
+    "E": 8,
+    "T": 128,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 8,
+    "align_us": 8.128
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "E": 8,
+    "T": 128,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 8,
+    "align_us": 7.904
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T2-A8",
+    "arm": "native",
+    "E": 40,
+    "T": 2,
+    "numel": 16,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 8.0
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "E": 40,
+    "T": 4,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 7.808
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "E": 40,
+    "T": 4,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 7.712
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "E": 40,
+    "T": 4,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 7.744
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "E": 40,
+    "T": 8,
+    "numel": 64,
+    "path": "small-batch",
+    "iterations": 2,
+    "align_us": 8.416
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T8-A40",
+    "arm": "native",
+    "E": 40,
+    "T": 8,
+    "numel": 64,
+    "path": "small-batch",
+    "iterations": 2,
+    "align_us": 8.544
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A16",
+    "arm": "native",
+    "E": 40,
+    "T": 64,
+    "numel": 512,
+    "path": "small-batch",
+    "iterations": 13,
+    "align_us": 14.592
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T64-A40",
+    "arm": "native",
+    "E": 40,
+    "T": 64,
+    "numel": 512,
+    "path": "small-batch",
+    "iterations": 13,
+    "align_us": 14.688
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "E": 40,
+    "T": 96,
+    "numel": 768,
+    "path": "small-batch",
+    "iterations": 20,
+    "align_us": 16.896
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T96-A40",
+    "arm": "native",
+    "E": 40,
+    "T": 96,
+    "numel": 768,
+    "path": "small-batch",
+    "iterations": 20,
+    "align_us": 18.304
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T120-A40",
+    "arm": "native",
+    "E": 40,
+    "T": 120,
+    "numel": 960,
+    "path": "small-batch",
+    "iterations": 24,
+    "align_us": 20.224
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "label": "S-T128-A40",
+    "arm": "native",
+    "E": 40,
+    "T": 128,
+    "numel": 1024,
+    "path": "block-scan",
+    "iterations": 26,
+    "align_us": 8.704
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A4",
+    "arm": "native",
+    "E": 60,
+    "T": 4,
+    "numel": 16,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 9.12
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T4-A16",
+    "arm": "native",
+    "E": 60,
+    "T": 4,
+    "numel": 16,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 9.088
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A4",
+    "arm": "native",
+    "E": 60,
+    "T": 8,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 9.184
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A16",
+    "arm": "native",
+    "E": 60,
+    "T": 8,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 9.184
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T8-A32",
+    "arm": "native",
+    "E": 60,
+    "T": 8,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 9.184
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A8",
+    "arm": "native",
+    "E": 60,
+    "T": 64,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 5,
+    "align_us": 11.488
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T64-A60",
+    "arm": "native",
+    "E": 60,
+    "T": 64,
+    "numel": 256,
+    "path": "small-batch",
+    "iterations": 5,
+    "align_us": 11.776
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A12",
+    "arm": "native",
+    "E": 60,
+    "T": 96,
+    "numel": 384,
+    "path": "small-batch",
+    "iterations": 7,
+    "align_us": 12.896
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A16",
+    "arm": "native",
+    "E": 60,
+    "T": 96,
+    "numel": 384,
+    "path": "small-batch",
+    "iterations": 7,
+    "align_us": 12.032
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A24",
+    "arm": "native",
+    "E": 60,
+    "T": 96,
+    "numel": 384,
+    "path": "small-batch",
+    "iterations": 7,
+    "align_us": 12.064
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T96-A32",
+    "arm": "native",
+    "E": 60,
+    "T": 96,
+    "numel": 384,
+    "path": "small-batch",
+    "iterations": 7,
+    "align_us": 12.032
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A8",
+    "arm": "native",
+    "E": 60,
+    "T": 128,
+    "numel": 512,
+    "path": "small-batch",
+    "iterations": 9,
+    "align_us": 13.92
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "E": 60,
+    "T": 128,
+    "numel": 512,
+    "path": "small-batch",
+    "iterations": 9,
+    "align_us": 13.76
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A8",
+    "arm": "native",
+    "E": 64,
+    "T": 4,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 11.616
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T4-A32",
+    "arm": "native",
+    "E": 64,
+    "T": 4,
+    "numel": 32,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 11.648
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A8",
+    "arm": "native",
+    "E": 64,
+    "T": 8,
+    "numel": 64,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 11.84
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T8-A64",
+    "arm": "native",
+    "E": 64,
+    "T": 8,
+    "numel": 64,
+    "path": "small-batch",
+    "iterations": 1,
+    "align_us": 11.552
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T64-A64",
+    "arm": "native",
+    "E": 64,
+    "T": 64,
+    "numel": 512,
+    "path": "small-batch",
+    "iterations": 8,
+    "align_us": 14.944
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A16",
+    "arm": "native",
+    "E": 64,
+    "T": 128,
+    "numel": 1024,
+    "path": "block-scan",
+    "iterations": 16,
+    "align_us": 7.872
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A32",
+    "arm": "native",
+    "E": 64,
+    "T": 128,
+    "numel": 1024,
+    "path": "block-scan",
+    "iterations": 16,
+    "align_us": 8.288
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "S-T128-A64",
+    "arm": "native",
+    "E": 64,
+    "T": 128,
+    "numel": 1024,
+    "path": "block-scan",
+    "iterations": 16,
+    "align_us": 8.128
+   }
+  ],
+  "points": {
+   "small-batch": [
+    [
+     8,
+     4.752
+    ],
+    [
+     16,
+     5.552
+    ],
+    [
+     32,
+     7.264
+    ],
+    [
+     40,
+     7.776
+    ],
+    [
+     60,
+     9.184
+    ],
+    [
+     64,
+     11.632
+    ]
+   ],
+   "block-scan": [
+    [
+     40,
+     8.704
+    ],
+    [
+     64,
+     8.128
+    ]
+   ]
+  },
+  "native_E": {
+   "8": 4.752,
+   "16": 5.552,
+   "40": 7.776,
+   "60": 9.184,
+   "64": 11.632
+  },
+  "decl_E": {
+   "16": 5.536,
+   "32": 7.264
+  },
+  "DECL_TRANSFER": {
+   "verdict": "TRANSFERS",
+   "used": true,
+   "decl_E16_us": 5.536,
+   "native_E16_us": 5.552,
+   "diff_us": -0.016,
+   "cut_us": 1.0
+  },
+  "SLOPE": {
+   "verdict": "READ: one slope, one intercept per declared E, OLS",
+   "slope_us": 0.526921,
+   "intercepts_us": {
+    "8": 4.768963,
+    "16": 5.5239,
+    "32": 7.281079,
+    "40": 7.916898,
+    "60": 9.264292,
+    "64": 11.582311
+   },
+   "E": [
+    8,
+    16,
+    32,
+    40,
+    60,
+    64
+   ],
+   "rows": 74,
+   "iterations_read": [
+    1,
+    24
+   ],
+   "check_against_0": {
+    "label": "DESCRIPTIVE",
+    "verdict": "DIFFERS FROM 0",
+    "se_us": 0.007418,
+    "t": 71.033614,
+    "dof": 67
+   },
+   "per_E": {
+    "8": {
+     "slope_us": 0.510226,
+     "intercept_us": 4.305919,
+     "rows": 23
+    },
+    "16": {
+     "slope_us": 0.523132,
+     "intercept_us": 5.010951,
+     "rows": 16
+    },
+    "32": {
+     "slope_us": 0.552,
+     "intercept_us": 6.704,
+     "rows": 6
+    },
+    "40": {
+     "slope_us": 0.528699,
+     "intercept_us": 7.374134,
+     "rows": 11
+    },
+    "60": {
+     "slope_us": 0.55666,
+     "intercept_us": 8.597825,
+     "rows": 13
+    },
+    "64": {
+     "slope_us": 0.468571,
+     "intercept_us": 11.195429,
+     "rows": 5
+    }
+   },
+   "median_per_E_us": 0.525915
+  },
+  "label": "DESCRIPTIVE: the align kernel per path and E, and its cost per loop iteration; no model term",
+  "BLOCK": {
+   "verdict": "READ: ALIGN's block-scan points",
+   "points": [
+    [
+     40,
+     8.704
+    ],
+    [
+     64,
+     8.128
+    ]
+   ]
+  }
+ },
+ "NOT_IDENTIFIED": [],
+ "verdict": "READ"
+}

@@ -1,0 +1,182 @@
+{
+ "gate": "probe",
+ "verdict": "FAIL",
+ "rung": {
+  "lock_mhz": 1710.0,
+  "verdict": "FAILS",
+  "pages": {
+   "mixtral-8x7b-lp1710m": {
+    "page": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-lp1710m/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-86e4983d",
+    "lock_mhz_page": 1710,
+    "why": [
+     "P3: uniform/shared/n3 LOST (5 clean of 9)",
+     "P3: PT/native/n8 LOST (4 clean of 9)",
+     "P3: uniform/shared/n8 LOST (5 clean of 9)",
+     "P3: balanced/native/n8 LOST (4 clean of 9)",
+     "P4: 33 of 144 repeat rows non-clean (22.92%, over 10%)"
+    ],
+    "locked_r3_held": 1710,
+    "non_clean": {
+     "rows": 33,
+     "of": 144,
+     "share": 0.229167,
+     "cap": 0.1
+    },
+    "cells": [
+     {
+      "cell": "PT/native/n3",
+      "mhz": 1710.0,
+      "clean": 7,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PT/shared/n3",
+      "mhz": 1710.0,
+      "clean": 8,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/native/n3",
+      "mhz": 1710.0,
+      "clean": 8,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/shared/n3",
+      "mhz": 1710.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/native/n3",
+      "mhz": 1710.0,
+      "clean": 8,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/shared/n3",
+      "mhz": 1710.0,
+      "clean": 5,
+      "of": 9,
+      "lost": true
+     },
+     {
+      "cell": "balanced/native/n3",
+      "mhz": 1710.0,
+      "clean": 8,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "balanced/shared/n3",
+      "mhz": 1710.0,
+      "clean": 7,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PT/native/n8",
+      "mhz": 1710.0,
+      "clean": 4,
+      "of": 9,
+      "lost": true
+     },
+     {
+      "cell": "PT/shared/n8",
+      "mhz": 1710.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/native/n8",
+      "mhz": 1710.0,
+      "clean": 7,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/shared/n8",
+      "mhz": 1710.0,
+      "clean": 8,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/native/n8",
+      "mhz": 1710.0,
+      "clean": 7,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/shared/n8",
+      "mhz": 1710.0,
+      "clean": 5,
+      "of": 9,
+      "lost": true
+     },
+     {
+      "cell": "balanced/native/n8",
+      "mhz": 1710.0,
+      "clean": 4,
+      "of": 9,
+      "lost": true
+     },
+     {
+      "cell": "balanced/shared/n8",
+      "mhz": 1710.0,
+      "clean": 7,
+      "of": 9,
+      "lost": false
+     }
+    ],
+    "min_cell_mhz": 1710.0,
+    "verdict": "FAIL",
+    "nvml (DESCRIPTIVE)": {
+     "busy_samples": 1066,
+     "min_clock_mhz": 1305.0,
+     "median_clock_mhz": 1710.0,
+     "max_power_w": 430.48,
+     "reasons_seen": [
+      "0x0000000000000000",
+      "0x0000000000000004"
+     ]
+    }
+   },
+   "qwen2-57b-a14b-lp1710q": {
+    "verdict": "FAIL",
+    "why": [
+     "P1: 0 report.json under gaps-nvidia_gh200_480gb-qwen2-57b-a14b-lp1710q"
+    ],
+    "nvml (DESCRIPTIVE)": {}
+   },
+   "olmoe-1b-7b-lp1710f (P5)": {
+    "page": null,
+    "why": [
+     "P5: NOT SCORED: 0 counter pages for olmoe-1b-7b lp1710f G 64"
+    ],
+    "verdict": "FAIL"
+   }
+  },
+  "hw_rulers (DESCRIPTIVE)": {
+   "matmul sm_clock_load_mhz": 1365.0,
+   "file": "/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-rulers-lp1710/rulers.json"
+  },
+  "why": [
+   "mixtral-8x7b-lp1710m: P3: uniform/shared/n3 LOST (5 clean of 9)",
+   "mixtral-8x7b-lp1710m: P3: PT/native/n8 LOST (4 clean of 9)",
+   "mixtral-8x7b-lp1710m: P3: uniform/shared/n8 LOST (5 clean of 9)",
+   "mixtral-8x7b-lp1710m: P3: balanced/native/n8 LOST (4 clean of 9)",
+   "mixtral-8x7b-lp1710m: P4: 33 of 144 repeat rows non-clean (22.92%, over 10%)",
+   "qwen2-57b-a14b-lp1710q: P1: 0 report.json under gaps-nvidia_gh200_480gb-qwen2-57b-a14b-lp1710q",
+   "olmoe-1b-7b-lp1710f (P5): P5: NOT SCORED: 0 counter pages for olmoe-1b-7b lp1710f G 64"
+  ]
+ },
+ "why": "mixtral-8x7b-lp1710m: P3: uniform/shared/n3 LOST (5 clean of 9); mixtral-8x7b-lp1710m: P3: PT/native/n8 LOST (4 clean of 9); mixtral-8x7b-lp1710m: P3: uniform/shared/n8 LOST (5 clean of 9); mixtral-8x7b-lp1710m: P3: balanced/native/n8 LOST (4 clean of 9); mixtral-8x7b-lp1710m: P4: 33 of 144 repeat rows non-clean (22.92%, over 10%); qwen2-57b-a14b-lp1710q: P1: 0 report.json under gaps-nvidia_gh200_480gb-qwen2-57b-a14b-lp1710q; olmoe-1b-7b-lp1710f (P5): P5: NOT SCORED: 0 counter pages for olmoe-1b-7b lp1710f G 64"
+}

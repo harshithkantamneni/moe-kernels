@@ -1,0 +1,2 @@
+== 2026-11-06T18:24:26Z step gate: gate band: scripts/tileA2_gate.py band at the 1410 lock; FAIL drops drop-group phi and its dependents, the session goes on (PC) (tileA2-gates)
+2026-11-06T18:24:27Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)

@@ -1,0 +1,6 @@
+== 2026-11-06T18:24:38Z step regcheck: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5)
+INSTRUMENTED KERNEL C3 (regcheck): 1 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u13-se1          phi-3.5-moe            128x128x64 w8 s3 G1 phi-3.5-moe-128g1 cells 12 (PT-n1-native, PW-n1-native, PT2-n1-native, PW2-n1-native, uniform-n1-native, balanced-n1-native, PT-n2-native, PW-n2-native, PT2-n2-native, PW2-n2-native, uniform-n2-native, balanced-n2-native) spec stamps=ends,evict_a=none,evict_b=none
+  u13-se1 128-128-64-1-3-8-False-2: plain 116r/2 off = | stamps=ends,evict_a=none,evict_b=none: 113r/2
+  u13-se1 128-128-64-1-3-8-True-1: plain 116r/2 off = | stamps=ends,evict_a=none,evict_b=none: 114r/2
+2026-11-06T18:24:49Z regcheck: REGCHECK_u13_se1=PASS

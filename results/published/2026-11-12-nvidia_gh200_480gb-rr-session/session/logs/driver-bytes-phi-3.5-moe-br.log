@@ -1,0 +1,14 @@
+== 2026-11-12T02:14:21Z step bytes: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json --arms native; tile 128x128x64 w8 s3
+2026-11-12T02:14:37Z census for phi-3.5-moe written (/home/ubuntu/moe/session/census-phi-3.5-moe.json)
+2026-11-12T02:14:37Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-12T02:14:37Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json --arms native on every page of this unit
+2026-11-12T02:14:37Z bytes: the registered list G = 1 (phi-3.5-moe, br): no tail drop, no re-price, no base-clock control
+==PROF== Resetting GPU clocks on device 0.
+REFUSE: cell PT n=1 asks arms ['shared'] that the run's --arms native does not run
+G=1 exit 2 02:14:45 5 s
+2026-11-12T02:14:46Z bytes: lock block exit 2 (G=1 exit 2 02:14:45 5 s;)
+clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, persistence_mode
+345 MHz, 2619 MHz, 1980 MHz, 0x0000000000000001, Enabled
+2026-11-12T02:14:51Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-12T02:14:51Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-12T02:14:51Z bytes: no page written, nothing to analyse

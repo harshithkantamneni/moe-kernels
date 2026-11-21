@@ -1,0 +1,104 @@
+refit4 ROUND 5 declarations (offline, read-only; repo ~/code/moe-kernels read at aa5e1b7c). THE FINAL DECLARED MODEL
+ROUND (owner, 2026-10-27, registered in docs/registered/2026-10-27-cal4-gh200 "AFTER"): if this round fails the B3 gate,
+iteration stops and the owner chooses between narrowing scope and going blind. B3 is registered only if it passes.
+Written before any round-5 byte law, time model, pass estimate or blind cell was scored. No amendment is made after
+scores are seen; there is no round 6. The UTC write time and sha256 are in DECLARED5.sha256, re-checked after all
+scoring.
+
+WEAKER EVIDENCE, STATED PLAINLY. Rounds 2, 3 and 4 were each informed by their predecessors, and this round is informed
+by all of them and by the C4 reading (scripts/scoring/cal4 cal4.read.{json,txt}, copied in moe-kernels-work 2026-10-27
+readC4): tp2 held out -4.44% under the frozen round-4 model; with M4's bytes -1.84; with counted bytes +0.12 (oracle);
+tp2's w1 counted bytes 7.47% above M4's and 21.04% above W2's (BEYOND-M4); tp2's w2 counted bytes 5.23% above W2's and
+0.21% above M4's; C4-S2: K1 at its SEEN constants on tp2's counted bytes reads w1 -0.25%, w2 -2.53% in the wall domain.
+Every C4 page is SEEN. Every held-out number of this round is weaker evidence than a round declared blind to these.
+
+ALSO SEEN BEFORE WRITING (pre-declaration diagnosis, no law scored, no time scored): work/diag5.py -> diag5.out,
+diag5.json. On every NATIVE 128 G 1 counter cell of the five CAL models (60 cells): counted q, M4's and W2's q, the
+compulsory and all-miss q, and the share of w1 slab re-reads that miss:
+  - counted miss share of w1 slab re-reads: OLMoE (P 16) about 0 (-0.05 to +0.05: its counted bytes sit at or under the
+    compulsory reads, an A-side term, not a slab one); Qwen2-57B (P 40) 0.17 to 0.28; tp2 (P 112) 0.75 to 0.84;
+    Mixtral-8x7B (P 224) 0.97 to 0.99; Mixtral-8x22B (P 256) 1.00.
+  - M4 prices 0.67 to 0.70 of tp2's re-reads as misses and W2 0.43 to 0.57. W2's launch law puts 44 to 62% of
+    tp2's later-wave re-reads at D_eff <= P / 2 (same wave, near-simultaneous); its mean D_eff is the staggered P
+    within -10% to +26%.
+  - the staggered fill F = P fbar (fbar at counted q): OLMoE 1.5 to 5.5 MiB, Qwen2-57B 19.5 to 26.3, tp2 97.6 to 101.5,
+    Mixtral-8x7B 220 to 223, Mixtral-8x22B 384 to 385 MiB.
+  - A HAND CALCULATION ON THESE SEEN SHARES suggested candidate STAG-RR below: 1 - exp(-F / 60 MiB) at the staggered
+    fill is about 0.28 at Qwen2-57B's 20 MiB and about 0.81 at tp2's 100 MiB. STAG-RR's byte score is therefore NOT
+    independent evidence. The same calculation predicts that STAG-RR adds 2 to 9% misses to OLMoE's w1 re-reads,
+    where the counters show none, so it may fail OLMoE's guard; this was known before scoring.
+
+PHYSICAL STATEMENT (why w1 re-reads rise at large P). At G 1 each M-tile reads all P slabs of its expert in column
+order, and the expert's next M-tile re-reads each slab P live CTAs later (the only w1 slab re-read at G 1). Between the
+two reads the L2 takes in the bytes of every CTA launched in between, from all experts: F = D fbar, fbar = q W / live,
+about one slab per CTA at two M-tiles per expert. F grows with P (and with the slab, so with K), from about 3 MiB
+(OLMoE) to about 385 MiB (Mixtral-8x22B) against a 60 MiB L2. The laws below differ in two things only: the distance D
+of a later-wave re-read (M4's staggered rank distance, or W2's launch-law D_eff = W_c dt / L) and the survival of a
+line after F bytes (M4's carried soft law, a step at the 60 MiB L2, or random replacement exp(-F / C)).
+
+INPUTS: the round-4 chain (round3/work r6.py -> r5 -> refit4 r4 -> knee-v5 k5 -> diag-v5 d5), built at p 14, T0
+43.23 us and bw 3597.8 GB/s asserted (the first-build trap), re-asserted in work/r7.py. OD13 kept: nothing is priced
+against rental A's 1710 E1-CAL pages.
+
+PART A. THE w1 BYTE LAW (128x128 NATIVE histogram cells, w1 slab x events only)
+  Every candidate keeps W2 on w2 (DECLARED: W2 is kept on w2, not re-selected. Its w2 under-pricing of the Mixtral
+  family, -4.96 / -7.01 / tp2 -5.23%, is round 3's thin-tail result; the one measured fix, W2T, failed the w1 guard in
+  round 4; nothing new is measured on the w2 tail). In-group events, A events and every M4 constant are CARRIED. The w2
+  reads of every candidate must equal W2's bit for bit on the 60 cells (asserted).
+  Candidates (F = theta D fbar, theta = M4's theta1 0.1967 in the first window, 1 after it, CARRIED; L2 60 MiB, the
+  page card, MEASURED):
+    W2         round 4's law on w1 (reference): LS D_eff later, carried soft survival, the 60 MiB cut later. 0 constants
+    M4w1       M4 on w1: staggered rank distance D, carried soft survival (C_B 72.52 MiB, beta_B 1.324). 0 constants
+    STAG-CUT   M4w1 plus W2's capacity cut on later-wave w1 re-reads: F >= 60 MiB misses. 0 constants
+    STAG-RR    staggered D; survival exp(-F / 60 MiB) on every w1 slab x event (random replacement at the measured L2
+               capacity), first window and later; no cut. 0 constants
+    LS-RR      W2's LS D_eff (sigma_gap 0.0375, R 16, the same seeds); survival exp(-F / 60 MiB); no cut. 0 constants
+    STAG-RR-C  STAG-RR with the capacity C fitted, grid 30, 35, ..., 120 MiB. 1 constant (SEEN-FITTED)
+  Cells: the 60 NATIVE 128 G 1 counter cells (OLMoE 24 A2 + S1, Qwen2-57B 16 A2 + S1, Mixtral-8x7B 8 S1 + C2,
+  Mixtral-8x22B 6 C2, tp2 6 C4). Error e = pred / counted - 1 on w1 dram_bytes_read.
+  Folds: zero-constant laws have LOMO = E-family-out = SEEN. STAG-RR-C:
+    LOMO with the router rule: a fold holding out Mixtral-8x7B or tp2 fits on the other three models (both Mixtral-8x7B
+    and tp2 left out, as they share the router); OLMoE, Qwen2-57B, Mixtral-8x22B folds fit on the other four.
+    E-family-out: E 64 (OLMoE, Qwen2-57B) predicted from a fit on E 8 (Mixtral-8x7B, Mixtral-8x22B, tp2), and back.
+    SEEN: all five.
+    Fit: the C minimising the equal-weight rms over the training models (sqrt of the mean over models of each model's
+    mean squared w1 error); a tie (to 1e-12) goes to the larger C.
+  Admissible: every one of the 60 cells priced (the fixed-point guard refuses none).
+  Guard (the registered w1 guard, unchanged): per model, the law's LOMO w1 rms <= M4's LOMO w1 rms + 1.0 (OLMoE 7.12,
+  Qwen2-57B 8.93, Mixtral-8x7B 0.34, Mixtral-8x22B 0.05, asserted from the M4w1 run; tp2 M4's rms on its 6 cells,
+  computed in the run). M4w1 passes by construction, so the admitted set is never empty.
+  Score S = max over the five models of max(|LOMO w1 mean|, |E-family-out w1 mean|).
+  Selection: the smallest S among admissible, guard-passing laws; within 1.0 point of it, the fewer constants; then the
+  law that leaves fewer of B2's 84 blind NATIVE cells UNPRICED (a pricing check at p 6.0, no score); then the smaller
+  pooled LOMO w1 rms over the 60 cells.
+
+PART B. THE FIVE-MODEL HELD-OUT TABLE
+  The PART A selected law (at each fold's constant for STAG-RR-C: the LOMO fold of the held-out model) + W2 on w2 + the
+  K1 knee in the wall domain at round 4's constants, NOT refitted (knee4.json K1 LOMO (p, S0) for OLMoE, Qwen2-57B,
+  Mixtral-8x7B, Mixtral-8x22B; tp2 is in no knee fit, so K1 SEEN (6.0, 2.75) is its held-out fold; CARRIED,
+  SEEN-FITTED) + the clock form of F1 (r6.cell_ms4 clock=True) + F1 par from the timed page's board's estimator pages
+  with the held-out model's own page dropped (refit4 fold_F1): A2 and C2 as round 4; C4 (OLMoE f128, Mixtral-8x7B
+  f128) both for tp2.
+  Cells: A2 E1-CAL 128g1 OLMoE 10, Qwen2-57B 8, Mixtral-8x7B 4; C2 Mixtral-8x22B 6; C2 Mixtral-8x7B 4 (in the gate);
+  C4 tp2 6 (read_c4.timed_rows' loop). Per model mean, rms, worst; max |mean| of the five, rms of the five means,
+  spread, pooled cell rms over the five models' cells, worst cell.
+  Reproductions asserted before anything is printed: round 4's selected table (+0.48 / -1.44 / +1.25 / +0.24, C2
+  +1.49) and C4's X -4.44, X with M4 bytes -1.84, X with counted bytes +0.12.
+  DESCRIPTIVE beside (no selection): every PART A candidate in the same pipeline; counted bytes (oracle).
+
+PART C. PASS ESTIMATE (ESTIMATE): read_c4.pass_estimates' method on the five held-out means (Mixtral-8x7B at its A2
+  mean): A = power(mean b, SD b), B = power(0, RMS b), D = power on OLMoE, Qwen2-57B, Mixtral-8x22B and tp2;
+  read_c2.power (diag-v5 power5's, verbatim), B2's noise model, board 0.26%, R 200,000, seed 20261022.
+  Cells, the registered UNPRICED rule: a blind cell the selected law cannot price is UNPRICED and excluded from
+  E1-TILE's statistics. JetMoE 128g1 n2 PT (B2 power index 72) stays UNPRICED unless the selected law prices it; if it
+  does, the estimate is on 84 cells (83 beside), and the report says which. Reproductions asserted: round 4's 0.3798
+  (four models, 83 cells) and C4's A 0.0206 (X -4.44).
+
+PART D. BLIND STAKES (stakes, not evidence): B2's 84 cells, the selected variant at SEEN (the law at its SEEN constant,
+  K1 SEEN (6.0, 2.75), the clock form, F1 par at A2's values 42.02 / 425; 64x128 cells v5'' unchanged) against v5''
+  (null knee, p 5.75, M4, v5'''s sag) and against round 4's selected (W2, K1 SEEN, the clock form). Per blind model and
+  class, Phi-3.5 by cell, each unpriced cell named.
+
+PART E. GATE (unchanged): G1 every held-out 128 G 1 mean of the PART B table within 1.0% (OLMoE, Qwen2-57B,
+  Mixtral-8x7B on A2's cells, Mixtral-8x22B, tp2; and Mixtral-8x7B on C2's board) AND G2 estimated P(A) >= 0.5 on the
+  registered cells. PASS iff both. A FAIL is final: iteration stops (owner).

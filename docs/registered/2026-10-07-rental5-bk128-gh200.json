@@ -1,0 +1,116 @@
+{
+ "registered": "2026-10-07, before any rental-5 page",
+ "name": "2026-10-07-rental5-bk128-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE: a BLIND confirmation of the occupancy-3 floor, not a lever",
+ "design": "design-r5 DESIGN.md part 4a with REVIEW.md section (f): SYNC (q 0.55-0.65) is already excluded by the SEEN counters (c128 686.9 is about 2 x 346), so this confirms the floor's time blind; num-stages=4 explicit on both pages; placed BELOW second K",
+ "tool": "scorer scripts/scoring/rental5/score_bk128.py",
+ "pages": {
+  "path": "gaps-<card>-olmoe-1b-7b-<label>/private_weight_reference/*/report.json, the G = 64 page, NATIVE only, treads 1..9",
+  "labels": {
+   "bk64": [
+    64,
+    4
+   ],
+   "bk128": [
+    128,
+    4
+   ]
+  },
+  "design_check": "each page's pinned BLOCK_SIZE_K and num_stages must equal its label's; else NOT SCORED"
+ },
+ "statistic": {
+  "q_n": "T(bk128, n) / T(bk64, n), NATIVE ms_p50, same board, n = 4..9 (floor-bound)",
+  "e": "q_meas / q_pred - 1"
+ },
+ "floor_formula": "q_pred = 1 + sum_g ceil(N_live,g / 132) [(S128 c128 + F_g) - (S64 c64 + F_g)] / (1710 MHz) / T64_pred, T64_pred the v2 timing model at sigma 1 (OLMoE NATIVE G 64, the 8x7B v2 fit), c64 the SEEN k64s4 counter c (346.2 / 344.0)",
+ "rivals": {
+  "H_C": {
+   "c128": {
+    "w1": 686.9,
+    "w2": 684.1
+   },
+   "label": "SEEN rental-4 counters at BK 128 s4, occupancy 3 / 3"
+  },
+  "SYNC": {
+   "c128": {
+    "w1": 346.2,
+    "w2": 344.0
+   },
+   "label": "c per k-step held at BK 64: the floor halves"
+  },
+  "PS": {
+   "c128": 688.2,
+   "label": "c128 = 2 x 344.1 (CAL c), printed"
+  }
+ },
+ "predicted_q": {
+  "4": {
+   "T64_ms": 0.728758,
+   "H_C": 0.993974,
+   "SYNC": 0.580841,
+   "PS": 0.996684
+  },
+  "5": {
+   "T64_ms": 0.893953,
+   "H_C": 0.993918,
+   "SYNC": 0.576941,
+   "PS": 0.996653
+  },
+  "6": {
+   "T64_ms": 1.069753,
+   "H_C": 0.993875,
+   "SYNC": 0.573945,
+   "PS": 0.996629
+  },
+  "7": {
+   "T64_ms": 1.234949,
+   "H_C": 0.993847,
+   "SYNC": 0.572044,
+   "PS": 0.996614
+  },
+  "8": {
+   "T64_ms": 1.410749,
+   "H_C": 0.993824,
+   "SYNC": 0.570383,
+   "PS": 0.996601
+  },
+  "9": {
+   "T64_ms": 1.575944,
+   "H_C": 0.993807,
+   "SYNC": 0.569267,
+   "PS": 0.996592
+  }
+ },
+ "rules": {
+  "H_C": "HOLDS if rms e <= 1% over the scored n; else FAILS",
+  "SYNC": "EXCLUDED if |e_SYNC| > 3 sqrt2 sigma_page (0.007637) on at least 4 cells",
+  "PS": "printed only (0.2 to 0.6% from H_C)",
+  "need": "at least 4 of n = 4..9 on both pages, else NOT SCORED"
+ },
+ "gates": "R3's VALIDITY gates by rental 3's two views (ALL and CLEAN); V5 does not gate",
+ "missing": "a page missing: NOT SCORED; the drop-group bk keeps the pair together",
+ "labels": {
+  "time": "BLIND-CALMODEL (OLMoE is a CAL model; no OLMoE G = 64 timed page at BK 128)",
+  "counters": "SEEN"
+ },
+ "secondary": "r5common.secondary on (q_pred H_C, q_meas), one cluster: calibration NOT RESOLVED",
+ "seen_data": [
+  "c128, c64 SEEN (rental 4 counters)",
+  "the v2 fit is CAL (8x7B)"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/private_weight_reference.py": "6c90112eb2f850382003bca2d5b947e6b67f192dcea16eec10c83e0c2ccde277",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/instr_probe.py": "a5b421bfd6825da67a8241a9535319c83824620928309633ac3b096ca479a6fe",
+  "scripts/skew_synth.py": "eea9d019f25b2b427ed74f6c33194dbd35b37f4ba95aab27a030c3d88fb94c23",
+  "scripts/cross_model_score.py": "d770e8ba1c4178add7c7180921d434aca8c4ee115068809cb5f0227dad22ef07",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "moe/instrumented/__init__.py": "331d8130c6aaee92c0e0cedab7fa7d2f79fc1479c1a5ddfea8cd1b3b44141488",
+  "moe/instrumented/fused_moe_instr.py": "16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250",
+  "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+  "scripts/scoring/rental5/r5common.py": "b3ae6f0d7feaa733e5c1aa7ed2f34706025bc02739aac6f4536ed8d3567e1086",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11"
+ }
+}

@@ -1,0 +1,40 @@
+DECODE STAGE, CAL2 RENTAL (addendum 3): score, model v4d' (fixes W, R; 0 fitted constants added)
+tile params: the tile stage's selections from A2's score directory (scripts/scoring/tileA2)
+power: READ (700.0 W)
+descriptive cells (out of the fit, the rho selection and every E1 bar): 11
+Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.
+units:
+  olmoe-1b-7b-dm-r3decode: counted
+  mixtral-8x7b-dm-r3decode: counted
+  olmoe-1b-7b-dc-r3decode: counted
+  mixtral-8x7b-dc-r3decode: counted
+  mixtral-8x7b-de-r3decode: counted
+  olmoe-1b-7b-dn-decodebytes: counted
+  mixtral-8x7b-dn-decodebytes: counted
+  olmoe-1b-7b-dd-r3decode: counted
+  mixtral-8x7b-dd-r3decode: counted
+  olmoe-1b-7b-dr-r3decode: counted
+fit: selected rho scaled (the lower CAL rms on sub-wave cells (sub-wave: some GEMM under one wave at the census occupancy); fixed unless scaled's rms is lower by 0.1 percentage points (absolute))
+  fixed: FITTED T0_GR 0.018929789766150538 s_naive -0.014998797871073067 s_block -0.019587101304307984 in-sample {'cells': 91, 'rms': 0.135467, 'worst': 0.384246, 'mean': 0.038392} sub-wave {'cells': 40, 'rms': 0.182871, 'worst': 0.384246, 'mean': 0.096657}
+  scaled: FITTED T0_GR 0.02802160411353527 s_naive -0.012706559284536033 s_block -0.014428759988317691 in-sample {'cells': 91, 'rms': 0.022904, 'worst': -0.063504, 'mean': 0.001745} sub-wave {'cells': 40, 'rms': 0.026394, 'worst': 0.056333, 'mean': 0.011499}
+E1-CAL-IN-SAMPLE: HOLDS {'cells': 91, 'rms': 0.022904, 'worst': -0.063504, 'mean': 0.001745}
+G3-D shuffle: EQUIVALENT (margin 1.868742 us)
+G3-D label: NOT EQUIVALENT (margin 0.51381 us)
+G3-D fill: NOT EQUIVALENT (margin 2.829031 us)
+REP: sigma_page 0.001586 over 47 pairs; blind bars {'rms_max': 0.015, 'max_abs': 0.04, 'mean_max': 0.0075, 'source': "tightened from the CAL replicate's sigma_page 0.00159"}
+GD2: PASS median 3.936 us band [-0.135994, 7.093979]
+GD3: NOT SCORED: no E240 page or no matched cell None/None in band
+STOP (addendum 3, G3-D label DESCRIPTIVE): GO
+  DESCRIPTIVE: G3-D label NOT EQUIVALENT: time is not shown to be a function of counts alone
+REP over every cell (DESCRIPTIVE): sigma_page 0.001622 over 52 pairs; bars {'rms_max': 0.015, 'max_abs': 0.04, 'mean_max': 0.0075, 'source': "tightened from the CAL replicate's sigma_page 0.00162"}
+SIGMA-D mixtral-8x7b: MIXED (median position 0.35355, 6 of 6 cells read); v4d sigma 1 {'cells': 6, 'rms': 0.23602, 'worst': 0.426484, 'mean': 0.200217}; L2-served {'cells': 6, 'rms': 0.267947, 'worst': -0.310009, 'mean': -0.265605}
+SIGMA-D olmoe-1b-7b: L2-SERVED (median position 0.700513, 5 of 5 cells read); v4d sigma 1 {'cells': 5, 'rms': 0.32718, 'worst': 0.454695, 'mean': 0.316067}; L2-served {'cells': 5, 'rms': 0.15294, 'worst': -0.21876, 'mean': -0.118019}
+knee p 5.75 (DESCRIPTIVE): {'cells': 91, 'rms': 0.023183, 'worst': -0.062187, 'mean': 0.003097}
+knee p 3.75 (DESCRIPTIVE): {'cells': 91, 'rms': 0.026655, 'worst': 0.073085, 'mean': 0.011028}
+as registered (DESCRIPTIVE): E1 FAILS {'cells': 102, 'rms': 0.086491, 'worst': 0.414813, 'mean': 0.00193}; STOP STOP
+G3-D label (DESCRIPTIVE): NOT EQUIVALENT margin 0.51381 us; mixtral-8x7b mean -2.286665 us over 3 pairs; olmoe-1b-7b mean -0.035554 us over 3 pairs
+v4d as registered (DESCRIPTIVE): E1 FAILS {'cells': 91, 'rms': 0.048742, 'worst': -0.232348, 'mean': 0.01734}; addendum-3 stop STOP
+settle M1 (DESCRIPTIVE): DESCRIPTIVE
+settle M2 (DESCRIPTIVE): DESCRIPTIVE
+settle M3 (DESCRIPTIVE): FOLLOWS-ADDRESS; q -0.694169
+settle M4 (DESCRIPTIVE): DESCRIPTIVE; 12 of 14 GEMM rows

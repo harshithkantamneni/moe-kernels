@@ -1,0 +1,2 @@
+G	n	seeds	mean	sd	env_lo	env_hi	joint	invalid_in_envelope	eta	eta_lo	eta_hi	band	eta_exit	reads_as	top_tread	shared_top_ms	bound_read_stream	bound_pin_rate	note
+2	1	0	0.7516	none	0.7507	0.7528	FAIL	none	1.1014	1.0678	1.1497	withheld:INVALID	INVALID	unresolved	6	3.2007	0.8477	0.8934	one run: the envelope is its own interval

@@ -1,0 +1,2008 @@
+{
+ "registered": "2026-10-13, before any rental-7 page",
+ "name": "2026-10-13-rental7-q1-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r7 DESIGN.md corrected by design-r7-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-13 (1 S_med plus the run guard, P20 printed beside; 2 Q1-H rivals scored apart from the copies clause; 3 the l2open byte page in, C 60 MiB, the 5% clause on skewed rows; 4 no second-K rerun; 5 fresh seeds on the same treads)",
+ "tool": "scorer scripts/scoring/rental7/score_q1.py; r7common.q1h_rule, q1h_power; r6common.q1c_rule, q1c_power",
+ "what": "rental 6's lost Q1 units, all six on this board (Qwen1.5 c9 rerun: Q1-C's D and the copies clause are same-board contrasts)",
+ "pages": {
+  "q9": "c9 balanced pages (SEEN replicates)",
+  "q15": "c15 balanced pages (SHARED BLIND, NATIVE SEEN)",
+  "models": {
+   "qwen1.5-moe-a2.7b": [
+    1,
+    2
+   ],
+   "phi-3.5-moe": [
+    1,
+    2
+   ],
+   "jetmoe-8b": [
+    1,
+    2,
+    4
+   ]
+  },
+  "files": {
+   "q1-phi-3.5-moe.json": {
+    "path": "docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json",
+    "sha256": "a78973617635f67a3eec8dad5d26c2f85a2cf996ba251236d8256ff21e6d8d24",
+    "shuffle_seed": 20261010,
+    "cells": [
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "q1-qwen1.5-moe-a2.7b.json": {
+    "path": "docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json",
+    "sha256": "f60467c6a99f97eba1210eba9af3ece5fab5ceed755abeaef783bf49b096b8c6",
+    "shuffle_seed": 20261010,
+    "cells": [
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "q1-jetmoe-8b.json": {
+    "path": "docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json",
+    "sha256": "0a131f4a19f24978b6cff7b1de565476871159a3254188517e89027915ce0401",
+    "shuffle_seed": 20261010,
+    "cells": [
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   }
+  },
+  "files_note": "rental 6's registered q1-*.json verbatim (balanced cells only, no draw)"
+ },
+ "predictions": [
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c9",
+   "copies": 9,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.77522,
+    "v3": 0.773523,
+    "v3_nob": 0.773523,
+    "v3_noca": 0.77522,
+    "LT3": 0.773398,
+    "v3_all": 0.773523,
+    "H8": 0.773301
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "small-batch",
+   "native_path": "small-batch",
+   "declared": 16,
+   "dead_ctas": {
+    "w1": 3200,
+    "w2": 1024
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 c9 G 8 balanced pages, probe on); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c9",
+   "copies": 9,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.768531,
+    "v3": 0.766833,
+    "v3_nob": 0.766833,
+    "v3_noca": 0.768531,
+    "LT3": 0.766708,
+    "v3_all": 0.757813,
+    "H8": 0.764216
+   },
+   "A_proxy_us": -3.86,
+   "A_how": "own declaration",
+   "path": "block-scan",
+   "native_path": "small-batch",
+   "declared": 144,
+   "dead_ctas": {
+    "w1": 28000,
+    "w2": 8960
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 c9 G 8 balanced pages, probe on); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c9",
+   "copies": 9,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 1.035098,
+    "v3": 1.035058,
+    "v3_nob": 1.035058,
+    "v3_noca": 1.035098,
+    "LT3": 1.018399,
+    "v3_all": 1.035058,
+    "H8": 1.034472
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 16,
+   "dead_ctas": {
+    "w1": 3200,
+    "w2": 1024
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 c9 G 8 balanced pages, probe on); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c9",
+   "copies": 9,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 1.048464,
+    "v3": 1.043664,
+    "v3_nob": 1.048424,
+    "v3_noca": 1.043704,
+    "LT3": 1.027005,
+    "v3_all": 1.043664,
+    "H8": 1.050523
+   },
+   "A_proxy_us": 0.4,
+   "A_how": "own declaration",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 144,
+   "dead_ctas": {
+    "w1": 28000,
+    "w2": 8960
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 c9 G 8 balanced pages, probe on); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c15",
+   "copies": 15,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.77522,
+    "v3": 0.773523,
+    "v3_nob": 0.773523,
+    "v3_noca": 0.77522,
+    "LT3": 0.773398,
+    "v3_all": 0.773523,
+    "H8": 0.773301
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "small-batch",
+   "native_path": "small-batch",
+   "declared": 16,
+   "dead_ctas": {
+    "w1": 3200,
+    "w2": 1024
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (c15 NATIVE declares E at any copies count, so it repeats the 2026-09-29 c9 NATIVE cell); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c15",
+   "copies": 15,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.787038,
+    "v3": 0.78534,
+    "v3_nob": 0.78534,
+    "v3_noca": 0.787038,
+    "LT3": 0.785215,
+    "v3_all": 0.77632,
+    "H8": 0.782723
+   },
+   "A_proxy_us": -3.86,
+   "A_how": "c9 table (no table at this declaration)",
+   "path": "block-scan",
+   "native_path": "small-batch",
+   "declared": 240,
+   "dead_ctas": {
+    "w1": 46600,
+    "w2": 14912
+   },
+   "host_ok": true,
+   "label_blind": "BLIND"
+  },
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c15",
+   "copies": 15,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 1.035098,
+    "v3": 1.035058,
+    "v3_nob": 1.035058,
+    "v3_noca": 1.035098,
+    "LT3": 1.018399,
+    "v3_all": 1.035058,
+    "H8": 1.034472
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 16,
+   "dead_ctas": {
+    "w1": 3200,
+    "w2": 1024
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (c15 NATIVE declares E at any copies count, so it repeats the 2026-09-29 c9 NATIVE cell); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "phi-3.5-moe",
+   "page": "c15",
+   "copies": 15,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 1.066971,
+    "v3": 1.062171,
+    "v3_nob": 1.066931,
+    "v3_noca": 1.062211,
+    "LT3": 1.045512,
+    "v3_all": 1.062171,
+    "H8": 1.06903
+   },
+   "A_proxy_us": 0.4,
+   "A_how": "c9 table (no table at this declaration)",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 240,
+   "dead_ctas": {
+    "w1": 46600,
+    "w2": 14912
+   },
+   "host_ok": true,
+   "label_blind": "BLIND"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c9",
+   "copies": 9,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.341469,
+    "v3": 0.339586,
+    "v3_nob": 0.339586,
+    "v3_noca": 0.341469,
+    "LT3": 0.339538,
+    "v3_all": 0.339586,
+    "H8": 0.338589
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c9",
+   "copies": 9,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.37059,
+    "v3": 0.363817,
+    "v3_nob": 0.368707,
+    "v3_noca": 0.3657,
+    "LT3": 0.363769,
+    "v3_all": 0.363817,
+    "H8": 0.370266
+   },
+   "A_proxy_us": 0.27,
+   "A_how": "own declaration",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 540,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c9",
+   "copies": 9,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.473526,
+    "v3": 0.473454,
+    "v3_nob": 0.473454,
+    "v3_noca": 0.473526,
+    "LT3": 0.468913,
+    "v3_all": 0.473454,
+    "H8": 0.472652
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c9",
+   "copies": 9,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.502647,
+    "v3": 0.497896,
+    "v3_nob": 0.502576,
+    "v3_noca": 0.497967,
+    "LT3": 0.493354,
+    "v3_all": 0.497896,
+    "H8": 0.504539
+   },
+   "A_proxy_us": 0.48,
+   "A_how": "own declaration",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 540,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c15",
+   "copies": 15,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.341469,
+    "v3": 0.339586,
+    "v3_nob": 0.339586,
+    "v3_noca": 0.341469,
+    "LT3": 0.339538,
+    "v3_all": 0.339586,
+    "H8": 0.338589
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (c15 NATIVE declares E at any copies count, so it repeats the 2026-09-29 and rental 5's c9 NATIVE cell); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c15",
+   "copies": 15,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.396906,
+    "v3": 0.390133,
+    "v3_nob": 0.395023,
+    "v3_noca": 0.392016,
+    "LT3": 0.390085,
+    "v3_all": 0.390133,
+    "H8": 0.396582
+   },
+   "A_proxy_us": 0.27,
+   "A_how": "c9 table (no table at this declaration)",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 900,
+   "dead_ctas": {
+    "w1": 38368,
+    "w2": 27904
+   },
+   "host_ok": true,
+   "label_blind": "BLIND (c15 SHARED: no c15 page exists)"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c15",
+   "copies": 15,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.473526,
+    "v3": 0.473454,
+    "v3_nob": 0.473454,
+    "v3_noca": 0.473526,
+    "LT3": 0.468913,
+    "v3_all": 0.473454,
+    "H8": 0.472652
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (c15 NATIVE declares E at any copies count, so it repeats the 2026-09-29 and rental 5's c9 NATIVE cell); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "c15",
+   "copies": 15,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.528963,
+    "v3": 0.524211,
+    "v3_nob": 0.528891,
+    "v3_noca": 0.524283,
+    "LT3": 0.519669,
+    "v3_all": 0.524211,
+    "H8": 0.530855
+   },
+   "A_proxy_us": 0.48,
+   "A_how": "c9 table (no table at this declaration)",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 900,
+   "dead_ctas": {
+    "w1": 38368,
+    "w2": 27904
+   },
+   "host_ok": true,
+   "label_blind": "BLIND (c15 SHARED: no c15 page exists)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c9",
+   "copies": 9,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.227871,
+    "v3": 0.227658,
+    "v3_nob": 0.227658,
+    "v3_noca": 0.227871,
+    "LT3": 0.227634,
+    "v3_all": 0.227658,
+    "H8": 0.227501
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "small-batch",
+   "native_path": "small-batch",
+   "declared": 8,
+   "dead_ctas": {
+    "w1": 1408,
+    "w2": 256
+   },
+   "host_ok": false,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c9",
+   "copies": 9,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.216112,
+    "v3": 0.215899,
+    "v3_nob": 0.215899,
+    "v3_noca": 0.216112,
+    "LT3": 0.215875,
+    "v3_all": 0.209989,
+    "H8": 0.216461
+   },
+   "A_proxy_us": -0.75,
+   "A_how": "own declaration",
+   "path": "block-scan",
+   "native_path": "small-batch",
+   "declared": 72,
+   "dead_ctas": {
+    "w1": 12320,
+    "w2": 2240
+   },
+   "host_ok": false,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c9",
+   "copies": 9,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.285148,
+    "v3": 0.285143,
+    "v3_nob": 0.285143,
+    "v3_noca": 0.285148,
+    "LT3": 0.280442,
+    "v3_all": 0.285143,
+    "H8": 0.285084
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "small-batch",
+   "native_path": "small-batch",
+   "declared": 8,
+   "dead_ctas": {
+    "w1": 1408,
+    "w2": 256
+   },
+   "host_ok": false,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c9",
+   "copies": 9,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.273389,
+    "v3": 0.273385,
+    "v3_nob": 0.273385,
+    "v3_noca": 0.273389,
+    "LT3": 0.268683,
+    "v3_all": 0.264985,
+    "H8": 0.271553
+   },
+   "A_proxy_us": -3.24,
+   "A_how": "own declaration",
+   "path": "block-scan",
+   "native_path": "small-batch",
+   "declared": 72,
+   "dead_ctas": {
+    "w1": 12320,
+    "w2": 2240
+   },
+   "host_ok": false,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c9",
+   "copies": 9,
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.488908,
+    "v3": 0.488908,
+    "v3_nob": 0.488908,
+    "v3_noca": 0.488908,
+    "LT3": 0.484345,
+    "v3_all": 0.488908,
+    "H8": 0.488115
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 8,
+   "dead_ctas": {
+    "w1": 1408,
+    "w2": 256
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c9",
+   "copies": 9,
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.497205,
+    "v3": 0.492585,
+    "v3_nob": 0.497205,
+    "v3_noca": 0.492585,
+    "LT3": 0.488022,
+    "v3_all": 0.492585,
+    "H8": 0.49924
+   },
+   "A_proxy_us": 0.54,
+   "A_how": "own declaration",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 72,
+   "dead_ctas": {
+    "w1": 12320,
+    "w2": 2240
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (2026-09-29 / rental-5 c9 pages)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c15",
+   "copies": 15,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.227871,
+    "v3": 0.227658,
+    "v3_nob": 0.227658,
+    "v3_noca": 0.227871,
+    "LT3": 0.227634,
+    "v3_all": 0.227658,
+    "H8": 0.227501
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "small-batch",
+   "native_path": "small-batch",
+   "declared": 8,
+   "dead_ctas": {
+    "w1": 1408,
+    "w2": 256
+   },
+   "host_ok": false,
+   "label_blind": "SEEN replicate (c15 NATIVE declares E at any copies count, so it repeats the 2026-09-29 c9 NATIVE cell); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c15",
+   "copies": 15,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.224342,
+    "v3": 0.22413,
+    "v3_nob": 0.22413,
+    "v3_noca": 0.224342,
+    "LT3": 0.224106,
+    "v3_all": 0.21822,
+    "H8": 0.224691
+   },
+   "A_proxy_us": -0.75,
+   "A_how": "c9 table (no table at this declaration)",
+   "path": "block-scan",
+   "native_path": "small-batch",
+   "declared": 120,
+   "dead_ctas": {
+    "w1": 20592,
+    "w2": 3744
+   },
+   "host_ok": false,
+   "label_blind": "BLIND (c15 SHARED: no c15 page exists)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c15",
+   "copies": 15,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.285148,
+    "v3": 0.285143,
+    "v3_nob": 0.285143,
+    "v3_noca": 0.285148,
+    "LT3": 0.280442,
+    "v3_all": 0.285143,
+    "H8": 0.285084
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "small-batch",
+   "native_path": "small-batch",
+   "declared": 8,
+   "dead_ctas": {
+    "w1": 1408,
+    "w2": 256
+   },
+   "host_ok": false,
+   "label_blind": "SEEN replicate (c15 NATIVE declares E at any copies count, so it repeats the 2026-09-29 c9 NATIVE cell); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c15",
+   "copies": 15,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.28162,
+    "v3": 0.281615,
+    "v3_nob": 0.281615,
+    "v3_noca": 0.28162,
+    "LT3": 0.276914,
+    "v3_all": 0.273215,
+    "H8": 0.279784
+   },
+   "A_proxy_us": -3.24,
+   "A_how": "c9 table (no table at this declaration)",
+   "path": "block-scan",
+   "native_path": "small-batch",
+   "declared": 120,
+   "dead_ctas": {
+    "w1": 20592,
+    "w2": 3744
+   },
+   "host_ok": false,
+   "label_blind": "BLIND (c15 SHARED: no c15 page exists)"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c15",
+   "copies": 15,
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.488908,
+    "v3": 0.488908,
+    "v3_nob": 0.488908,
+    "v3_noca": 0.488908,
+    "LT3": 0.484345,
+    "v3_all": 0.488908,
+    "H8": 0.488115
+   },
+   "A_proxy_us": 0.0,
+   "A_how": "native",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 8,
+   "dead_ctas": {
+    "w1": 1408,
+    "w2": 256
+   },
+   "host_ok": true,
+   "label_blind": "SEEN replicate (c15 NATIVE declares E at any copies count, so it repeats the 2026-09-29 c9 NATIVE cell); only the board is new"
+  },
+  {
+   "test": "Q1",
+   "model": "jetmoe-8b",
+   "page": "c15",
+   "copies": 15,
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms": {
+    "v2": 0.505435,
+    "v3": 0.500815,
+    "v3_nob": 0.505435,
+    "v3_noca": 0.500815,
+    "LT3": 0.496253,
+    "v3_all": 0.500815,
+    "H8": 0.507471
+   },
+   "A_proxy_us": 0.54,
+   "A_how": "c9 table (no table at this declaration)",
+   "path": "block-scan",
+   "native_path": "block-scan",
+   "declared": 120,
+   "dead_ctas": {
+    "w1": 20592,
+    "w2": 3744
+   },
+   "host_ok": true,
+   "label_blind": "BLIND (c15 SHARED: no c15 page exists)"
+  }
+ ],
+ "predictions_note": "rental 6's registered Q1 predictions verbatim (copied from 2026-10-09-rental6-q1-gh200), so its g_R and A proxies are unchanged; the skew-page pairs read rental7-skew's predictions",
+ "statistic": {
+  "g": "per (NATIVE, SHARED) pair on one page: g = (T_S - T_N)_meas - (T_S - T_N)_v3, us, T_v3 carried to the page's own A (r6model.reprice); a page with no align_probe: its SHARED cells are NOT SCORED in Q1-H and Q1-P",
+  "se": "cluster-robust (CR1) on (model, n): se^2 = C / (C - 1) x sum_c (sum_i in c (g_i - mean))^2 / N^2",
+  "g_R": "rival R's per-pair (S - N)_R - (S - N)_v3 from the registered predictions (both carried to the page's A), averaged over the SAME valid pairs"
+ },
+ "tests": {
+  "Q1-H": {
+   "label": "REPLICATE: 21 of its 24 pairs are SEEN replicates (every c9 and skew-page control pair); only the c15 SHARED cells are BLIND, so the verdict is BLIND only in the copies clause",
+   "population": "CONTROL pairs (uniform, balanced) whose NATIVE takes block-scan and that pass the host rule: Phi n 2 (skew pages A, B, C and Q1 c9, c15), Qwen1.5 n 2 (c9, c15), JetMoE n 4 (c9, c15); ADDED (design-r7-review (d), SEEN-SELECTED, zero cost: the cells are on the skew pages): Mixtral n 6 and Phi n 4 controls on pages A, B, C",
+   "clusters": [
+    "jetmoe-8b|n4",
+    "mixtral-8x7b|n6",
+    "phi-3.5-moe|n2",
+    "phi-3.5-moe|n4",
+    "qwen1.5-moe-a2.7b|n2"
+   ],
+   "pairs": [
+    {
+     "model": "jetmoe-8b",
+     "page": "c15",
+     "n": 4,
+     "label": "balanced",
+     "copies": 15,
+     "q1page": true,
+     "cluster": "jetmoe-8b|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.62,
+      "v3": 0.0,
+      "v3_nob": 4.62,
+      "v3_noca": 0.0,
+      "LT3": 0.001,
+      "v3_all": 0.0,
+      "H8": 7.449
+     },
+     "gap_v3_us": 11.907,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "BLIND (c15 SHARED: the copies clause's blind side)"
+    },
+    {
+     "model": "jetmoe-8b",
+     "page": "c9",
+     "n": 4,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": true,
+     "cluster": "jetmoe-8b|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.62,
+      "v3": 0.0,
+      "v3_nob": 4.62,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.448
+     },
+     "gap_v3_us": 3.677,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "A",
+     "n": 6,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n6",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.08,
+      "v3": 0.0,
+      "v3_nob": 4.08,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 12.629,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "A",
+     "n": 6,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n6",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.08,
+      "v3": 0.0,
+      "v3_nob": 4.08,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 12.629,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "B",
+     "n": 6,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n6",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.08,
+      "v3": 0.0,
+      "v3_nob": 4.08,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 12.629,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "B",
+     "n": 6,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n6",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.08,
+      "v3": 0.0,
+      "v3_nob": 4.08,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 12.629,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "C",
+     "n": 6,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n6",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.08,
+      "v3": 0.0,
+      "v3_nob": 4.08,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 12.629,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "C",
+     "n": 6,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n6",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.08,
+      "v3": 0.0,
+      "v3_nob": 4.08,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 12.629,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "A",
+     "n": 2,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 8.626,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "A",
+     "n": 2,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 8.626,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "A",
+     "n": 4,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.39,
+      "v3": 0.0,
+      "v3_nob": 4.39,
+      "v3_noca": 0.0,
+      "LT3": -0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 8.976,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "A",
+     "n": 4,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.39,
+      "v3": 0.0,
+      "v3_nob": 4.39,
+      "v3_noca": 0.0,
+      "LT3": -0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 8.976,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "B",
+     "n": 2,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 8.626,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "B",
+     "n": 2,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 8.626,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "B",
+     "n": 4,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.39,
+      "v3": 0.0,
+      "v3_nob": 4.39,
+      "v3_noca": 0.0,
+      "LT3": -0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 8.976,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "B",
+     "n": 4,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.39,
+      "v3": 0.0,
+      "v3_nob": 4.39,
+      "v3_noca": 0.0,
+      "LT3": -0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 8.976,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "C",
+     "n": 2,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 8.626,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "C",
+     "n": 2,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 8.626,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "C",
+     "n": 4,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.39,
+      "v3": 0.0,
+      "v3_nob": 4.39,
+      "v3_noca": 0.0,
+      "LT3": -0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 8.976,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "C",
+     "n": 4,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n4",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.39,
+      "v3": 0.0,
+      "v3_nob": 4.39,
+      "v3_noca": 0.0,
+      "LT3": -0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 8.976,
+     "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "c15",
+     "n": 2,
+     "label": "balanced",
+     "copies": 15,
+     "q1page": true,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.76,
+      "v3": 0.0,
+      "v3_nob": 4.76,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 27.113,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "BLIND (c15 SHARED: the copies clause's blind side)"
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "c9",
+     "n": 2,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": true,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.76,
+      "v3": 0.0,
+      "v3_nob": 4.76,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 8.606,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    },
+    {
+     "model": "qwen1.5-moe-a2.7b",
+     "page": "c15",
+     "n": 2,
+     "label": "balanced",
+     "copies": 15,
+     "q1page": true,
+     "cluster": "qwen1.5-moe-a2.7b|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.68,
+      "v3": 0.0,
+      "v3_nob": 4.68,
+      "v3_noca": 0.0,
+      "LT3": -0.001,
+      "v3_all": 0.0,
+      "H8": 7.446
+     },
+     "gap_v3_us": 50.757,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "BLIND (c15 SHARED: the copies clause's blind side)"
+    },
+    {
+     "model": "qwen1.5-moe-a2.7b",
+     "page": "c9",
+     "n": 2,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": true,
+     "cluster": "qwen1.5-moe-a2.7b|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.679,
+      "v3": 0.0,
+      "v3_nob": 4.68,
+      "v3_noca": -0.001,
+      "LT3": -0.001,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 24.442,
+     "population": "the design's population (design-r7 3.2)",
+     "label_blind": "SEEN replicate (the same cells as published pages; only the board is new)"
+    }
+   ],
+   "rule": "v3 HOLDS iff |mean g| <= 1.5 us (pair-weighted) AND the copies clause (|d| <= 1.5 us, d the pair-weighted mean over models with valid Q1 pairs at both c9 and c15 of mean g(c15) - mean g(c9)); the copies clause undecided leaves v3 UNDECIDED (FAILS if the level clause fails); a rival is EXCLUDED iff |mean g - g_R| > 3 se and > 1.5 us, scored whenever 6 pairs and 3 clusters are valid WHATEVER the copies clause reads (owner decision 2); se CR1 on (model, n) and at least 3 clusters, else UNDECIDED",
+   "rivals": [
+    "v2",
+    "H8",
+    "v3_all"
+   ],
+   "min_pairs": 6,
+   "min_clusters": 3,
+   "not_separated": "v3_all is not separated from v3 by construction (g_R 0 on every block-scan pair): stated here, not discovered",
+   "power": {
+    "model": "g = anchor(cluster) + tau x N(0,1) per cluster + sigma(cluster) x N(0,1) per pair (+ g_R of the true rival; + a c15 effect on c15 Q1 pairs); no pair losses (r7 lost no held cell)",
+    "anchor_us": {
+     "phi-3.5-moe|n2": 0.638,
+     "qwen1.5-moe-a2.7b|n2": 1.02,
+     "jetmoe-8b|n4": 0.77,
+     "mixtral-8x7b|n6": 0.041,
+     "phi-3.5-moe|n4": 0.608
+    },
+    "sigma_us": {
+     "phi-3.5-moe|n2": 0.2,
+     "qwen1.5-moe-a2.7b|n2": 0.45,
+     "jetmoe-8b|n4": 0.45,
+     "mixtral-8x7b|n6": 0.769,
+     "phi-3.5-moe|n4": 0.563
+    },
+    "label": "SEEN inputs (design-r7 3.2 and design-r7-review work/seen_g_clusters.json, mc_q1h.py)",
+    "device": "cpu",
+    "dtype": "float64",
+    "R": 200000,
+    "points": {
+     "registered population | v3 | tau 0.9": {
+      "pairs": 24,
+      "clusters": 5,
+      "P(v3 HOLDS)": 0.98259,
+      "P(level clause)": 0.98259,
+      "P(copies clause)": 1.0,
+      "P(EXCLUDED v2)": 0.9992,
+      "P(EXCLUDED H8)": 1.0,
+      "P(EXCLUDED v3_all)": 0.01306
+     },
+     "registered population | v3 | tau 1.3": {
+      "pairs": 24,
+      "clusters": 5,
+      "P(v3 HOLDS)": 0.92951,
+      "P(level clause)": 0.92951,
+      "P(copies clause)": 1.0,
+      "P(EXCLUDED v2)": 0.97698,
+      "P(EXCLUDED H8)": 0.99999,
+      "P(EXCLUDED v3_all)": 0.03884
+     },
+     "registered population | v3 | tau 0.9 | anchors 0": {
+      "pairs": 24,
+      "clusters": 5,
+      "P(v3 HOLDS)": 0.99879,
+      "P(level clause)": 0.99879,
+      "P(copies clause)": 1.0,
+      "P(EXCLUDED v2)": 0.99996,
+      "P(EXCLUDED H8)": 1.0,
+      "P(EXCLUDED v3_all)": 0.00089
+     },
+     "registered population | v3 | tau 0.9 | c15 effect +1 us": {
+      "pairs": 24,
+      "clusters": 5,
+      "P(v3 HOLDS)": 0.91209,
+      "P(level clause)": 0.967,
+      "P(copies clause)": 0.94319,
+      "P(EXCLUDED v2)": 0.99852,
+      "P(EXCLUDED H8)": 1.0,
+      "P(EXCLUDED v3_all)": 0.02483
+     },
+     "registered population | v3 | tau 0.9 | c15 effect +2 us": {
+      "pairs": 24,
+      "clusters": 5,
+      "P(v3 HOLDS)": 0.05364,
+      "P(level clause)": 0.94181,
+      "P(copies clause)": 0.05683,
+      "P(EXCLUDED v2)": 0.9972,
+      "P(EXCLUDED H8)": 1.0,
+      "P(EXCLUDED v3_all)": 0.0424
+     },
+     "registered population | v2 true | tau 0.9": {
+      "pairs": 24,
+      "clusters": 5,
+      "P(v3 HOLDS)": 0.0,
+      "P(level clause)": 0.0,
+      "P(copies clause)": 1.0,
+      "P(EXCLUDED v2)": 0.01083,
+      "P(EXCLUDED H8)": 0.88522,
+      "P(EXCLUDED v3_all)": 0.99997
+     },
+     "registered population | H8 true | tau 0.9": {
+      "pairs": 24,
+      "clusters": 5,
+      "P(v3 HOLDS)": 0.0,
+      "P(level clause)": 0.0,
+      "P(copies clause)": 1.0,
+      "P(EXCLUDED v2)": 0.99699,
+      "P(EXCLUDED H8)": 0.01306,
+      "P(EXCLUDED v3_all)": 1.0
+     },
+     "design population only (3 clusters) | v3 | tau 0.9": {
+      "pairs": 12,
+      "clusters": 3,
+      "P(v3 HOLDS)": 0.88704,
+      "P(level clause)": 0.88704,
+      "P(copies clause)": 1.0,
+      "P(EXCLUDED v2)": 0.99613,
+      "P(EXCLUDED H8)": 1.0,
+      "P(EXCLUDED v3_all)": 0.09285
+     },
+     "design population only (3 clusters) | v3 | tau 1.3": {
+      "pairs": 12,
+      "clusters": 3,
+      "P(v3 HOLDS)": 0.79237,
+      "P(level clause)": 0.79237,
+      "P(copies clause)": 1.0,
+      "P(EXCLUDED v2)": 0.96093,
+      "P(EXCLUDED H8)": 0.99896,
+      "P(EXCLUDED v3_all)": 0.13871
+     }
+    },
+    "mps_check": {
+     "file": "docs/registered/2026-10-13-rental7-skew-hist/power7_check.json",
+     "sha256": "983b41754cdd30b5be59e7a3afdb47e5c1ee07a53c827cb2af276b301e38a3f4",
+     "torch": "2.13.0",
+     "R": 200000,
+     "max_abs_diff_cpu_float64_vs_mps_float32": 1.0000000000065512e-05,
+     "seconds": {
+      "cpu_float64": 1.34,
+      "mps_float32": 1.96,
+      "pricing_cpu_first_call": 1.7
+     }
+    }
+   }
+  },
+  "Q1-C": {
+   "cell": "Qwen1.5 SHARED n 1 (NATIVE block-scan), c9 and c15 Q1 pages; x = g of that pair",
+   "statistic": "D = x15 - x9 (owner, review (e)): a board shift common to the two pages cancels",
+   "rivals": {
+    "CALL": "D = 0 (a per-call cost at n = 1)",
+    "DEAD": "D = (ratio - 1) x9, ratio = dead CTAs c15 / c9 = 66272 / 39824 = 1.664122",
+    "ZERO": "x9 = 0: printed only (SEEN x9 already reads -7.95 / -5.97 us)",
+    "OVERLAP": "partial host overlap at n 1 (rental 3): predicts what CALL predicts; printed as such"
+   },
+   "dead_ratio": 1.664122,
+   "se_D_us": 0.636396,
+   "rule": "the nearer of CALL and DEAD to D is SELECTED if the other is more than 2 se_D farther; else NOT SEPARATED; positions are functions of the MEASURED x9 (review (h) 5); se_D = sqrt2 x 0.45 us (Qwen1.5 replicate, SEEN)",
+   "host_margin": "Qwen1.5 NATIVE n 1 is 339.6 us + F240 = 407 us against the 0.40 ms cut: the rule reads the REGISTERED prediction, so a faster board does not void the cell (the page's timer flag still can)",
+   "note": "rental 6's rule verbatim (D = x15 - x9 at Qwen1.5 SHARED n 1)",
+   "power": {
+    "device": "cpu",
+    "dtype": "float64",
+    "points": {
+     "x9 -5.97 | board 1.0 + replicate 0.45 | CALL true": {
+      "P(correct)": 0.9922,
+      "P(SELECTED and correct)": 0.9495
+     },
+     "x9 -5.97 | board 1.0 + replicate 0.45 | DEAD true": {
+      "P(correct)": 0.9923,
+      "P(SELECTED and correct)": 0.95
+     },
+     "x9 -7.95 | board 1.0 + replicate 0.45 | CALL true": {
+      "P(correct)": 0.9994,
+      "P(SELECTED and correct)": 0.9927
+     },
+     "x9 -7.95 | board 1.0 + replicate 0.45 | DEAD true": {
+      "P(correct)": 0.9993,
+      "P(SELECTED and correct)": 0.9928
+     }
+    }
+   }
+  },
+  "Q1-P": {
+   "status": "DESCRIPTIVE",
+   "population": "small-batch NATIVE pairs passing the host rule: Phi n 1 (Q1 c9, c15), Mixtral n 3 controls on the rental-7 pages A, B, C",
+   "pairs": [
+    {
+     "model": "mixtral-8x7b",
+     "page": "A",
+     "n": 3,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n3",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.0,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": -10.43,
+      "H8": -3.806
+     },
+     "gap_v3_us": -3.346
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "A",
+     "n": 3,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n3",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.0,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": -10.43,
+      "H8": -3.806
+     },
+     "gap_v3_us": -3.346
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "B",
+     "n": 3,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n3",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.0,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": -10.43,
+      "H8": -3.806
+     },
+     "gap_v3_us": -3.346
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "B",
+     "n": 3,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n3",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.0,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": -10.43,
+      "H8": -3.806
+     },
+     "gap_v3_us": -3.346
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "C",
+     "n": 3,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n3",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.0,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": -10.43,
+      "H8": -3.806
+     },
+     "gap_v3_us": -3.346
+    },
+    {
+     "model": "mixtral-8x7b",
+     "page": "C",
+     "n": 3,
+     "label": "uniform",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "mixtral-8x7b|n3",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.0,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": -10.43,
+      "H8": -3.806
+     },
+     "gap_v3_us": -3.346
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "c15",
+     "n": 1,
+     "label": "balanced",
+     "copies": 15,
+     "q1page": true,
+     "cluster": "phi-3.5-moe|n1",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.001,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.001,
+      "LT3": -0.0,
+      "v3_all": -9.02,
+      "H8": -2.395
+     },
+     "gap_v3_us": 11.817
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "c9",
+     "n": 1,
+     "label": "balanced",
+     "copies": 9,
+     "q1page": true,
+     "cluster": "phi-3.5-moe|n1",
+     "native_path": "small-batch",
+     "host_ok": true,
+     "g_R": {
+      "v2": 0.001,
+      "v3": 0.0,
+      "v3_nob": 0.0,
+      "v3_noca": 0.001,
+      "LT3": -0.0,
+      "v3_all": -9.02,
+      "H8": -2.395
+     },
+     "gap_v3_us": -6.69
+    }
+   ]
+  },
+  "Q1-SK": {
+   "status": "OPEN, printed: mean g over Phi n 2 skewed pairs minus mean g over the same pages' Phi n 2 control pairs",
+   "pairs": [
+    {
+     "model": "phi-3.5-moe",
+     "page": "A",
+     "n": 2,
+     "label": "PT",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.444
+     },
+     "gap_v3_us": 7.432
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "A",
+     "n": 2,
+     "label": "PW",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 6.835
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "B",
+     "n": 2,
+     "label": "DW",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 7.034
+    },
+    {
+     "model": "phi-3.5-moe",
+     "page": "C",
+     "n": 2,
+     "label": "PW2",
+     "copies": 9,
+     "q1page": false,
+     "cluster": "phi-3.5-moe|n2",
+     "native_path": "block-scan",
+     "host_ok": true,
+     "g_R": {
+      "v2": 4.74,
+      "v3": 0.0,
+      "v3_nob": 4.74,
+      "v3_noca": 0.0,
+      "LT3": 0.0,
+      "v3_all": 0.0,
+      "H8": 7.445
+     },
+     "gap_v3_us": 7.432
+    }
+   ]
+  }
+ },
+ "gates": "as rental7-skew (G1 under r7-median-run3, 6 of 9 clean, G2 host rule + timer flag, G4 1705, G5); views ALL and CLEAN; the P20 view printed",
+ "labels": {
+  "c9": "SEEN replicates",
+  "c15": "SHARED BLIND; NATIVE SEEN (it declares E at any copies count)",
+  "anchors_sigma": "SEEN",
+  "n1_exclusion": "SEEN-INFORMED (rental 6)"
+ },
+ "scorer_ambiguities": {
+  "1 the registered rule and where it runs": "r7-median-run3 (S_med plus the run guard, owner decision 1), applied by the scorer to cells.csv (r7common.rebuild); R3 is unchanged and runs --slip-policy cell --min-clean-repeats 0; a page that ran another min-clean is NOT SCORED",
+  "2 S_med's G1 drift clause": "the run guard excludes a repeat (3 or more consecutive reads a step under the lock); G1 fails on drift only past 10% non-clean repeat rows (slipped, run-guarded or not ok); the endpoint flag is recorded only",
+  "3 the P20 side view": "rebuilt from the same cells.csv with today's exclusions: its own medians, clocks, host flags and lost cells (6 of 9), G1's clock clauses on its kept cells and the 20% ceiling; DESCRIPTIVE, every test printed on it",
+  "4 per-shape E1": "read in each view on that view's cells; the registered verdict holds only if both views hold; a shape is CERTIFIED in CLEAN only with at least 2 of its 3 pages in CLEAN and its CLEAN cells meeting the bar",
+  "5 Q1-H se with few clusters": "CR1 on (model, n) clusters needs at least 3 clusters; fewer is UNDECIDED (no C / (C - 1) with C = 1); the registered population has 5",
+  "6 pair or cluster weights": "pair-weighted mean (rental 6's); the equal-cluster-weight mean is printed",
+  "7 the copies clause": "matched by model: per model with valid Q1 pairs at both c9 and c15, mean g(c15) - mean g(c9), pair-weighted over those models; identical to rental 6's unmatched means when all six Q1 pages are valid",
+  "8 one copies side only": "the copies clause is UNDECIDED; v3 reads UNDECIDED (FAILS if its level clause fails); the rivals are still scored (owner decision 2)",
+  "9 the share denominator": "every timed repeat row of the page in cells.csv (R3 at min-clean 0 times all 9 of every cell); cells.csv's rows per cell must equal the report's repeat_rows, else NOT SCORED",
+  "10 l2open": "rows are (cell, arm) on w1 only for the verdict (PT, PW skewed; uniform and balanced printed), NATIVE and SHARED at n <= 9 and NATIVE at n 16; w2 under v3 printed; rental 6's counter clock rule; one page, one view"
+ },
+ "seen_data": [
+  "every c9 and skew-page control pair is a SEEN replicate",
+  "anchors and sigma SEEN",
+  "h SEEN-FITTED"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b"
+ }
+}

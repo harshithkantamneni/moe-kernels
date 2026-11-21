@@ -1,0 +1,27 @@
+== 2026-11-10T21:08:58Z step perturb: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2)
+INSTRUMENTED KERNEL PC2 (perturb): 6 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u5-sd        page  docs/registered/2026-11-10-pc2-pages/pc2-d.json cells 29 tiles 16x64x128w4s4 shapes mixtral-8x7b pcs-e32-h4096 pcs-e8-h1024 pcs-e8-h128 pcs-e8-h2048 pcs-e8-h256 pcs-e8-h512 pcs2-e32-h4096-f1024 pcs2-e32-h4096-f1792 pcs2-e32-h4096-f3584 pcs2-e32-h4096-f512 pcs2-e32-h4096-f7168 pcs2-e8-h256-f1024 pcs2-e8-h256-f1792 pcs2-e8-h256-f3584 pcs2-e8-h256-f512 pcs2-e8-h256-f7168 spec stamps=ends,evict_a=none,evict_b=none
+  u6-ss        page  docs/registered/2026-11-10-pc2-pages/pc2-s.json cells 20 tiles 64x128x64w4s3 shapes pcs-e32-h4096 pcs-e8-h2048 pcs-e8-h256 pcs2-e32-h4096-f1024 pcs2-e32-h4096-f1792 pcs2-e32-h4096-f256 pcs2-e32-h4096-f512 pcs2-e8-h2048-f1024 pcs2-e8-h2048-f1792 pcs2-e8-h2048-f256 pcs2-e8-h2048-f512 pcs2-e8-h256-f1024 pcs2-e8-h256-f1792 pcs2-e8-h256-f256 pcs2-e8-h256-f512 spec stamps=ends,evict_a=none,evict_b=none
+  u7-sn        page  docs/registered/2026-11-10-pc2-pages/pc2-n.json cells 26 tiles 16x64x128w4s4 shapes deepseek-v2-lite granite-3.0-3b-a800m jetmoe-8b mixtral-8x7b pcs2-e64-h2048-f1408-k8 phi-3.5-moe qwen1.5-moe-a2.7b spec stamps=ends,evict_a=none,evict_b=none
+  u8-sw        page  docs/registered/2026-11-10-pc2-pages/pc2-w.json cells 29 tiles 32x128x64w4s3 32x64x128w4s3 shapes pcs2-e32-h4224 pcs2-e32-h4224-f1024 pcs2-e32-h4224-f512 spec stamps=ends,evict_a=none,evict_b=none
+  u9-sd3       page  docs/registered/2026-11-10-pc2-pages/pc2-d3.json cells 3 tiles 16x64x128w4s3 shapes pcs-e32-h4096 pcs-e8-h512 spec stamps=ends,evict_a=none,evict_b=none
+  u10-sr       page  docs/registered/2026-11-10-pc2-pages/pc2-r.json cells 3 tiles 16x64x128w4s4 64x128x64w4s3 shapes pcs-e32-h4096 pcs-e8-h256 pcs2-e32-h4096-f512 spec stamps=ends,evict_a=none,evict_b=none
+  gate (C3's): median |plain/copy - 1| <= 1%, worst <= 2%, CTAs per SM identical, all-off SASS equal, the upstream file, C3's SASS legs; 8 bursts of 10 calls each way on every cell of ['u10-sr', 'u5-sd', 'u6-ss', 'u7-sn', 'u8-sw', 'u9-sd3']
+  u5-sd: FAIL median |r - 1| 1.27% > 1%; worst |r - 1| 7.18% > 2%
+  u6-ss: FAIL median |r - 1| 2.74% > 1%; worst |r - 1| 6.76% > 2%
+  u7-sn: FAIL worst |r - 1| 4.20% > 2%
+  u8-sw: FAIL worst |r - 1| 5.67% > 2%
+  u9-sd3: PASS 
+  u10-sr: FAIL median |r - 1| 1.79% > 1%; worst |r - 1| 6.78% > 2%
+2026-11-10T21:10:39Z perturb: GATE_u5_sd=FAIL median=0.012723784474854338 worst=0.07175499001012331
+2026-11-10T21:10:39Z perturb: HARD_u5_sd=PASS
+2026-11-10T21:10:39Z perturb: GATE_u6_ss=FAIL median=0.027395677374928706 worst=0.067624657513352
+2026-11-10T21:10:39Z perturb: HARD_u6_ss=PASS
+2026-11-10T21:10:39Z perturb: GATE_u7_sn=FAIL median=0.00917343945268323 worst=0.04196576303156552
+2026-11-10T21:10:39Z perturb: HARD_u7_sn=PASS
+2026-11-10T21:10:39Z perturb: GATE_u8_sw=FAIL median=0.005983202547443001 worst=0.05668362305350283
+2026-11-10T21:10:39Z perturb: HARD_u8_sw=PASS
+2026-11-10T21:10:39Z perturb: GATE_u9_sd3=PASS median=0.0037617558606858337 worst=0.010235128840282659
+2026-11-10T21:10:39Z perturb: HARD_u9_sd3=PASS
+2026-11-10T21:10:39Z perturb: GATE_u10_sr=FAIL median=0.017932370905941852 worst=0.0677617994223696
+2026-11-10T21:10:39Z perturb: HARD_u10_sr=PASS

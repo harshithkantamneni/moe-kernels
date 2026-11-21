@@ -1,0 +1,539 @@
+{
+ "registration": "2026-10-05-rental3-stages-gh200",
+ "pages": {
+  "k32s8": {
+   "ctas_recorded": 5,
+   "ctas_expected": 4,
+   "stages": 8,
+   "block_k": 32,
+   "ds": {
+    "4": -0.01022254096137154,
+    "5": 0.007052194504510889,
+    "6": -0.0005968366350448395,
+    "7": -1.1444091796875e-05,
+    "8": -0.0059860644697333765,
+    "9": -0.022877965654645727
+   },
+   "cls": "base",
+   "far_share_printed": 0.2561945221807372,
+   "w1_s_printed": {
+    "2": 0.08883803231375557,
+    "3": 0.05952626182919448,
+    "4": 0.042125338599795385,
+    "5": 0.029893693469819738,
+    "6": 0.025992911202566964,
+    "7": 0.020851861862909226,
+    "8": 0.020614143942489154,
+    "9": 0.018035616193498884
+   },
+   "flags": [],
+   "use": "counted"
+  },
+  "k128s4": {
+   "ctas_recorded": 3,
+   "ctas_expected": 2,
+   "stages": 4,
+   "block_k": 128,
+   "ds": {
+    "4": 0.13641956874302463,
+    "5": 0.12571593693324512,
+    "6": 0.13993519374302443,
+    "7": 0.09432256789434523,
+    "8": 0.0828982242921582,
+    "9": 0.08824225834437782
+   },
+   "cls": "unclassified",
+   "far_share_printed": 0.2388405547430514,
+   "w1_s_printed": {
+    "2": 0.16492398579915374,
+    "3": 0.11242984590076256,
+    "4": 0.0789999280657087,
+    "5": 0.0674149649483817,
+    "6": 0.0495323726109096,
+    "7": 0.04727947901165663,
+    "8": 0.040246029289401304,
+    "9": 0.03778889065697071
+   },
+   "flags": [],
+   "use": "counted"
+  },
+  "k128s3": {
+   "ctas_recorded": 4,
+   "ctas_expected": 3,
+   "stages": 3,
+   "block_k": 128,
+   "ds": {
+    "4": 0.06786219278971362,
+    "5": 0.040472893487839334,
+    "6": 0.04036672682989206,
+    "7": 0.04313565814305875,
+    "8": 0.04042079172977786,
+    "9": 0.038418474651518264
+   },
+   "cls": "base",
+   "far_share_printed": 0.26116757562415627,
+   "w1_s_printed": {
+    "2": 0.2807397388276599,
+    "3": 0.15282957894461496,
+    "4": 0.1149477580237009,
+    "5": 0.08958448682512556,
+    "6": 0.0734699067615326,
+    "7": 0.0810068826826793,
+    "8": 0.06432572189642459,
+    "9": 0.057573068709600585
+   },
+   "flags": [],
+   "k128s3_check": "recorded occupancy 4, not 3: the column is re-keyed",
+   "use": "counted"
+  },
+  "k64s7": {
+   "ctas_recorded": 3,
+   "ctas_expected": 2,
+   "stages": 7,
+   "block_k": 64,
+   "ds": {
+    "4": 0.016102745419456888,
+    "5": 0.02576092311314171,
+    "6": 0.032882872081938186,
+    "7": 0.010708793761238344,
+    "8": 0.003171362844454073,
+    "9": -0.0007961136954171
+   },
+   "cls": "base",
+   "far_share_printed": 0.2703541891685681,
+   "w1_s_printed": {
+    "2": 0.15092895144508006,
+    "3": 0.0785801751273019,
+    "4": 0.0679113297235398,
+    "5": 0.056552251180013106,
+    "6": 0.045236187889462494,
+    "7": 0.03955812302846763,
+    "8": 0.033419563656761485,
+    "9": 0.028937078657604358
+   },
+   "flags": [],
+   "use": "counted"
+  },
+  "k64s3": {
+   "ctas_recorded": 4,
+   "ctas_expected": 4,
+   "stages": 3,
+   "block_k": 64,
+   "ds": {
+    "4": 0.03609775361560641,
+    "5": 0.021422159104120153,
+    "6": 0.011060805547804975,
+    "7": 0.01726486569359198,
+    "8": 0.03959134160255895,
+    "9": 0.026324885232107964
+   },
+   "cls": "base",
+   "far_share_printed": 0.2690489937535166,
+   "w1_s_printed": {
+    "2": 0.34258397420247405,
+    "3": 0.2993955612182617,
+    "4": 0.16075863913884245,
+    "5": 0.11610662369501032,
+    "6": 0.17403947739374062,
+    "7": 0.2408714143056717,
+    "8": 0.1308625798647095,
+    "9": 0.2971985453651066
+   },
+   "flags": [],
+   "use": "counted"
+  }
+ },
+ "board_check": {
+  "ok": true,
+  "within_0.05_at": 6
+ },
+ "hypotheses": {
+  "OCC": {
+   "wrong_on": [],
+   "status": "consistent"
+  },
+  "DEPTH": {
+   "wrong_on": [
+    "k32s8",
+    "k64s7"
+   ],
+   "status": "FALSIFIED"
+  },
+  "WIDTH": {
+   "wrong_on": [
+    "k128s3"
+   ],
+   "status": "FALSIFIED"
+  },
+  "U-OCC": {
+   "wrong_on": [
+    "k128s3"
+   ],
+   "status": "FALSIFIED"
+  },
+  "U-DEPTH": {
+   "wrong_on": [
+    "k32s8",
+    "k128s3",
+    "k64s7"
+   ],
+   "status": "FALSIFIED"
+  },
+  "NULL": {
+   "wrong_on": [],
+   "status": "consistent"
+  }
+ },
+ "pairs": {
+  "OCC/DEPTH": "SEPARATED",
+  "OCC/WIDTH": "SEPARATED",
+  "OCC/U-OCC": "SEPARATED",
+  "OCC/U-DEPTH": "SEPARATED",
+  "OCC/NULL": "NO SEPARATION",
+  "DEPTH/WIDTH": "SEPARATED",
+  "DEPTH/U-OCC": "SEPARATED",
+  "DEPTH/U-DEPTH": "SEPARATED",
+  "DEPTH/NULL": "SEPARATED",
+  "WIDTH/U-OCC": "NO SEPARATION",
+  "WIDTH/U-DEPTH": "SEPARATED",
+  "WIDTH/NULL": "SEPARATED",
+  "U-OCC/U-DEPTH": "SEPARATED",
+  "U-OCC/NULL": "SEPARATED",
+  "U-DEPTH/NULL": "SEPARATED"
+ },
+ "classified": {
+  "k32s8": "base",
+  "k128s3": "base",
+  "k64s7": "base",
+  "k64s3": "base"
+ },
+ "verdict": "INCONCLUSIVE",
+ "survivors": [
+  "OCC",
+  "NULL"
+ ],
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/r3c-g1.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k32s8-r3-counters/lock1710/r3c-g1.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k128s4-r3-counters/lock1710/r3c-g1.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k128s3-r3-counters/lock1710/r3c-g1.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k64s7-r3-counters/lock1710/r3c-g1.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k64s3-r3-counters/lock1710/r3c-g1.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "verdict",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-05-rental3-stages-gh200",
+   "pages": {
+    "k32s8": {
+     "ctas_recorded": 5,
+     "ctas_expected": 4,
+     "stages": 8,
+     "block_k": 32,
+     "ds": {
+      "4": -0.01022254096137154,
+      "5": 0.007052194504510889,
+      "6": -0.0005968366350448395,
+      "7": -1.1444091796875e-05,
+      "8": -0.0059860644697333765,
+      "9": -0.022877965654645727
+     },
+     "cls": "base",
+     "far_share_printed": 0.2561945221807372,
+     "w1_s_printed": {
+      "2": 0.08883803231375557,
+      "3": 0.05952626182919448,
+      "4": 0.042125338599795385,
+      "5": 0.029893693469819738,
+      "6": 0.025992911202566964,
+      "7": 0.020851861862909226,
+      "8": 0.020614143942489154,
+      "9": 0.018035616193498884
+     },
+     "flags": [],
+     "use": "counted"
+    },
+    "k128s4": {
+     "ctas_recorded": 3,
+     "ctas_expected": 2,
+     "stages": 4,
+     "block_k": 128,
+     "ds": {
+      "4": 0.13641956874302463,
+      "5": 0.12571593693324512,
+      "6": 0.13993519374302443,
+      "7": 0.09432256789434523,
+      "8": 0.0828982242921582,
+      "9": 0.08824225834437782
+     },
+     "cls": "unclassified",
+     "far_share_printed": 0.2388405547430514,
+     "w1_s_printed": {
+      "2": 0.16492398579915374,
+      "3": 0.11242984590076256,
+      "4": 0.0789999280657087,
+      "5": 0.0674149649483817,
+      "6": 0.0495323726109096,
+      "7": 0.04727947901165663,
+      "8": 0.040246029289401304,
+      "9": 0.03778889065697071
+     },
+     "flags": [],
+     "use": "counted"
+    },
+    "k128s3": {
+     "ctas_recorded": 4,
+     "ctas_expected": 3,
+     "stages": 3,
+     "block_k": 128,
+     "ds": {
+      "4": 0.06786219278971362,
+      "5": 0.040472893487839334,
+      "6": 0.04036672682989206,
+      "7": 0.04313565814305875,
+      "8": 0.04042079172977786,
+      "9": 0.038418474651518264
+     },
+     "cls": "base",
+     "far_share_printed": 0.26116757562415627,
+     "w1_s_printed": {
+      "2": 0.2807397388276599,
+      "3": 0.15282957894461496,
+      "4": 0.1149477580237009,
+      "5": 0.08958448682512556,
+      "6": 0.0734699067615326,
+      "7": 0.0810068826826793,
+      "8": 0.06432572189642459,
+      "9": 0.057573068709600585
+     },
+     "flags": [],
+     "k128s3_check": "recorded occupancy 4, not 3: the column is re-keyed",
+     "use": "counted"
+    },
+    "k64s7": {
+     "ctas_recorded": 3,
+     "ctas_expected": 2,
+     "stages": 7,
+     "block_k": 64,
+     "ds": {
+      "4": 0.016102745419456888,
+      "5": 0.02576092311314171,
+      "6": 0.032882872081938186,
+      "7": 0.010708793761238344,
+      "8": 0.003171362844454073,
+      "9": -0.0007961136954171
+     },
+     "cls": "base",
+     "far_share_printed": 0.2703541891685681,
+     "w1_s_printed": {
+      "2": 0.15092895144508006,
+      "3": 0.0785801751273019,
+      "4": 0.0679113297235398,
+      "5": 0.056552251180013106,
+      "6": 0.045236187889462494,
+      "7": 0.03955812302846763,
+      "8": 0.033419563656761485,
+      "9": 0.028937078657604358
+     },
+     "flags": [],
+     "use": "counted"
+    },
+    "k64s3": {
+     "ctas_recorded": 4,
+     "ctas_expected": 4,
+     "stages": 3,
+     "block_k": 64,
+     "ds": {
+      "4": 0.03609775361560641,
+      "5": 0.021422159104120153,
+      "6": 0.011060805547804975,
+      "7": 0.01726486569359198,
+      "8": 0.03959134160255895,
+      "9": 0.026324885232107964
+     },
+     "cls": "base",
+     "far_share_printed": 0.2690489937535166,
+     "w1_s_printed": {
+      "2": 0.34258397420247405,
+      "3": 0.2993955612182617,
+      "4": 0.16075863913884245,
+      "5": 0.11610662369501032,
+      "6": 0.17403947739374062,
+      "7": 0.2408714143056717,
+      "8": 0.1308625798647095,
+      "9": 0.2971985453651066
+     },
+     "flags": [],
+     "use": "counted"
+    }
+   },
+   "board_check": {
+    "ok": true,
+    "within_0.05_at": 6
+   },
+   "hypotheses": {
+    "OCC": {
+     "wrong_on": [],
+     "status": "consistent"
+    },
+    "DEPTH": {
+     "wrong_on": [
+      "k32s8",
+      "k64s7"
+     ],
+     "status": "FALSIFIED"
+    },
+    "WIDTH": {
+     "wrong_on": [
+      "k128s3"
+     ],
+     "status": "FALSIFIED"
+    },
+    "U-OCC": {
+     "wrong_on": [
+      "k128s3"
+     ],
+     "status": "FALSIFIED"
+    },
+    "U-DEPTH": {
+     "wrong_on": [
+      "k32s8",
+      "k128s3",
+      "k64s7"
+     ],
+     "status": "FALSIFIED"
+    },
+    "NULL": {
+     "wrong_on": [],
+     "status": "consistent"
+    }
+   },
+   "pairs": {
+    "OCC/DEPTH": "SEPARATED",
+    "OCC/WIDTH": "SEPARATED",
+    "OCC/U-OCC": "SEPARATED",
+    "OCC/U-DEPTH": "SEPARATED",
+    "OCC/NULL": "NO SEPARATION",
+    "DEPTH/WIDTH": "SEPARATED",
+    "DEPTH/U-OCC": "SEPARATED",
+    "DEPTH/U-DEPTH": "SEPARATED",
+    "DEPTH/NULL": "SEPARATED",
+    "WIDTH/U-OCC": "NO SEPARATION",
+    "WIDTH/U-DEPTH": "SEPARATED",
+    "WIDTH/NULL": "SEPARATED",
+    "U-OCC/U-DEPTH": "SEPARATED",
+    "U-OCC/NULL": "SEPARATED",
+    "U-DEPTH/NULL": "SEPARATED"
+   },
+   "classified": {
+    "k32s8": "base",
+    "k128s3": "base",
+    "k64s7": "base",
+    "k64s3": "base"
+   },
+   "verdict": "INCONCLUSIVE",
+   "survivors": [
+    "OCC",
+    "NULL"
+   ]
+  }
+ }
+}

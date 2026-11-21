@@ -1,0 +1,15 @@
+RENTAL 4 DEAD-CTA CONTRAST, 2026-10-06-rental4-dead-gh200
+  A1 qwen2-57b-a14b-tp8: Delta 22.93 us (raw 22.70), null +0.77 us within 5.19: PASS; the c15 page is NOT JOINABLE TO COUNTER BYTES
+    z (sigma 0.9): D +1.79  D2 +1.63  M -5.38  K5 +2.44  K0 -1.67  SLOT +2.04  FIXED +25.47
+  A2 olmoe-1b-7b: Delta 24.45 us (raw 24.29), null +0.00 us within 8.11: PASS; the c15 page is NOT JOINABLE TO COUNTER BYTES
+    z (sigma 0.9): D +0.58  D2 +1.24  M -8.10  K5 +0.84  K0 +0.84  SLOT +3.06  FIXED +27.16
+  D: HOLDS
+  D2: HOLDS
+  M: EXCLUDED on ['A1', 'A2']
+  K0: NOT EXCLUDED
+  SLOT: EXCLUDED on ['A2']
+  FIXED: EXCLUDED on ['A1', 'A2']
+  K5: NOT TESTED (equals D on A1 and A2; A3 is cut)
+  per-GEMM d (printed): {'d_w2_ns': 1.1005172682654245, 'd_w1_ns': 0.953078034356059}
+  two views (ALL, CLEAN):
+    0 of 9 verdicts differ between ALL and CLEAN

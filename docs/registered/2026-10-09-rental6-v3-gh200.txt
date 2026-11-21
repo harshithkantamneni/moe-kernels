@@ -1,0 +1,73 @@
+REGISTERED 2026-10-09, before any rental-6 page: rental 6, 2026-10-09-rental6-v3-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r6 DESIGN.md corrected by design-r6-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-09 (1-6 accepted; h kept and labelled SEEN-FITTED)
+tool: scripts/r3_timing_model_v3.py (V3_H_MS, v3_b_ms, call_ms), scripts/wave_split_bytes_v3.py (ModelV3, content_events_counts: MODEL M4), scripts/scoring/rental6/r6model.py (v3 and the rivals)
+
+h = -5.16 us (SEEN-FITTED (4 models' timed pages): at least 143 of its 178 cells are SEEN held-out timing pages of earlier registrations)
+rental-5 E1-SKEW 72 cells, rms / mean / worst: v2 0.0126 / +0.0040 / +0.0438; v3 0.0090 / +0.0009 / +0.0308; v3_nob 0.0122 / +0.0037 / +0.0438; v3_noca 0.0094 / +0.0012 / +0.0308; LT3 0.0122 / -0.0071 / +0.0285; v3_all 0.0090 / +0.0009 / +0.0308; H8 0.0140 / +0.0044 / +0.0480
+8x7B CAL fitted cells under v3: rms 0.00249
+
+modules:
+  rule: OWNER DECISION 2026-10-09: v3 lives in new modules that import the pinned ones; scripts/r3_timing_model.py, scripts/wave_split_bytes.py and scripts/scoring/rental5/skewmodel.py stay byte-identical to rental5-skew's code_pins (tests/test_rental6_model.py checks the sha256)
+  timing: r3_timing_model_v3.call_ms = r3_timing_model.call_ms (dead_model v2) + term (b)
+  bytes: wave_split_bytes_v3.ModelV3 = wave_split_bytes.Model(content_a=True) + content keys on histogram cells
+model:
+  base: model v2 (docs/registered/2026-10-07-rental5-v2-gh200), its registered x unchanged: {"T0": 0.04323, "c": 202.547644, "bw": 3597.800853, "s_small": 0.012987, "s_block": -0.007069}
+  a_content_a: MODEL M4: w1's A keyed by tile CONTENT on histogram cells too (realize_counts, the page's token-row shuffle, each expert's rows sorted; partial last tiles weighted rows / 32; the compulsory offset (distinct-content rows - all tile rows) / 32 A tiles); 0 fitted constants. On a skewed cell no two experts share a token set, so it moves w1 q only through the partial-tile weighting (at most 0.16% on the rental-6 byte cells); it moves uniform / balanced w1 (OLMoE up to 16%, Mixtral at most 0.29%, Phi at most 0.71%)
+  b_alignment: on every non-NATIVE cell whose NATIVE twin (same model, n, declaration E) takes the block-scan alignment kernel: + A_arm(n) from the page's own align_probe, and on SHARED also + h = -5.16 us; 0 elsewhere
+  A_statistic: A_arm(n) = median over the probe's repeats of align(arm, n) ms - median of align(native, n) ms, both from the same page's align_probe; histogram-independent (the probe runs balanced ids at the tread's numel, and a histogram cell's numel is its tread's), so a histogram cell takes A at its tread n
+h:
+  value_us: -5.16
+  label: SEEN-FITTED (4 models' timed pages): at least 143 of its 178 cells are SEEN held-out timing pages of earlier registrations
+  fit:
+    h_us: -5.16
+    h_unrounded_us: -5.156793587769217
+    page_bootstrap_95_us: [-6.21, -4.3]
+    s_hat_us: -1.912
+    s_hat_ci_us: [-2.773, -0.864]
+    cells: 178
+    groups: 27
+    per_model_s_hat_us: {"mixtral-8x22b": 0.12, "mixtral-8x7b": -1.37, "olmoe-1b-7b": -1.43, "qwen2-57b-a14b": -3.86}
+    estimator: per block-scan cell s_hat = (S - N)_meas - (S - N)_v2 + A + s_block_v2 under rental 3's host rule (T_N + F240 >= 0.40 ms); h = -(mean s_hat - s_block_v2); page-cluster bootstrap B 20000 seed 20261009
+  groups:
+    - {"pages": "8x7B 2026-09-27 G 2/3/4/8/32", "cells": 35, "status": "CAL for the 5 registered pages; G2 and G4 repeat pages SEEN"}
+    - {"pages": "8x7B 2026-09-25 G 1/2/4/16/64", "cells": 15, "status": "SEEN, not in the CAL timing set"}
+    - {"pages": "8x22B 2026-09-28", "cells": 26, "status": "SEEN held-out TIME test page"}
+    - {"pages": "Qwen2-57B 2026-09-28", "cells": 53, "status": "SEEN held-out TIME test page"}
+    - {"pages": "OLMoE 2026-09-29", "cells": 33, "status": "SEEN held-out TIME test page (rental5-v2: no OLMoE time page enters any v2 fit)"}
+    - {"pages": "OLMoE rental 4 (2026-10-07) D 576 and 960", "cells": 16, "status": "SEEN held-out TIME test page"}
+  in_sample: 8x22B, Qwen2-57B and OLMoE (and 8x7B) are IN-SAMPLE for term (b); OLMoE's E1 cells and its n 3 Q1-H pairs are therefore not BLIND-CALMODEL for (b)
+  rival_H8:
+    what: the registered 8x7B timing set alone, h free (6 parameters), A from those pages' probes
+    x: {"T0_ms": 0.045211, "c_ns": 202.627394, "bw_gbps": 3598.197676, "s_small_ms": 0.010862, "s_block_ms": -0.010014}
+    h_us: -0.652801
+    rms: 0.002706
+    cells: 75
+seen_informed_choices:
+  - h = -5.16 us is SEEN-FITTED (above); kept by the owner (2026-10-09)
+  - the block-scan path condition is SEEN-INFORMED: chosen after the rental-5 Mixtral n 2 pages (slip-affected) read +1.6 us under v3 and +9.9 us with (b) everywhere. Evidence the other way, stated: on the CAL 2026-09-27 G 8 page Mixtral n 3 (NATIVE small-batch) reads g = -8.03 us under v3, the v3_all direction
+  - content_a is SEEN-SELECTED: picked out of 14 diag-Q2 WSC variants on SEEN byte pages (rental 5 skc, rental 4 B', rental 1 A-tile)
+  - the n = 1 exclusion from Q1-H is SEEN-INFORMED: Qwen1.5 SHARED n 1 was seen to be anomalous (+6.6 us) on the 2026-09-29 and rental-5 pages, and CAL Qwen2-57B reads the same at n 1
+  - Phi-3.5 carries Mixtral's fitted (kind, param) to E 16 at Phi's B (owner decision 4): no Phi routing statistics
+  - the Q1-H population is control pairs only (review (b)): skewed pairs carry a SEEN offset (Q1-SK, open)
+  - the Q1-P statistic is DESCRIPTIVE (rental6-q1): its SEEN small-batch residual trends with n
+  - B-SKEW carves OLMoE's skewed w1 rows out of its pooled verdict (OPEN-L2SKEW, scored apart): SEEN-INFORMED, decided after rental 5 read those rows +8% at n 4 and +25% at n 16 (v3's content keys do not move a skewed cell)
+rental5_code_pins_note: rental 5's registrations list scripts/private_weight_reference.py and scripts/skew_synth.py in their code_pins, and rental 6 changes both (the slip plumbing and the align probe; --draw6 / --check6). Harmless: rental 5's scorer (scripts/scoring/rental5/score_skew.py, unchanged) checks only its three pinned files, r3_timing_model.py, wave_split_bytes.py and rental5/skewmodel.py, which stay byte-identical (tests/test_rental6_model.py), and rental 5's pages are already published; the other pins record the tree, they gate nothing
+open_residuals:
+  Q1-C: Qwen1.5 SHARED n = 1 carries a further ~+6.6 us under v3 (SEEN); CAL Qwen2-57B reads the same at n 1; registered as open with rivals CALL and DEAD on D = x15 - x9 (rental6-q1)
+  Q1-SK: skewed pairs' S - N gap sits under the controls' on the same page (SEEN: OLMoE -3.39 us, Qwen1.5 -1.78 us, Mixtral rms 4.98 us); open, printed (rental6-q1)
+  OPEN-L2SKEW: skewed OLMoE w1 bytes: v3's content keys do not move a skewed cell; the row-key rival is priced before any page (rental6-skew)
+  granite: the 09-30 Granite G 8 cells with n <= 6 are host-bound (268-303 us every arm): nothing planned
+variants:
+  v2: registered model
+  v3_nob: v3 without (b)
+  v3_noca: v3 without (a)
+  LT3: v3 with wave_q = 1
+  v3_all: v3 with (b) on every non-NATIVE cell
+  H8: M4 bytes, the 8x7B 6-parameter refit's (x, h), (b) on every non-NATIVE cell
+seen_data:
+  - the v2 source fit is CAL (8x7B 2026-09-27)
+  - h is SEEN-FITTED
+  - content_a SEEN-SELECTED
+  - the align proxy is SEEN
+  - every reproduction number is on SEEN pages

@@ -1,0 +1,18 @@
+step	state	rc	seconds	dirty	log	note
+preflight-r1	DONE	0	1	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/preflight-r1.log	log agrees: RESULT lines imply 0
+preflight-r3	DONE	0	4	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/preflight-r3.log	log agrees: RESULT lines imply 0
+preconditions	DONE	0	8	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/preconditions.log	the driver's own ARMS.tsv carries each arm's second opinion
+counter-probe	SKIPPED	-	0	0	-	a dry run does not run it: it is the r3-arms family's probe, which asks ncu for the chip's metric list and then launches the probe kernel under ncu on the card one to three times. Priced ~60 s at the driver's own arm_minutes for counter_plan, whose probe is the ladder family's one-metric one, not this; capped on the pod at 1800 s (3 x 60 s is under the 1800 s floor); informational, it gates nothing and runs on every measuring pass
+gpu-tests	DONE	0	3	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/gpu-tests.log	pytest exit 0: 38 tests collected in 1.38s
+probe-check	SKIPPED	-	0	0	-	a dry run does not run it: it times the card. Priced ~120 s, a documented allowance (it prints no plan); capped on the pod at 1800 s (3 x 120 s is under the 1800 s floor)
+r3-g1-s0	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r3-g1-s0.log	
+r3-g2-s0	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r3-g2-s0.log	
+r3-g4-s0	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r3-g4-s0.log	
+r3-g16-s0	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r3-g16-s0.log	
+r3-g64-s0	REFUSED	2	1	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r3-g64-s0.log	
+r1-g1	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r1-g1.log	
+r1-g2	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r1-g2.log	
+r1-g4	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r1-g4.log	
+r1-g16	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r1-g16.log	
+r1-g64	REFUSED	2	2	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/chain-logs/r1-g64.log	
+suite	SKIPPED	-	0	0	-	END_SUITE=skip (the default): the end suite was not requested; a dry run neither collects nor prices it, and END_SUITE=run does both

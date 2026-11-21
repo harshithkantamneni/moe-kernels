@@ -1,0 +1,1403 @@
+{
+  "family": "r3-arms",
+  "schema": 1,
+  "card": {
+    "name": "NVIDIA GH200 480GB",
+    "slug": "nvidia_gh200_480gb",
+    "uuid": "e2aeaef6-2633-c7cb-e7eb-696be58cc57d",
+    "sm_count": 132,
+    "l2_bytes": 62914560,
+    "capability": "9.0",
+    "memory_bytes": 101468602368,
+    "driver": "580.105.08",
+    "study_role": "the primary card"
+  },
+  "stack": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "ncu": {
+    "binary": "/usr/local/cuda-13.0/bin/ncu",
+    "version": "Version 2025.3.1.0 (build 36398880) (public-release)",
+    "argv": [
+      "/usr/local/cuda-13.0/bin/ncu",
+      "--target-processes",
+      "all",
+      "--replay-mode",
+      "kernel",
+      "--cache-control",
+      "all",
+      "--clock-control",
+      "none",
+      "--nvtx",
+      "-k",
+      "regex:^fused_moe_kernel$",
+      "--kernel-name-base",
+      "function",
+      "--launch-skip",
+      "48",
+      "--launch-count",
+      "72",
+      "--metrics",
+      "dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_srcunit_tex_op_read.sum,launch__grid_size,gpu__time_duration.sum,lts__d_sectors_fill_device.sum,lts__t_sectors_op_read_lookup_miss.sum,lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum,lts__t_sector_op_read_hit_rate.pct,launch__occupancy_limit_blocks,launch__occupancy_limit_registers,launch__occupancy_limit_shared_mem,launch__occupancy_limit_warps,launch__registers_per_thread,launch__waves_per_multiprocessor,lts__t_sectors_srcunit_ltcfabric.sum,sm__cycles_elapsed.avg",
+      "--export",
+      "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x22b-b128g1-r3-counters/lock1410/r3c-g1.profiles/g1.ncu-rep",
+      "--force-overwrite",
+      "--",
+      "/home/ubuntu/moe/venvs/vllm/bin/python",
+      "/home/ubuntu/moe/repo/scripts/r3_tile.py",
+      "--counter-child",
+      "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x22b-b128g1-r3-counters/lock1410/r3c-g1.profiles/g1.plan.json"
+    ],
+    "replay_mode": "kernel",
+    "cache_control": "all",
+    "clock_control": "none",
+    "lock_mhz": 1410.0,
+    "probe_clock_control": "none",
+    "smi_before": {
+      "utc": "2026-10-21T19:06:48Z",
+      "argv": [
+        "nvidia-smi",
+        "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+        "--format=csv,noheader,nounits"
+      ],
+      "returncode": 0,
+      "rows": [
+        {
+          "uuid": "GPU-e2aeaef6-2633-c7cb-e7eb-696be58cc57d",
+          "clocks.sm": "1410",
+          "power.draw": "101.52",
+          "power.limit": "700.00",
+          "clocks_event_reasons.active": "0x0000000000000000",
+          "persistence_mode": "Enabled"
+        }
+      ],
+      "error": ""
+    },
+    "smi_after": {
+      "utc": "2026-10-21T19:11:17Z",
+      "argv": [
+        "nvidia-smi",
+        "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+        "--format=csv,noheader,nounits"
+      ],
+      "returncode": 0,
+      "rows": [
+        {
+          "uuid": "GPU-e2aeaef6-2633-c7cb-e7eb-696be58cc57d",
+          "clocks.sm": "1410",
+          "power.draw": "99.30",
+          "power.limit": "700.00",
+          "clocks_event_reasons.active": "0x0000000000000000",
+          "persistence_mode": "Enabled"
+        }
+      ],
+      "error": ""
+    },
+    "report": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x22b-b128g1-r3-counters/lock1410/r3c-g1.profiles/g1.ncu-rep",
+    "report_sha256": "ba1ad9a0cfd5e7aa81fa20f98cb73c277a3172d61a4987d13c98c4a360e2debf",
+    "csv": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x22b-b128g1-r3-counters/lock1410/r3c-g1.profiles/g1.csv",
+    "csv_layout": "wide",
+    "metrics_asked": [
+      "dram__bytes_read.sum",
+      "dram__bytes_write.sum",
+      "lts__t_sectors_srcunit_tex_op_read.sum",
+      "launch__grid_size",
+      "gpu__time_duration.sum",
+      "lts__d_sectors_fill_device.sum",
+      "lts__t_sectors_op_read_lookup_miss.sum",
+      "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum",
+      "lts__t_sector_op_read_hit_rate.pct",
+      "launch__occupancy_limit_blocks",
+      "launch__occupancy_limit_registers",
+      "launch__occupancy_limit_shared_mem",
+      "launch__occupancy_limit_warps",
+      "launch__registers_per_thread",
+      "launch__waves_per_multiprocessor",
+      "lts__t_sectors_srcunit_ltcfabric.sum",
+      "sm__cycles_elapsed.avg"
+    ],
+    "metrics_dropped": [],
+    "capture_commit": "09b340ce60920d5d66c7a07019427cff3ba1b0f3"
+  },
+  "design": {
+    "histogram": {
+      "file_sha256": "b5d6e34a5afd4fc6ba906707758b199a2c5555a49290bf7512fd5a1749c924ad",
+      "page": "mixtral-8x22b-128g1",
+      "shuffle_seed": 20261440
+    },
+    "histogram_page": true,
+    "model": "mixtral-8x22b",
+    "dtype": "bf16",
+    "block_m": 128,
+    "block_n": 128,
+    "block_k": 64,
+    "num_warps": 8,
+    "num_stages": 3,
+    "group_m": 1,
+    "treads": [
+      2
+    ],
+    "arms": [
+      "native",
+      "shared"
+    ],
+    "copies_declared": 9,
+    "declared_reason": "the ladder's id count 1024..9216 does not cross 1024: one kernel throughout",
+    "declared_by_arm": {
+      "native": 8,
+      "shared": 72,
+      "private": 72
+    },
+    "calls_per_cell": 3,
+    "warmup_calls": 2,
+    "gemms_per_call": 2,
+    "launch_skip": 48,
+    "launch_count": 72,
+    "seed": 0
+  },
+  "byte_model": {
+    "W": 4831838208,
+    "W_w1": 3221225472,
+    "W_w2": 1610612736,
+    "operand_per_tile_w1": 12582912,
+    "operand_per_tile_w2": 33554432,
+    "source": "moe.bench.weights.routed_expert_weight_bytes_by_gemm; block_m_crossing_sweep.gemm_operand_read_bytes_per_row x E x BLOCK_M"
+  },
+  "census": {
+    "path": "/home/ubuntu/moe/session/census-mixtral-8x22b.json",
+    "sha256": "d3063d95bfe41c36763c7c99d5b0c314904a6f062da8b5ac90d1d6e38418aef8",
+    "gemms_per_call": 2
+  },
+  "proof": null,
+  "cells": [
+    {
+      "arm": "native",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 8,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 6144,
+        "w2": 1152
+      },
+      "per_call": {
+        "dram_bytes_read": 9655067648.0,
+        "dram_bytes_write": 158408106.6666667,
+        "l2_tex_read_sectors": 610419039.0,
+        "gpu_time_ns": 3133909.333333333,
+        "l2_fill_device_sectors": 301720832.6666667,
+        "l2_read_miss_sectors": 466347233.0,
+        "l2_tex_read_hit_sectors": 293958699.3333333,
+        "l2_read_hit_pct": 39.926511645923064
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 7284127658.666667,
+          "dram_bytes_write": 133018538.66666667,
+          "l2_tex_read_sectors": 407529125.0,
+          "gpu_time_ns": 2181034.6666666665,
+          "l2_fill_device_sectors": 227628970.0,
+          "l2_read_miss_sectors": 342286772.0,
+          "l2_tex_read_hit_sectors": 178875037.0,
+          "l2_read_hit_pct": 34.46,
+          "grid_size": 6144
+        },
+        "w2": {
+          "dram_bytes_read": 2370939989.3333335,
+          "dram_bytes_write": 25389568.0,
+          "l2_tex_read_sectors": 202889914.0,
+          "gpu_time_ns": 952874.6666666666,
+          "l2_fill_device_sectors": 74091862.66666667,
+          "l2_read_miss_sectors": 124060461.0,
+          "l2_tex_read_hit_sectors": 115083662.33333333,
+          "l2_read_hit_pct": 50.906666666666666,
+          "grid_size": 1152
+        }
+      },
+      "per_call_values": [
+        9662655488.0,
+        9671192832.0,
+        9631354624.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          7284004352.0,
+          7284377856.0,
+          7284000768.0
+        ],
+        "w2": [
+          2378651136.0,
+          2386814976.0,
+          2347353856.0
+        ]
+      },
+      "spread_rel": 0.0041229047283611485,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 23.27,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 116974305.0,
+          "sm__cycles_elapsed.avg": 3003950.7533333334
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 4.36,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 49867298.666666664,
+          "sm__cycles_elapsed.avg": 1284660.96
+        }
+      },
+      "histogram": "PT",
+      "counts_sha256": "0a59797323261f5d92e153ad1c8032e1a83b4a0034820d321abcdc2d3a3981ea",
+      "bincount": [
+        234,
+        233,
+        214,
+        372,
+        236,
+        260,
+        249,
+        250
+      ]
+    },
+    {
+      "arm": "shared",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 72,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 22528,
+        "w2": 4224
+      },
+      "per_call": {
+        "dram_bytes_read": 9648146005.333332,
+        "dram_bytes_write": 158207573.33333334,
+        "l2_tex_read_sectors": 609642518.3333334,
+        "gpu_time_ns": 3137824.0,
+        "l2_fill_device_sectors": 301504569.0,
+        "l2_read_miss_sectors": 466324101.3333334,
+        "l2_tex_read_hit_sectors": 294259994.0,
+        "l2_read_hit_pct": 39.947316177007714
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 7284052053.333333,
+          "dram_bytes_write": 132873728.0,
+          "l2_tex_read_sectors": 407300998.6666667,
+          "gpu_time_ns": 2183253.3333333335,
+          "l2_fill_device_sectors": 227626634.66666666,
+          "l2_read_miss_sectors": 342318020.6666667,
+          "l2_tex_read_hit_sectors": 178798568.33333334,
+          "l2_read_hit_pct": 34.43,
+          "grid_size": 22528
+        },
+        "w2": {
+          "dram_bytes_read": 2364093952.0,
+          "dram_bytes_write": 25333845.333333332,
+          "l2_tex_read_sectors": 202341519.66666666,
+          "gpu_time_ns": 954570.6666666666,
+          "l2_fill_device_sectors": 73877934.33333333,
+          "l2_read_miss_sectors": 124006080.66666667,
+          "l2_tex_read_hit_sectors": 115461425.66666667,
+          "l2_read_hit_pct": 51.053333333333335,
+          "grid_size": 4224
+        }
+      },
+      "per_call_values": [
+        9654659328.0,
+        9649629184.0,
+        9640149504.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          7284013056.0,
+          7283992064.0,
+          7284151040.0
+        ],
+        "w2": [
+          2370646272.0,
+          2365637120.0,
+          2355998464.0
+        ]
+      },
+      "spread_rel": 0.0015036664853462622,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 85.33,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 116968239.66666667,
+          "sm__cycles_elapsed.avg": 3007632.6199999996
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 16.0,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 48950856.666666664,
+          "sm__cycles_elapsed.avg": 1285600.0966666667
+        }
+      },
+      "histogram": "PT",
+      "counts_sha256": "0a59797323261f5d92e153ad1c8032e1a83b4a0034820d321abcdc2d3a3981ea",
+      "bincount": [
+        234,
+        233,
+        214,
+        372,
+        236,
+        260,
+        249,
+        250
+      ]
+    },
+    {
+      "arm": "native",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 8,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 6144,
+        "w2": 1152
+      },
+      "per_call": {
+        "dram_bytes_read": 11564582314.666666,
+        "dram_bytes_write": 160714837.33333334,
+        "l2_tex_read_sectors": 670226621.0,
+        "gpu_time_ns": 3659605.3333333335,
+        "l2_fill_device_sectors": 361393207.3333333,
+        "l2_read_miss_sectors": 556901309.3333334,
+        "l2_tex_read_hit_sectors": 292529958.6666667,
+        "l2_read_hit_pct": 35.49600573841824
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 8492969728.0,
+          "dram_bytes_write": 135129088.0,
+          "l2_tex_read_sectors": 447387089.0,
+          "gpu_time_ns": 2537397.3333333335,
+          "l2_fill_device_sectors": 265405307.0,
+          "l2_read_miss_sectors": 399060605.6666667,
+          "l2_tex_read_hit_sectors": 181030943.0,
+          "l2_read_hit_pct": 31.323333333333334,
+          "grid_size": 6144
+        },
+        "w2": {
+          "dram_bytes_read": 3071612586.6666665,
+          "dram_bytes_write": 25585749.333333332,
+          "l2_tex_read_sectors": 222839532.0,
+          "gpu_time_ns": 1122208.0,
+          "l2_fill_device_sectors": 95987900.33333333,
+          "l2_read_miss_sectors": 157840703.66666666,
+          "l2_tex_read_hit_sectors": 111499015.66666667,
+          "l2_read_hit_pct": 43.873333333333335,
+          "grid_size": 1152
+        }
+      },
+      "per_call_values": [
+        11570491136.0,
+        11563659008.0,
+        11559596800.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          8491848704.0,
+          8492226560.0,
+          8494833920.0
+        ],
+        "w2": [
+          3078642432.0,
+          3071432448.0,
+          3064762880.0
+        ]
+      },
+      "spread_rel": 0.0009421184066793264,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 23.27,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 135804237.33333334,
+          "sm__cycles_elapsed.avg": 3509356.1833333336
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 4.36,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 60066627.0,
+          "sm__cycles_elapsed.avg": 1518027.1333333335
+        }
+      },
+      "histogram": "PW",
+      "counts_sha256": "224b94ae664a7d1064a922b0f88b6a8dd6dd2d278b15f5dc97dd43bdf91ca143",
+      "bincount": [
+        138,
+        281,
+        184,
+        242,
+        275,
+        296,
+        55,
+        577
+      ]
+    },
+    {
+      "arm": "shared",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 72,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 22528,
+        "w2": 4224
+      },
+      "per_call": {
+        "dram_bytes_read": 11566576896.0,
+        "dram_bytes_write": 160562944.0,
+        "l2_tex_read_sectors": 670091819.0,
+        "gpu_time_ns": 3660128.0,
+        "l2_fill_device_sectors": 361455537.6666667,
+        "l2_read_miss_sectors": 556947431.0,
+        "l2_tex_read_hit_sectors": 292735830.0,
+        "l2_read_hit_pct": 35.52835755313109
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 8493490346.666667,
+          "dram_bytes_write": 134946986.66666666,
+          "l2_tex_read_sectors": 447338326.0,
+          "gpu_time_ns": 2537845.3333333335,
+          "l2_fill_device_sectors": 265421580.33333334,
+          "l2_read_miss_sectors": 399030332.0,
+          "l2_tex_read_hit_sectors": 180772412.66666666,
+          "l2_read_hit_pct": 31.28,
+          "grid_size": 22528
+        },
+        "w2": {
+          "dram_bytes_read": 3073086549.3333335,
+          "dram_bytes_write": 25615957.333333332,
+          "l2_tex_read_sectors": 222753493.0,
+          "gpu_time_ns": 1122282.6666666667,
+          "l2_fill_device_sectors": 96033957.33333333,
+          "l2_read_miss_sectors": 157917099.0,
+          "l2_tex_read_hit_sectors": 111963417.33333333,
+          "l2_read_hit_pct": 44.06,
+          "grid_size": 4224
+        }
+      },
+      "per_call_values": [
+        11593580288.0,
+        11552303360.0,
+        11553847040.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          8491810048.0,
+          8492230912.0,
+          8496430080.0
+        ],
+        "w2": [
+          3101770240.0,
+          3060072448.0,
+          3057416960.0
+        ]
+      },
+      "spread_rel": 0.003572570058881444,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 85.33,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 135797913.0,
+          "sm__cycles_elapsed.avg": 3510544.486666667
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 16.0,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 60384341.333333336,
+          "sm__cycles_elapsed.avg": 1518751.93
+        }
+      },
+      "histogram": "PW",
+      "counts_sha256": "224b94ae664a7d1064a922b0f88b6a8dd6dd2d278b15f5dc97dd43bdf91ca143",
+      "bincount": [
+        138,
+        281,
+        184,
+        242,
+        275,
+        296,
+        55,
+        577
+      ]
+    },
+    {
+      "arm": "native",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 8,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 6144,
+        "w2": 1152
+      },
+      "per_call": {
+        "dram_bytes_read": 11824348586.666668,
+        "dram_bytes_write": 160733781.3333333,
+        "l2_tex_read_sectors": 688299520.0,
+        "gpu_time_ns": 3771573.3333333335,
+        "l2_fill_device_sectors": 369510901.3333333,
+        "l2_read_miss_sectors": 567898951.0,
+        "l2_tex_read_hit_sectors": 302200131.0,
+        "l2_read_hit_pct": 36.08601344939676
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 8890582613.333334,
+          "dram_bytes_write": 135878826.66666666,
+          "l2_tex_read_sectors": 459285113.3333333,
+          "gpu_time_ns": 2647893.3333333335,
+          "l2_fill_device_sectors": 277830719.0,
+          "l2_read_miss_sectors": 417652504.0,
+          "l2_tex_read_hit_sectors": 180334260.33333334,
+          "l2_read_hit_pct": 30.26,
+          "grid_size": 6144
+        },
+        "w2": {
+          "dram_bytes_read": 2933765973.3333335,
+          "dram_bytes_write": 24854954.666666668,
+          "l2_tex_read_sectors": 229014406.66666666,
+          "gpu_time_ns": 1123680.0,
+          "l2_fill_device_sectors": 91680182.33333333,
+          "l2_read_miss_sectors": 150246447.0,
+          "l2_tex_read_hit_sectors": 121865870.66666667,
+          "l2_read_hit_pct": 47.77,
+          "grid_size": 1152
+        }
+      },
+      "per_call_values": [
+        11874576640.0,
+        11820231936.0,
+        11778237184.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          8891366400.0,
+          8889787136.0,
+          8890594304.0
+        ],
+        "w2": [
+          2983210240.0,
+          2930444800.0,
+          2887642880.0
+        ]
+      },
+      "spread_rel": 0.008150386263283557,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 23.27,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 142044002.66666666,
+          "sm__cycles_elapsed.avg": 3659872.93
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 4.36,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 60391288.0,
+          "sm__cycles_elapsed.avg": 1533079.72
+        }
+      },
+      "histogram": "PT2",
+      "counts_sha256": "a7b998b345ef3c2c4f4c0673c96be77ece5bc430cac328cf5c40531f97f28b5b",
+      "bincount": [
+        313,
+        280,
+        265,
+        406,
+        166,
+        259,
+        195,
+        164
+      ]
+    },
+    {
+      "arm": "shared",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 72,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 22528,
+        "w2": 4224
+      },
+      "per_call": {
+        "dram_bytes_read": 11826961493.333334,
+        "dram_bytes_write": 160880298.6666667,
+        "l2_tex_read_sectors": 687015174.6666666,
+        "gpu_time_ns": 3772266.6666666665,
+        "l2_fill_device_sectors": 369592558.0,
+        "l2_read_miss_sectors": 568107843.3333334,
+        "l2_tex_read_hit_sectors": 302129500.3333334,
+        "l2_read_hit_pct": 36.104156846063596
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 8889252949.333334,
+          "dram_bytes_write": 135904085.33333334,
+          "l2_tex_read_sectors": 458370161.3333333,
+          "gpu_time_ns": 2649706.6666666665,
+          "l2_fill_device_sectors": 277789149.0,
+          "l2_read_miss_sectors": 417597506.6666667,
+          "l2_tex_read_hit_sectors": 180031367.33333334,
+          "l2_read_hit_pct": 30.276666666666667,
+          "grid_size": 22528
+        },
+        "w2": {
+          "dram_bytes_read": 2937708544.0,
+          "dram_bytes_write": 24976213.333333332,
+          "l2_tex_read_sectors": 228645013.33333334,
+          "gpu_time_ns": 1122560.0,
+          "l2_fill_device_sectors": 91803409.0,
+          "l2_read_miss_sectors": 150510336.66666666,
+          "l2_tex_read_hit_sectors": 122098133.0,
+          "l2_read_hit_pct": 47.78666666666667,
+          "grid_size": 4224
+        }
+      },
+      "per_call_values": [
+        11804411648.0,
+        11822775296.0,
+        11853697536.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          8886850048.0,
+          8893004800.0,
+          8887904000.0
+        ],
+        "w2": [
+          2917561600.0,
+          2929770496.0,
+          2965793536.0
+        ]
+      },
+      "spread_rel": 0.004168724074175283,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 85.33,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 142172572.66666666,
+          "sm__cycles_elapsed.avg": 3657432.51
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 16.0,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 60377839.0,
+          "sm__cycles_elapsed.avg": 1529124.11
+        }
+      },
+      "histogram": "PT2",
+      "counts_sha256": "a7b998b345ef3c2c4f4c0673c96be77ece5bc430cac328cf5c40531f97f28b5b",
+      "bincount": [
+        313,
+        280,
+        265,
+        406,
+        166,
+        259,
+        195,
+        164
+      ]
+    },
+    {
+      "arm": "native",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 8,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 6144,
+        "w2": 1152
+      },
+      "per_call": {
+        "dram_bytes_read": 10248236288.0,
+        "dram_bytes_write": 161608618.66666666,
+        "l2_tex_read_sectors": 631695556.0,
+        "gpu_time_ns": 3276864.0,
+        "l2_fill_device_sectors": 320257396.0,
+        "l2_read_miss_sectors": 489938941.6666666,
+        "l2_tex_read_hit_sectors": 298262735.3333334,
+        "l2_read_hit_pct": 38.71044282310365
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 7688106069.333333,
+          "dram_bytes_write": 136409344.0,
+          "l2_tex_read_sectors": 421286376.0,
+          "gpu_time_ns": 2299253.3333333335,
+          "l2_fill_device_sectors": 240253322.66666666,
+          "l2_read_miss_sectors": 361195084.3333333,
+          "l2_tex_read_hit_sectors": 179660702.33333334,
+          "l2_read_hit_pct": 33.31333333333333,
+          "grid_size": 6144
+        },
+        "w2": {
+          "dram_bytes_read": 2560130218.6666665,
+          "dram_bytes_write": 25199274.666666668,
+          "l2_tex_read_sectors": 210409180.0,
+          "gpu_time_ns": 977610.6666666666,
+          "l2_fill_device_sectors": 80004073.33333333,
+          "l2_read_miss_sectors": 128743857.33333333,
+          "l2_tex_read_hit_sectors": 118602033.0,
+          "l2_read_hit_pct": 49.51666666666667,
+          "grid_size": 1152
+        }
+      },
+      "per_call_values": [
+        10246981120.0,
+        10238503168.0,
+        10259224576.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          7685809664.0,
+          7685595648.0,
+          7692912896.0
+        ],
+        "w2": [
+          2561171456.0,
+          2552907520.0,
+          2566311680.0
+        ]
+      },
+      "spread_rel": 0.0020221963676263707,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 23.27,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 123276110.33333333,
+          "sm__cycles_elapsed.avg": 3163507.56
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 4.36,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 51251103.0,
+          "sm__cycles_elapsed.avg": 1317188.3
+        }
+      },
+      "histogram": "PW2",
+      "counts_sha256": "8abfb2c4450fb2bf1876f2582ff8e4cfdb5968c76dca82e44a3b4b8c5a9cc763",
+      "bincount": [
+        196,
+        188,
+        126,
+        337,
+        348,
+        357,
+        108,
+        388
+      ]
+    },
+    {
+      "arm": "shared",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 72,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 22528,
+        "w2": 4224
+      },
+      "per_call": {
+        "dram_bytes_read": 10235258282.666668,
+        "dram_bytes_write": 161760426.66666666,
+        "l2_tex_read_sectors": 631914364.0,
+        "gpu_time_ns": 3280576.0,
+        "l2_fill_device_sectors": 319851799.3333333,
+        "l2_read_miss_sectors": 492476645.6666667,
+        "l2_tex_read_hit_sectors": 299310963.0,
+        "l2_read_hit_pct": 39.129834646970544
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 7685662634.666667,
+          "dram_bytes_write": 136680192.0,
+          "l2_tex_read_sectors": 421442858.3333333,
+          "gpu_time_ns": 2308842.6666666665,
+          "l2_fill_device_sectors": 240176949.0,
+          "l2_read_miss_sectors": 361143169.0,
+          "l2_tex_read_hit_sectors": 179670797.0,
+          "l2_read_hit_pct": 33.306666666666665,
+          "grid_size": 22528
+        },
+        "w2": {
+          "dram_bytes_read": 2549595648.0,
+          "dram_bytes_write": 25080234.666666668,
+          "l2_tex_read_sectors": 210471505.66666666,
+          "gpu_time_ns": 971733.3333333334,
+          "l2_fill_device_sectors": 79674850.33333333,
+          "l2_read_miss_sectors": 131333476.66666667,
+          "l2_tex_read_hit_sectors": 119640166.0,
+          "l2_read_hit_pct": 50.79,
+          "grid_size": 4224
+        }
+      },
+      "per_call_values": [
+        10223696128.0,
+        10237231872.0,
+        10244846848.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          7685513728.0,
+          7685548032.0,
+          7685926144.0
+        ],
+        "w2": [
+          2538182400.0,
+          2551683840.0,
+          2558920704.0
+        ]
+      },
+      "spread_rel": 0.0020660585072659766,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 85.33,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 123242550.33333333,
+          "sm__cycles_elapsed.avg": 3184215.0
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 16.0,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 51516115.333333336,
+          "sm__cycles_elapsed.avg": 1312849.51
+        }
+      },
+      "histogram": "PW2",
+      "counts_sha256": "8abfb2c4450fb2bf1876f2582ff8e4cfdb5968c76dca82e44a3b4b8c5a9cc763",
+      "bincount": [
+        196,
+        188,
+        126,
+        337,
+        348,
+        357,
+        108,
+        388
+      ]
+    },
+    {
+      "arm": "native",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 8,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 6144,
+        "w2": 1152
+      },
+      "per_call": {
+        "dram_bytes_read": 8817196714.666666,
+        "dram_bytes_write": 156182016.0,
+        "l2_tex_read_sectors": 569350279.3333334,
+        "gpu_time_ns": 2780672.0,
+        "l2_fill_device_sectors": 275537377.6666667,
+        "l2_read_miss_sectors": 423623361.0,
+        "l2_tex_read_hit_sectors": 282417249.3333334,
+        "l2_read_hit_pct": 40.9949424949864
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 6478137088.0,
+          "dram_bytes_write": 132128938.66666667,
+          "l2_tex_read_sectors": 380670215.6666667,
+          "gpu_time_ns": 1947264.0,
+          "l2_fill_device_sectors": 202441776.0,
+          "l2_read_miss_sectors": 304489437.3333333,
+          "l2_tex_read_hit_sectors": 177151022.33333334,
+          "l2_read_hit_pct": 36.9,
+          "grid_size": 6144
+        },
+        "w2": {
+          "dram_bytes_read": 2339059626.6666665,
+          "dram_bytes_write": 24053077.333333332,
+          "l2_tex_read_sectors": 188680063.66666666,
+          "gpu_time_ns": 833408.0,
+          "l2_fill_device_sectors": 73095601.66666667,
+          "l2_read_miss_sectors": 119133923.66666667,
+          "l2_tex_read_hit_sectors": 105266227.0,
+          "l2_read_hit_pct": 49.25666666666666,
+          "grid_size": 1152
+        }
+      },
+      "per_call_values": [
+        8823742208.0,
+        8814277888.0,
+        8813570048.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          6478344704.0,
+          6477847296.0,
+          6478219264.0
+        ],
+        "w2": [
+          2345397504.0,
+          2336430592.0,
+          2335350784.0
+        ]
+      },
+      "spread_rel": 0.0011540548334479739,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 23.27,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 104307548.66666667,
+          "sm__cycles_elapsed.avg": 2676796.033333333
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 4.36,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 47640173.333333336,
+          "sm__cycles_elapsed.avg": 1111067.3166666667
+        }
+      },
+      "histogram": "uniform",
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ]
+    },
+    {
+      "arm": "shared",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 72,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 22528,
+        "w2": 4224
+      },
+      "per_call": {
+        "dram_bytes_read": 8812096170.666668,
+        "dram_bytes_write": 156327680.0,
+        "l2_tex_read_sectors": 569395575.0,
+        "gpu_time_ns": 2787456.0,
+        "l2_fill_device_sectors": 275378004.3333334,
+        "l2_read_miss_sectors": 424206868.3333333,
+        "l2_tex_read_hit_sectors": 283249048.6666667,
+        "l2_read_hit_pct": 40.99524943471856
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 6478434474.666667,
+          "dram_bytes_write": 132283050.66666667,
+          "l2_tex_read_sectors": 380905630.0,
+          "gpu_time_ns": 1951808.0,
+          "l2_fill_device_sectors": 202451088.33333334,
+          "l2_read_miss_sectors": 304643803.3333333,
+          "l2_tex_read_hit_sectors": 177611949.0,
+          "l2_read_hit_pct": 36.949999999999996,
+          "grid_size": 22528
+        },
+        "w2": {
+          "dram_bytes_read": 2333661696.0,
+          "dram_bytes_write": 24044629.333333332,
+          "l2_tex_read_sectors": 188489945.0,
+          "gpu_time_ns": 835648.0,
+          "l2_fill_device_sectors": 72926916.0,
+          "l2_read_miss_sectors": 119563065.0,
+          "l2_tex_read_hit_sectors": 105637099.66666667,
+          "l2_read_hit_pct": 49.169999999999995,
+          "grid_size": 4224
+        }
+      },
+      "per_call_values": [
+        8800366336.0,
+        8825556736.0,
+        8810365440.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          6478348544.0,
+          6478612992.0,
+          6478341888.0
+        ],
+        "w2": [
+          2322017792.0,
+          2346943744.0,
+          2332023552.0
+        ]
+      },
+      "spread_rel": 0.0028591776551779445,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 85.33,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 104392597.0,
+          "sm__cycles_elapsed.avg": 2678804.756666667
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 16.0,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 46761811.333333336,
+          "sm__cycles_elapsed.avg": 1112419.4400000002
+        }
+      },
+      "histogram": "uniform",
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ]
+    },
+    {
+      "arm": "native",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 8,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 6144,
+        "w2": 1152
+      },
+      "per_call": {
+        "dram_bytes_read": 8827953237.333334,
+        "dram_bytes_write": 156253354.6666667,
+        "l2_tex_read_sectors": 571139182.6666666,
+        "gpu_time_ns": 2787018.666666667,
+        "l2_fill_device_sectors": 275873562.3333333,
+        "l2_read_miss_sectors": 422972229.6666667,
+        "l2_tex_read_hit_sectors": 283548159.3333333,
+        "l2_read_hit_pct": 40.99628385604309
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 6478440618.666667,
+          "dram_bytes_write": 132188586.66666667,
+          "l2_tex_read_sectors": 382412612.0,
+          "gpu_time_ns": 1951658.6666666667,
+          "l2_fill_device_sectors": 202451277.0,
+          "l2_read_miss_sectors": 304499914.0,
+          "l2_tex_read_hit_sectors": 177058500.66666666,
+          "l2_read_hit_pct": 36.766666666666666,
+          "grid_size": 6144
+        },
+        "w2": {
+          "dram_bytes_read": 2349512618.6666665,
+          "dram_bytes_write": 24064768.0,
+          "l2_tex_read_sectors": 188726570.66666666,
+          "gpu_time_ns": 835360.0,
+          "l2_fill_device_sectors": 73422285.33333333,
+          "l2_read_miss_sectors": 118472315.66666667,
+          "l2_tex_read_hit_sectors": 106489658.66666667,
+          "l2_read_hit_pct": 49.56666666666666,
+          "grid_size": 1152
+        }
+      },
+      "per_call_values": [
+        8824233216.0,
+        8823695616.0,
+        8835930880.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          6478777344.0,
+          6478929664.0,
+          6477614848.0
+        ],
+        "w2": [
+          2345455872.0,
+          2344765952.0,
+          2358316032.0
+        ]
+      },
+      "spread_rel": 0.0013865526556817603,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 23.27,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 104312364.66666667,
+          "sm__cycles_elapsed.avg": 2673699.6733333333
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 4.36,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 46937339.0,
+          "sm__cycles_elapsed.avg": 1113717.1733333333
+        }
+      },
+      "histogram": "balanced",
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ]
+    },
+    {
+      "arm": "shared",
+      "n": 2,
+      "tokens": 1024,
+      "declared": 72,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 22528,
+        "w2": 4224
+      },
+      "per_call": {
+        "dram_bytes_read": 8827519658.666668,
+        "dram_bytes_write": 156117333.33333334,
+        "l2_tex_read_sectors": 570211429.3333333,
+        "gpu_time_ns": 2790986.6666666665,
+        "l2_fill_device_sectors": 275859998.0,
+        "l2_read_miss_sectors": 424157564.3333333,
+        "l2_tex_read_hit_sectors": 284855799.3333334,
+        "l2_read_hit_pct": 41.1434525907114
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 6478714794.666667,
+          "dram_bytes_write": 132198400.0,
+          "l2_tex_read_sectors": 381062597.3333333,
+          "gpu_time_ns": 1949184.0,
+          "l2_fill_device_sectors": 202459849.0,
+          "l2_read_miss_sectors": 304553439.0,
+          "l2_tex_read_hit_sectors": 178167925.33333334,
+          "l2_read_hit_pct": 37.06333333333333,
+          "grid_size": 22528
+        },
+        "w2": {
+          "dram_bytes_read": 2348804864.0,
+          "dram_bytes_write": 23918933.333333332,
+          "l2_tex_read_sectors": 189148832.0,
+          "gpu_time_ns": 841802.6666666666,
+          "l2_fill_device_sectors": 73400149.0,
+          "l2_read_miss_sectors": 119604125.33333333,
+          "l2_tex_read_hit_sectors": 106687874.0,
+          "l2_read_hit_pct": 49.36333333333334,
+          "grid_size": 4224
+        }
+      },
+      "per_call_values": [
+        8844018432.0,
+        8827532288.0,
+        8811008256.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          6478552064.0,
+          6478791680.0,
+          6478800640.0
+        ],
+        "w2": [
+          2365466368.0,
+          2348740608.0,
+          2332207616.0
+        ]
+      },
+      "spread_rel": 0.0037394568406023823,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 85.33,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 104246098.33333333,
+          "sm__cycles_elapsed.avg": 2681844.9499999997
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 16.0,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 46716282.0,
+          "sm__cycles_elapsed.avg": 1112814.79
+        }
+      },
+      "histogram": "balanced",
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ]
+    }
+  ],
+  "group_model": {
+    "model": "group_reads: vLLM v0.27.1's pid mapping, a pure L2 inside a GROUP_SIZE_M group and none across",
+    "q": {
+      "2": 2.0
+    }
+  },
+  "estimates": {
+    "not_applicable": "histogram page: cells are (arm, n, label), not a balanced ladder; the rental-5 scorer reads them"
+  },
+  "gates": [],
+  "run_id": "nvidia_gh200_480gb-armsnative_shared-block_m128-block_n128-calls3-clock_controlnone-dtypebf16-fa-97bc0e2c",
+  "git_sha": "09b340ce60920d5d66c7a07019427cff3ba1b0f3",
+  "gpu_name": "NVIDIA GH200 480GB",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "nsight-compute/dram-counters/replay-mode-kernel/cache-control-all/clock-control-none/r3-arms-fused_moe_kernel-launches-attributed-by-order-and-grid; NOT timing.TIMING_BASIS",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "09b340ce60920d5d66c7a07019427cff3ba1b0f3",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-10-21T19:11:18+00:00",
+    "hostname": "192-222-57-243",
+    "gpu_name": "NVIDIA GH200 480GB",
+    "driver_version": "580.105.08",
+    "cuda_version": "13.0",
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "nsight-compute/dram-counters/replay-mode-kernel/cache-control-all/clock-control-none/r3-arms-fused_moe_kernel-launches-attributed-by-order-and-grid; NOT timing.TIMING_BASIS",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}

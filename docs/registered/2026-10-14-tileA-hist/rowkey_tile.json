@@ -1,0 +1,820 @@
+{
+ "what": "tile-stage A-key candidates: rental 6's row-key LRU (rowkeys.py, pinned) streamed at the tile (rowkeys_tile.stream_misses: the same access order and hit rule, bounded memory) on every w1 row of rental A's G-1 byte pages, priced before any tile page",
+ "pages": {
+  "olmoe-1b-7b-128g1": {
+   "tile": "128x128x64w8s3",
+   "occupancy_w1": 2,
+   "occupancy_source": "DESIGN (shared-memory rule; the census replaces it)"
+  },
+  "mixtral-8x7b-64g1": {
+   "tile": "64x128x64w8s3",
+   "occupancy_w1": 3,
+   "occupancy_source": "DESIGN (shared-memory rule; the census replaces it)"
+  },
+  "qwen2-57b-a14b-128g1": {
+   "tile": "128x128x64w8s3",
+   "occupancy_w1": 2,
+   "occupancy_source": "DESIGN (shared-memory rule; the census replaces it)"
+  }
+ },
+ "C_MiB": [
+  60.0,
+  30.0
+ ],
+ "arms": "NATIVE priced; SHARED carried (the same walk at G 1)",
+ "timing": {
+  "sms": 132,
+  "sigma": 0.0,
+  "note": "c moves no byte (every CTA lasts occ x c per k-step); the occupancy does"
+ },
+ "device": "cpu",
+ "dtype": "int64 (exact)",
+ "max_rss_gb_guard": 4.0,
+ "wall_s": 82.3,
+ "cells": [
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "PT",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 1024,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 559738624.0,
+   "read_bytes_C30": 559747072.0,
+   "accesses": 4242880,
+   "wall_s": 0.8,
+   "peak_rss_gb": 0.206
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "PW",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 1024,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 562316032.0,
+   "read_bytes_C30": 562565120.0,
+   "accesses": 4249216,
+   "wall_s": 0.82,
+   "peak_rss_gb": 0.207
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "uniform",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 1024,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 542638080.0,
+   "read_bytes_C30": 542638080.0,
+   "accesses": 4228096,
+   "wall_s": 0.79,
+   "peak_rss_gb": 0.207
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "balanced",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": null,
+   "tokens": 1024,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 542638080.0,
+   "read_bytes_C30": 542638080.0,
+   "accesses": 4228096,
+   "wall_s": 0.79,
+   "peak_rss_gb": 0.207
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "PT",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 2048,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 598639104.0,
+   "read_bytes_C30": 613113856.0,
+   "accesses": 8474672,
+   "wall_s": 1.61,
+   "peak_rss_gb": 0.215
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "PW",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 2048,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 596554752.0,
+   "read_bytes_C30": 619515904.0,
+   "accesses": 8471504,
+   "wall_s": 1.57,
+   "peak_rss_gb": 0.217
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "uniform",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 2048,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 584941568.0,
+   "read_bytes_C30": 585105408.0,
+   "accesses": 8456192,
+   "wall_s": 1.51,
+   "peak_rss_gb": 0.217
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "balanced",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": null,
+   "tokens": 2048,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 584941568.0,
+   "read_bytes_C30": 585105408.0,
+   "accesses": 8456192,
+   "wall_s": 1.58,
+   "peak_rss_gb": 0.217
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "PT",
+   "n": 4,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 4096,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 320,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 564203520.0,
+   "read_bytes_C30": 737739392.0,
+   "accesses": 16928752,
+   "wall_s": 3.2,
+   "peak_rss_gb": 0.225
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "PW",
+   "n": 4,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 4096,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 320,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 566629504.0,
+   "read_bytes_C30": 726773760.0,
+   "accesses": 16930336,
+   "wall_s": 3.24,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "uniform",
+   "n": 4,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 4096,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 320,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 553648128.0,
+   "read_bytes_C30": 682459136.0,
+   "accesses": 16912384,
+   "wall_s": 3.05,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "label": "balanced",
+   "n": 4,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": null,
+   "tokens": 4096,
+   "k": 8,
+   "P": 16,
+   "S": 32,
+   "R": 320,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 553648128.0,
+   "read_bytes_C30": 682459136.0,
+   "accesses": 16912384,
+   "wall_s": 3.22,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "PT",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 256,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 16,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 2299191296.0,
+   "read_bytes_C30": 2299191296.0,
+   "accesses": 7500192,
+   "wall_s": 1.57,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "PW",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 256,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 16,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 2441928704.0,
+   "read_bytes_C30": 2441928704.0,
+   "accesses": 7514752,
+   "wall_s": 1.6,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "uniform",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 256,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 16,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 1883242496.0,
+   "read_bytes_C30": 1883242496.0,
+   "accesses": 7456512,
+   "wall_s": 1.54,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "balanced",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": null,
+   "tokens": 256,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 16,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 1883242496.0,
+   "read_bytes_C30": 1883242496.0,
+   "accesses": 7456512,
+   "wall_s": 1.43,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "PT",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 512,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 24,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 2918809600.0,
+   "read_bytes_C30": 2918809600.0,
+   "accesses": 14956704,
+   "wall_s": 3.08,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "PW",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 512,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 24,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 3681878016.0,
+   "read_bytes_C30": 3681878016.0,
+   "accesses": 14971264,
+   "wall_s": 3.02,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "uniform",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 512,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 24,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 2914295808.0,
+   "read_bytes_C30": 2917318656.0,
+   "accesses": 14913024,
+   "wall_s": 3.14,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "label": "balanced",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": null,
+   "tokens": 512,
+   "k": 2,
+   "P": 224,
+   "S": 64,
+   "R": 24,
+   "tile": [
+    64,
+    128,
+    64
+   ],
+   "occ": 3,
+   "G": 1,
+   "read_bytes_C60": 2914295808.0,
+   "read_bytes_C30": 2917318656.0,
+   "accesses": 14913024,
+   "wall_s": 2.86,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "PT",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 1024,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2511581184.0,
+   "read_bytes_C30": 2511581184.0,
+   "accesses": 18559840,
+   "wall_s": 3.63,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "PW",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 1024,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2568724480.0,
+   "read_bytes_C30": 2568724480.0,
+   "accesses": 18587200,
+   "wall_s": 3.52,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "uniform",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 1024,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2364407808.0,
+   "read_bytes_C30": 2364407808.0,
+   "accesses": 18496000,
+   "wall_s": 3.52,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "balanced",
+   "n": 1,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": null,
+   "tokens": 1024,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 128,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2364407808.0,
+   "read_bytes_C30": 2364407808.0,
+   "accesses": 18496000,
+   "wall_s": 3.26,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "PT",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 2048,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2945022976.0,
+   "read_bytes_C30": 2945022976.0,
+   "accesses": 37074080,
+   "wall_s": 6.93,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "PW",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 2048,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2967458816.0,
+   "read_bytes_C30": 2967458816.0,
+   "accesses": 37067240,
+   "wall_s": 7.29,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "uniform",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": 20261410,
+   "tokens": 2048,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2762604544.0,
+   "read_bytes_C30": 2762604544.0,
+   "accesses": 36992000,
+   "wall_s": 6.85,
+   "peak_rss_gb": 0.229
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "label": "balanced",
+   "n": 2,
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "shuffle_seed": null,
+   "tokens": 2048,
+   "k": 8,
+   "P": 40,
+   "S": 56,
+   "R": 192,
+   "tile": [
+    128,
+    128,
+    64
+   ],
+   "occ": 2,
+   "G": 1,
+   "read_bytes_C60": 2762604544.0,
+   "read_bytes_C30": 2762604544.0,
+   "accesses": 36992000,
+   "wall_s": 6.89,
+   "peak_rss_gb": 0.229
+  }
+ ]
+}

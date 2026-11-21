@@ -1,0 +1,1598 @@
+{
+ "pages": {
+  "mixtral-8x7b-ska": "counted",
+  "mixtral-8x7b-skb": "counted",
+  "mixtral-8x7b-skc": "counted",
+  "phi-3.5-moe-ska": "counted",
+  "phi-3.5-moe-skb": "counted",
+  "phi-3.5-moe-skc": "counted",
+  "qwen1.5-moe-a2.7b-q9": "counted",
+  "qwen1.5-moe-a2.7b-q15": "counted",
+  "phi-3.5-moe-q9": "counted",
+  "phi-3.5-moe-q15": "counted",
+  "jetmoe-8b-q9": "counted",
+  "jetmoe-8b-q15": "counted"
+ },
+ "dropped_rows": {
+  "mixtral-8x7b-ska": [],
+  "mixtral-8x7b-skb": [],
+  "mixtral-8x7b-skc": [],
+  "phi-3.5-moe-ska": [],
+  "phi-3.5-moe-skb": [],
+  "phi-3.5-moe-skc": [],
+  "qwen1.5-moe-a2.7b-q9": [],
+  "qwen1.5-moe-a2.7b-q15": [],
+  "phi-3.5-moe-q9": [],
+  "phi-3.5-moe-q15": [],
+  "jetmoe-8b-q9": [
+   [
+    "jetmoe-8b/c9/1/balanced/native",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ],
+   [
+    "jetmoe-8b/c9/1/balanced/shared",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ],
+   [
+    "jetmoe-8b/c9/2/balanced/native",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ],
+   [
+    "jetmoe-8b/c9/2/balanced/shared",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ]
+  ],
+  "jetmoe-8b-q15": [
+   [
+    "jetmoe-8b/c15/1/balanced/native",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ],
+   [
+    "jetmoe-8b/c15/1/balanced/shared",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ],
+   [
+    "jetmoe-8b/c15/2/balanced/native",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ],
+   [
+    "jetmoe-8b/c15/2/balanced/shared",
+    "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+   ]
+  ]
+ },
+ "Q1-H": {
+  "verdict": "FAILS",
+  "pairs": 24,
+  "clusters": 5,
+  "mean_g_us": 0.420344,
+  "se_us": 0.517073,
+  "level_clause": "HOLDS",
+  "copies_clause": {
+   "verdict": "FAILS",
+   "c15_minus_c9_us": 2.237335,
+   "models": {
+    "jetmoe-8b": 0.222033,
+    "phi-3.5-moe": 3.437002,
+    "qwen1.5-moe-a2.7b": 3.052969
+   }
+  },
+  "equal_cluster_weight_mean_us": 0.75817,
+  "rivals": {
+   "v2": {
+    "g_R_us": 4.521792,
+    "verdict": "EXCLUDED"
+   },
+   "H8": {
+    "g_R_us": 7.444833,
+    "verdict": "EXCLUDED"
+   },
+   "v3_all": {
+    "g_R_us": 0.0,
+    "verdict": "NOT EXCLUDED"
+   }
+  },
+  "label": "REPLICATE: 21 of its 24 pairs are SEEN replicates (every c9 and skew-page control pair); only the c15 SHARED cells are BLIND, so the verdict is BLIND only in the copies clause",
+  "skipped": [],
+  "rows": [
+   {
+    "pair": "jetmoe-8b/c15/4/balanced/15",
+    "g_us": -0.700981,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "jetmoe-8b/c9/4/balanced/9",
+    "g_us": -0.923014,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "mixtral-8x7b/A/6/balanced/9",
+    "g_us": -0.266979,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "mixtral-8x7b/A/6/uniform/9",
+    "g_us": -0.347087,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "mixtral-8x7b/B/6/balanced/9",
+    "g_us": -0.540905,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "mixtral-8x7b/B/6/uniform/9",
+    "g_us": -0.077062,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "mixtral-8x7b/C/6/balanced/9",
+    "g_us": 1.140992,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "mixtral-8x7b/C/6/uniform/9",
+    "g_us": -0.330885,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "phi-3.5-moe/A/2/balanced/9",
+    "g_us": -0.788074,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "phi-3.5-moe/A/2/uniform/9",
+    "g_us": -0.484031,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "phi-3.5-moe/A/4/balanced/9",
+    "g_us": 0.784022,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "phi-3.5-moe/A/4/uniform/9",
+    "g_us": 1.248104,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "phi-3.5-moe/B/2/balanced/9",
+    "g_us": -1.236018,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "phi-3.5-moe/B/2/uniform/9",
+    "g_us": -1.140055,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "phi-3.5-moe/B/4/balanced/9",
+    "g_us": 0.850053,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "phi-3.5-moe/B/4/uniform/9",
+    "g_us": 1.026125,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "phi-3.5-moe/C/2/balanced/9",
+    "g_us": -0.439953,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "phi-3.5-moe/C/2/uniform/9",
+    "g_us": -0.872027,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "phi-3.5-moe/C/4/balanced/9",
+    "g_us": 2.042024,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "phi-3.5-moe/C/4/uniform/9",
+    "g_us": 1.466005,
+    "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+   },
+   {
+    "pair": "phi-3.5-moe/c15/2/balanced/15",
+    "g_us": 2.760987,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "phi-3.5-moe/c9/2/balanced/9",
+    "g_us": -0.676015,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "qwen1.5-moe-a2.7b/c15/2/balanced/15",
+    "g_us": 5.322994,
+    "population": "the design's population (design-r7 3.2)"
+   },
+   {
+    "pair": "qwen1.5-moe-a2.7b/c9/2/balanced/9",
+    "g_us": 2.270025,
+    "population": "the design's population (design-r7 3.2)"
+   }
+  ],
+  "design_population_printed": {
+   "pairs": 12,
+   "clusters": 3,
+   "mean_g_us": 0.25782,
+   "se_us": 0.907427,
+   "level_clause": "HOLDS",
+   "copies_clause": {
+    "verdict": "FAILS",
+    "c15_minus_c9_us": 2.237335,
+    "models": {
+     "jetmoe-8b": 0.222033,
+     "phi-3.5-moe": 3.437002,
+     "qwen1.5-moe-a2.7b": 3.052969
+    }
+   },
+   "equal_cluster_weight_mean_us": 0.875038,
+   "rivals": {
+    "v2": {
+     "g_R_us": 4.71925,
+     "verdict": "EXCLUDED"
+    },
+    "H8": {
+     "g_R_us": 7.445667,
+     "verdict": "EXCLUDED"
+    },
+    "v3_all": {
+     "g_R_us": 0.0,
+     "verdict": "NOT EXCLUDED"
+    }
+   },
+   "reads_as": "FAILS",
+   "label": "DESCRIPTIVE: the design's 12 pairs alone"
+  }
+ },
+ "Q1-P": {
+  "verdict": "DESCRIPTIVE (no verdict, as registered)",
+  "statistic": {
+   "pairs": 8,
+   "clusters": 2,
+   "rivals": {
+    "v2": {
+     "verdict": "UNDECIDED (too few pairs or clusters)"
+    },
+    "H8": {
+     "verdict": "UNDECIDED (too few pairs or clusters)"
+    },
+    "v3_all": {
+     "verdict": "UNDECIDED (too few pairs or clusters)"
+    }
+   }
+  },
+  "skipped": [],
+  "rows": [
+   {
+    "pair": "mixtral-8x7b/A/3/balanced/9",
+    "g_us": -3.901984
+   },
+   {
+    "pair": "mixtral-8x7b/A/3/uniform/9",
+    "g_us": -6.973948
+   },
+   {
+    "pair": "mixtral-8x7b/B/3/balanced/9",
+    "g_us": -13.982024
+   },
+   {
+    "pair": "mixtral-8x7b/B/3/uniform/9",
+    "g_us": -12.413945
+   },
+   {
+    "pair": "mixtral-8x7b/C/3/balanced/9",
+    "g_us": -12.461986
+   },
+   {
+    "pair": "mixtral-8x7b/C/3/uniform/9",
+    "g_us": -13.646033
+   },
+   {
+    "pair": "phi-3.5-moe/c15/1/balanced/15",
+    "g_us": -8.96903
+   },
+   {
+    "pair": "phi-3.5-moe/c9/1/balanced/9",
+    "g_us": 2.529953
+   }
+  ]
+ },
+ "Q1-SK": {
+  "status": "OPEN (printed)",
+  "phi-3.5-moe n 2": {
+   "skew_minus_control_us": -0.947576,
+   "skewed_pairs": 4,
+   "control_pairs": 6
+  }
+ },
+ "Q1-C": {
+  "verdict": "SELECTED CALL",
+  "D_us": 0.582005,
+  "x9_us": -8.232997,
+  "x15_us": -7.650993,
+  "positions_us": {
+   "CALL": 0.0,
+   "DEAD": -5.467715
+  },
+  "zero_level": "ZERO (x9 = 0) printed only; SEEN x9 already reads -7.95 / -5.97 us"
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "mixtral-8x7b-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    }
+   },
+   "mixtral-8x7b-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2b-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2b-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   },
+   "mixtral-8x7b-skc": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2c-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2c-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2d-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2d-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2e-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2e-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-skc": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2f-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2f-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   },
+   "qwen1.5-moe-a2.7b-q9": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2g-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2g-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    }
+   },
+   "qwen1.5-moe-a2.7b-q15": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2h-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2h-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-q9": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2i-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2i-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-q15": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2j-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2j-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 36 repeat rows non-clean (0.00%)"
+    }
+   },
+   "jetmoe-8b-q9": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-11-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 54 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-11-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 54 repeat rows non-clean (0.00%)"
+    }
+   },
+   "jetmoe-8b-q15": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-12-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 54 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-12-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 54 repeat rows non-clean (0.00%)"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "Q1-H / verdict",
+    "ALL": "FAILS",
+    "CLEAN": "FAILS",
+    "registered": "FAILS"
+   },
+   {
+    "path": "Q1-H / copies_clause / verdict",
+    "ALL": "FAILS",
+    "CLEAN": "FAILS",
+    "registered": "FAILS"
+   },
+   {
+    "path": "Q1-H / rivals / v2 / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "EXCLUDED",
+    "registered": "EXCLUDED"
+   },
+   {
+    "path": "Q1-H / rivals / H8 / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "EXCLUDED",
+    "registered": "EXCLUDED"
+   },
+   {
+    "path": "Q1-H / rivals / v3_all / verdict",
+    "ALL": "NOT EXCLUDED",
+    "CLEAN": "NOT EXCLUDED",
+    "registered": "NOT EXCLUDED"
+   },
+   {
+    "path": "Q1-H / design_population_printed / copies_clause / verdict",
+    "ALL": "FAILS",
+    "CLEAN": "FAILS",
+    "registered": "FAILS"
+   },
+   {
+    "path": "Q1-H / design_population_printed / rivals / v2 / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "EXCLUDED",
+    "registered": "EXCLUDED"
+   },
+   {
+    "path": "Q1-H / design_population_printed / rivals / H8 / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "EXCLUDED",
+    "registered": "EXCLUDED"
+   },
+   {
+    "path": "Q1-H / design_population_printed / rivals / v3_all / verdict",
+    "ALL": "NOT EXCLUDED",
+    "CLEAN": "NOT EXCLUDED",
+    "registered": "NOT EXCLUDED"
+   },
+   {
+    "path": "Q1-P / verdict",
+    "ALL": "DESCRIPTIVE (no verdict, as registered)",
+    "CLEAN": "DESCRIPTIVE (no verdict, as registered)",
+    "registered": "DESCRIPTIVE (no verdict, as registered)"
+   },
+   {
+    "path": "Q1-P / statistic / rivals / v2 / verdict",
+    "ALL": "UNDECIDED (too few pairs or clusters)",
+    "CLEAN": "UNDECIDED (too few pairs or clusters)",
+    "registered": "UNDECIDED (too few pairs or clusters)"
+   },
+   {
+    "path": "Q1-P / statistic / rivals / H8 / verdict",
+    "ALL": "UNDECIDED (too few pairs or clusters)",
+    "CLEAN": "UNDECIDED (too few pairs or clusters)",
+    "registered": "UNDECIDED (too few pairs or clusters)"
+   },
+   {
+    "path": "Q1-P / statistic / rivals / v3_all / verdict",
+    "ALL": "UNDECIDED (too few pairs or clusters)",
+    "CLEAN": "UNDECIDED (too few pairs or clusters)",
+    "registered": "UNDECIDED (too few pairs or clusters)"
+   },
+   {
+    "path": "Q1-C / verdict",
+    "ALL": "SELECTED CALL",
+    "CLEAN": "SELECTED CALL",
+    "registered": "SELECTED CALL"
+   }
+  ],
+  "CLEAN": {
+   "pages": {
+    "mixtral-8x7b-ska": "counted",
+    "mixtral-8x7b-skb": "counted",
+    "mixtral-8x7b-skc": "counted",
+    "phi-3.5-moe-ska": "counted",
+    "phi-3.5-moe-skb": "counted",
+    "phi-3.5-moe-skc": "counted",
+    "qwen1.5-moe-a2.7b-q9": "counted",
+    "qwen1.5-moe-a2.7b-q15": "counted",
+    "phi-3.5-moe-q9": "counted",
+    "phi-3.5-moe-q15": "counted",
+    "jetmoe-8b-q9": "counted",
+    "jetmoe-8b-q15": "counted"
+   },
+   "dropped_rows": {
+    "mixtral-8x7b-ska": [],
+    "mixtral-8x7b-skb": [],
+    "mixtral-8x7b-skc": [],
+    "phi-3.5-moe-ska": [],
+    "phi-3.5-moe-skb": [],
+    "phi-3.5-moe-skc": [],
+    "qwen1.5-moe-a2.7b-q9": [],
+    "qwen1.5-moe-a2.7b-q15": [],
+    "phi-3.5-moe-q9": [],
+    "phi-3.5-moe-q15": [],
+    "jetmoe-8b-q9": [
+     [
+      "jetmoe-8b/c9/1/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/1/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/2/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/2/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ]
+    ],
+    "jetmoe-8b-q15": [
+     [
+      "jetmoe-8b/c15/1/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/1/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/2/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/2/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ]
+    ]
+   },
+   "Q1-H": {
+    "verdict": "FAILS",
+    "pairs": 24,
+    "clusters": 5,
+    "mean_g_us": 0.420344,
+    "se_us": 0.517073,
+    "level_clause": "HOLDS",
+    "copies_clause": {
+     "verdict": "FAILS",
+     "c15_minus_c9_us": 2.237335,
+     "models": {
+      "jetmoe-8b": 0.222033,
+      "phi-3.5-moe": 3.437002,
+      "qwen1.5-moe-a2.7b": 3.052969
+     }
+    },
+    "equal_cluster_weight_mean_us": 0.75817,
+    "rivals": {
+     "v2": {
+      "g_R_us": 4.521792,
+      "verdict": "EXCLUDED"
+     },
+     "H8": {
+      "g_R_us": 7.444833,
+      "verdict": "EXCLUDED"
+     },
+     "v3_all": {
+      "g_R_us": 0.0,
+      "verdict": "NOT EXCLUDED"
+     }
+    },
+    "label": "REPLICATE: 21 of its 24 pairs are SEEN replicates (every c9 and skew-page control pair); only the c15 SHARED cells are BLIND, so the verdict is BLIND only in the copies clause",
+    "skipped": [],
+    "rows": [
+     {
+      "pair": "jetmoe-8b/c15/4/balanced/15",
+      "g_us": -0.700981,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "jetmoe-8b/c9/4/balanced/9",
+      "g_us": -0.923014,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "mixtral-8x7b/A/6/balanced/9",
+      "g_us": -0.266979,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/A/6/uniform/9",
+      "g_us": -0.347087,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/B/6/balanced/9",
+      "g_us": -0.540905,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/B/6/uniform/9",
+      "g_us": -0.077062,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/C/6/balanced/9",
+      "g_us": 1.140992,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/C/6/uniform/9",
+      "g_us": -0.330885,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/2/balanced/9",
+      "g_us": -0.788074,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/2/uniform/9",
+      "g_us": -0.484031,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/4/balanced/9",
+      "g_us": 0.784022,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/4/uniform/9",
+      "g_us": 1.248104,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/2/balanced/9",
+      "g_us": -1.236018,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/2/uniform/9",
+      "g_us": -1.140055,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/4/balanced/9",
+      "g_us": 0.850053,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/4/uniform/9",
+      "g_us": 1.026125,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/2/balanced/9",
+      "g_us": -0.439953,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/2/uniform/9",
+      "g_us": -0.872027,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/4/balanced/9",
+      "g_us": 2.042024,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/4/uniform/9",
+      "g_us": 1.466005,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/c15/2/balanced/15",
+      "g_us": 2.760987,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/c9/2/balanced/9",
+      "g_us": -0.676015,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "qwen1.5-moe-a2.7b/c15/2/balanced/15",
+      "g_us": 5.322994,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "qwen1.5-moe-a2.7b/c9/2/balanced/9",
+      "g_us": 2.270025,
+      "population": "the design's population (design-r7 3.2)"
+     }
+    ],
+    "design_population_printed": {
+     "pairs": 12,
+     "clusters": 3,
+     "mean_g_us": 0.25782,
+     "se_us": 0.907427,
+     "level_clause": "HOLDS",
+     "copies_clause": {
+      "verdict": "FAILS",
+      "c15_minus_c9_us": 2.237335,
+      "models": {
+       "jetmoe-8b": 0.222033,
+       "phi-3.5-moe": 3.437002,
+       "qwen1.5-moe-a2.7b": 3.052969
+      }
+     },
+     "equal_cluster_weight_mean_us": 0.875038,
+     "rivals": {
+      "v2": {
+       "g_R_us": 4.71925,
+       "verdict": "EXCLUDED"
+      },
+      "H8": {
+       "g_R_us": 7.445667,
+       "verdict": "EXCLUDED"
+      },
+      "v3_all": {
+       "g_R_us": 0.0,
+       "verdict": "NOT EXCLUDED"
+      }
+     },
+     "reads_as": "FAILS",
+     "label": "DESCRIPTIVE: the design's 12 pairs alone"
+    }
+   },
+   "Q1-P": {
+    "verdict": "DESCRIPTIVE (no verdict, as registered)",
+    "statistic": {
+     "pairs": 8,
+     "clusters": 2,
+     "rivals": {
+      "v2": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      },
+      "H8": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      },
+      "v3_all": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      }
+     }
+    },
+    "skipped": [],
+    "rows": [
+     {
+      "pair": "mixtral-8x7b/A/3/balanced/9",
+      "g_us": -3.901984
+     },
+     {
+      "pair": "mixtral-8x7b/A/3/uniform/9",
+      "g_us": -6.973948
+     },
+     {
+      "pair": "mixtral-8x7b/B/3/balanced/9",
+      "g_us": -13.982024
+     },
+     {
+      "pair": "mixtral-8x7b/B/3/uniform/9",
+      "g_us": -12.413945
+     },
+     {
+      "pair": "mixtral-8x7b/C/3/balanced/9",
+      "g_us": -12.461986
+     },
+     {
+      "pair": "mixtral-8x7b/C/3/uniform/9",
+      "g_us": -13.646033
+     },
+     {
+      "pair": "phi-3.5-moe/c15/1/balanced/15",
+      "g_us": -8.96903
+     },
+     {
+      "pair": "phi-3.5-moe/c9/1/balanced/9",
+      "g_us": 2.529953
+     }
+    ]
+   },
+   "Q1-SK": {
+    "status": "OPEN (printed)",
+    "phi-3.5-moe n 2": {
+     "skew_minus_control_us": -0.947576,
+     "skewed_pairs": 4,
+     "control_pairs": 6
+    }
+   },
+   "Q1-C": {
+    "verdict": "SELECTED CALL",
+    "D_us": 0.582005,
+    "x9_us": -8.232997,
+    "x15_us": -7.650993,
+    "positions_us": {
+     "CALL": 0.0,
+     "DEAD": -5.467715
+    },
+    "zero_level": "ZERO (x9 = 0) printed only; SEEN x9 already reads -7.95 / -5.97 us"
+   }
+  }
+ },
+ "P20_view": {
+  "label": "DESCRIPTIVE, NOT A VERDICT: every test on the P20 side view (rental7-g1rule)",
+  "combined": {
+   "pages": {
+    "mixtral-8x7b-ska": "counted",
+    "mixtral-8x7b-skb": "counted",
+    "mixtral-8x7b-skc": "counted",
+    "phi-3.5-moe-ska": "counted",
+    "phi-3.5-moe-skb": "counted",
+    "phi-3.5-moe-skc": "counted",
+    "qwen1.5-moe-a2.7b-q9": "counted",
+    "qwen1.5-moe-a2.7b-q15": "counted",
+    "phi-3.5-moe-q9": "counted",
+    "phi-3.5-moe-q15": "counted",
+    "jetmoe-8b-q9": "counted",
+    "jetmoe-8b-q15": "counted"
+   },
+   "dropped_rows": {
+    "mixtral-8x7b-ska": [],
+    "mixtral-8x7b-skb": [],
+    "mixtral-8x7b-skc": [],
+    "phi-3.5-moe-ska": [],
+    "phi-3.5-moe-skb": [
+     [
+      "phi-3.5-moe/B/2/DW/shared",
+      "5 clean repeats, under 6"
+     ]
+    ],
+    "phi-3.5-moe-skc": [],
+    "qwen1.5-moe-a2.7b-q9": [],
+    "qwen1.5-moe-a2.7b-q15": [],
+    "phi-3.5-moe-q9": [],
+    "phi-3.5-moe-q15": [],
+    "jetmoe-8b-q9": [
+     [
+      "jetmoe-8b/c9/1/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/1/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/2/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/2/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ]
+    ],
+    "jetmoe-8b-q15": [
+     [
+      "jetmoe-8b/c15/1/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/1/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/2/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/2/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ]
+    ]
+   },
+   "Q1-H": {
+    "verdict": "FAILS",
+    "pairs": 24,
+    "clusters": 5,
+    "mean_g_us": 0.460677,
+    "se_us": 0.498953,
+    "level_clause": "HOLDS",
+    "copies_clause": {
+     "verdict": "FAILS",
+     "c15_minus_c9_us": 2.221341,
+     "models": {
+      "jetmoe-8b": 0.222033,
+      "phi-3.5-moe": 3.389021,
+      "qwen1.5-moe-a2.7b": 3.052969
+     }
+    },
+    "equal_cluster_weight_mean_us": 0.782636,
+    "rivals": {
+     "v2": {
+      "g_R_us": 4.521792,
+      "verdict": "EXCLUDED"
+     },
+     "H8": {
+      "g_R_us": 7.444833,
+      "verdict": "EXCLUDED"
+     },
+     "v3_all": {
+      "g_R_us": 0.0,
+      "verdict": "NOT EXCLUDED"
+     }
+    },
+    "label": "REPLICATE: 21 of its 24 pairs are SEEN replicates (every c9 and skew-page control pair); only the c15 SHARED cells are BLIND, so the verdict is BLIND only in the copies clause",
+    "skipped": [],
+    "rows": [
+     {
+      "pair": "jetmoe-8b/c15/4/balanced/15",
+      "g_us": -0.700981,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "jetmoe-8b/c9/4/balanced/9",
+      "g_us": -0.923014,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "mixtral-8x7b/A/6/balanced/9",
+      "g_us": -0.266979,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/A/6/uniform/9",
+      "g_us": -0.347087,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/B/6/balanced/9",
+      "g_us": -0.540905,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/B/6/uniform/9",
+      "g_us": -0.077062,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/C/6/balanced/9",
+      "g_us": 1.140992,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/C/6/uniform/9",
+      "g_us": -0.330885,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/2/balanced/9",
+      "g_us": -0.43602,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/2/uniform/9",
+      "g_us": -0.492018,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/4/balanced/9",
+      "g_us": 0.784022,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/4/uniform/9",
+      "g_us": 1.248104,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/2/balanced/9",
+      "g_us": -1.267966,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/2/uniform/9",
+      "g_us": -0.91606,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/4/balanced/9",
+      "g_us": 0.882001,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/4/uniform/9",
+      "g_us": 1.026125,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/2/balanced/9",
+      "g_us": -0.119995,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/2/uniform/9",
+      "g_us": -0.840019,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/4/balanced/9",
+      "g_us": 2.042024,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/4/uniform/9",
+      "g_us": 1.466005,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/c15/2/balanced/15",
+      "g_us": 2.760987,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/c9/2/balanced/9",
+      "g_us": -0.628033,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "qwen1.5-moe-a2.7b/c15/2/balanced/15",
+      "g_us": 5.322994,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "qwen1.5-moe-a2.7b/c9/2/balanced/9",
+      "g_us": 2.270025,
+      "population": "the design's population (design-r7 3.2)"
+     }
+    ],
+    "design_population_printed": {
+     "pairs": 12,
+     "clusters": 3,
+     "mean_g_us": 0.335825,
+     "se_us": 0.881362,
+     "level_clause": "HOLDS",
+     "copies_clause": {
+      "verdict": "FAILS",
+      "c15_minus_c9_us": 2.221341,
+      "models": {
+       "jetmoe-8b": 0.222033,
+       "phi-3.5-moe": 3.389021,
+       "qwen1.5-moe-a2.7b": 3.052969
+      }
+     },
+     "equal_cluster_weight_mean_us": 0.91404,
+     "rivals": {
+      "v2": {
+       "g_R_us": 4.71925,
+       "verdict": "EXCLUDED"
+      },
+      "H8": {
+       "g_R_us": 7.445667,
+       "verdict": "EXCLUDED"
+      },
+      "v3_all": {
+       "g_R_us": 0.0,
+       "verdict": "NOT EXCLUDED"
+      }
+     },
+     "reads_as": "FAILS",
+     "label": "DESCRIPTIVE: the design's 12 pairs alone"
+    }
+   },
+   "Q1-P": {
+    "verdict": "DESCRIPTIVE (no verdict, as registered)",
+    "statistic": {
+     "pairs": 8,
+     "clusters": 2,
+     "rivals": {
+      "v2": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      },
+      "H8": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      },
+      "v3_all": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      }
+     }
+    },
+    "skipped": [],
+    "rows": [
+     {
+      "pair": "mixtral-8x7b/A/3/balanced/9",
+      "g_us": -4.397984
+     },
+     {
+      "pair": "mixtral-8x7b/A/3/uniform/9",
+      "g_us": -7.013973
+     },
+     {
+      "pair": "mixtral-8x7b/B/3/balanced/9",
+      "g_us": -14.846023
+     },
+     {
+      "pair": "mixtral-8x7b/B/3/uniform/9",
+      "g_us": -11.98196
+     },
+     {
+      "pair": "mixtral-8x7b/C/3/balanced/9",
+      "g_us": -12.461986
+     },
+     {
+      "pair": "mixtral-8x7b/C/3/uniform/9",
+      "g_us": -12.934025
+     },
+     {
+      "pair": "phi-3.5-moe/c15/1/balanced/15",
+      "g_us": -8.96903
+     },
+     {
+      "pair": "phi-3.5-moe/c9/1/balanced/9",
+      "g_us": 2.529953
+     }
+    ]
+   },
+   "Q1-SK": {
+    "status": "OPEN (printed)",
+    "phi-3.5-moe n 2": {
+     "skew_minus_control_us": -1.717657,
+     "skewed_pairs": 3,
+     "control_pairs": 6
+    }
+   },
+   "Q1-C": {
+    "verdict": "SELECTED CALL",
+    "D_us": 0.582005,
+    "x9_us": -8.232997,
+    "x15_us": -7.650993,
+    "positions_us": {
+     "CALL": 0.0,
+     "DEAD": -5.467715
+    },
+    "zero_level": "ZERO (x9 = 0) printed only; SEEN x9 already reads -7.95 / -5.97 us"
+   }
+  },
+  "CLEAN": {
+   "pages": {
+    "mixtral-8x7b-ska": "counted",
+    "mixtral-8x7b-skb": "counted",
+    "mixtral-8x7b-skc": "counted",
+    "phi-3.5-moe-ska": "counted",
+    "phi-3.5-moe-skb": "counted",
+    "phi-3.5-moe-skc": "counted",
+    "qwen1.5-moe-a2.7b-q9": "counted",
+    "qwen1.5-moe-a2.7b-q15": "counted",
+    "phi-3.5-moe-q9": "counted",
+    "phi-3.5-moe-q15": "counted",
+    "jetmoe-8b-q9": "counted",
+    "jetmoe-8b-q15": "counted"
+   },
+   "dropped_rows": {
+    "mixtral-8x7b-ska": [],
+    "mixtral-8x7b-skb": [],
+    "mixtral-8x7b-skc": [],
+    "phi-3.5-moe-ska": [],
+    "phi-3.5-moe-skb": [
+     [
+      "phi-3.5-moe/B/2/DW/shared",
+      "5 clean repeats, under 6"
+     ]
+    ],
+    "phi-3.5-moe-skc": [],
+    "qwen1.5-moe-a2.7b-q9": [],
+    "qwen1.5-moe-a2.7b-q15": [],
+    "phi-3.5-moe-q9": [],
+    "phi-3.5-moe-q15": [],
+    "jetmoe-8b-q9": [
+     [
+      "jetmoe-8b/c9/1/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/1/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/2/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c9/2/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ]
+    ],
+    "jetmoe-8b-q15": [
+     [
+      "jetmoe-8b/c15/1/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/1/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/2/balanced/native",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ],
+     [
+      "jetmoe-8b/c15/2/balanced/shared",
+      "G2 host-bound by rule (v3 + F240 under 0.40 ms)"
+     ]
+    ]
+   },
+   "Q1-H": {
+    "verdict": "FAILS",
+    "pairs": 24,
+    "clusters": 5,
+    "mean_g_us": 0.460677,
+    "se_us": 0.498953,
+    "level_clause": "HOLDS",
+    "copies_clause": {
+     "verdict": "FAILS",
+     "c15_minus_c9_us": 2.221341,
+     "models": {
+      "jetmoe-8b": 0.222033,
+      "phi-3.5-moe": 3.389021,
+      "qwen1.5-moe-a2.7b": 3.052969
+     }
+    },
+    "equal_cluster_weight_mean_us": 0.782636,
+    "rivals": {
+     "v2": {
+      "g_R_us": 4.521792,
+      "verdict": "EXCLUDED"
+     },
+     "H8": {
+      "g_R_us": 7.444833,
+      "verdict": "EXCLUDED"
+     },
+     "v3_all": {
+      "g_R_us": 0.0,
+      "verdict": "NOT EXCLUDED"
+     }
+    },
+    "label": "REPLICATE: 21 of its 24 pairs are SEEN replicates (every c9 and skew-page control pair); only the c15 SHARED cells are BLIND, so the verdict is BLIND only in the copies clause",
+    "skipped": [],
+    "rows": [
+     {
+      "pair": "jetmoe-8b/c15/4/balanced/15",
+      "g_us": -0.700981,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "jetmoe-8b/c9/4/balanced/9",
+      "g_us": -0.923014,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "mixtral-8x7b/A/6/balanced/9",
+      "g_us": -0.266979,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/A/6/uniform/9",
+      "g_us": -0.347087,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/B/6/balanced/9",
+      "g_us": -0.540905,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/B/6/uniform/9",
+      "g_us": -0.077062,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/C/6/balanced/9",
+      "g_us": 1.140992,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "mixtral-8x7b/C/6/uniform/9",
+      "g_us": -0.330885,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/2/balanced/9",
+      "g_us": -0.43602,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/2/uniform/9",
+      "g_us": -0.492018,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/4/balanced/9",
+      "g_us": 0.784022,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/A/4/uniform/9",
+      "g_us": 1.248104,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/2/balanced/9",
+      "g_us": -1.267966,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/2/uniform/9",
+      "g_us": -0.91606,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/4/balanced/9",
+      "g_us": 0.882001,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/B/4/uniform/9",
+      "g_us": 1.026125,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/2/balanced/9",
+      "g_us": -0.119995,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/2/uniform/9",
+      "g_us": -0.840019,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/4/balanced/9",
+      "g_us": 2.042024,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/C/4/uniform/9",
+      "g_us": 1.466005,
+      "population": "ADDED by design-r7-review (d), SEEN-SELECTED (zero-cost clusters on the skew pages)"
+     },
+     {
+      "pair": "phi-3.5-moe/c15/2/balanced/15",
+      "g_us": 2.760987,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "phi-3.5-moe/c9/2/balanced/9",
+      "g_us": -0.628033,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "qwen1.5-moe-a2.7b/c15/2/balanced/15",
+      "g_us": 5.322994,
+      "population": "the design's population (design-r7 3.2)"
+     },
+     {
+      "pair": "qwen1.5-moe-a2.7b/c9/2/balanced/9",
+      "g_us": 2.270025,
+      "population": "the design's population (design-r7 3.2)"
+     }
+    ],
+    "design_population_printed": {
+     "pairs": 12,
+     "clusters": 3,
+     "mean_g_us": 0.335825,
+     "se_us": 0.881362,
+     "level_clause": "HOLDS",
+     "copies_clause": {
+      "verdict": "FAILS",
+      "c15_minus_c9_us": 2.221341,
+      "models": {
+       "jetmoe-8b": 0.222033,
+       "phi-3.5-moe": 3.389021,
+       "qwen1.5-moe-a2.7b": 3.052969
+      }
+     },
+     "equal_cluster_weight_mean_us": 0.91404,
+     "rivals": {
+      "v2": {
+       "g_R_us": 4.71925,
+       "verdict": "EXCLUDED"
+      },
+      "H8": {
+       "g_R_us": 7.445667,
+       "verdict": "EXCLUDED"
+      },
+      "v3_all": {
+       "g_R_us": 0.0,
+       "verdict": "NOT EXCLUDED"
+      }
+     },
+     "reads_as": "FAILS",
+     "label": "DESCRIPTIVE: the design's 12 pairs alone"
+    }
+   },
+   "Q1-P": {
+    "verdict": "DESCRIPTIVE (no verdict, as registered)",
+    "statistic": {
+     "pairs": 8,
+     "clusters": 2,
+     "rivals": {
+      "v2": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      },
+      "H8": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      },
+      "v3_all": {
+       "verdict": "UNDECIDED (too few pairs or clusters)"
+      }
+     }
+    },
+    "skipped": [],
+    "rows": [
+     {
+      "pair": "mixtral-8x7b/A/3/balanced/9",
+      "g_us": -4.397984
+     },
+     {
+      "pair": "mixtral-8x7b/A/3/uniform/9",
+      "g_us": -7.013973
+     },
+     {
+      "pair": "mixtral-8x7b/B/3/balanced/9",
+      "g_us": -14.846023
+     },
+     {
+      "pair": "mixtral-8x7b/B/3/uniform/9",
+      "g_us": -11.98196
+     },
+     {
+      "pair": "mixtral-8x7b/C/3/balanced/9",
+      "g_us": -12.461986
+     },
+     {
+      "pair": "mixtral-8x7b/C/3/uniform/9",
+      "g_us": -12.934025
+     },
+     {
+      "pair": "phi-3.5-moe/c15/1/balanced/15",
+      "g_us": -8.96903
+     },
+     {
+      "pair": "phi-3.5-moe/c9/1/balanced/9",
+      "g_us": 2.529953
+     }
+    ]
+   },
+   "Q1-SK": {
+    "status": "OPEN (printed)",
+    "phi-3.5-moe n 2": {
+     "skew_minus_control_us": -1.717657,
+     "skewed_pairs": 3,
+     "control_pairs": 6
+    }
+   },
+   "Q1-C": {
+    "verdict": "SELECTED CALL",
+    "D_us": 0.582005,
+    "x9_us": -8.232997,
+    "x15_us": -7.650993,
+    "positions_us": {
+     "CALL": 0.0,
+     "DEAD": -5.467715
+    },
+    "zero_level": "ZERO (x9 = 0) printed only; SEEN x9 already reads -7.95 / -5.97 us"
+   }
+  }
+ },
+ "registration": "2026-10-13-rental7-q1-gh200",
+ "part": "q1"
+}

@@ -1,0 +1,241 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist9cc371ef8a-06f9754b
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json (sha256 9cc371ef8a155b63...), page A, 18 cells x arms = 30 timed cells, token-row shuffle seed 20261007; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       174.87 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 651.8 TFLOP/s bf16 over 3727.6 GB/s (triad pattern); calibrated 2026-10-08 at d4d1767e
+experts     native declares E=8; shared declares E x n_decl = 72 at every cell
+            n_decl = 9 against n_max = 32 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 32 against the 32 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261008T233040Z-p2-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-ska/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist9cc371ef8a-06f9754b
+cells (n, label, arms, path, counts sha256):
+  n=2   PT               native,shared  block-scan/small-batch fdbd206d846e9ad4
+  n=2   PW               native,shared  block-scan/small-batch 201d468a000e4d45
+  n=2   PW-hotfirst      native         small-batch  86b8e89af5abe84c
+  n=2   PW-rand1         native         small-batch  b6d879d542d49fa5
+  n=2   uniform          native,shared  block-scan/small-batch 6e917c769e5c2617
+  n=2   balanced         native,shared  block-scan/small-batch 74234e98afe7498f
+  n=8   PT               native,shared  block-scan   f34f0645012abee6
+  n=8   PW               native,shared  block-scan   34db55c36623b17a
+  n=8   PW-hotfirst      native         block-scan   34db55c36623b17a
+  n=8   PW-rand1         native         block-scan   8bb16ba92b471f5a
+  n=8   uniform          native,shared  block-scan   9b3a6d3b0b6482a3
+  n=8   balanced         native,shared  block-scan   74234e98afe7498f
+  n=32  PT               native,shared  block-scan   7e7e0278080e7382
+  n=32  PW               native,shared  block-scan   fd052ec9bd9a64e2
+  n=32  PW-hotfirst      native         block-scan   845b09fcf88f7b8b
+  n=32  PW-rand1         native         block-scan   3e82eaf00c7f6894
+  n=32  uniform          native,shared  block-scan   ca1f45bac7054078
+  n=32  balanced         native,shared  block-scan   74234e98afe7498f
+  rep 0 PT             native   n=  2 T=    256    1.5457 ms
+  rep 0 PT             shared   n=  2 T=    256    1.5453 ms
+  rep 0 PW             native   n=  2 T=    256    1.5458 ms
+  rep 0 PW             shared   n=  2 T=    256    1.5443 ms
+  rep 0 PW-hotfirst    native   n=  2 T=    256    1.5466 ms
+  rep 0 PW-rand1       native   n=  2 T=    256    1.5501 ms
+  rep 0 uniform        native   n=  2 T=    256    1.1684 ms
+  rep 0 uniform        shared   n=  2 T=    256    1.1680 ms
+  rep 0 balanced       native   n=  2 T=    256    1.1656 ms
+  rep 0 balanced       shared   n=  2 T=    256    1.1677 ms
+  rep 0 PT             native   n=  8 T=   1024    4.5366 ms
+  rep 0 PT             shared   n=  8 T=   1024    4.5438 ms
+  rep 0 PW             native   n=  8 T=   1024    4.6760 ms
+  rep 0 PW             shared   n=  8 T=   1024    4.6857 ms
+  rep 0 PW-hotfirst    native   n=  8 T=   1024    4.6754 ms
+  rep 0 PW-rand1       native   n=  8 T=   1024    4.6776 ms
+  rep 0 uniform        native   n=  8 T=   1024    4.4319 ms
+  rep 0 uniform        shared   n=  8 T=   1024    4.4431 ms
+  rep 0 balanced       native   n=  8 T=   1024    4.4318 ms
+  rep 0 balanced       shared   n=  8 T=   1024    4.4441 ms
+  rep 0 PT             native   n= 32 T=   4096   17.6275 ms
+  rep 0 PT             shared   n= 32 T=   4096   17.6374 ms
+  rep 0 PW             native   n= 32 T=   4096   17.7259 ms
+  rep 0 PW             shared   n= 32 T=   4096   17.7319 ms
+  rep 0 PW-hotfirst    native   n= 32 T=   4096   17.7221 ms
+  rep 0 PW-rand1       native   n= 32 T=   4096   17.7246 ms
+  rep 0 uniform        native   n= 32 T=   4096   17.4339 ms
+  rep 0 uniform        shared   n= 32 T=   4096   17.4515 ms
+  rep 0 balanced       native   n= 32 T=   4096   17.4258 ms
+  rep 0 balanced       shared   n= 32 T=   4096   17.4456 ms
+  rep 1 balanced       shared   n= 32 T=   4096   17.4463 ms
+  rep 1 balanced       native   n= 32 T=   4096   17.4349 ms
+  rep 1 uniform        shared   n= 32 T=   4096   17.4435 ms
+  rep 1 uniform        native   n= 32 T=   4096   17.4333 ms
+  rep 1 PW-rand1       native   n= 32 T=   4096   17.7227 ms
+  rep 1 PW-hotfirst    native   n= 32 T=   4096   17.7192 ms
+  rep 1 PW             shared   n= 32 T=   4096   17.7341 ms
+  rep 1 PW             native   n= 32 T=   4096   17.7228 ms
+  rep 1 PT             shared   n= 32 T=   4096   17.6380 ms
+  rep 1 PT             native   n= 32 T=   4096   17.6250 ms
+  rep 1 balanced       shared   n=  8 T=   1024    4.4455 ms
+  rep 1 balanced       native   n=  8 T=   1024    4.4323 ms
+  rep 1 uniform        shared   n=  8 T=   1024    4.4455 ms
+  rep 1 uniform        native   n=  8 T=   1024    4.4322 ms
+  rep 1 PW-rand1       native   n=  8 T=   1024    4.6776 ms
+  rep 1 PW-hotfirst    native   n=  8 T=   1024    4.6780 ms
+  rep 1 PW             shared   n=  8 T=   1024    4.6840 ms
+  rep 1 PW             native   n=  8 T=   1024    4.6771 ms
+  rep 1 PT             shared   n=  8 T=   1024    4.5440 ms
+  rep 1 PT             native   n=  8 T=   1024    4.5358 ms
+  rep 1 balanced       shared   n=  2 T=    256    1.1673 ms
+  rep 1 balanced       native   n=  2 T=    256    1.1743 ms
+  rep 1 uniform        shared   n=  2 T=    256    1.1682 ms
+  rep 1 uniform        native   n=  2 T=    256    1.1735 ms
+  rep 1 PW-rand1       native   n=  2 T=    256    1.5522 ms
+  rep 1 PW-hotfirst    native   n=  2 T=    256    1.5490 ms
+  rep 1 PW             shared   n=  2 T=    256    1.5473 ms
+  rep 1 PW             native   n=  2 T=    256    1.5474 ms
+  rep 1 PT             shared   n=  2 T=    256    1.5472 ms
+  rep 1 PT             native   n=  2 T=    256    1.5493 ms
+  rep 2 PT             native   n=  2 T=    256    1.5461 ms
+  rep 2 PT             shared   n=  2 T=    256    1.5490 ms
+  rep 2 PW             native   n=  2 T=    256    1.5497 ms
+  rep 2 PW             shared   n=  2 T=    256    1.5477 ms
+  rep 2 PW-hotfirst    native   n=  2 T=    256    1.5488 ms
+  rep 2 PW-rand1       native   n=  2 T=    256    1.5521 ms
+  rep 2 uniform        native   n=  2 T=    256    1.1722 ms
+  rep 2 uniform        shared   n=  2 T=    256    1.1690 ms
+  rep 2 balanced       native   n=  2 T=    256    1.1715 ms
+  rep 2 balanced       shared   n=  2 T=    256    1.1664 ms
+  rep 2 PT             native   n=  8 T=   1024    4.5362 ms
+  rep 2 PT             shared   n=  8 T=   1024    4.5423 ms
+  rep 2 PW             native   n=  8 T=   1024    4.6788 ms
+  rep 2 PW             shared   n=  8 T=   1024    4.6873 ms
+  rep 2 PW-hotfirst    native   n=  8 T=   1024    4.6797 ms
+  rep 2 PW-rand1       native   n=  8 T=   1024    4.6786 ms
+  rep 2 uniform        native   n=  8 T=   1024    4.4336 ms
+  rep 2 uniform        shared   n=  8 T=   1024    4.4442 ms
+  rep 2 balanced       native   n=  8 T=   1024    4.4338 ms
+  rep 2 balanced       shared   n=  8 T=   1024    4.4466 ms
+  rep 2 PT             native   n= 32 T=   4096   17.6345 ms
+  rep 2 PT             shared   n= 32 T=   4096   17.6390 ms
+  rep 2 PW             native   n= 32 T=   4096   17.7208 ms
+  rep 2 PW             shared   n= 32 T=   4096   17.7383 ms
+  rep 2 PW-hotfirst    native   n= 32 T=   4096   17.7178 ms
+  rep 2 PW-rand1       native   n= 32 T=   4096   17.7273 ms
+  rep 2 uniform        native   n= 32 T=   4096   17.4246 ms
+  rep 2 uniform        shared   n= 32 T=   4096   17.4540 ms
+  rep 2 balanced       native   n= 32 T=   4096   17.4315 ms
+  rep 2 balanced       shared   n= 32 T=   4096   17.4409 ms
+  rep 3 balanced       shared   n= 32 T=   4096   17.4502 ms
+  rep 3 balanced       native   n= 32 T=   4096   17.4309 ms
+  rep 3 uniform        shared   n= 32 T=   4096   17.4415 ms
+  rep 3 uniform        native   n= 32 T=   4096   17.4294 ms
+  rep 3 PW-rand1       native   n= 32 T=   4096   17.7205 ms
+  rep 3 PW-hotfirst    native   n= 32 T=   4096   17.7202 ms
+  rep 3 PW             shared   n= 32 T=   4096   17.7333 ms
+  rep 3 PW             native   n= 32 T=   4096   17.7259 ms
+  rep 3 PT             shared   n= 32 T=   4096   17.6423 ms
+  rep 3 PT             native   n= 32 T=   4096   17.6256 ms
+  rep 3 balanced       shared   n=  8 T=   1024    4.4445 ms
+  rep 3 balanced       native   n=  8 T=   1024    4.4340 ms
+  rep 3 uniform        shared   n=  8 T=   1024    4.4454 ms
+  rep 3 uniform        native   n=  8 T=   1024    4.4331 ms
+  rep 3 PW-rand1       native   n=  8 T=   1024    4.6782 ms
+  rep 3 PW-hotfirst    native   n=  8 T=   1024    4.6777 ms
+  rep 3 PW             shared   n=  8 T=   1024    4.6860 ms
+  rep 3 PW             native   n=  8 T=   1024    4.6789 ms
+  rep 3 PT             shared   n=  8 T=   1024    4.5433 ms
+  rep 3 PT             native   n=  8 T=   1024    4.5368 ms
+  rep 3 balanced       shared   n=  2 T=    256    1.1693 ms
+  rep 3 balanced       native   n=  2 T=    256    1.1750 ms
+  rep 3 uniform        shared   n=  2 T=    256    1.1688 ms
+  rep 3 uniform        native   n=  2 T=    256    1.1714 ms
+  rep 3 PW-rand1       native   n=  2 T=    256    1.5503 ms
+  rep 3 PW-hotfirst    native   n=  2 T=    256    1.5479 ms
+  rep 3 PW             shared   n=  2 T=    256    1.5471 ms
+  rep 3 PW             native   n=  2 T=    256    1.5497 ms
+  rep 3 PT             shared   n=  2 T=    256    1.5499 ms
+  rep 3 PT             native   n=  2 T=    256    1.5472 ms
+  rep 4 PT             native   n=  2 T=    256    1.5500 ms
+  rep 4 PT             shared   n=  2 T=    256    1.5488 ms
+  rep 4 PW             native   n=  2 T=    256    1.5466 ms
+  rep 4 PW             shared   n=  2 T=    256    1.5494 ms
+  rep 4 PW-hotfirst    native   n=  2 T=    256    1.5490 ms
+  rep 4 PW-rand1       native   n=  2 T=    256    1.5502 ms
+  rep 4 uniform        native   n=  2 T=    256    1.1722 ms
+  rep 4 uniform        shared   n=  2 T=    256    1.1702 ms
+  rep 4 balanced       native   n=  2 T=    256    1.1703 ms
+  rep 4 balanced       shared   n=  2 T=    256    1.1685 ms
+  rep 4 PT             native   n=  8 T=   1024    4.5375 ms
+  rep 4 PT             shared   n=  8 T=   1024    4.5421 ms
+  rep 4 PW             native   n=  8 T=   1024    4.6783 ms
+  rep 4 PW             shared   n=  8 T=   1024    4.6870 ms
+  rep 4 PW-hotfirst    native   n=  8 T=   1024    4.6793 ms
+  rep 4 PW-rand1       native   n=  8 T=   1024    4.6780 ms
+  rep 4 uniform        native   n=  8 T=   1024    4.4367 ms
+  rep 4 uniform        shared   n=  8 T=   1024    4.4440 ms
+  rep 4 balanced       native   n=  8 T=   1024    4.4316 ms
+  rep 4 balanced       shared   n=  8 T=   1024    4.4446 ms
+  rep 4 PT             native   n= 32 T=   4096   17.6253 ms
+  rep 4 PT             shared   n= 32 T=   4096   17.6351 ms
+  rep 4 PW             native   n= 32 T=   4096   17.7242 ms
+  rep 4 PW             shared   n= 32 T=   4096   17.7343 ms
+  rep 4 PW-hotfirst    native   n= 32 T=   4096   17.7207 ms
+  rep 4 PW-rand1       native   n= 32 T=   4096   17.7258 ms
+  rep 4 uniform        native   n= 32 T=   4096   17.4308 ms
+  rep 4 uniform        shared   n= 32 T=   4096   17.4444 ms
+  rep 4 balanced       native   n= 32 T=   4096   17.4268 ms
+  rep 4 balanced       shared   n= 32 T=   4096   17.4452 ms
+  rep 5 balanced       shared   n= 32 T=   4096   17.4452 ms
+  rep 5 balanced       native   n= 32 T=   4096   17.4380 ms
+  rep 5 uniform        shared   n= 32 T=   4096   17.4500 ms
+  rep 5 uniform        native   n= 32 T=   4096   17.4331 ms
+  rep 5 PW-rand1       native   n= 32 T=   4096   17.7243 ms
+  rep 5 PW-hotfirst    native   n= 32 T=   4096   17.7199 ms
+  rep 5 PW             shared   n= 32 T=   4096   17.7395 ms
+  rep 5 PW             native   n= 32 T=   4096   17.7194 ms
+  rep 5 PT             shared   n= 32 T=   4096   17.6400 ms
+  rep 5 PT             native   n= 32 T=   4096   17.6261 ms
+  rep 5 balanced       shared   n=  8 T=   1024    4.4453 ms
+  rep 5 balanced       native   n=  8 T=   1024    4.4333 ms
+  rep 5 uniform        shared   n=  8 T=   1024    4.4450 ms
+  rep 5 uniform        native   n=  8 T=   1024    4.4348 ms
+  rep 5 PW-rand1       native   n=  8 T=   1024    4.6796 ms
+  rep 5 PW-hotfirst    native   n=  8 T=   1024    4.6761 ms
+  rep 5 PW             shared   n=  8 T=   1024    4.6882 ms
+  rep 5 PW             native   n=  8 T=   1024    4.6813 ms
+  rep 5 PT             shared   n=  8 T=   1024    4.5442 ms
+  rep 5 PT             native   n=  8 T=   1024    4.5393 ms
+  rep 5 balanced       shared   n=  2 T=    256    1.1676 ms
+  rep 5 balanced       native   n=  2 T=    256    1.1752 ms
+  rep 5 uniform        shared   n=  2 T=    256    1.1693 ms
+  rep 5 uniform        native   n=  2 T=    256    1.1711 ms
+  rep 5 PW-rand1       native   n=  2 T=    256    1.5532 ms
+  rep 5 PW-hotfirst    native   n=  2 T=    256    1.5470 ms
+  rep 5 PW             shared   n=  2 T=    256    1.5491 ms
+  rep 5 PW             native   n=  2 T=    256    1.5457 ms
+  rep 5 PT             shared   n=  2 T=    256    1.5479 ms
+  rep 5 PT             native   n=  2 T=    256    1.5474 ms
+  rep 6 PT             native   n=  2 T=    256    1.5467 ms
+  rep 6 PT             shared   n=  2 T=    256    1.5481 ms
+  rep 6 PW             native   n=  2 T=    256    1.5467 ms
+  rep 6 PW             shared   n=  2 T=    256    1.5482 ms
+  rep 6 PW-hotfirst    native   n=  2 T=    256    1.5476 ms
+  rep 6 PW-rand1       native   n=  2 T=    256    1.5528 ms
+Traceback (most recent call last):
+  File "/home/ubuntu/moe/repo/scripts/private_weight_reference.py", line 10625, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/ubuntu/moe/repo/scripts/private_weight_reference.py", line 10593, in main
+    return _main(argv)
+           ^^^^^^^^^^^
+  File "/home/ubuntu/moe/repo/scripts/private_weight_reference.py", line 9578, in _main
+    return _histogram_mode(args, cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/moe/repo/scripts/private_weight_reference.py", line 10201, in _histogram_mode
+    samples_by_cell, bincounts = run_histogram_page(
+                                 ^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/moe/repo/scripts/private_weight_reference.py", line 10288, in run_histogram_page
+    t = time_cell(call, duty=args.duty, warmup_ms=args.warmup,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/moe/repo/scripts/private_weight_reference.py", line 2741, in time_cell
+    t = duty_timer(call, duty=duty, calls_per_burst=calls_per_burst,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/moe/repo/scripts/clock_elasticity.py", line 2281, in time_duty
+    sleep(gap)
+KeyboardInterrupt

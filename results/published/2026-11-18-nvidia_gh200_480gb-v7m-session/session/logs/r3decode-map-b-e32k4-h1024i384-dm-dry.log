@@ -1,0 +1,26 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-map-b-e32k4-h1024i384-GRR-map-b-e32k4-h1024i384-main-45e233c5
+model       map-b-e32k4-h1024i384 E=32 k=4 bf16; W_e 2.2 MiB
+page        docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json (sha256 3771a977078a24de...), map-b-e32k4-h1024i384-main, 7 cells, 7 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 27 calls, call j on copy j mod 27 (R x A_min 4 x W_e 2.2 MiB >= 240 MiB); per call = replay / 27; no flush
+copies      27 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::27]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    3.9 min
+session     gh200-20261118T094411Z-decg-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-map-b-e32k4-h1024i384-dm/private_weight_reference/nvidia_gh200_480gb-decode-map-b-e32k4-h1024i384-GRR-map-b-e32k4-h1024i384-main-45e233c5
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A4               native      naive       16x64x128w4s4  A=4   L=4   P=60   dead=0/0     89bf0ca57f80
+  T=4   MIN-T4                native      small-batch 16x64x128w4s4  A=4   L=4   P=48   dead=144/192   04ed9be3d09b
+  T=8   L-T8-A27              native      small-batch 16x64x128w4s4  A=27  L=27  P=400  dead=60/80    fe5196379d3e
+  T=16  MIN-T16               native      small-batch 16x64x128w4s4  A=4   L=4   P=0    dead=360/480   c598916210b8
+  T=64  L-T64-A32             native      small-batch 32x64x128w4s3  A=32  L=32  P=768  dead=84/112   02b4b6c2ab11
+  T=96  L-T96-A32             native      small-batch 32x128x64w4s3  A=32  L=32  P=640  dead=66/88    06cf811a66db
+  T=128 L-T128-A32            native      small-batch 64x128x64w4s3  A=32  L=32  P=1536 dead=48/64    d68e1200665b
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================

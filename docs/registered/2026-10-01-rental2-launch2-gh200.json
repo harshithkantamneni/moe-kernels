@@ -1,0 +1,312 @@
+{
+ "registered": "2026-10-01, before any rental-2 page",
+ "name": "2026-10-01-rental2-launch2-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r2/DESIGN.md section 2 with REVIEW.md sections 2 and 5.2",
+ "tool": "scripts/launch_floor.py --phase timed, then --phase trace (two processes, one lock); scorer scripts/scoring/rental2/score_launch.py",
+ "models": {
+  "mixtral-8x7b-tp8": "BLIND on every host-side prediction (no timed page of it exists); P1's GR is C_reg CAL with its GEMM durations SEEN under ncu (rental-1 r3c gpu_time_ns at G = 1, 2, 8)",
+  "granite-3.0-3b-a800m": "SEEN: the rerun of rental 1's confounded P2, P4 and P8",
+  "jetmoe-8b": "tail unit, scored by the same rules",
+  "granite-3.0-1b-a400m": "tail unit, scored by the same rules"
+ },
+ "C_reg_ms": {
+  "mixtral-8x7b-tp8": {
+   "native": {
+    "1": 0.158,
+    "2": 0.2053,
+    "3": 0.2821,
+    "4": 0.3285,
+    "5": 0.3949,
+    "6": 0.4746,
+    "7": 0.541,
+    "8": 0.6207,
+    "9": 0.6809
+   },
+   "shared": {
+    "1": 0.146,
+    "2": 0.1933,
+    "3": 0.2701,
+    "4": 0.3365,
+    "5": 0.403,
+    "6": 0.4827,
+    "7": 0.5491,
+    "8": 0.6288,
+    "9": 0.689
+   },
+   "private": {
+    "1": 0.146,
+    "2": 0.259,
+    "3": 0.3493,
+    "4": 0.451,
+    "5": 0.5527,
+    "6": 0.6545,
+    "7": 0.7562,
+    "8": 0.8581,
+    "9": 0.9597
+   }
+  },
+  "granite-3.0-3b-a800m": {
+   "native": {
+    "1": 0.0947,
+    "2": 0.1263,
+    "3": 0.169,
+    "4": 0.2147,
+    "5": 0.2582,
+    "6": 0.3018,
+    "7": 0.3401,
+    "8": 0.3859,
+    "9": 0.4294
+   },
+   "shared": {
+    "1": 0.1096,
+    "2": 0.1411,
+    "3": 0.1838,
+    "4": 0.2296,
+    "5": 0.2731,
+    "6": 0.3166,
+    "7": 0.355,
+    "8": 0.4007,
+    "9": 0.4443
+   },
+   "private": {
+    "1": 0.1096,
+    "2": 0.1676,
+    "3": 0.2257,
+    "4": 0.2841,
+    "5": 0.3423,
+    "6": 0.4004,
+    "7": 0.4586,
+    "8": 0.517,
+    "9": 0.5751
+   }
+  },
+  "jetmoe-8b": {
+   "native": {
+    "1": 0.2373,
+    "2": 0.2851,
+    "3": 0.4317,
+    "4": 0.4889
+   },
+   "shared": {
+    "1": 0.2253,
+    "2": 0.2732,
+    "3": 0.4197,
+    "4": 0.497
+   },
+   "private": {
+    "1": 0.2253,
+    "2": 0.364,
+    "3": 0.5485,
+    "4": 0.6843
+   }
+  },
+  "granite-3.0-1b-a400m": {
+   "native": {
+    "1": 0.0678,
+    "2": 0.086,
+    "3": 0.1097,
+    "4": 0.1342,
+    "5": 0.1587,
+    "6": 0.1832,
+    "7": 0.2077,
+    "8": 0.2322,
+    "9": 0.251
+   },
+   "shared": {
+    "1": 0.0774,
+    "2": 0.0957,
+    "3": 0.1193,
+    "4": 0.1438,
+    "5": 0.1683,
+    "6": 0.1928,
+    "7": 0.2173,
+    "8": 0.2418,
+    "9": 0.2606
+   },
+   "private": {
+    "1": 0.0774,
+    "2": 0.1091,
+    "3": 0.1408,
+    "4": 0.1724,
+    "5": 0.2041,
+    "6": 0.2357,
+    "7": 0.2674,
+    "8": 0.299,
+    "9": 0.3304
+   }
+  },
+  "source": {
+   "mixtral-8x7b-tp8": "scripts/cross_model_predict.py predict() at this commit, 8x7B 2026-09-27 source pages (cores_heldout_predict.source_pages, counters C27), G = 4 (CAL)",
+   "others": "the 2026-10-01 launch-floor registration's C_reg_ms, unchanged"
+  }
+ },
+ "F_ms": {
+  "E240": 0.0676,
+  "E480": 0.1351,
+  "E0": 0.0,
+  "basis": "bytes over the 3.7261 TB/s ruler: 251.7 MB (E240) and 480 MiB (E480)",
+  "F_tr": "the flush kernel's duration in the TRACE process (TR-E median flush_us)"
+ },
+ "definitions": {
+  "I": "a cell's median over its repeats of ms_p50",
+  "H_cell": "the median over the cell's repeats of host_enqueue_ms / calls_per_burst (cells.csv)",
+  "H_pre": "hostprobe.csv H_pre_ms of the cell's (arm, n, mode): its own host time measured in the same process before any GPU cell",
+  "host_bound_fraction": "the fraction of the cell's repeat rows (3) whose host_bound is True",
+  "measured_host_bound": "host_bound_fraction >= 0.8; measured GPU-bound: host_bound_fraction == 0",
+  "rule_host_bound": "C_reg + F_mode < H_pre (F_mode the cell's own mode's F)",
+  "edge": "|C_reg + F_mode - H_pre| <= 0.020 ms (by rule), or host_bound_fraction in [0.2, 0.8] (measured); edge cells are out of P2, P4, P5 and P8"
+ },
+ "P0": {
+  "what": "an instrument gate",
+  "fails_if": [
+   "the timed process's manifest is not phase 'timed', has profiler_enabled_ever True, or made no profiler check",
+   "the median over (arm, n, mode) of |H_post / H_pre - 1| exceeds 0.05",
+   "H_cell / H_pre lies outside [0.93, 1.10] on more than 5% of the probed cells",
+   "more than 5% of the probe rows are REFUSED (a synchronising body or a GPU not held)"
+  ],
+  "effect": "P2, P4, P5 and P8 are still printed, marked 'host drift'"
+ },
+ "P1": {
+  "cells": "GR: tp8 every (arm, n <= 9), 27 cells; Granite n <= 5, 15 cells",
+  "band": [
+   0.8,
+   1.1
+  ],
+  "rule": "GR in [0.80, 1.10] x C_reg; FALSIFIED when more than 1 cell per model lies outside, or an increment is short: Granite I_GR(5) - I_GR(1) >= 0.10 ms for SHARED and PRIVATE; tp8 I_GR(9) - I_GR(1) >= 0.8 x (C_reg(9) - C_reg(1)) per arm",
+  "labels": {
+   "mixtral-8x7b-tp8": "C_reg CAL; GEMM durations SEEN under ncu (rental-1 r3c gpu_time_ns, G = 1, 2, 8)",
+   "granite-3.0-3b-a800m": "SEEN replication"
+  }
+ },
+ "P2": {
+  "cells": "E240 cells GPU-bound by rule with margin (C_reg + F240 > H_pre + 0.020 ms) AND measured GPU-bound (host_bound_fraction 0)",
+  "rule": "0 <= E240 - GR <= max(2% of E240, 9 us); FALSIFIED when more than 1 per model lies outside",
+  "label": "band SEEN (rental 1: 3.8 to 6.0 us on 13 cells)"
+ },
+ "P3": {
+  "cells": "n = 1, 2, every arm, both models: measured host-bound and non-edge at both E0 and E240, with both TR-E E240 and TR-G E0/E240 traces",
+  "rule": "E0 - E240 in [F_tr - h_flush + dD - 12 us, F_tr - h_flush + 12 us], h_flush = hostprobe.csv h_flush_ms of the E240 row (the PROBE's, not the trace's), F_tr = TR-E E240 median flush_us, dD = min(0, TR-G(E0) kernel_sum - TR-G(E240) kernel_sum); FALSIFIED when more than 1 qualifying cell lies outside; NOT TESTED when fewer than 8 qualify"
+ },
+ "P4": {
+  "cells": "measured host-bound and non-edge at both E240 and E480",
+  "rule": "the shift (E480 - E240) - (H_cell,480 - H_cell,240) = -(F480_tr - F240_tr) +- 12 us, F_tr from TR-E traces (median over the n = 1, 2 cells of both); the E480 verdict by rule (C_reg + F480 < H_pre at E480) against measured on non-edge E480 cells; FALSIFIED when a shift lies outside the band on more than 1 cell, or the verdict is wrong on more than 2 cells per model"
+ },
+ "P5": {
+  "cells": "every non-edge E240, E0 and E480 cell",
+  "rule": "measured host-bound iff C_reg + F_mode < H_pre; FALSIFIED under 95% agreement per model"
+ },
+ "P6": {
+  "cells": "E240, E0 and E480 at the trace treads, each with its own mode's TR-E and TR-G",
+  "rule": "MP within max(5%, 12 us) of I; FALSIFIED when more than 1 per model lies outside",
+  "function": "scripts/scoring/rental2/launch_mp.py: timeline() and mp() copied verbatim from scripts/scoring/rental1/score_launch.py (its sha256 is pinned in tests/test_scoring_rental2.py); mp(te, tg, H_us) scales the trace's host offsets by H_us / P_traced, and H_us here is H_cell (rental 1's text already did this)"
+ },
+ "P7": {
+  "cells": "tp8 and Granite n = 1",
+  "rule": "classifies only: TR-G kernel sum, non-GEMM time, launch-API share"
+ },
+ "P8": {
+  "cells": "non-edge E240 cells host-bound by rule",
+  "rule": "plateau I_E240 in [H_cell - 0.12, H_cell - 0.08] ms; FALSIFIED when more than 10% lie outside per model",
+  "label": "Phi band SEEN (Granite); tp8 BLIND"
+ },
+ "predicted_host_bound_tp8": {
+  "note": "printed estimates at two H; the scores use each cell's own H_pre",
+  "H_0.30": {
+   "E240": {
+    "native": [
+     1,
+     2
+    ],
+    "shared": [
+     1,
+     2
+    ],
+    "private": [
+     1
+    ]
+   },
+   "E480": {
+    "native": [
+     1
+    ],
+    "shared": [
+     1
+    ],
+    "private": [
+     1
+    ]
+   },
+   "E0": {
+    "native": [
+     1,
+     2,
+     3
+    ],
+    "shared": [
+     1,
+     2,
+     3
+    ],
+    "private": [
+     1,
+     2
+    ]
+   }
+  },
+  "H_0.35": {
+   "E240": {
+    "native": [
+     1,
+     2,
+     3
+    ],
+    "shared": [
+     1,
+     2,
+     3
+    ],
+    "private": [
+     1,
+     2
+    ]
+   },
+   "E480": {
+    "native": [
+     1,
+     2
+    ],
+    "shared": [
+     1,
+     2
+    ],
+    "private": [
+     1
+    ]
+   },
+   "E0": {
+    "native": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "shared": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "private": [
+     1,
+     2,
+     3
+    ]
+   }
+  }
+ },
+ "seen_data": [
+  "Granite's P1 and P2 bands and the Phi plateau are SEEN (rental 1 and the 09-30 pages)",
+  "tp8's GEMM gpu_time_ns at G = 1, 2, 8 is on rental-1 r3c pages (SEEN); its host and graph timing are not"
+ ]
+}

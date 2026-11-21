@@ -1,0 +1,180 @@
+2026-10-06T22:46:59Z setup_vm.sh start: commit 85ef38cddc0f76f03f9b0d0cf17bae2e121e7c3d from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-07T05:25:24Z
+2026-10-06T22:48:59Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-06T22:49:00Z driver start: commit 85ef38cddc0f76f03f9b0d0cf17bae2e121e7c3d, steps of the plan scripts/plans/rental4-2026-10.plan, deadline 2026-10-07T05:25:24Z (388 min of work left)
+2026-10-06T22:49:00Z plan: /home/ubuntu/moe/repo/scripts/plans/rental4-2026-10.plan (sha256 01a4cc6f49f8bde14da67b12ce98cf5e269f4f3c0f03ec97c77a2eee405a1d16), 25 units
+2026-10-06T22:49:00Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/25 -] (estimate 3 min, cap 15 min, 388 min left)
+2026-10-06T22:49:00Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-06T22:49:00Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-06T22:49:00Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-06T22:49:01Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261006T224900Z
+2026-10-06T22:49:01Z prelude END: exit 0 after 0 min [unit 1/25 -]
+2026-10-06T22:49:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T22:49:02Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/25 mixtral-8x7b r4] (estimate 2 min, cap 30 min, 388 min left)
+2026-10-06T22:49:27Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-10-06T22:49:27Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3725.9 GB/s
+2026-10-06T22:49:27Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3949.3 GB/s against a derived pin rate of 4022.8 GB/s
+2026-10-06T22:49:27Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3949.3 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-10-06T22:49:27Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-10-06T22:49:27Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1455 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-10-06T22:49:27Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-10-06T22:49:27Z calibrate END: exit 0 after 0 min [unit 2/25 mixtral-8x7b r4]
+2026-10-06T22:49:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T22:49:29Z rulers START: rulers at the 1710 lock: torch read2d / copy / add / matmul bf16 8192^3, the device's L2 size [unit 3/25 - r4] (estimate 3 min, cap 10 min, 387 min left)
+2026-10-06T22:49:39Z rulers: exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-rulers-r4/rulers.json)
+2026-10-06T22:49:39Z rulers END: exit 0 after 0 min [unit 3/25 - r4]
+2026-10-06T22:49:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T22:49:40Z gpubench START: THIRD-PARTY RRZE-HPC/gpu-benches (GPL-3.0) at the 1710 lock: latency, stream, l2-cache; fetched into $MOE_HOME/ext, never the repo [unit 4/25 - r4] (estimate 8 min, cap 20 min, 387 min left)
+2026-10-06T22:59:29Z gpubench: exit 0 (third-party GPL-3.0 code at its pin, outside the checkout; /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-gpubench-r4/constants.json)
+2026-10-06T22:59:29Z gpubench END: exit 0 after 10 min [unit 4/25 - r4]
+2026-10-06T22:59:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T22:59:30Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9] (estimate 16 min, cap 45 min, 377 min left)
+2026-10-06T22:59:30Z timed: declared-copies 9 on every page of this unit
+2026-10-06T22:59:31Z timed: G = 8 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-06T23:15:39Z timed: P2 locked_r3 exit 0
+2026-10-06T23:15:39Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-06T23:15:39Z timed: 2026-10-06T23:15:34Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-94e2fecb
+2026-10-06T23:15:39Z timed END: exit 0 after 16 min [unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9]
+2026-10-06T23:15:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:15:41Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15] (estimate 17 min, cap 45 min, 361 min left)
+2026-10-06T23:15:41Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-06T23:15:42Z timed: G = 8 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-06T23:31:50Z timed: P2 locked_r3 exit 0
+2026-10-06T23:31:50Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-06T23:31:50Z timed: 2026-10-06T23:31:45Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-7f595452
+2026-10-06T23:31:50Z timed END: exit 0 after 16 min [unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15]
+2026-10-06T23:31:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:31:52Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 7/25 - pt] (estimate 10 min, cap 25 min, 345 min left)
+2026-10-06T23:32:44Z perturb: GATE_u8_stf=FAIL median=0.016840566892701192 worst=0.022218209391939414
+2026-10-06T23:32:44Z perturb: GATE_u9_stk64s4=FAIL median=0.07274465299527444 worst=0.0905522850061461
+2026-10-06T23:32:44Z perturb: GATE_u10_stk32s4=FAIL median=0.08101718174886718 worst=0.08619869910208533
+2026-10-06T23:32:44Z perturb: GATE_u11_stk128s4=FAIL median=0.07285111295094443 worst=0.07837896952008427
+2026-10-06T23:32:44Z perturb: GATE_u12_stk64s8=FAIL median=0.09510375148566308 worst=0.097600832498965
+2026-10-06T23:32:44Z perturb: GATE_u13_sttail=FAIL median=0.07526497609799226 worst=0.16675163224599054
+2026-10-06T23:32:44Z perturb: GATE_u14_sttail=FAIL median=0.058963939633133566 worst=0.14645017231508917
+2026-10-06T23:32:44Z perturb: GATE_u15_stdead4=FAIL median=0.014500143448019032 worst=0.035777535396228854
+2026-10-06T23:32:44Z perturb: GATE_u16_stdead2=FAIL median=0.021444182073370566 worst=0.05636746732690201
+2026-10-06T23:32:44Z perturb END: exit 1 after 1 min [unit 7/25 - pt]
+2026-10-06T23:32:45Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:32:48Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 6 arms native, BK 64 s4; runs only on a PASS gate [unit 8/25 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-stamps=cta] (estimate 6 min, cap 15 min, 344 min left)
+2026-10-06T23:32:48Z stamps REFUSED: the perturbation gate for u8-stf reads 'FAIL median=0.016840566892701192 worst=0.022218209391939414' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:32:48Z stamps END: exit 2 after 0 min [unit 8/25 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-stamps=cta]
+2026-10-06T23:32:49Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:32:51Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 64 s4; runs only on a PASS gate [unit 9/25 olmoe-1b-7b stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:32:51Z stamps REFUSED: the perturbation gate for u9-stk64s4 reads 'FAIL median=0.07274465299527444 worst=0.0905522850061461' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:32:51Z stamps END: exit 2 after 0 min [unit 9/25 olmoe-1b-7b stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64]
+2026-10-06T23:32:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:32:54Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 32 s4; runs only on a PASS gate [unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4] (estimate 3 min, cap 8 min, 344 min left)
+2026-10-06T23:32:54Z stamps REFUSED: the perturbation gate for u10-stk32s4 reads 'FAIL median=0.08101718174886718 worst=0.08619869910208533' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:32:54Z stamps END: exit 2 after 0 min [unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4]
+2026-10-06T23:32:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:32:57Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 128 s4; runs only on a PASS gate [unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128] (estimate 3 min, cap 8 min, 344 min left)
+2026-10-06T23:32:57Z stamps REFUSED: the perturbation gate for u11-stk128s4 reads 'FAIL median=0.07285111295094443 worst=0.07837896952008427' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:32:57Z stamps END: exit 2 after 0 min [unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128]
+2026-10-06T23:32:58Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:00Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 64 s8; runs only on a PASS gate [unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:00Z stamps REFUSED: the perturbation gate for u12-stk64s8 reads 'FAIL median=0.09510375148566308 worst=0.097600832498965' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:33:00Z stamps END: exit 2 after 0 min [unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8]
+2026-10-06T23:33:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:03Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=112), G=8 treads 1 arms native private, BK 64 s4; runs only on a PASS gate [unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112] (estimate 3 min, cap 10 min, 344 min left)
+2026-10-06T23:33:03Z stamps REFUSED: the perturbation gate for u13-sttail reads 'FAIL median=0.07526497609799226 worst=0.16675163224599054' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:33:03Z stamps END: exit 2 after 0 min [unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112]
+2026-10-06T23:33:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:06Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=112), G=8 treads 1 2 arms native, BK 64 s4; runs only on a PASS gate [unit 14/25 mixtral-8x7b sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:06Z stamps REFUSED: the perturbation gate for u14-sttail reads 'FAIL median=0.058963939633133566 worst=0.14645017231508917' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:33:06Z stamps END: exit 2 after 0 min [unit 14/25 mixtral-8x7b sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112]
+2026-10-06T23:33:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:09Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 arms native shared, BK 64 s4; runs only on a PASS gate [unit 15/25 olmoe-1b-7b stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:09Z stamps REFUSED: the perturbation gate for u15-stdead4 reads 'FAIL median=0.014500143448019032 worst=0.035777535396228854' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:33:09Z stamps END: exit 2 after 0 min [unit 15/25 olmoe-1b-7b stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta]
+2026-10-06T23:33:10Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:12Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 arms native shared, BK 64 s8; runs only on a PASS gate [unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:12Z stamps REFUSED: the perturbation gate for u16-stdead2 reads 'FAIL median=0.021444182073370566 worst=0.05636746732690201' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:33:12Z stamps END: exit 2 after 0 min [unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8]
+2026-10-06T23:33:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:15Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64] (estimate 4 min, cap 20 min, 344 min left)
+2026-10-06T23:33:30Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-06T23:33:30Z bytes: the registered list G = 64 (olmoe-1b-7b, k64s4): no tail drop, no re-price, no base-clock control
+2026-10-06T23:35:53Z bytes: G=64 page exit 1 after 140 s
+2026-10-06T23:35:56Z bytes: lock block exit 0 (G=64 exit 1 23:35:53 140 s;)
+2026-10-06T23:36:01Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T23:36:01Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T23:36:02Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s4-r3-counters/lock1710/summary.json)
+2026-10-06T23:36:02Z bytes END: exit 0 after 3 min [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64]
+2026-10-06T23:36:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:36:06Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 32 [unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4] (estimate 4 min, cap 20 min, 341 min left)
+2026-10-06T23:36:06Z bytes: rental 2 knobs --num-stages 4 --block-k 32 on every page of this unit
+2026-10-06T23:36:06Z bytes: the registered list G = 64 (olmoe-1b-7b, k32s4): no tail drop, no re-price, no base-clock control
+2026-10-06T23:38:28Z bytes: G=64 page exit 1 after 140 s
+2026-10-06T23:38:31Z bytes: lock block exit 0 (G=64 exit 1 23:35:53 140 s;G=64 exit 1 23:38:28 140 s;)
+2026-10-06T23:38:36Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T23:38:36Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T23:38:38Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k32s4-r3-counters/lock1710/summary.json)
+2026-10-06T23:38:38Z bytes END: exit 0 after 3 min [unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4]
+2026-10-06T23:38:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:38:41Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --block-k 128 [unit 19/25 olmoe-1b-7b k128s4 byte-groups=64 block-k=128] (estimate 4 min, cap 20 min, 338 min left)
+2026-10-06T23:38:41Z bytes: rental 2 knobs --block-k 128 on every page of this unit
+2026-10-06T23:38:41Z bytes: the registered list G = 64 (olmoe-1b-7b, k128s4): no tail drop, no re-price, no base-clock control
+2026-10-06T23:41:03Z bytes: G=64 page exit 1 after 139 s
+2026-10-06T23:41:07Z bytes: lock block exit 0 (G=64 exit 1 23:35:53 140 s;G=64 exit 1 23:38:28 140 s;G=64 exit 1 23:41:03 139 s;)
+2026-10-06T23:41:12Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T23:41:12Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T23:41:13Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k128s4-r3-counters/lock1710/summary.json)
+2026-10-06T23:41:13Z bytes END: exit 0 after 3 min [unit 19/25 olmoe-1b-7b k128s4 byte-groups=64 block-k=128]
+2026-10-06T23:41:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:41:17Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 6 [unit 20/25 olmoe-1b-7b k64s6 byte-groups=64 num-stages=6] (estimate 4 min, cap 20 min, 336 min left)
+2026-10-06T23:41:17Z bytes: rental 2 knobs --num-stages 6 on every page of this unit
+2026-10-06T23:41:17Z bytes: the registered list G = 64 (olmoe-1b-7b, k64s6): no tail drop, no re-price, no base-clock control
+2026-10-06T23:43:39Z bytes: G=64 page exit 1 after 140 s
+2026-10-06T23:43:42Z bytes: lock block exit 0 (G=64 exit 1 23:35:53 140 s;G=64 exit 1 23:38:28 140 s;G=64 exit 1 23:41:03 139 s;G=64 exit 1 23:43:39 140 s;)
+2026-10-06T23:43:47Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T23:43:47Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T23:43:49Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s6-r3-counters/lock1710/summary.json)
+2026-10-06T23:43:49Z bytes END: exit 0 after 3 min [unit 20/25 olmoe-1b-7b k64s6 byte-groups=64 num-stages=6]
+2026-10-06T23:43:49Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:43:52Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 2 [unit 21/25 olmoe-1b-7b k64s2 byte-groups=64 num-stages=2] (estimate 4 min, cap 20 min, 333 min left)
+2026-10-06T23:43:52Z bytes: rental 2 knobs --num-stages 2 on every page of this unit
+2026-10-06T23:43:52Z bytes: the registered list G = 64 (olmoe-1b-7b, k64s2): no tail drop, no re-price, no base-clock control
+2026-10-06T23:46:14Z bytes: G=64 page exit 1 after 139 s
+2026-10-06T23:46:18Z bytes: lock block exit 0 (G=64 exit 1 23:35:53 140 s;G=64 exit 1 23:38:28 140 s;G=64 exit 1 23:41:03 139 s;G=64 exit 1 23:43:39 140 s;G=64 exit 1 23:46:14 139 s;)
+2026-10-06T23:46:23Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T23:46:23Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T23:46:24Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s2-r3-counters/lock1710/summary.json)
+2026-10-06T23:46:24Z bytes END: exit 0 after 3 min [unit 21/25 olmoe-1b-7b k64s2 byte-groups=64 num-stages=2]
+2026-10-06T23:46:25Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:46:28Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 [unit 22/25 olmoe-1b-7b k64s3 byte-groups=64 num-stages=3] (estimate 4 min, cap 20 min, 330 min left)
+2026-10-06T23:46:28Z bytes: rental 2 knobs --num-stages 3 on every page of this unit
+2026-10-06T23:46:28Z bytes: the registered list G = 64 (olmoe-1b-7b, k64s3): no tail drop, no re-price, no base-clock control
+2026-10-06T23:48:50Z bytes: G=64 page exit 1 after 140 s
+2026-10-06T23:48:53Z bytes: lock block exit 0 (G=64 exit 1 23:35:53 140 s;G=64 exit 1 23:38:28 140 s;G=64 exit 1 23:41:03 139 s;G=64 exit 1 23:43:39 140 s;G=64 exit 1 23:46:14 139 s;G=64 exit 1 23:48:50 140 s;)
+2026-10-06T23:48:59Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T23:48:59Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T23:49:00Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s3-r3-counters/lock1710/summary.json)
+2026-10-06T23:49:00Z bytes END: exit 0 after 3 min [unit 22/25 olmoe-1b-7b k64s3 byte-groups=64 num-stages=3]
+2026-10-06T23:49:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:49:04Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 8 [unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8] (estimate 4 min, cap 20 min, 328 min left)
+2026-10-06T23:49:04Z bytes: rental 2 knobs --num-stages 8 on every page of this unit
+2026-10-06T23:49:04Z bytes: the registered list G = 64 (olmoe-1b-7b, k64s8): no tail drop, no re-price, no base-clock control
+2026-10-06T23:51:26Z bytes: G=64 page exit 1 after 140 s
+2026-10-06T23:51:30Z bytes: lock block exit 0 (G=64 exit 1 23:35:53 140 s;G=64 exit 1 23:38:28 140 s;G=64 exit 1 23:41:03 139 s;G=64 exit 1 23:43:39 140 s;G=64 exit 1 23:46:14 139 s;G=64 exit 1 23:48:50 140 s;G=64 exit 1 23:51:26 140 s;)
+2026-10-06T23:51:35Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T23:51:35Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T23:51:36Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s8-r3-counters/lock1710/summary.json)
+2026-10-06T23:51:36Z bytes END: exit 0 after 3 min [unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8]
+2026-10-06T23:51:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:51:40Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9] (estimate 16 min, cap 45 min, 325 min left)
+2026-10-06T23:51:40Z timed: declared-copies 9 on every page of this unit
+2026-10-06T23:51:41Z timed: G = 8 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-07T00:07:49Z timed: P2 locked_r3 exit 0
+2026-10-07T00:07:49Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-07T00:07:49Z timed: 2026-10-07T00:07:43Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n64-183ddc17
+2026-10-07T00:07:49Z timed END: exit 0 after 16 min [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9]
+2026-10-07T00:07:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-07T00:07:58Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15] (estimate 16 min, cap 45 min, 309 min left)
+2026-10-07T00:07:58Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-07T00:07:58Z timed: G = 8 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-07T00:24:06Z timed: P2 locked_r3 exit 0
+2026-10-07T00:24:06Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-07T00:24:06Z timed: 2026-10-07T00:24:01Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n6-a71cd9a0
+2026-10-07T00:24:06Z timed END: exit 0 after 16 min [unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15]
+2026-10-07T00:24:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-07T00:24:10Z driver end: exit 3

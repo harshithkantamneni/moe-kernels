@@ -1,0 +1,38 @@
+2026-09-27T05:51:35Z setup_vm.sh start: commit 161f9ec19347efb7aa64ac4c645c527e0d2b46d6 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-27T12:26:41Z
+2026-09-27T05:52:58Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 0eb8091 to run-gh200-2026-09-27: setup_vm.sh: READY
+2026-09-27T05:52:59Z driver start: commit 161f9ec19347efb7aa64ac4c645c527e0d2b46d6, steps prelude bytes calibrate timed eta floor deep r1lock, deadline 2026-09-27T12:26:41Z (385 min of work left)
+2026-09-27T05:52:59Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 385 min left)
+2026-09-27T05:52:59Z prelude END: exit 0 after 0 min
+2026-09-27T05:53:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c5552f4 to run-gh200-2026-09-27: prelude: exit 0 (0 min)
+2026-09-27T05:53:01Z bytes START: 3c.2 byte pages at the 1710 lock, G = 1 2 4 16 8 32 3 64, treads 1,2,3,4,5,6,7,8,9; base-clock control (estimate 55 min, cap 120 min, 385 min left)
+2026-09-27T06:05:17Z bytes END: exit 3 after 12 min
+2026-09-27T06:05:18Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 57e1d72 to run-gh200-2026-09-27: bytes: exit 3 (12 min)
+2026-09-27T06:05:19Z calibrate START: 3c.3 calibrate (the ruler), no lock in force (estimate 8 min, cap 30 min, 373 min left)
+2026-09-27T06:05:44Z calibrate END: exit 0 after 0 min
+2026-09-27T06:05:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ce7f3b4 to run-gh200-2026-09-27: calibrate: exit 0 (0 min)
+2026-09-27T06:05:45Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 (estimate 37 min, cap 90 min, 372 min left)
+2026-09-27T06:41:19Z timed END: exit 0 after 36 min
+2026-09-27T06:41:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1d5b8af to run-gh200-2026-09-27: timed: exit 0 (36 min)
+2026-09-27T06:41:21Z eta START: 3c.4 timed R3 at held locks 1410 (G=4, 2), 1500 and 1605 (G=4): P1 (estimate 50 min, cap 115 min, 337 min left)
+2026-09-27T07:24:45Z eta END: exit 0 after 43 min
+2026-09-27T07:24:45Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 34c53ea to run-gh200-2026-09-27: eta: exit 0 (43 min)
+2026-09-27T07:24:47Z floor START: 3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at 1710: P6 (estimate 15 min, cap 45 min, 293 min left)
+2026-09-27T07:28:21Z floor END: exit 3 after 4 min
+2026-09-27T07:28:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed e2a928f to run-gh200-2026-09-27: floor: exit 3 (4 min)
+2026-09-27T07:28:24Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 33 min, cap 75 min, 290 min left)
+2026-09-27T08:00:15Z deep END: exit 0 after 32 min
+2026-09-27T08:00:16Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d835cea to run-gh200-2026-09-27: deep: exit 0 (32 min)
+2026-09-27T08:00:18Z r1lock START: 3c.7 R1 in lock mode, G=4 then G=1: the floor's clock exponent (estimate 62 min, cap 130 min, 258 min left)
+2026-09-27T08:53:19Z r1lock END: exit 0 after 53 min
+2026-09-27T08:53:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d10700d to run-gh200-2026-09-27: r1lock: exit 0 (53 min)
+2026-09-27T08:53:22Z driver end: exit 3
+[push] pushed f933f55 to run-gh200-2026-09-27: the session ended: driver exit 3

@@ -1,0 +1,22 @@
+/workspace/moe-kernels/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=vllm 0.27.1 gpu=NVIDIA H200
+
+forced tile     BLOCK_SIZE_M=64 BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 GROUP_SIZE_M=1 num_warps=4 num_stages=3  [MOE_FORCE_TILE]
+  resume key    bm64-7350efad (in every manifest key, so a pinned run cannot resume an unpinned one)
+  CAN PIN       vllm_fused_experts
+[cli] gates registered before the run, with their thresholds:
+[cli]   F1  every row produced under the pin shows the forced tile: == 0
+[cli]   F2  cells of this run stand under the pin: >= 1
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+[driver] wrote 2 rows -> /workspace/session/gaps-nvidia_h200-20260910T041201Z/ptx/mma-switch/bm64/results/run_7733a2d82a68_vllm.csv
+[force-tile] BLOCK_SIZE_M=64 BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 GROUP_SIZE_M=1 num_warps=4 num_stages=3  [MOE_FORCE_TILE]
+[force-tile] 2 cells ran pinned, 0 were already complete under this tile, 0 skipped as unpinnable
+[cli] run_id=7733a2d82a68 elapsed=3.5s
+{"csv": "/workspace/session/gaps-nvidia_h200-20260910T041201Z/ptx/mma-switch/bm64/results/run_7733a2d82a68_vllm.csv", "manifest": "/workspace/session/gaps-nvidia_h200-20260910T041201Z/ptx/mma-switch/bm64/results/run_7733a2d82a68_vllm.manifest.jsonl", "run_id": "7733a2d82a68"}
+RESULT: VALIDITY F1 PASS [VALIDITY] every row produced under the pin shows the forced tile | measured 0 cells disagreed | gate == 0
+[force-tile] GATE F1  every row produced under the pin shows the forced tile: 0 cells disagreed against == 0  PASS
+RESULT: VALIDITY F2 PASS [VALIDITY] cells of this run stand under the pin | measured 2 measured + 0 already complete, 0 skipped as unpinnable | gate >= 1
+[force-tile] GATE F2  cells of this run stand under the pin: 2 measured + 0 already complete, 0 skipped as unpinnable against >= 1  PASS
+[force-tile] exit 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

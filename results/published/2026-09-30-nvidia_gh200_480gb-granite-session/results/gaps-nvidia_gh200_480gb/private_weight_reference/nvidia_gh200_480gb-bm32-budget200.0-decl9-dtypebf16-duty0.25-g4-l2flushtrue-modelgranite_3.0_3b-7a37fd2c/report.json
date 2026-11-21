@@ -1,0 +1,2476 @@
+{
+  "experiment": "private_weight_reference",
+  "synthetic": false,
+  "card": "nvidia_gh200_480gb",
+  "model": "granite-3.0-3b-a800m",
+  "dtype": "bf16",
+  "block_m": 32,
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 4,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "treads": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "repeats": 9,
+  "duty": 0.25,
+  "duty_timed": 0.25,
+  "duty_gap_from_burst": true,
+  "duty_achieved_by_arm": {
+    "native": 0.249894898491455,
+    "shared": 0.2498948629256765,
+    "private": 0.24989542861542732
+  },
+  "duty_achieved_tolerance": 0.02,
+  "alpha_refit": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "ridge": 176.84611860733173,
+  "ridge_source": "measured on this device: NVIDIA GH200 480GB (measured), 658.9 TFLOP/s bf16 over 3726.1 GB/s (triad pattern); calibrated 2026-09-30 at a1563920",
+  "bandwidth_gbps": 3726.09675340241,
+  "bandwidth_source": "measured on this device: NVIDIA GH200 480GB (measured), 3726.1 GB/s (triad pattern)",
+  "roof_tflops": 658.9457483945963,
+  "roof_source": "ridge 176.85 Op/B x bandwidth 3726.1 GB/s; ridge: measured on this device: NVIDIA GH200 480GB (measured), 658.9 TFLOP/s bf16 over 3726.1 GB/s (triad pattern); calibrated 2026-09-30 at a1563920; bandwidth: measured on this device: NVIDIA GH200 480GB (measured), 3726.1 GB/s (triad pattern)",
+  "reference_clock_mhz": 1455.0,
+  "reference_clock_grade": "under-load",
+  "reference_clock_source": "NVIDIA GH200 480GB (measured): detail.gemm_clock.median_mhz = 1455 MHz, the median of the samples taken while the calibration's dense GEMM ran (bf16 GEMM)",
+  "weight_stream_ms": 0.05065453005954624,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 188743680,
+    "weight_bytes": 1698693120,
+    "activation_bytes": 79626240,
+    "allowance": 3.0,
+    "flush_bytes": 251658240,
+    "flush_source": "timing.flush_mb_for_device(), this device's own L2 x 4",
+    "predicted_peak_bytes": 2189230080,
+    "device_free_bytes": 100856627200,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 9
+  },
+  "weight_delta_bytes": 1698693120,
+  "high_water_bytes": 2007255552,
+  "buffer_proof": {
+    "parts": {
+      "addresses": true,
+      "sentinels": true,
+      "same_layer": true,
+      "kernel_read": true,
+      "shared_blind": true
+    },
+    "detail": {
+      "addresses": "9 copies x 40 experts span 1698693120 bytes against 1698693120 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+      "sentinels": "wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+      "same_layer": "private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)",
+      "kernel_read": "every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=1: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=2: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=3: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=4: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=5: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=6: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=7: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=8: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True",
+      "shared_blind": "the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output"
+    },
+    "synthetic": false,
+    "verdict": "PASS"
+  },
+  "claim_min_tread": 2,
+  "claim_treads": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "ladders": {
+    "native": {
+      "points": [
+        [
+          2,
+          0.2535040080547333
+        ],
+        [
+          3,
+          0.2673279941082001
+        ],
+        [
+          4,
+          0.2731039971113205
+        ],
+        [
+          5,
+          0.27532801032066345
+        ],
+        [
+          6,
+          0.2951039969921112
+        ],
+        [
+          7,
+          0.33689600229263306
+        ],
+        [
+          8,
+          0.38172799348831177
+        ],
+        [
+          9,
+          0.42739200592041016
+        ]
+      ],
+      "intercept_ms": 0.18282152588168782,
+      "slope_ms": 0.023813904573520023,
+      "mean_rel_err": 0.06105333457717705,
+      "across_repeat_spread": 0.007467741724627872,
+      "excluded_drifted": 0,
+      "min_tread": 2
+    },
+    "shared": {
+      "points": [
+        [
+          2,
+          0.2543039917945862
+        ],
+        [
+          3,
+          0.2738879919052124
+        ],
+        [
+          4,
+          0.27350398898124695
+        ],
+        [
+          5,
+          0.26019200682640076
+        ],
+        [
+          6,
+          0.3032959997653961
+        ],
+        [
+          7,
+          0.3457919955253601
+        ],
+        [
+          8,
+          0.3903999924659729
+        ],
+        [
+          9,
+          0.4365440011024475
+        ]
+      ],
+      "intercept_ms": 0.17854780029682887,
+      "slope_ms": 0.025216762863454364,
+      "mean_rel_err": 0.07190879580130154,
+      "across_repeat_spread": 0.006919825640856658,
+      "excluded_drifted": 0,
+      "min_tread": 2
+    },
+    "private": {
+      "points": [
+        [
+          2,
+          0.262719988822937
+        ],
+        [
+          3,
+          0.27486400306224823
+        ],
+        [
+          4,
+          0.27027198672294617
+        ],
+        [
+          5,
+          0.3270399868488312
+        ],
+        [
+          6,
+          0.3856320083141327
+        ],
+        [
+          7,
+          0.44304001331329346
+        ],
+        [
+          8,
+          0.502016007900238
+        ],
+        [
+          9,
+          0.5613120198249817
+        ]
+      ],
+      "intercept_ms": 0.12936912228663763,
+      "slope_ms": 0.04527143264810244,
+      "mean_rel_err": 0.06827503453395016,
+      "across_repeat_spread": 0.0004851995355453658,
+      "excluded_drifted": 0,
+      "min_tread": 2
+    }
+  },
+  "ladders_all_treads": {
+    "native": {
+      "points": [
+        [
+          1,
+          0.25097599625587463
+        ],
+        [
+          2,
+          0.2535040080547333
+        ],
+        [
+          3,
+          0.2673279941082001
+        ],
+        [
+          4,
+          0.2731039971113205
+        ],
+        [
+          5,
+          0.27532801032066345
+        ],
+        [
+          6,
+          0.2951039969921112
+        ],
+        [
+          7,
+          0.33689600229263306
+        ],
+        [
+          8,
+          0.38172799348831177
+        ],
+        [
+          9,
+          0.42739200592041016
+        ]
+      ],
+      "intercept_ms": 0.2025284440153175,
+      "slope_ms": 0.02085786685347557,
+      "mean_rel_err": 0.06448543931113587,
+      "across_repeat_spread": 0.00956103611008803,
+      "excluded_drifted": 0,
+      "min_tread": 1
+    },
+    "shared": {
+      "points": [
+        [
+          1,
+          0.25068798661231995
+        ],
+        [
+          2,
+          0.2543039917945862
+        ],
+        [
+          3,
+          0.2738879919052124
+        ],
+        [
+          4,
+          0.27350398898124695
+        ],
+        [
+          5,
+          0.26019200682640076
+        ],
+        [
+          6,
+          0.3032959997653961
+        ],
+        [
+          7,
+          0.3457919955253601
+        ],
+        [
+          8,
+          0.3903999924659729
+        ],
+        [
+          9,
+          0.4365440011024475
+        ]
+      ],
+      "intercept_ms": 0.19940265516440075,
+      "slope_ms": 0.02208853463331858,
+      "mean_rel_err": 0.07491730006607772,
+      "across_repeat_spread": 0.01324469614866408,
+      "excluded_drifted": 0,
+      "min_tread": 1
+    },
+    "private": {
+      "points": [
+        [
+          1,
+          0.24995200335979462
+        ],
+        [
+          2,
+          0.262719988822937
+        ],
+        [
+          3,
+          0.27486400306224823
+        ],
+        [
+          4,
+          0.27027198672294617
+        ],
+        [
+          5,
+          0.3270399868488312
+        ],
+        [
+          6,
+          0.3856320083141327
+        ],
+        [
+          7,
+          0.44304001331329346
+        ],
+        [
+          8,
+          0.502016007900238
+        ],
+        [
+          9,
+          0.5613120198249817
+        ]
+      ],
+      "intercept_ms": 0.1628408771422174,
+      "slope_ms": 0.040250669419765475,
+      "mean_rel_err": 0.08391836125574864,
+      "across_repeat_spread": 0.0005451197638679761,
+      "excluded_drifted": 0,
+      "min_tread": 1
+    }
+  },
+  "ratio_all_treads": 0.5487743421845251,
+  "ratio_all_treads_interval": [
+    0.5405648010916606,
+    0.5630815921337234
+  ],
+  "ratio_all_treads_draws": 2000,
+  "tread1_off_claim_line_ms": {
+    "native": 0.04434056580066678,
+    "shared": 0.046923423452036706,
+    "private": 0.07531144842505455
+  },
+  "discrimination_floor": {
+    "alpha": 0.0,
+    "raw": -0.004362972716906333,
+    "onchip_ms_per_tile": 0.025216762863454364,
+    "stream_ms": 0.05065453005954624,
+    "shallowest_tread": 2,
+    "treads": "2..9",
+    "bandwidth_gbps": 3726.09675340241,
+    "bandwidth_source": "measured on this device: NVIDIA GH200 480GB (measured), 3726.1 GB/s (triad pattern)",
+    "formula": "(n0 c / tau - 1) / (n0 - 1), held to [0, 1]",
+    "source": "c: the shared ladder's slope over the claim's window; tau: weight_stream_ms at bandwidth_gbps",
+    "on_floor": "NOT DETERMINED BY THIS RUN: each arm holds one clock, and what tells a shared ladder on the on-chip floor from one on its traffic branch is the shared call's clock response (R1's per-M-tile elasticity, CLOCK-CARRIES on the floor)",
+    "not_determined": null
+  },
+  "treads_table": [
+    {
+      "arm": "native",
+      "tiles": 1,
+      "rows_per_expert": 32,
+      "tokens": 160,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.25097599625587463,
+      "achieved_tflops": 24.06524070071751,
+      "pct_of_roof": 0.03652082247946538,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.03107473491673808,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 2,
+      "rows_per_expert": 64,
+      "tokens": 320,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.2535040080547333,
+      "achieved_tflops": 47.65051098281622,
+      "pct_of_roof": 0.07231325355525578,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.06152969820052465,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 3,
+      "rows_per_expert": 96,
+      "tokens": 480,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.2673279941082001,
+      "achieved_tflops": 67.77963280817585,
+      "pct_of_roof": 0.10286071800798294,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.0875218390067925,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "rows_per_expert": 128,
+      "tokens": 640,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.2731039971113205,
+      "achieved_tflops": 88.46150658920024,
+      "pct_of_roof": 0.13424702535029767,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.1142277320963059,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 5,
+      "rows_per_expert": 160,
+      "tokens": 800,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.27532801032066345,
+      "achieved_tflops": 109.68367789687817,
+      "pct_of_roof": 0.1664532750444219,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.14163129543253442,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 6,
+      "rows_per_expert": 192,
+      "tokens": 960,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.2951039969921112,
+      "achieved_tflops": 122.80005330110369,
+      "pct_of_roof": 0.18635836652756937,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.15856808379977394,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 7,
+      "rows_per_expert": 224,
+      "tokens": 1120,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.33689600229263306,
+      "achieved_tflops": 125.49446723109577,
+      "pct_of_roof": 0.19044734340701133,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.16204730096912368,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 8,
+      "rows_per_expert": 256,
+      "tokens": 1280,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.38172799348831177,
+      "achieved_tflops": 126.57804222964191,
+      "pct_of_roof": 0.19209175040286203,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.16344648937787382,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "native",
+      "tiles": 9,
+      "rows_per_expert": 288,
+      "tokens": 1440,
+      "copies": 1,
+      "experts_declared": 40,
+      "repeats": 9,
+      "ms_p50": 0.42739200592041016,
+      "achieved_tflops": 127.18576643224041,
+      "pct_of_roof": 0.19301401783395042,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.16423122570081744,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 1,
+      "rows_per_expert": 32,
+      "tokens": 160,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.25068798661231995,
+      "achieved_tflops": 24.0928887004878,
+      "pct_of_roof": 0.03656278040974666,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.031110435962679178,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 2,
+      "rows_per_expert": 64,
+      "tokens": 320,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.2543039917945862,
+      "achieved_tflops": 47.500613084191315,
+      "pct_of_roof": 0.07208577215941993,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.0613361394689801,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 3,
+      "rows_per_expert": 96,
+      "tokens": 480,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.2738879919052124,
+      "achieved_tflops": 66.1562164662947,
+      "pct_of_roof": 0.10039706095300335,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.08542556940738004,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 4,
+      "rows_per_expert": 128,
+      "tokens": 640,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.27350398898124695,
+      "achieved_tflops": 88.33213413079872,
+      "pct_of_roof": 0.13405069286205154,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.11406067725981578,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 5,
+      "rows_per_expert": 160,
+      "tokens": 800,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.26019200682640076,
+      "achieved_tflops": 116.06424489491972,
+      "pct_of_roof": 0.17613626793660864,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.14987033324430735,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 6,
+      "rows_per_expert": 192,
+      "tokens": 960,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.3032959997653961,
+      "achieved_tflops": 119.48323284194723,
+      "pct_of_roof": 0.18132484067625718,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.15428517145260479,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 7,
+      "rows_per_expert": 224,
+      "tokens": 1120,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.3457919955253601,
+      "achieved_tflops": 122.26594272596263,
+      "pct_of_roof": 0.1855478133425123,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.15787840258090957,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 8,
+      "rows_per_expert": 256,
+      "tokens": 1280,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.3903999924659729,
+      "achieved_tflops": 123.7663499294545,
+      "pct_of_roof": 0.18782479472853286,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.15981583411112005,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "shared",
+      "tiles": 9,
+      "rows_per_expert": 288,
+      "tokens": 1440,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.4365440011024475,
+      "achieved_tflops": 124.51936048307601,
+      "pct_of_roof": 0.18896754518326464,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.16078817441032167,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 1,
+      "rows_per_expert": 32,
+      "tokens": 160,
+      "copies": 1,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.24995200335979462,
+      "achieved_tflops": 24.16383017065074,
+      "pct_of_roof": 0.03667043945502585,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.031202040588925502,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 2,
+      "rows_per_expert": 64,
+      "tokens": 320,
+      "copies": 2,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.262719988822937,
+      "achieved_tflops": 45.97897394149623,
+      "pct_of_roof": 0.06977656970018517,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.05937129176243825,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 3,
+      "rows_per_expert": 96,
+      "tokens": 480,
+      "copies": 3,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.27486400306224823,
+      "achieved_tflops": 65.92130318314732,
+      "pct_of_roof": 0.10004056228263526,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.08512223281943526,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 4,
+      "rows_per_expert": 128,
+      "tokens": 640,
+      "copies": 4,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.27027198672294617,
+      "achieved_tflops": 89.38843915320535,
+      "pct_of_roof": 0.13565371560706527,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.11542465275338008,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 5,
+      "rows_per_expert": 160,
+      "tokens": 800,
+      "copies": 5,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.3270399868488312,
+      "achieved_tflops": 92.34035596374636,
+      "pct_of_roof": 0.1401334725790661,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.11923637579095976,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 6,
+      "rows_per_expert": 192,
+      "tokens": 960,
+      "copies": 6,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.3856320083141327,
+      "achieved_tflops": 93.97245503148218,
+      "pct_of_roof": 0.14261030632708277,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.12134385713795638,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 7,
+      "rows_per_expert": 224,
+      "tokens": 1120,
+      "copies": 7,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.44304001331329346,
+      "achieved_tflops": 95.42836549642057,
+      "pct_of_roof": 0.14481976054768506,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.1232238313432057,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 8,
+      "rows_per_expert": 256,
+      "tokens": 1280,
+      "copies": 8,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.502016007900238,
+      "achieved_tflops": 96.24868792949319,
+      "pct_of_roof": 0.1460646618693359,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.1242830894853121,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    },
+    {
+      "arm": "private",
+      "tiles": 9,
+      "rows_per_expert": 288,
+      "tokens": 1440,
+      "copies": 9,
+      "experts_declared": 360,
+      "repeats": 9,
+      "ms_p50": 0.5613120198249817,
+      "achieved_tflops": 96.84128955041618,
+      "pct_of_roof": 0.14696397963922325,
+      "sm_clock_load_mhz": 1710.0,
+      "roof_at_cell_clock_tflops": 774.4310857421029,
+      "pct_of_roof_at_cell_clock": 0.1250482984649531,
+      "roof_note": "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency",
+      "level_sides": [
+        "high"
+      ]
+    }
+  ],
+  "copies_declared": 9,
+  "path_census": {
+    "rows": [
+      [
+        "native",
+        1,
+        160,
+        1280,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        320,
+        2560,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        3,
+        480,
+        3840,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        4,
+        640,
+        5120,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        5,
+        800,
+        6400,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        6,
+        960,
+        7680,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        7,
+        1120,
+        8960,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        8,
+        1280,
+        10240,
+        40,
+        "block-scan"
+      ],
+      [
+        "native",
+        9,
+        1440,
+        11520,
+        40,
+        "block-scan"
+      ],
+      [
+        "shared",
+        1,
+        160,
+        1280,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        320,
+        2560,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        3,
+        480,
+        3840,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        4,
+        640,
+        5120,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        5,
+        800,
+        6400,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        6,
+        960,
+        7680,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        7,
+        1120,
+        8960,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        8,
+        1280,
+        10240,
+        360,
+        "block-scan"
+      ],
+      [
+        "shared",
+        9,
+        1440,
+        11520,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        1,
+        160,
+        1280,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        2,
+        320,
+        2560,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        3,
+        480,
+        3840,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        4,
+        640,
+        5120,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        5,
+        800,
+        6400,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        6,
+        960,
+        7680,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        7,
+        1120,
+        8960,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        8,
+        1280,
+        10240,
+        360,
+        "block-scan"
+      ],
+      [
+        "private",
+        9,
+        1440,
+        11520,
+        360,
+        "block-scan"
+      ]
+    ],
+    "refusals": [],
+    "switch_tread": {
+      "native": null,
+      "shared": null,
+      "private": null
+    },
+    "hypothesis": {
+      "max_ids": 1024,
+      "max_experts": 64
+    }
+  },
+  "align_probe": {
+    "synthetic": false,
+    "note": "",
+    "cells": [
+      {
+        "label": "native",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.005392000079154968,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.08627200126647949
+      },
+      {
+        "label": "shared",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.00572599982842803,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09161599725484848
+      },
+      {
+        "label": "private",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.005692000035196543,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09107200056314468
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.005865999963134527,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09385599941015244
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.006314000114798546,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10102400183677673
+      },
+      {
+        "label": "private",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.006231999956071377,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09971199929714203
+      },
+      {
+        "label": "native",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.0061980001628398895,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09916800260543823
+      },
+      {
+        "label": "shared",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.006804000120609999,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10886400192975998
+      },
+      {
+        "label": "private",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.006686000153422356,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10697600245475769
+      },
+      {
+        "label": "native",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.006399999838322401,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10239999741315842
+      },
+      {
+        "label": "shared",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.007437999825924635,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.11900799721479416
+      },
+      {
+        "label": "private",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.007344000041484833,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.11750400066375732
+      },
+      {
+        "label": "native",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.007133999839425087,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.11414399743080139
+      },
+      {
+        "label": "shared",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.008317999541759491,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.13308799266815186
+      },
+      {
+        "label": "private",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.007968000136315823,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12748800218105316
+      },
+      {
+        "label": "native",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.0074800001457333565,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1196800023317337
+      },
+      {
+        "label": "shared",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.009014000184834003,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.14422400295734406
+      },
+      {
+        "label": "private",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.008621999993920326,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.13795199990272522
+      },
+      {
+        "label": "native",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.007841999642550945,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12547199428081512
+      },
+      {
+        "label": "shared",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.009705999866127968,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15529599785804749
+      },
+      {
+        "label": "private",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.00913000013679266,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.14608000218868256
+      },
+      {
+        "label": "native",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.008093999698758125,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12950399518013
+      },
+      {
+        "label": "shared",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.009875999763607979,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15801599621772766
+      },
+      {
+        "label": "private",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.009581999853253365,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15331199765205383
+      },
+      {
+        "label": "native",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 40,
+        "repeat": 0,
+        "ms": 0.008592000231146812,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.137472003698349
+      },
+      {
+        "label": "shared",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.010793999768793583,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.17270399630069733
+      },
+      {
+        "label": "private",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 360,
+        "repeat": 0,
+        "ms": 0.01040599960833788,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.16649599373340607
+      },
+      {
+        "label": "native",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.005392000079154968,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.08627200126647949
+      },
+      {
+        "label": "shared",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.0056940000504255295,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09110400080680847
+      },
+      {
+        "label": "private",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.005708000157028437,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09132800251245499
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.0058479998260736465,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09356799721717834
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.006297999992966652,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10076799988746643
+      },
+      {
+        "label": "private",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.006246000062674284,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09993600100278854
+      },
+      {
+        "label": "native",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.006167999934405088,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09868799895048141
+      },
+      {
+        "label": "shared",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.006792000029236078,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10867200046777725
+      },
+      {
+        "label": "private",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.006680000107735395,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10688000172376633
+      },
+      {
+        "label": "native",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.006364000029861927,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10182400047779083
+      },
+      {
+        "label": "shared",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.007445999886840582,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.11913599818944931
+      },
+      {
+        "label": "private",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.00735200010240078,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.11763200163841248
+      },
+      {
+        "label": "native",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.007124000228941441,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.11398400366306305
+      },
+      {
+        "label": "shared",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.00825200043618679,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.13203200697898865
+      },
+      {
+        "label": "private",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.007972000166773796,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12755200266838074
+      },
+      {
+        "label": "native",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.007536000106483698,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12057600170373917
+      },
+      {
+        "label": "shared",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.00902399979531765,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1443839967250824
+      },
+      {
+        "label": "private",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.008593999780714512,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1375039964914322
+      },
+      {
+        "label": "native",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.007836000062525272,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12537600100040436
+      },
+      {
+        "label": "shared",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.009717999957501888,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1554879993200302
+      },
+      {
+        "label": "private",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.009185999631881714,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.14697599411010742
+      },
+      {
+        "label": "native",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.008113999851047993,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12982399761676788
+      },
+      {
+        "label": "shared",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.009866000153124332,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15785600244998932
+      },
+      {
+        "label": "private",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.009615999646484852,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15385599434375763
+      },
+      {
+        "label": "native",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 40,
+        "repeat": 1,
+        "ms": 0.008630000054836273,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.13808000087738037
+      },
+      {
+        "label": "shared",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.01080199982970953,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.17283199727535248
+      },
+      {
+        "label": "private",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 360,
+        "repeat": 1,
+        "ms": 0.010354000143706799,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.16566400229930878
+      },
+      {
+        "label": "native",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.005379999987781048,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.08607999980449677
+      },
+      {
+        "label": "shared",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.005727999843657017,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09164799749851227
+      },
+      {
+        "label": "private",
+        "tread": 1,
+        "numel": 1280,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.00573199987411499,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09171199798583984
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.00585799990221858,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09372799843549728
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.006287999916821718,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10060799866914749
+      },
+      {
+        "label": "private",
+        "tread": 2,
+        "numel": 2560,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.0062699997797608376,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1003199964761734
+      },
+      {
+        "label": "native",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.006209999788552523,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09935999661684036
+      },
+      {
+        "label": "shared",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.006808000151067972,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10892800241708755
+      },
+      {
+        "label": "private",
+        "tread": 3,
+        "numel": 3840,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.006696000229567289,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10713600367307663
+      },
+      {
+        "label": "native",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.006339999847114086,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10143999755382538
+      },
+      {
+        "label": "shared",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.007430000230669975,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1188800036907196
+      },
+      {
+        "label": "private",
+        "tread": 4,
+        "numel": 5120,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.007342000026255846,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.11747200042009354
+      },
+      {
+        "label": "native",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.0071319998241961,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1141119971871376
+      },
+      {
+        "label": "shared",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.00829199980944395,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1326719969511032
+      },
+      {
+        "label": "private",
+        "tread": 5,
+        "numel": 6400,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.007957999594509602,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12732799351215363
+      },
+      {
+        "label": "native",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.007517999969422817,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12028799951076508
+      },
+      {
+        "label": "shared",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.009019999764859676,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.14431999623775482
+      },
+      {
+        "label": "private",
+        "tread": 6,
+        "numel": 7680,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.008617999963462353,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.13788799941539764
+      },
+      {
+        "label": "native",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.007807999849319458,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12492799758911133
+      },
+      {
+        "label": "shared",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.009676000103354454,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15481600165367126
+      },
+      {
+        "label": "private",
+        "tread": 7,
+        "numel": 8960,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.009212000295519829,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.14739200472831726
+      },
+      {
+        "label": "native",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.0080960001796484,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1295360028743744
+      },
+      {
+        "label": "shared",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.009858000092208385,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15772800147533417
+      },
+      {
+        "label": "private",
+        "tread": 8,
+        "numel": 10240,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.009564000181853771,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.15302400290966034
+      },
+      {
+        "label": "native",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 40,
+        "repeat": 2,
+        "ms": 0.008605999872088432,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.13769599795341492
+      },
+      {
+        "label": "shared",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.010792000219225883,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.17267200350761414
+      },
+      {
+        "label": "private",
+        "tread": 9,
+        "numel": 11520,
+        "declared": 360,
+        "repeat": 2,
+        "ms": 0.010444000363349915,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.16710400581359863
+      }
+    ]
+  },
+  "declaration_fit": {
+    "switch_tread": null,
+    "switch_source": "the cited hypothesis (no switch); the probe resolved no step for native IN GPU TIME (threshold 1.08 us at 6 dof), so the hypothesis stands as the fit's tread and the step it names is under that per call",
+    "step_ms": null,
+    "per_tile_ms": -0.0014028582899343405,
+    "intercept_ms": 0.0042737255848589424,
+    "per_tile_band": [
+      -0.0022478103637695317,
+      -0.00036666826123283013
+    ],
+    "step_band": null,
+    "points": [
+      [
+        2,
+        -0.0007999837398529053
+      ],
+      [
+        3,
+        -0.006559997797012329
+      ],
+      [
+        4,
+        -0.00039999186992645264
+      ],
+      [
+        5,
+        0.015136003494262695
+      ],
+      [
+        6,
+        -0.008192002773284912
+      ],
+      [
+        7,
+        -0.00889599323272705
+      ],
+      [
+        8,
+        -0.008671998977661133
+      ],
+      [
+        9,
+        -0.009151995182037354
+      ]
+    ],
+    "dof": 6,
+    "min_tread": 2
+  },
+  "run_id": "nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modelgranite_3.0_3b-7a37fd2c",
+  "seed": 0,
+  "session_tag": "gh200-20260930T004542Z-deep-lock1710",
+  "ratio": 0.5570126984817506,
+  "ratio_interval": [
+    0.5466609387652365,
+    0.5729707845142347
+  ],
+  "ratio_interval_pct": 90.0,
+  "ratio_draws": 2000,
+  "ratio_corrected": 0.5237045491401707,
+  "c1_verdict_alone": "UNKNOWN",
+  "byte_reference": null,
+  "refit_band_verdict_alone": "PASS",
+  "replicates": null,
+  "clock_correction": null,
+  "outcome": "IN-THE-H200-REFIT-BAND",
+  "outcomes_partition": [
+    [
+      "ISSUE-AND-LATENCY",
+      0.0,
+      0.35,
+      "the timed ratio sits below 0.35, where the registered issue-and-latency world (most of the per-M-tile cost not weight traffic, so a private copy per M-tile barely moves the time) would put it. A POSITION, NOT A READING: on its own a timed ratio is not a traffic fraction on any card, and C1 against this card's own byte page (or dram_counter_route.py's C5 over the same pair) is what says what it measures."
+    ],
+    [
+      "BELOW-THE-REFIT-BAND",
+      0.35,
+      0.529,
+      "the timed ratio sits between 0.35 and the H200-era refit band's lower edge 0.529 (the band fitted from H200 and A100-80GB rows pooled). A POSITION, NOT A READING: on its own a timed ratio is not a traffic fraction on any card, and C1 against this card's own byte page (or dram_counter_route.py's C5 over the same pair) is what says what it measures."
+    ],
+    [
+      "IN-THE-H200-REFIT-BAND",
+      0.529,
+      0.588,
+      "the timed ratio sits inside the H200-era refit band 0.529-0.588 (fitted from H200 and A100-80GB rows pooled), where the Lambda H100's timed ratios also sat at G = 2, 4 and 16 while its own bytes read 0.45, 0.22 and 0.07. A POSITION, NOT A READING: on its own a timed ratio is not a traffic fraction on any card, and C1 against this card's own byte page (or dram_counter_route.py's C5 over the same pair) is what says what it measures."
+    ],
+    [
+      "ABOVE-THE-REFIT-BAND",
+      0.588,
+      0.85,
+      "the timed ratio sits between the H200-era refit band's upper edge 0.588 and 0.85. A POSITION, NOT A READING: on its own a timed ratio is not a traffic fraction on any card, and C1 against this card's own byte page (or dram_counter_route.py's C5 over the same pair) is what says what it measures."
+    ],
+    [
+      "NO-REUSE",
+      0.85,
+      null,
+      "the timed ratio sits at or above 0.85, where the registered no-reuse world (essentially the whole weight set re-read per extra M-tile) would put it. A POSITION, NOT A READING: on its own a timed ratio is not a traffic fraction on any card, and C1 against this card's own byte page (or dram_counter_route.py's C5 over the same pair) is what says what it measures."
+    ]
+  ],
+  "gates": [
+    {
+      "tag": "V0",
+      "kind": "VALIDITY",
+      "claim": "the run measured the grid it planned",
+      "verdict": "PASS",
+      "measured": "243/243 cells, treads 8/8/8 in 2..9, 9/9/9 in all, drift 0.0%",
+      "gate": ">= 3 usable treads in the claim's window (treads 2 and deeper) and >= 3 repeats per arm, no unrecovered failure, and DRIFT under 20% of the timed cells at every tread",
+      "consequence": "every ladder below was fitted on a grid with holes in it, and no slope, ratio or interval on this page may be quoted",
+      "detail": [
+        "243 of 243 planned cells measured and usable",
+        "usable treads per arm: native:9, shared:9, private:9 (of 9 planned)",
+        "usable treads per arm in the claim's window, treads 2 and deeper, which the floor counts: native:8, shared:8, private:8 (of 8 planned there: 2..9)",
+        "fewest repeats behind any tread, per arm: native:9, shared:9, private:9 (of 9 planned, floor 3)",
+        "cells excluded because the clock DRIFTED across their own trials, and so absent from every fit through their tread: native:0, shared:0, private:0 (none) at every tread (the every-tread fits), native:0, shared:0, private:0 in the claim's window, treads 2 and deeper (the claim's fits); 0.0% of the 243 timed cells at every tread against a ceiling of 20%",
+        "0 cell(s) failed and were not recovered"
+      ]
+    },
+    {
+      "tag": "V1",
+      "kind": "VALIDITY",
+      "claim": "the three arms ran one geometry over one tread set",
+      "verdict": "PASS",
+      "measured": "9 common treads at BLOCK_M=[32]",
+      "gate": "all three arms over the same treads at BLOCK_M=32, one token count per tread",
+      "consequence": "the ratio compares two ladders measured over different grids, and its value is a fact about the difference between the grids",
+      "detail": [
+        "treads per arm: native:[1, 2, 3, 4, 5, 6, 7, 8, 9]; shared:[1, 2, 3, 4, 5, 6, 7, 8, 9]; private:[1, 2, 3, 4, 5, 6, 7, 8, 9]",
+        "tread set common to all three arms: [1, 2, 3, 4, 5, 6, 7, 8, 9]",
+        "BLOCK_M seen in the rows: [32]",
+        "token count per tread is single-valued: yes",
+        "every usable row has rows_per_expert == tiles x BLOCK_M: yes"
+      ]
+    },
+    {
+      "tag": "V2",
+      "kind": "VALIDITY",
+      "claim": "the private arm allocated and READ distinct weight copies",
+      "verdict": "PASS",
+      "measured": "5 of 5 parts",
+      "gate": "all 5 parts of the proof",
+      "consequence": "the private ladder is not a no-reuse reference at all, and the ratio is a number about the apparatus",
+      "detail": [
+        "PASS     addresses: the n copies occupy disjoint contiguous address ranges spanning exactly n x the weight set, in both w1 and w2",
+        "         9 copies x 40 experts span 1698693120 bytes against 1698693120 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+        "PASS     sentinels: a distinct value written into each copy reads back from that copy and from no other, and the original bytes are restored before anything else reads them",
+        "         wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+        "PASS     kernel_read: zeroing ONE copy c at a time, for every c >= 1, changes EXACTLY the private output rows of the tokens routed to copy c and no others, so every tile reads its own copy and no tile reads another's",
+        "         every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=1: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=2: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=3: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=4: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=5: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=6: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=7: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True; c=8: 160 rows changed, 160 routed, exact=True, shared unchanged=True, restored=True",
+        "PASS     shared_blind: each of those zeroings leaves the shared arm's output bitwise unchanged, and restoring the copy restores the private output bitwise, so the changes above are the private mapping and not a corruption",
+        "         the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output",
+        "PASS     same_layer: with nothing zeroed, the private arm's output is bitwise equal to the shared arm's, so the relabelling computes the same layer",
+        "         private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)"
+      ]
+    },
+    {
+      "tag": "V3",
+      "kind": "VALIDITY",
+      "claim": "the device memory taken is the memory the plan predicted",
+      "verdict": "PASS",
+      "measured": "2 of 2 parts",
+      "gate": "weight allocation within 1% of prediction, high-water mark at or under the plan's ceiling",
+      "consequence": "the copies are not the copies the plan priced, so neither the no-reuse reference nor the cost of reaching it is what this page says",
+      "detail": [
+        "weight allocation: 1.6987 GB measured against 1.6987 GB predicted, 0.00% apart (gate 1%)",
+        "high-water mark: 2.0073 GB against the plan's ceiling 2.1892 GB (weights 1.6987 + 3.0x the modelled activation set 0.2389 + the instrument's L2 flush buffer 0.2517, all in GB)"
+      ]
+    },
+    {
+      "tag": "V4",
+      "kind": "VALIDITY",
+      "claim": "no fitted tread of either ladder reaches the fixed compute roof",
+      "verdict": "PASS",
+      "measured": "worst 18.9% of the fixed roof",
+      "gate": "< 95% of the fixed roof on every fitted tread of shared and private (treads 2 and deeper)",
+      "consequence": "at least one ladder's slope is set by the compute roof and not by reads, which pulls the ratio toward 1.0 for a reason that is not reuse",
+      "detail": [
+        "roof 658.9 TFLOP/s, ridge 176.85 Op/B x bandwidth 3726.1 GB/s; ridge: measured on this device: NVIDIA GH200 480GB (measured), 658.9 TFLOP/s bf16 over 3726.1 GB/s (triad pattern); calibrated 2026-09-30 at a1563920; bandwidth: measured on this device: NVIDIA GH200 480GB (measured), 3726.1 GB/s (triad pattern)",
+        "worst fitted tread of shared/private reaches 18.9% of it, over the claim's window, treads 2..9",
+        "outside the window, printed and not scored: shared n=1 3.7%, private n=1 3.7%",
+        "a PASS says no fitted tread is at the fixed roof, not that the ladders are memory bound: an on-chip floor under the roof sets a slope this gate cannot see, and the DISCRIMINATION FLOOR under FITS says how far such a floor at the shared ladder's own per-M-tile cost blinds the ratio",
+        "own-clock issue efficiency is printed per tread in the ladder table and is scored by nothing here; scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency"
+      ]
+    },
+    {
+      "tag": "V5",
+      "kind": "VALIDITY",
+      "claim": "the declaration's own per-M-tile cost is bounded",
+      "verdict": "UNKNOWN",
+      "measured": "4.97% of the private slope at b's far edge, 0.81% at its near edge (point 3.10%)",
+      "gate": "PASS: the FAR edge of b's 90% band < 3% of the private slope. FAIL: its NEAR edge is over that bound, i.e. the whole band is. Otherwise UNKNOWN",
+      "consequence": "the wider declaration changes the per-M-tile cost itself, so the matched ratio is about a call the study does not make, and nothing on this page may be quoted as the study's alpha",
+      "detail": [
+        "every slope below, and b, over the claim's window: treads 2..9 (treads 2 and deeper)",
+        "slope(native)  0.023814 ms per M-tile  (the study's call: E declared)",
+        "slope(shared)  0.025217 ms per M-tile  (same bytes, addresses and order; E x n_decl declared)",
+        "slope(private) 0.045271 ms per M-tile",
+        "native - shared per tread, fitted as a + s 1{n >= -} + b n over 8 treads (6 dof): b = -0.001403 ms per M-tile [-0.002248, -0.000367], no switch inside the ladder, so no step term, a = +0.0043 ms",
+        "the switch tread came from the cited hypothesis (no switch); the probe resolved no step for native IN GPU TIME (threshold 1.08 us at 6 dof), so the hypothesis stands as the fit's tread and the step it names is under that per call",
+        "the raw slope gap native - shared is -0.001403 ms per M-tile (3.10% of the private slope); it carries the step at the design's leverage and is printed, not scored",
+        "declaration = b = -0.001403 ms per M-tile, which is 3.10% of the private slope",
+        "intercepts: native 0.1828 ms, shared 0.1785 ms -- the dead launches of the wider declaration belong HERE, as a constant, and are not scored",
+        "read b as the additive error bar on reading the ratio as the native call's: about +/-0.050 at the band's far edge, over and above the ratio's own bootstrap interval",
+        "b's band STRADDLES the bound: its near edge is 0.81% of the private slope and its far edge 4.97%, against 3%. The measurement neither bounded the declaration's per-M-tile cost nor showed it over: not a finding about the declaration, a statement about this run's precision"
+      ]
+    },
+    {
+      "tag": "V6",
+      "kind": "VALIDITY",
+      "claim": "shared and private agree at n=1, where they are the same call",
+      "verdict": "PASS",
+      "measured": "0.294% gap",
+      "gate": "<= 2.0%",
+      "consequence": "one call timed twice does not agree with itself, so the difference between the two arms at depth is not attributable to traffic and the ratio is unreadable at any value",
+      "detail": [
+        "medians at n=1: native:0.2510 ms, shared:0.2507 ms, private:0.2500 ms",
+        "shared/private gap 0.294% of the faster",
+        "this is the floor the ratio's own difference has to stand above, measured on this card in this session",
+        "n=1 is below the claim's window (treads 2 and deeper, DESIGN DECISION 16): no slope the ratio reads passes through it, which is why it can bound the instrument without being a point of the fit it bounds",
+        "native sits +0.115% from shared here: the declaration's constant, RECORDED and not scored"
+      ]
+    },
+    {
+      "tag": "V7",
+      "kind": "VALIDITY",
+      "claim": "shared and private ran at the same clock at every tread",
+      "verdict": "PASS",
+      "measured": "worst 0.00%",
+      "gate": "<= 1% at every tread, clock read in both arms",
+      "consequence": "the two slopes were taken at different clocks on a card whose time moves with its clock, so the raw ratio carries a clock difference and may not be quoted; the clock-corrected ratio this page may print beside it is a model's number, scored by nothing",
+      "detail": [
+        "n=1: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 184 W, private 184 W, native 181 W",
+        "      in-burst sag (tail - head) / head: shared -0.65%, private -0.58%, native -1.36%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=2: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 203 W, private 212 W, native 202 W",
+        "      in-burst sag (tail - head) / head: shared -1.23%, private -0.29%, native -0.75%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=3: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 217 W, private 242 W, native 217 W",
+        "      in-burst sag (tail - head) / head: shared -0.92%, private -0.92%, native -0.62%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=4: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 238 W, private 274 W, native 236 W",
+        "      in-burst sag (tail - head) / head: shared -0.58%, private -0.23%, native -0.81%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=5: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 260 W, private 278 W, native 256 W",
+        "      in-burst sag (tail - head) / head: shared -0.45%, private +0.07%, native -0.28%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=6: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 266 W, private 279 W, native 267 W",
+        "      in-burst sag (tail - head) / head: shared +0.07%, private +0.02%, native +0.08%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=7: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 264 W, private 276 W, native 267 W",
+        "      in-burst sag (tail - head) / head: shared -0.07%, private +0.03%, native -0.03%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=8: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 261 W, private 278 W, native 265 W",
+        "      in-burst sag (tail - head) / head: shared +0.02%, private +0.01%, native -0.05%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "n=9: shared 1710 MHz, private 1710 MHz, 0.00% apart; native 1710 MHz",
+        "      power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 260 W, private 276 W, native 262 W",
+        "      in-burst sag (tail - head) / head: shared -0.01%, private +0.01%, native -0.07%",
+        "      achieved duty: shared 0.2499, private 0.2499, native 0.2499",
+        "power and in-burst sag and achieved duty are each arm's median over its cells at the tread, RECORDS: V7 scores the clocks alone",
+        "achieved duty over the ladder, each arm's median: shared 0.2499, private 0.2499, native 0.2499 against the requested 0.25, tolerance +/-2% of it (+/-0.0050)",
+        "  gaps sized from: burst",
+        "  every arm within it: the arms ran at one duty",
+        "scored at every tread both ratio arms reached, tread 1 included: wider than the claim's window (treads 2 and deeper), so a split at a tread no claimed slope passes through still fails the page"
+      ]
+    },
+    {
+      "tag": "V8",
+      "kind": "VALIDITY",
+      "claim": "the ratio arms take one alignment kernel along the ladder",
+      "verdict": "PASS",
+      "measured": "bias <= 0.0012, 0.0000 over the resolved steps, no step resolved",
+      "gate": "step bias on the ratio <= 0.01, the step priced at its leverage over the claim's window (treads 2 and deeper), from the probed series at the ratio arms' own declaration",
+      "consequence": "vLLM changes alignment kernel inside the ratio arms' ladder on this build, and the step it leaves -- in one of the two slopes or in both, which the page names -- is worth more than the budget; the ratio is not quotable at this declaration",
+      "detail": [
+        "the probe timed the op under a CUDA graph, 16 calls per replay: each cell is GPU time (the replay's p50 over that count) and no host enqueue sits in it",
+        "native   best split at tread 5: step +0.34 us +/- 0.11 us (1 se), affine part 5.09 us + 0.2684 ns/id; RSS with the step 3.900e-08, without 1.026e-07; across-repeat spread 0.01 us; the step is NOT resolved against 3 se widened by 2.04 for the 8 split(s) the minimum was taken over, i.e. 1.08 us [GPU time: 16 calls per graph replay]",
+        "         the hypothesis puts this declaration on one kernel throughout: no step resolved, consistent",
+        "shared   best split at tread 8: step -0.34 us +/- 0.16 us (1 se), affine part 4.90 us + 0.5300 ns/id; RSS with the step 1.084e-07, without 1.913e-07; across-repeat spread 0.01 us; the step is NOT resolved against 3 se widened by 2.04 for the 8 split(s) the minimum was taken over, i.e. 1.56 us [GPU time: 16 calls per graph replay]",
+        "         the hypothesis puts this declaration on one kernel throughout: no step resolved, consistent",
+        "private  best split at tread 9: step +0.15 us +/- 0.11 us (1 se), affine part 5.08 us + 0.4486 ns/id; RSS with the step 4.258e-08, without 5.744e-08; across-repeat spread 0.02 us; the step is NOT resolved against 3 se widened by 2.04 for the 8 split(s) the minimum was taken over, i.e. 1.07 us [GPU time: 16 calls per graph replay]",
+        "         the hypothesis puts this declaration on one kernel throughout: no step resolved, consistent",
+        "slope(private ids) - slope(shared ids) = -0.104 us per tread (1280 ids a tread), -0.00206 of the weight stream per tread: the alignment's counter asymmetry the plan page registers, MEASURED; printed, not scored",
+        "the ratio arms' steps: NEITHER arm resolved one; shared -0.34 us at 8, private +0.15 us at 9",
+        "the bias bound is pair_step_bias, ASSUMED ratio <= 1: the shared arm re-reads no more than the whole set per M-tile",
+        "shared's step: -0.34 us at tread 8, at leverage 0.143; private's step: +0.15 us at tread 9, at leverage 0.083; each step fitted over every probed tread and its leverage taken over the claim's window, treads 2 and deeper (2..9), where the ratio's lines are fitted; against a weight stream of 0.0507 ms (the denominator's own scale) they could move the ratio by at most 0.0012, and by 0.0000 over the RESOLVED steps alone, which is the number a FAIL is taken on",
+        "the instrument called 0 of 27 of shared's, 0 of 27 of private's probed cells HOST-BOUND at the ratio arms' declaration",
+        "POSITIVE CONTROL UNAVAILABLE, and not needed: the census puts NATIVE on one alignment kernel throughout this ladder, so there is no switch to read; the ratio series are GPU time by construction and V8 rests on them"
+      ]
+    },
+    {
+      "tag": "C1",
+      "kind": "CLAIM",
+      "claim": "the timed ratio is this card's own DRAM byte ratio at this G: timing measures weight traffic here",
+      "verdict": "UNKNOWN",
+      "measured": "REFUSE: no same-card byte page; the H200-era refit band is not a per-card claim, owner 2026-09-26; timed 0.5570 [0.5467, 0.5730], IN-THE-H200-REFIT-BAND, over treads 2..9",
+      "gate": "PASS: the timed point and its whole interval inside the same card's byte bracket (a dram_counter_route r3-arms page of this design at this G, over the claim's window); FAIL: the two disjoint, the side named; otherwise UNKNOWN; no byte page: REFUSE, scored UNKNOWN",
+      "consequence": "the timed ratio is not this card's byte ratio at this G, so on this card it is not a traffic fraction: ABOVE the bytes, the shared arm's time per M-tile is set by an on-chip floor or a cost its bytes do not carry; BELOW them, the two arms did not deliver their bytes at one rate",
+      "detail": [
+        "ratio = slope(shared) / slope(private) = 0.5570, both slopes over treads 2..9, THE CLAIM'S WINDOW (CLAIM_MIN_TREAD, DESIGN DECISION 16)",
+        "90% percentile bootstrap interval [0.5467, 0.5730] over 2000 draws that produced a ratio",
+        "WHERE THIS LANDS: IN-THE-H200-REFIT-BAND",
+        "  the timed ratio sits inside the H200-era refit band 0.529-0.588 (fitted from H200 and A100-80GB rows pooled), where the Lambda H100's timed ratios also sat at G = 2, 4 and 16 while its own bytes read 0.45, 0.22 and 0.07. A POSITION, NOT A READING: on its own a timed ratio is not a traffic fraction on any card, and C1 against this card's own byte page (or dram_counter_route.py's C5 over the same pair) is what says what it measures.",
+        "the registered partition, in full: ISSUE-AND-LATENCY [0.000, 0.350); BELOW-THE-REFIT-BAND [0.350, 0.529); IN-THE-H200-REFIT-BAND [0.529, 0.588); ABOVE-THE-REFIT-BAND [0.588, 0.850); NO-REUSE [0.850, inf)",
+        "PRINTED BESIDE IT, never gated: the same ratio over EVERY tread, tread 1 included, 0.5488 [0.5406, 0.5631] from the same draws, -0.0082 from the claim",
+        "activation-corrected ratio 0.5237, printed only: it subtracts a MODELLED activation slope from both terms, and the raw number above is the one this arm was built to produce",
+        "NO BANDWIDTH AND NO INTERCEPT ENTER THIS NUMBER. It is one measured slope over another, taken minutes apart on one card at one tile in one kernel.",
+        "C1 REFUSES: no same-card byte page; the H200-era refit band is not a per-card claim, owner 2026-09-26. A timed ratio is a traffic fraction on a card only where it equals that card's own byte ratio at this G; name the card's r3c-g<G>.json with --byte-reference, on the run or later with --read",
+        "PRINTED, NOT GATED (continuity, owner 2026-09-26): the H200-era refit-band test C1 scored until then, point and whole interval inside ALPHA_BAND [0.529, 0.588) pooled from H200 and A100-80GB rows, would read PASS on this run alone",
+        "scored on this run's within-run interval alone: no replicate was named (--replicate-of), and a bootstrap over repeats is not the run-to-run spread (DESIGN DECISION 14)"
+      ]
+    },
+    {
+      "tag": "C2",
+      "kind": "CLAIM",
+      "claim": "the private arm's delivered weight-read rate is at or under the card's own ceiling",
+      "verdict": "FAIL",
+      "measured": "4169.2 GB/s, w=0.8937",
+      "gate": "<= 4098.7 GB/s",
+      "consequence": "either the private arm did not read every copy (V2 answers that) or the calibrated bandwidth this study divides every slope by is not a ceiling",
+      "detail": [
+        "slope(private) 0.045271 ms per M-tile over treads 2..9, the claim's window (treads 2 and deeper), moves 0.1887 GB, so it delivered 4169.2 GB/s",
+        "the card's calibrated rate is 3726.1 GB/s (measured on this device: NVIDIA GH200 480GB (measured), 3726.1 GB/s (triad pattern)); the gate allows 10% over it, i.e. 4098.7 GB/s",
+        "w(private) = 0.8937 weight-streams per M-tile at that rate; 1.0000 is what a full fresh read per tile at the calibrated rate would give, and the excess over 1 is the shortfall of the achieved rate against the calibrated one",
+        "THIS IS THE STUDY'S OWN DENOMINATOR, MEASURED. Every published w divides a slope by a stream time computed at an ASSUMED rate; this row says what that assumption was worth on this card in this kernel."
+      ]
+    }
+  ],
+  "git_sha": "a15639201fe1d31e67637480ba954f4aa192c8f0",
+  "gpu_name": "NVIDIA GH200 480GB",
+  "instrument": "scripts/clock_elasticity.py: bursts of N back-to-back fused_experts calls under one pinned tile, each call L2-flushed and bracketed by its own pre-primed event pair, the FIRST call of every burst discarded as a drained-queue launch, a host-side idle gap after each burst setting the sustained duty cycle, and the SM clock, board power and memory clock read through NVML with the burst still in flight; NOT timing.TIMING_BASIS | duty 0.25 | each idle gap sized from its own burst (gap_basis burst)",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "a15639201fe1d31e67637480ba954f4aa192c8f0",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-30T01:34:36+00:00",
+    "hostname": "192-222-51-98",
+    "gpu_name": "NVIDIA GH200 480GB",
+    "driver_version": "580.105.08",
+    "cuda_version": "13.0",
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "scripts/clock_elasticity.py: bursts of N back-to-back fused_experts calls under one pinned tile, each call L2-flushed and bracketed by its own pre-primed event pair, the FIRST call of every burst discarded as a drained-queue launch, a host-side idle gap after each burst setting the sustained duty cycle, and the SM clock, board power and memory clock read through NVML with the burst still in flight; NOT timing.TIMING_BASIS | duty 0.25 | each idle gap sized from its own burst (gap_basis burst)",
+    "ridge": 176.84611860733173,
+    "ridge_source": "measured on this device: NVIDIA GH200 480GB (measured), 658.9 TFLOP/s bf16 over 3726.1 GB/s (triad pattern); calibrated 2026-09-30 at a1563920",
+    "bandwidth": 3726.09675340241,
+    "bandwidth_source": "measured on this device: NVIDIA GH200 480GB (measured), 3726.1 GB/s (triad pattern)",
+    "warmup_ms": 300.0,
+    "iters": 680,
+    "target_ms": 200.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}

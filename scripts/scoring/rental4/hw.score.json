@@ -1,0 +1,44 @@
+{
+ "registration": "2026-10-06-rental4-hw-gh200",
+ "checks": {
+  "far_l2": {
+   "value": 275.0292397660819,
+   "against": 253.384,
+   "rel": 0.08542465098854679,
+   "verdict": "DIFFERS"
+  },
+  "dram": {
+   "verdict": "NOT SCORED"
+  },
+  "triad": {
+   "value": 3781.0,
+   "against": 3783.0,
+   "rel": -0.0005286809410520732,
+   "verdict": "CONSISTENT"
+  },
+  "l2_cache_size": {
+   "value": 62914560,
+   "against": 62914560,
+   "rel": 0.0,
+   "verdict": "CONSISTENT"
+  }
+ },
+ "printed": {
+  "cycles_at_lock": {
+   "near_l2_ns": 260.6000000000001,
+   "far_l2_ns": 470.30000000000007,
+   "dram_ns": null
+  },
+  "near_l2_ns": 152.3976608187135,
+  "l2_half_way_over_L": 0.8148250451399838,
+  "triad_knee_occupancy": 0.7190000000000001,
+  "eta_mix": {
+   "read2d": 0.9431305016960323,
+   "copy": 0.9795078657615085,
+   "add": 0.9650588285910663,
+   "gpubench_triad": 0.9516001057921185
+  },
+  "tau_mma_flop_per_clk_per_sm": 3054.077096521022
+ },
+ "verdict": "far_l2 DIFFERS; dram NOT SCORED; triad CONSISTENT; l2_cache_size CONSISTENT"
+}

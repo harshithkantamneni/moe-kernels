@@ -1,0 +1,4 @@
+COUNTER ROUTE r3-decode (wide): qwen1.5-moe-a2.7b, page docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json (sha256 fc27d04465decc9f...), 13 (cell, arm), 3 calls + 2 warmups each, at most 390 profiled launches (the GEMMs, the align, activation and reduction kernels), about 3.9 min
+  kernel filter: regex:^(fused_moe_kernel|moe_align_block_size\w*|count_and_sort_expert_tokens\w*|act_and_mul\w*|silu\w*|moe_sum\w*)$
+  child: scripts/r3_decode.py --counter-child (vLLM's own tile, the spy's grids in the manifest)
+RESULT: VALIDITY grid PASS 13 cells, 130 GEMM launches attributed, 195 other launches by place; /home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d.json

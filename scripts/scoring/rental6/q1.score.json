@@ -1,0 +1,503 @@
+{
+ "pages": {
+  "mixtral-8x7b-ska": "counted in ALL only (G1: R3 G1 FAIL)",
+  "mixtral-8x7b-skb": "counted in ALL only (G1: R3 G1 FAIL)",
+  "mixtral-8x7b-skc": "counted in ALL only (G1: R3 G1 FAIL)",
+  "olmoe-1b-7b-ska": "counted",
+  "olmoe-1b-7b-skb": "counted",
+  "olmoe-1b-7b-skc": "counted",
+  "phi-3.5-moe-ska": "counted in ALL only (G1: R3 G1 FAIL)",
+  "phi-3.5-moe-skb": "counted in ALL only (G1: R3 G1 FAIL)",
+  "phi-3.5-moe-skc": "counted in ALL only (G1: R3 G1 FAIL)",
+  "phi-3.5-moe-q9": "NOT SCORED: 0 G = 8 pages under gaps-phi-3.5-moe-q9 (no report.json is NOT SCORED)",
+  "phi-3.5-moe-q15": "NOT SCORED: 0 G = 8 pages under gaps-phi-3.5-moe-q15 (no report.json is NOT SCORED)",
+  "qwen1.5-moe-a2.7b-q9": "counted",
+  "qwen1.5-moe-a2.7b-q15": "NOT SCORED: 0 G = 8 pages under gaps-qwen1.5-moe-a2.7b-q15 (no report.json is NOT SCORED)",
+  "jetmoe-8b-q9": "NOT SCORED: 0 G = 8 pages under gaps-jetmoe-8b-q9 (no report.json is NOT SCORED)",
+  "jetmoe-8b-q15": "NOT SCORED: 0 G = 8 pages under gaps-jetmoe-8b-q15 (no report.json is NOT SCORED)"
+ },
+ "dropped_rows": {
+  "mixtral-8x7b-ska": [],
+  "mixtral-8x7b-skb": [],
+  "mixtral-8x7b-skc": [],
+  "olmoe-1b-7b-ska": [],
+  "olmoe-1b-7b-skb": [],
+  "olmoe-1b-7b-skc": [],
+  "phi-3.5-moe-ska": [
+   [
+    "phi-3.5-moe/A/2/uniform/native",
+    "5 clean repeats, under 6"
+   ]
+  ],
+  "phi-3.5-moe-skb": [
+   [
+    "phi-3.5-moe/B/2/uniform/native",
+    "4 clean repeats, under 6"
+   ]
+  ],
+  "phi-3.5-moe-skc": [
+   [
+    "phi-3.5-moe/C/2/PW2/native",
+    "5 clean repeats, under 6"
+   ],
+   [
+    "phi-3.5-moe/C/2/uniform/native",
+    "4 clean repeats, under 6"
+   ]
+  ],
+  "qwen1.5-moe-a2.7b-q9": []
+ },
+ "Q1-H": {
+  "verdict": "UNDECIDED: the copies clause needs Q1 pairs at both c9 and c15",
+  "pairs": 10,
+  "mean_g_us": -0.978204,
+  "se_us": 1.071699,
+  "skipped": [
+   "jetmoe-8b/c15/4/balanced/15: a cell is missing or invalid",
+   "jetmoe-8b/c9/4/balanced/9: a cell is missing or invalid",
+   "phi-3.5-moe/A/2/uniform/9: a cell is missing or invalid",
+   "phi-3.5-moe/B/2/uniform/9: a cell is missing or invalid",
+   "phi-3.5-moe/C/2/uniform/9: a cell is missing or invalid",
+   "phi-3.5-moe/c15/2/balanced/15: a cell is missing or invalid",
+   "phi-3.5-moe/c9/2/balanced/9: a cell is missing or invalid",
+   "qwen1.5-moe-a2.7b/c15/2/balanced/15: a cell is missing or invalid"
+  ],
+  "rows": [
+   {
+    "pair": "olmoe-1b-7b/A/3/balanced/9",
+    "g_us": -2.159019
+   },
+   {
+    "pair": "olmoe-1b-7b/A/3/uniform/9",
+    "g_us": -2.062996
+   },
+   {
+    "pair": "olmoe-1b-7b/B/3/balanced/9",
+    "g_us": -2.03304
+   },
+   {
+    "pair": "olmoe-1b-7b/B/3/uniform/9",
+    "g_us": -2.289042
+   },
+   {
+    "pair": "olmoe-1b-7b/C/3/balanced/9",
+    "g_us": -2.178959
+   },
+   {
+    "pair": "olmoe-1b-7b/C/3/uniform/9",
+    "g_us": -2.115004
+   },
+   {
+    "pair": "phi-3.5-moe/A/2/balanced/9",
+    "g_us": 0.690005
+   },
+   {
+    "pair": "phi-3.5-moe/B/2/balanced/9",
+    "g_us": 0.772018
+   },
+   {
+    "pair": "phi-3.5-moe/C/2/balanced/9",
+    "g_us": 0.452
+   },
+   {
+    "pair": "qwen1.5-moe-a2.7b/c9/2/balanced/9",
+    "g_us": 1.142001
+   }
+  ]
+ },
+ "Q1-P": {
+  "verdict": "DESCRIPTIVE (no verdict, as registered)",
+  "statistic": {
+   "pairs": 6,
+   "mean_g_us": -6.380678,
+   "se_us": 0.622407
+  },
+  "why": "DESCRIPTIVE: with JetMoE n 1, 2 out (host-bound by the registered rule), P(v3 HOLDS) is 0.6954 under replicate sigma and 0.0 at the SEEN anchors (Mixtral n 3 reads -8.03 us); the small-batch error trends with n (SEEN: Mixtral +2.6, +1.0, -6.3 us at n 1-3; JetMoE n 3 +2.8; 8x22B n 3 -9.0), which s_small cannot carry, and more cells do not fix it. The statistic and every rival's g_R are printed; no verdict",
+  "skipped": [
+   "phi-3.5-moe/c15/1/balanced/15: a cell is missing or invalid",
+   "phi-3.5-moe/c9/1/balanced/9: a cell is missing or invalid"
+  ],
+  "rows": [
+   {
+    "pair": "mixtral-8x7b/A/3/balanced/9",
+    "g_us": -4.782017
+   },
+   {
+    "pair": "mixtral-8x7b/A/3/uniform/9",
+    "g_us": -6.997999
+   },
+   {
+    "pair": "mixtral-8x7b/B/3/balanced/9",
+    "g_us": -6.253984
+   },
+   {
+    "pair": "mixtral-8x7b/B/3/uniform/9",
+    "g_us": -8.542027
+   },
+   {
+    "pair": "mixtral-8x7b/C/3/balanced/9",
+    "g_us": -4.542019
+   },
+   {
+    "pair": "mixtral-8x7b/C/3/uniform/9",
+    "g_us": -7.166024
+   }
+  ]
+ },
+ "Q1-SK": {
+  "status": "OPEN (printed)",
+  "per_shape": {
+   "olmoe-1b-7b": {
+    "skew_minus_control_us": -1.567834,
+    "skewed_pairs": 4,
+    "control_pairs": 6
+   },
+   "phi-3.5-moe": {
+    "skew_minus_control_us": -2.527299,
+    "skewed_pairs": 3,
+    "control_pairs": 3
+   }
+  },
+  "seen_prior_us": {
+   "olmoe-1b-7b": {
+    "mean_us": -3.39,
+    "rms_us": 4.41
+   },
+   "qwen1.5-moe-a2.7b": {
+    "mean_us": -1.78,
+    "rms_us": 2.4
+   },
+   "mixtral-8x7b": {
+    "mean_us": -0.41,
+    "rms_us": 4.98
+   }
+  }
+ },
+ "Q1-C": {
+  "verdict": "NOT SCORED: the c9 or c15 pair is missing or invalid"
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "mixtral-8x7b-ska": {
+    "ALL": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2-lock1710",
+     "use": "counted",
+     "g1_slips": "R3 G1 FAIL"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2-lock1710",
+     "use": "excluded"
+    }
+   },
+   "mixtral-8x7b-skb": {
+    "ALL": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2b-lock1710",
+     "use": "counted",
+     "g1_slips": "R3 G1 FAIL"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2b-lock1710",
+     "use": "excluded"
+    }
+   },
+   "mixtral-8x7b-skc": {
+    "ALL": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2c-lock1710",
+     "use": "counted",
+     "g1_slips": "R3 G1 FAIL"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2c-lock1710",
+     "use": "excluded"
+    }
+   },
+   "olmoe-1b-7b-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2d-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 216 repeat rows slipped)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2d-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 216 repeat rows slipped)"
+    }
+   },
+   "olmoe-1b-7b-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2e-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 162 repeat rows slipped)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2e-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 162 repeat rows slipped)"
+    }
+   },
+   "olmoe-1b-7b-skc": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2f-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 162 repeat rows slipped)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2f-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 162 repeat rows slipped)"
+    }
+   },
+   "phi-3.5-moe-ska": {
+    "ALL": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2g-lock1710",
+     "use": "counted",
+     "g1_slips": "R3 G1 FAIL"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2g-lock1710",
+     "use": "excluded"
+    }
+   },
+   "phi-3.5-moe-skb": {
+    "ALL": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2h-lock1710",
+     "use": "counted",
+     "g1_slips": "R3 G1 FAIL"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2h-lock1710",
+     "use": "excluded"
+    }
+   },
+   "phi-3.5-moe-skc": {
+    "ALL": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2i-lock1710",
+     "use": "counted",
+     "g1_slips": "R3 G1 FAIL"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2i-lock1710",
+     "use": "excluded"
+    }
+   },
+   "qwen1.5-moe-a2.7b-q9": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2j-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 36 repeat rows slipped)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261013T105333Z-p2j-lock1710",
+     "use": "counted",
+     "g1_slips": "PASS (0 of 36 repeat rows slipped)"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "Q1-H / verdict",
+    "ALL": "UNDECIDED: the copies clause needs Q1 pairs at both c9 and c15",
+    "CLEAN": "UNDECIDED: the copies clause needs Q1 pairs at both c9 and c15",
+    "registered": "UNDECIDED: the copies clause needs Q1 pairs at both c9 and c15"
+   },
+   {
+    "path": "Q1-P / verdict",
+    "ALL": "DESCRIPTIVE (no verdict, as registered)",
+    "CLEAN": "DESCRIPTIVE (no verdict, as registered)",
+    "registered": "DESCRIPTIVE (no verdict, as registered)"
+   },
+   {
+    "path": "Q1-C / verdict",
+    "ALL": "NOT SCORED: the c9 or c15 pair is missing or invalid",
+    "CLEAN": "NOT SCORED: the c9 or c15 pair is missing or invalid",
+    "registered": "NOT SCORED: the c9 or c15 pair is missing or invalid"
+   }
+  ],
+  "CLEAN": {
+   "pages": {
+    "mixtral-8x7b-ska": "NOT SCORED: the page is out of this view (a recorded VALIDITY gate failed)",
+    "mixtral-8x7b-skb": "NOT SCORED: the page is out of this view (a recorded VALIDITY gate failed)",
+    "mixtral-8x7b-skc": "NOT SCORED: the page is out of this view (a recorded VALIDITY gate failed)",
+    "olmoe-1b-7b-ska": "counted",
+    "olmoe-1b-7b-skb": "counted",
+    "olmoe-1b-7b-skc": "counted",
+    "phi-3.5-moe-ska": "NOT SCORED: the page is out of this view (a recorded VALIDITY gate failed)",
+    "phi-3.5-moe-skb": "NOT SCORED: the page is out of this view (a recorded VALIDITY gate failed)",
+    "phi-3.5-moe-skc": "NOT SCORED: the page is out of this view (a recorded VALIDITY gate failed)",
+    "phi-3.5-moe-q9": "NOT SCORED: 0 G = 8 pages under gaps-phi-3.5-moe-q9 (no report.json is NOT SCORED)",
+    "phi-3.5-moe-q15": "NOT SCORED: 0 G = 8 pages under gaps-phi-3.5-moe-q15 (no report.json is NOT SCORED)",
+    "qwen1.5-moe-a2.7b-q9": "counted",
+    "qwen1.5-moe-a2.7b-q15": "NOT SCORED: 0 G = 8 pages under gaps-qwen1.5-moe-a2.7b-q15 (no report.json is NOT SCORED)",
+    "jetmoe-8b-q9": "NOT SCORED: 0 G = 8 pages under gaps-jetmoe-8b-q9 (no report.json is NOT SCORED)",
+    "jetmoe-8b-q15": "NOT SCORED: 0 G = 8 pages under gaps-jetmoe-8b-q15 (no report.json is NOT SCORED)"
+   },
+   "dropped_rows": {
+    "olmoe-1b-7b-ska": [],
+    "olmoe-1b-7b-skb": [],
+    "olmoe-1b-7b-skc": [],
+    "qwen1.5-moe-a2.7b-q9": []
+   },
+   "Q1-H": {
+    "verdict": "UNDECIDED: the copies clause needs Q1 pairs at both c9 and c15",
+    "pairs": 7,
+    "mean_g_us": -1.670866,
+    "se_us": 0.803676,
+    "skipped": [
+     "jetmoe-8b/c15/4/balanced/15: a cell is missing or invalid",
+     "jetmoe-8b/c9/4/balanced/9: a cell is missing or invalid",
+     "phi-3.5-moe/A/2/balanced/9: a cell is missing or invalid",
+     "phi-3.5-moe/A/2/uniform/9: a cell is missing or invalid",
+     "phi-3.5-moe/B/2/balanced/9: a cell is missing or invalid",
+     "phi-3.5-moe/B/2/uniform/9: a cell is missing or invalid",
+     "phi-3.5-moe/C/2/balanced/9: a cell is missing or invalid",
+     "phi-3.5-moe/C/2/uniform/9: a cell is missing or invalid",
+     "phi-3.5-moe/c15/2/balanced/15: a cell is missing or invalid",
+     "phi-3.5-moe/c9/2/balanced/9: a cell is missing or invalid",
+     "qwen1.5-moe-a2.7b/c15/2/balanced/15: a cell is missing or invalid"
+    ],
+    "rows": [
+     {
+      "pair": "olmoe-1b-7b/A/3/balanced/9",
+      "g_us": -2.159019
+     },
+     {
+      "pair": "olmoe-1b-7b/A/3/uniform/9",
+      "g_us": -2.062996
+     },
+     {
+      "pair": "olmoe-1b-7b/B/3/balanced/9",
+      "g_us": -2.03304
+     },
+     {
+      "pair": "olmoe-1b-7b/B/3/uniform/9",
+      "g_us": -2.289042
+     },
+     {
+      "pair": "olmoe-1b-7b/C/3/balanced/9",
+      "g_us": -2.178959
+     },
+     {
+      "pair": "olmoe-1b-7b/C/3/uniform/9",
+      "g_us": -2.115004
+     },
+     {
+      "pair": "qwen1.5-moe-a2.7b/c9/2/balanced/9",
+      "g_us": 1.142001
+     }
+    ]
+   },
+   "Q1-P": {
+    "verdict": "DESCRIPTIVE (no verdict, as registered)",
+    "statistic": {
+     "pairs": 0
+    },
+    "why": "DESCRIPTIVE: with JetMoE n 1, 2 out (host-bound by the registered rule), P(v3 HOLDS) is 0.6954 under replicate sigma and 0.0 at the SEEN anchors (Mixtral n 3 reads -8.03 us); the small-batch error trends with n (SEEN: Mixtral +2.6, +1.0, -6.3 us at n 1-3; JetMoE n 3 +2.8; 8x22B n 3 -9.0), which s_small cannot carry, and more cells do not fix it. The statistic and every rival's g_R are printed; no verdict",
+    "skipped": [
+     "mixtral-8x7b/A/3/balanced/9: a cell is missing or invalid",
+     "mixtral-8x7b/A/3/uniform/9: a cell is missing or invalid",
+     "mixtral-8x7b/B/3/balanced/9: a cell is missing or invalid",
+     "mixtral-8x7b/B/3/uniform/9: a cell is missing or invalid",
+     "mixtral-8x7b/C/3/balanced/9: a cell is missing or invalid",
+     "mixtral-8x7b/C/3/uniform/9: a cell is missing or invalid",
+     "phi-3.5-moe/c15/1/balanced/15: a cell is missing or invalid",
+     "phi-3.5-moe/c9/1/balanced/9: a cell is missing or invalid"
+    ],
+    "rows": []
+   },
+   "Q1-SK": {
+    "status": "OPEN (printed)",
+    "per_shape": {
+     "olmoe-1b-7b": {
+      "skew_minus_control_us": -1.567834,
+      "skewed_pairs": 4,
+      "control_pairs": 6
+     }
+    },
+    "seen_prior_us": {
+     "olmoe-1b-7b": {
+      "mean_us": -3.39,
+      "rms_us": 4.41
+     },
+     "qwen1.5-moe-a2.7b": {
+      "mean_us": -1.78,
+      "rms_us": 2.4
+     },
+     "mixtral-8x7b": {
+      "mean_us": -0.41,
+      "rms_us": 4.98
+     }
+    }
+   },
+   "Q1-C": {
+    "verdict": "NOT SCORED: the c9 or c15 pair is missing or invalid"
+   }
+  }
+ },
+ "registration": "2026-10-09-rental6-q1-gh200",
+ "part": "q1"
+}

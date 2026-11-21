@@ -1,0 +1,103 @@
+LOCKED R3: the timed R3 arm under an nvidia-smi SM clock lock, top lock first
+session tag gh200-20261020T060059Z-p2b; each lock's pages carry gh200-20261020T060059Z-p2b-lock<F>
+locks       1710 MHz, top down; a slip (a timed cell more than 15 MHz under the lock) stops that lock, steps down one and restarts at G=16; a cell more than 15 MHz over it means the lock is not in force and stops the ladder
+groups      G = 16, in this order at every lock
+R3          /home/ubuntu/moe/venvs/vllm/bin/python scripts/r3_tile.py --model mixtral-8x7b --block-m 128 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --histogram docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json --arms native,shared --num-stages 3 --block-k 64 --block-n 128 --num-warps 8 --group-m G --session-tag <tag>-lock<F>
+results     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-e128g16/private_weight_reference/<run id>: each attempt's directory is the one its own R3 names (the plan's `session` and `WRITES TO` lines) under its own tag, created after the attempt started; never found by time
+lock        sudo -n nvidia-smi -lgc F,F, after `nvidia-smi -q -d SUPPORTED_CLOCKS` (every lock must be a supported graphics clock) and only once `nvidia-smi --query-compute-apps` lists no process on the card
+reset       sudo -n nvidia-smi -rgc on every exit: a return, an exception, SIGTERM, SIGHUP, Ctrl-C. SIGKILL cannot be caught: after one, reset by hand (sudo -n nvidia-smi -rgc)
+ledger      /home/ubuntu/moe/session/locked-r3/gh200-20261020T060059Z-p2b/status (one UTC line per event), summary.json, r3-g<G>-lock<F>.log per attempt, smi.csv every 500 ms
+caps        one R3 run 1800 s, the whole ladder 14400 s, a busy GPU 300 s; polled every 10 s
+slips       --slip-policy cell: a slipped repeat does NOT stop R3; R3 flags it (lock_slip), keeps it out of the cell median, drops a cell under 0 clean repeats and stops once none can reach it; the page ends HELD_WITH_SLIPS
+attempts    at most 1, in this order until one lock holds at every G:
+    1  lock 1710  G=16  /home/ubuntu/moe/venvs/vllm/bin/python scripts/r3_tile.py --model mixtral-8x7b --block-m 128 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --histogram docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json --arms native,shared --num-stages 3 --block-k 64 --block-n 128 --num-warps 8 --slip-policy cell --lock-mhz 1710 --min-clean-repeats 0 --group-m 16 --session-tag gh200-20261020T060059Z-p2b-lock1710
+2026-10-20T06:51:29Z locked_r3 start: tag gh200-20261020T060059Z-p2b, locks [1710], G [16], R3 args --model mixtral-8x7b --block-m 128 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --histogram docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json --arms native,shared --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-e128g16/private_weight_reference
+2026-10-20T06:51:30Z card: NVIDIA GH200 480GB, GPU-82fa16c1-1eb0-efac-8c23-3ee0b3295771, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-10-20T06:51:30Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-10-20T06:51:30Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-10-20T06:51:30Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 148.67 W, 700.00 W
+2026-10-20T06:51:30Z G=16 start at lock 1710: pid 50531, tag gh200-20261020T060059Z-p2b-lock1710, log r3-g16-lock1710.log
+2026-10-20T06:51:40Z G=16 at lock 1710: R3 named its run directory nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-70a4632e
+2026-10-20T06:51:50Z G=16 at lock 1710: slipped row 0 PT native n=3 rep 0 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:51:50Z G=16 at lock 1710: slipped row 1 PT shared n=3 rep 0 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:52:10Z G=16 at lock 1710: slipped row 6 balanced native n=3 rep 0 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:52:20Z G=16 at lock 1710: slipped row 7 balanced shared n=3 rep 0 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T06:52:30Z G=16 at lock 1710: slipped row 10 PW native n=4 rep 0 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T06:53:00Z G=16 at lock 1710: slipped row 18 PW native n=8 rep 0 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:53:10Z G=16 at lock 1710: slipped row 20 uniform native n=8 rep 0 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:53:10Z G=16 at lock 1710: slipped row 21 uniform shared n=8 rep 0 at 1605 MHz (recorded, R3 runs on)
+2026-10-20T06:53:10Z G=16 at lock 1710: slipped row 22 balanced native n=8 rep 0 at 1650 MHz (recorded, R3 runs on)
+2026-10-20T06:53:20Z G=16 at lock 1710: slipped row 23 balanced shared n=8 rep 0 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:53:20Z G=16 at lock 1710: slipped row 24 balanced shared n=8 rep 1 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:53:30Z G=16 at lock 1710: slipped row 25 balanced native n=8 rep 1 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:54:20Z G=16 at lock 1710: slipped row 38 PT shared n=4 rep 1 at 1680 MHz (recorded, R3 runs on)
+2026-10-20T06:54:20Z G=16 at lock 1710: slipped row 39 PT native n=4 rep 1 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:54:20Z G=16 at lock 1710: slipped row 40 balanced shared n=3 rep 1 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:54:50Z G=16 at lock 1710: slipped row 47 PT native n=3 rep 1 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:55:00Z G=16 at lock 1710: slipped row 48 PT native n=3 rep 2 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:55:20Z G=16 at lock 1710: slipped row 56 PT native n=4 rep 2 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:55:40Z G=16 at lock 1710: slipped row 61 uniform shared n=4 rep 2 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T06:56:10Z G=16 at lock 1710: slipped row 68 uniform native n=8 rep 2 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T06:56:20Z G=16 at lock 1710: slipped row 70 balanced native n=8 rep 2 at 1650 MHz (recorded, R3 runs on)
+2026-10-20T06:56:20Z G=16 at lock 1710: slipped row 71 balanced shared n=8 rep 2 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:56:30Z G=16 at lock 1710: slipped row 72 balanced shared n=8 rep 3 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:57:10Z G=16 at lock 1710: slipped row 85 PW native n=4 rep 3 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T06:57:20Z G=16 at lock 1710: slipped row 87 PT native n=4 rep 3 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T06:57:40Z G=16 at lock 1710: slipped row 91 uniform native n=3 rep 3 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T06:57:40Z G=16 at lock 1710: slipped row 93 PW native n=3 rep 3 at 1650 MHz (recorded, R3 runs on)
+2026-10-20T06:58:00Z G=16 at lock 1710: slipped row 98 PW native n=3 rep 4 at 1680 MHz (recorded, R3 runs on)
+2026-10-20T06:58:30Z G=16 at lock 1710: slipped row 105 PT shared n=4 rep 4 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T06:58:40Z G=16 at lock 1710: slipped row 107 PW shared n=4 rep 4 at 1650 MHz (recorded, R3 runs on)
+2026-10-20T06:59:20Z G=16 at lock 1710: slipped row 119 balanced shared n=8 rep 4 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:59:20Z G=16 at lock 1710: slipped row 120 balanced shared n=8 rep 5 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T06:59:30Z G=16 at lock 1710: slipped row 121 balanced native n=8 rep 5 at 1680 MHz (recorded, R3 runs on)
+2026-10-20T06:59:40Z G=16 at lock 1710: slipped row 122 uniform shared n=8 rep 5 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T07:00:10Z G=16 at lock 1710: slipped row 132 PW shared n=4 rep 5 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:00:20Z G=16 at lock 1710: slipped row 133 PW native n=4 rep 5 at 1680 MHz (recorded, R3 runs on)
+2026-10-20T07:00:40Z G=16 at lock 1710: slipped row 139 uniform native n=3 rep 5 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:00:50Z G=16 at lock 1710: slipped row 143 PT native n=3 rep 5 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:01:00Z G=16 at lock 1710: slipped row 146 PW native n=3 rep 6 at 1680 MHz (recorded, R3 runs on)
+2026-10-20T07:01:10Z G=16 at lock 1710: slipped row 148 uniform native n=3 rep 6 at 1605 MHz (recorded, R3 runs on)
+2026-10-20T07:01:10Z G=16 at lock 1710: slipped row 149 uniform shared n=3 rep 6 at 1680 MHz (recorded, R3 runs on)
+2026-10-20T07:01:20Z G=16 at lock 1710: slipped row 150 balanced native n=3 rep 6 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:01:50Z G=16 at lock 1710: slipped row 158 balanced native n=4 rep 6 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:02:10Z G=16 at lock 1710: slipped row 164 uniform native n=8 rep 6 at 1650 MHz (recorded, R3 runs on)
+2026-10-20T07:02:10Z G=16 at lock 1710: slipped row 165 uniform shared n=8 rep 6 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:02:20Z G=16 at lock 1710: slipped row 166 balanced native n=8 rep 6 at 1650 MHz (recorded, R3 runs on)
+2026-10-20T07:02:30Z G=16 at lock 1710: slipped row 168 balanced shared n=8 rep 7 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T07:02:30Z G=16 at lock 1710: slipped row 169 balanced native n=8 rep 7 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:02:30Z G=16 at lock 1710: slipped row 170 uniform shared n=8 rep 7 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:02:40Z G=16 at lock 1710: slipped row 171 uniform native n=8 rep 7 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T07:03:10Z G=16 at lock 1710: slipped row 180 PW shared n=4 rep 7 at 1620 MHz (recorded, R3 runs on)
+2026-10-20T07:03:51Z G=16 at lock 1710: slipped row 189 PW native n=3 rep 7 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:03:51Z G=16 at lock 1710: slipped row 191 PT native n=3 rep 7 at 1635 MHz (recorded, R3 runs on)
+2026-10-20T07:04:41Z G=16 at lock 1710: slipped row 203 PW shared n=4 rep 8 at 1605 MHz (recorded, R3 runs on)
+2026-10-20T07:05:11Z G=16 at lock 1710: slipped row 212 uniform native n=8 rep 8 at 1665 MHz (recorded, R3 runs on)
+2026-10-20T07:05:11Z G=16 at lock 1710: slipped row 213 uniform shared n=8 rep 8 at 1680 MHz (recorded, R3 runs on)
+2026-10-20T07:05:21Z G=16 held-with-slips at lock 1710: R3 exit 3 INVALID, cells=216 worst=1605.0 MHz, 831 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-70a4632e; 56 slipped rows; 56 slipped rows, lowest 1605 MHz, recorded and kept out of their cell medians by R3
+2026-10-20T07:05:21Z all G held at lock 1710 MHz
+2026-10-20T07:05:21Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-10-20T07:05:21Z read back after the reset: 390 MHz, 1980 MHz, 0x0000000000000001, 139.10 W, 700.00 W
+==============================================================================
+LOCKED R3, session tag gh200-20261020T060059Z-p2b: 1710 MHz held at every G (16)
+   lock   G  state              cells worst MHz  R3 exit            s  run directory
+   1710  16  held-with-slips      216    1605.0  3 INVALID        831  nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-70a4632e
+pages kept, all at 1710 MHz (each verdict is R3's own):
+  G=16  3 INVALID     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-e128g16/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-70a4632e (56 slipped rows)
+RESULT: VALIDITY V1 PASS every attempt read only the run directory its own R3 named | measured 1 of 1 attempts | gate the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag
+VALIDITY 1  PASS     every attempt read only the run directory its own R3 named
+           measured 1 of 1 attempts
+           gate     the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag
+RESULT: VALIDITY V2 PASS the lock search reached a verdict | measured lock 1710 MHz held at every G | gate a lock held at every G, or every lock on the ladder slipped
+VALIDITY 2  PASS     the lock search reached a verdict
+           measured lock 1710 MHz held at every G
+           gate     a lock held at every G, or every lock on the ladder slipped
+RESULT: CLAIM C1 PASS a lock on the ladder held at every G | measured 1710 MHz held at G = 16, 56 slipped rows recorded (--slip-policy cell) | gate no timed cell more than 15 MHz under the lock at any G (under --slip-policy cell a slipped repeat is R3's to exclude, not a stop)
+CLAIM 1  PASS     a lock on the ladder held at every G
+           measured 1710 MHz held at G = 16, 56 slipped rows recorded (--slip-policy cell)
+           gate     no timed cell more than 15 MHz under the lock at any G (under --slip-policy cell a slipped repeat is R3's to exclude, not a stop)
+SM clock reset: `sudo -n nvidia-smi -rgc` exited 0
+exit 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
+ledger /home/ubuntu/moe/session/locked-r3/gh200-20261020T060059Z-p2b/status; summary /home/ubuntu/moe/session/locked-r3/gh200-20261020T060059Z-p2b/summary.json
+==============================================================================
+2026-10-20T07:05:21Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

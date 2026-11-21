@@ -1,0 +1,6062 @@
+{
+ "registered": "2026-11-17",
+ "name": "2026-11-17-v7-decode-blind-gh200",
+ "draft": false,
+ "status": "REGISTERED BEFORE ANY PAGE of the three models, after the v7 gate read DECODE: GO (scripts/scoring/v7/gate_v7.out.txt)",
+ "design": "design-v7 (moe-kernels-work 2026-11-17 DESIGN.md, section 7, the blind proposal) and the owner's decisions of 2026-11-17: one blind GH200 rental for a regime that reads GO at the v7 gate; this one tests v7 at vLLM's decode tiles on models no decode page has timed, with the old decode blind's cells and the bars registered for these cells (owner, D4-1), changing nothing",
+ "tool": "scripts/scoring/v7blind/register_v7_blind.py --write [--final] / --check (this file and the plan), scripts/scoring/v7blind/score_blind_v7.py <results tree> <out dir> (the scorer), scripts/vm_run_v7b.sh (the launcher), scripts/gh200_decode_session.sh (the pinned decode driver, unchanged)",
+ "what": "E1-DEC BLIND under model v7: v7 with every switch on (D6FIX at decode; RR is not defined at decode) at its CAL2 refit, frozen before any page, on three models no decode page has timed",
+ "models": {
+  "chosen": [
+   "mixtral-8x22b",
+   "qwen2-57b-a14b",
+   "granite-3.0-1b-a400m"
+  ],
+  "why": "the decode stage's three reserved models (docs/FINDINGS.md, Decode closes after v6d: 'The three reserved models remain untimed at decode'; addendum 4's names, addenda 5 and 6's new blind): no decode page of any has been timed; their page lists were registered on 2026-11-04 (addendum 5), before v7 existed, so the cells are not chosen with v7 in view; each fits one GH200 NATIVE (weights under 5 GB, below); the old decode blind's routing classes and T grid carry over unchanged",
+  "footprint (COMPUTED, d5common.footprint)": {
+   "mixtral-8x22b": {
+    "E": 8,
+    "k": 2,
+    "H": 6144,
+    "I": 16384,
+    "W_e_MB": 603.979776,
+    "R": 1,
+    "calls": 8,
+    "weights_GB": 4.831838,
+    "why": "R x A_min 2 x W_e 576.0 MiB >= 240 MiB"
+   },
+   "qwen2-57b-a14b": {
+    "E": 64,
+    "k": 8,
+    "H": 3584,
+    "I": 2560,
+    "W_e_MB": 55.05024,
+    "R": 1,
+    "calls": 8,
+    "weights_GB": 3.523215,
+    "why": "R x A_min 8 x W_e 52.5 MiB >= 240 MiB"
+   },
+   "granite-3.0-1b-a400m": {
+    "E": 32,
+    "k": 8,
+    "H": 1024,
+    "I": 512,
+    "W_e_MB": 3.145728,
+    "R": 10,
+    "calls": 10,
+    "weights_GB": 1.006633,
+    "why": "R x A_min 8 x W_e 3.0 MiB >= 240 MiB"
+   }
+  },
+  "census (COMPUTED: every model in moe.spec, toy left out)": {
+   "mixtral-8x7b": {
+    "decode stage (no_decode_page)": "HAS A PAGE",
+    "decode stage pages": 8,
+    "decode stage sessions": 18,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-06-pc-pages/pc-a.json:A-MX-T128-A4",
+     "docs/registered/2026-11-06-pc-pages/pc-a.json:A-MX-T128-A8",
+     "docs/registered/2026-11-06-pc-pages/pc-c.json:C-MX-T128-A4",
+     "docs/registered/2026-11-06-pc-pages/pc-d.json:D-MX-T16-A2",
+     "docs/registered/2026-11-06-pc-pages/pc-d.json:D-MX-T2-A2",
+     "docs/registered/2026-11-06-pc-pages/pc-d.json:D-MX-T4-A2",
+     "docs/registered/2026-11-10-pc2-pages/pc2-d.json:D-MX-T16-A2",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-MX-T1",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-MX-T2"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "mixtral-8x22b": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "NO DECODE PAGE"
+   },
+   "qwen2-57b-a14b": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "NO DECODE PAGE"
+   },
+   "olmoe-1b-7b": {
+    "decode stage (no_decode_page)": "HAS A PAGE",
+    "decode stage pages": 7,
+    "decode stage sessions": 15,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "qwen1.5-moe-a2.7b": {
+    "decode stage (no_decode_page)": "HAS A PAGE",
+    "decode stage pages": 3,
+    "decode stage sessions": 3,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-QW-T1",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-QW-T2-A4",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-QW-T2-A8",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-QW-T4",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-QW-T4-A8"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "phi-3.5-moe": {
+    "decode stage (no_decode_page)": "HAS A PAGE",
+    "decode stage pages": 2,
+    "decode stage sessions": 2,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-PH-T1",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-PH-T2-A2",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-PH-T2-A4",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-PH-T3-A2",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-PH-T3-A4"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "jetmoe-8b": {
+    "decode stage (no_decode_page)": "HAS A PAGE",
+    "decode stage pages": 2,
+    "decode stage sessions": 2,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-06-pc-pages/pc-a.json:A-JM-T128-A4",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-JM-T1",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-JM-T2"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "granite-3.0-3b-a800m": {
+    "decode stage (no_decode_page)": "HAS A PAGE",
+    "decode stage pages": 3,
+    "decode stage sessions": 3,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-G3-T1",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-G3-T2"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "granite-3.0-1b-a400m": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "NO DECODE PAGE"
+   },
+   "deepseek-v3": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "NO DECODE PAGE"
+   },
+   "deepseek-v2-lite": {
+    "decode stage (no_decode_page)": "HAS A PAGE",
+    "decode stage pages": 1,
+    "decode stage sessions": 1,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-DS-T1",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-DS-T2-A12",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-DS-T2-A6",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-DS-T3",
+     "docs/registered/2026-11-10-pc2-pages/pc2-n.json:N-DS-T3-A12"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "deepseek-v3-tp4": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "NO DECODE PAGE"
+   },
+   "deepseek-v3-tp8": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "NO DECODE PAGE"
+   },
+   "mixtral-8x7b-tp2": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-06-pc-pages/pc-a.json:A-TP2-G128"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "mixtral-8x7b-tp4": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-06-pc-pages/pc-a.json:A-TP4-G128"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "mixtral-8x7b-tp8": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [
+     "docs/registered/2026-11-06-pc-pages/pc-a.json:A-TP8-G128"
+    ],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "HAS A DECODE PAGE"
+   },
+   "qwen2-57b-a14b-tp8": {
+    "decode stage (no_decode_page)": "NO DECODE PAGE",
+    "decode stage pages": 0,
+    "decode stage sessions": 0,
+    "measurement cells at a decode tile, by name": [],
+    "measurement cells at a decode tile, by shape": [],
+    "verdict": "NO DECODE PAGE"
+   }
+  },
+  "every model with no decode page": [
+   "mixtral-8x22b",
+   "qwen2-57b-a14b",
+   "granite-3.0-1b-a400m",
+   "deepseek-v3",
+   "deepseek-v3-tp4",
+   "deepseek-v3-tp8",
+   "qwen2-57b-a14b-tp8"
+  ],
+  "not chosen": {
+   "deepseek-v3": "no decode page; 22.6 GB per layer NATIVE fits; not a reserved model; one GH200 row of 2026-09-25 (alpha-G pin probe, T 4096, 128x64x64) times its layer at another tile; design-v7 7.3 proposed it for a combined prefill and decode blind; adding it would add units and cells chosen after v7, so it is left for the owner (open question)",
+   "deepseek-v3-tp4, deepseek-v3-tp8, qwen2-57b-a14b-tp8": "no decode page; tp shards of the models above, not reserved",
+   "mixtral-8x7b-tp2, -tp4, -tp8": "PC timed their w2 GEMM on vLLM's 64x128x64 w4 s3 decode tile (pc-a.json, A-TP2/4/8-G128): a decode-tile page, so excluded under the strict reading"
+  },
+  "unseen scan (COMPUTED: published sessions dated 2026-11-04 or later, check_unseen's pattern)": [
+   "2026-11-04-nvidia_gh200_480gb-decodeBlind-session: file names naming a reserved model: 0; text files with a hit: 1; session/setup_vm.log: ['8x22b']",
+   "2026-11-04-nvidia_gh200_480gb-decodeDS-session: file names naming a reserved model: 0; text files with a hit: 2; session/README.md: ['8x22b', 'granite-3.0-1b', 'qwen2-57b']; session/setup_vm.log: ['8x22b']",
+   "2026-11-05-nvidia_gh200_480gb-tileB3-session: file names naming a reserved model: 0; text files with a hit: 1; session/setup_vm.log: ['8x22b']",
+   "2026-11-06-nvidia_gh200_480gb-pc-session: file names naming a reserved model: 0; text files with a hit: 2; session/README.md: ['8x22b', 'granite-3.0-1b', 'qwen2-57b']; session/setup_vm.log: ['8x22b']",
+   "2026-11-10-nvidia_gh200_480gb-pc2-session: file names naming a reserved model: 0; text files with a hit: 2; session/README.md: ['8x22b', 'granite-3.0-1b', 'qwen2-57b']; session/setup_vm.log: ['8x22b']",
+   "2026-11-12-nvidia_gh200_480gb-rr-session: file names naming a reserved model: 0; text files with a hit: 2; session/README.md: ['8x22b', 'granite-3.0-1b', 'qwen2-57b']; session/setup_vm.log: ['8x22b']"
+  ],
+  "unseen scan reading": "two kinds of text hit, no page: session/setup_vm.log's git fetch listing of the old run branch run-gh200-8x22b-2026-09-28 (an R3-tile session), as d6_build/check_unseen.out read through PC2; and the DS, PC, PC2 and RR session READMEs' sentence that no file names or loads the three models; no file name names a reserved model",
+  "labels": {
+   "time": "BLIND: the decode call, its tiles and its instrument have no page on any of the three models",
+   "pages": "SYNTHETIC (decode_synth.py's frozen rules; config shapes only, synthetic weights)",
+   "per_model": {
+    "mixtral-8x22b": "SEEN-MODEL: R3-tile pages (2026-09-28, rentals 2 to 6) and vLLM's 128x128 prefill tile as C2's held-out CAL model; no decode page",
+    "qwen2-57b-a14b": "SEEN-MODEL: R3-tile pages (2026-09-28 onward), vLLM's prefill tiles as a CAL model (A, A2, S1, C3), and vLLM/SGLang fused_experts timed at T 1 to 128 on H200 (2026-08-22 to 2026-09-10, vLLM's tuned E=64,N=2560 H200 config) and A100 (2026-08-28 a100-cross-card, vLLM 0.27.1; no A100 file for E=64,N=2560 bf16 in either local vLLM tree, so vLLM's default config, its decode tiles, on another card, span-timed, not this apparatus' GRR decode page); no GH200 decode page and no decode-stage page",
+    "granite-3.0-1b-a400m": "SEEN-MODEL: R3-tile pages (rentals 1 to 3: launch floor, census, floor counters); no decode page"
+   },
+   "everything published": "SEEN"
+  }
+ },
+ "cells": {
+  "structure": "the old decode blind's, exactly (decodeB-blind's unit form, addendum 5's pages from decode_synth's frozen generators): one GRR main page per model (nodrop) and one GR1 control page on the two models with matched control cells (drop group gr1), T 1, 2, 4, 8, 16, 32, 64, 96, 128, the routing classes BALANCED, UNIFORM, UNIFORM-UNSHUFFLED, LADDER, LADDER-BOTTOM and MINCOVER (the ladder rungs scaled to each model's E and k by the generator, as on the old pages), the NATIVE arm, shuffle seed 20261014, the 1710 MHz lock at G 1 and 700 W; the old pages' T 3 rows and TRACE-DW cells were Qwen1.5-specific (its trace), as on every other old page",
+  "per model": {
+   "mixtral-8x22b": {
+    "main cells": 47,
+    "T": [
+     1,
+     2,
+     4,
+     8,
+     16,
+     32,
+     64,
+     96,
+     128
+    ],
+    "roles": {
+     "BALANCED": 9,
+     "UNIFORM": 9,
+     "LADDER-BOTTOM": 8,
+     "LADDER": 15,
+     "MINCOVER": 3,
+     "UNIFORM-UNSHUFFLED": 3
+    }
+   },
+   "qwen2-57b-a14b": {
+    "main cells": 48,
+    "T": [
+     1,
+     2,
+     4,
+     8,
+     16,
+     32,
+     64,
+     96,
+     128
+    ],
+    "roles": {
+     "BALANCED": 9,
+     "UNIFORM": 9,
+     "LADDER-BOTTOM": 8,
+     "LADDER": 16,
+     "MINCOVER": 3,
+     "UNIFORM-UNSHUFFLED": 3
+    }
+   },
+   "granite-3.0-1b-a400m": {
+    "main cells": 48,
+    "T": [
+     1,
+     2,
+     4,
+     8,
+     16,
+     32,
+     64,
+     96,
+     128
+    ],
+    "roles": {
+     "BALANCED": 9,
+     "UNIFORM": 9,
+     "LADDER-BOTTOM": 8,
+     "LADDER": 16,
+     "MINCOVER": 3,
+     "UNIFORM-UNSHUFFLED": 3
+    }
+   }
+  },
+  "units": [
+   {
+    "label": "dm",
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main.json",
+    "step": "r3decode",
+    "inst": "GRR",
+    "drop": "nodrop",
+    "est_min": 15
+   },
+   {
+    "label": "dm",
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main.json",
+    "step": "r3decode",
+    "inst": "GRR",
+    "drop": "nodrop",
+    "est_min": 16
+   },
+   {
+    "label": "dm",
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main.json",
+    "step": "r3decode",
+    "inst": "GRR",
+    "drop": "nodrop",
+    "est_min": 16
+   },
+   {
+    "label": "dc",
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-ctl.json",
+    "step": "r3decode",
+    "inst": "GR1",
+    "drop": "gr1",
+    "est_min": 10
+   },
+   {
+    "label": "dc",
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-ctl.json",
+    "step": "r3decode",
+    "inst": "GR1",
+    "drop": "gr1",
+    "est_min": 10
+   }
+  ],
+  "drop_order": [
+   "gr1"
+  ],
+  "pages": {
+   "dir": "docs/registered/2026-11-04-blind5-pages",
+   "label": "addendum 5's registered page lists (decode_synth's frozen generators), reused unchanged; never timed",
+   "files": {
+    "mixtral-8x22b-main.json": {
+     "path": "docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json",
+     "sha256": "c6ca50e390038e6b0d56d4f0b03ef77aa46fb0e3f0117a82113b2f8ac4c623e1",
+     "shuffle_seed": 20261014,
+     "decl_copies": null,
+     "cells": [
+      {
+       "label": "L-T1-A2",
+       "T": 1,
+       "counts_sha256": "36ab315e00463a5ef1b7c4aea033f156881e6a1c08727d06399cfd3416fbe242",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T1",
+       "T": 1,
+       "counts_sha256": "8b538013fc2e24005fcd5ca673f013e611ba9dadb6ebccd1715cdf4116fe104f",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A2",
+       "T": 2,
+       "counts_sha256": "41e6eddbc39078e17135931b7e829829ea5206c016c1b91b6719e783873b1fba",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A3",
+       "T": 2,
+       "counts_sha256": "8318bbca042ba977938d901c605eae42da4c9b3fb6ddaab733a2ca2473e6ff91",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A4",
+       "T": 2,
+       "counts_sha256": "b8fa4fa28b07b20c2e6cb1feb32275bb07e225e3e7c632253ccdaddb54e8f05c",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T2",
+       "T": 2,
+       "counts_sha256": "0367fc81edfd90be4d890b22821c91b92870006be93a221d487f941e0649128d",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A2",
+       "T": 4,
+       "counts_sha256": "03768fbd70e26bfa410d54da5648231c96b6b07575d0c0350d12b92b0051749d",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A4",
+       "T": 4,
+       "counts_sha256": "b38fda26cc1c6e74a86a5e4b10a422a302ca8bdb192157fe0328092d05583caa",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A6",
+       "T": 4,
+       "counts_sha256": "4e9bd09202df422a2bb5e0d0ab4cb704ed3b7753bd250f899b0139e35d59e956",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A8",
+       "T": 4,
+       "counts_sha256": "3c1425b38d52d1967a20a1ce4abe58b11af7d5260e368e378cbbc12574a967e8",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T4",
+       "T": 4,
+       "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T4",
+       "T": 4,
+       "counts_sha256": "c65458dddd927fd7d6f41524a4b94775ae969a92340776b61146c71d018f9981",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A2",
+       "T": 8,
+       "counts_sha256": "c223dd0555514e9292abc5d5af69105b47f68844c8ead9d53f5f5be89493358d",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A4",
+       "T": 8,
+       "counts_sha256": "aa8817a914afc190e6c142636620e1d87579460fdba12a1d4919362cce5a4625",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A6",
+       "T": 8,
+       "counts_sha256": "fc6c710eba279286b8545509fdd0543777d8399ac69958234c3860150dd0427f",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A8",
+       "T": 8,
+       "counts_sha256": "7d179ef22f20b3110950a8b8133fab4552fe8ffc4c97531fe8592b0ec0b0899b",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T8",
+       "T": 8,
+       "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T8",
+       "T": 8,
+       "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      },
+      {
+       "label": "L-T16-A2",
+       "T": 16,
+       "counts_sha256": "2da27d04377a66e8fbad8be2041f30f38973f69615f44fffe3a11b40119cee8a",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A4",
+       "T": 16,
+       "counts_sha256": "fe06d435fe1514837ae6ec308877f357bee16a40d2b065014966ea4e74ad6a3e",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A6",
+       "T": 16,
+       "counts_sha256": "c54dc19cd1bdf85b0a89abb91946529d7ec73a60f38932e151d06bae7ee4cb25",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A8",
+       "T": 16,
+       "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T16",
+       "T": 16,
+       "counts_sha256": "87ae52f91d993510d3ba97ab61e9ea63966d44e9838111859f3a10a427006aae",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T16",
+       "T": 16,
+       "counts_sha256": "29114c9dea0f015473848d7256703399990709813ec6f640dd1fad2fa209c5fa",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A2",
+       "T": 32,
+       "counts_sha256": "5f03e82ce2462b10190d6e12cc8af094a8f114cf723f1c95cfb997ad547d0480",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A4",
+       "T": 32,
+       "counts_sha256": "8cbd50b9547921c85bcb9c8156f2c84f364e530faec78de51c4ec1b646120e0f",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A6",
+       "T": 32,
+       "counts_sha256": "f01e249aba0bed03a5d87d501dc13e057c13bf787c5d7127de6830123d7a1933",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A8",
+       "T": 32,
+       "counts_sha256": "355d07fa606531f96bb17ecb89e9e60344810958b45fe43a61e659bed52a4a21",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T32",
+       "T": 32,
+       "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T32",
+       "T": 32,
+       "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      },
+      {
+       "label": "L-T64-A2",
+       "T": 64,
+       "counts_sha256": "041cec87a6a74a40107490f5ca47b5b0f083a2313fa6f813475c76a1e457b08a",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A4",
+       "T": 64,
+       "counts_sha256": "08e818be3b1c2710ed04c62c4de1e67c1805ddaf46a70cea79b07637e35e4f12",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A6",
+       "T": 64,
+       "counts_sha256": "6a6145d9b0926b0429a20caf7aee72c333a2667740c1b02f89a6dc9fd3ece9d0",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A8",
+       "T": 64,
+       "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T64",
+       "T": 64,
+       "counts_sha256": "20592ddc3ffe20daeebcf5ab2110c34457de5bfd05fbeacf067a7c9f8436bbcd",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T64",
+       "T": 64,
+       "counts_sha256": "6fa4213ae3f2d8551b113f68dc4a71b6248715263fac917479903e5bd7d6ab4f",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A2",
+       "T": 96,
+       "counts_sha256": "71f65999b90c014406bf8ab372f36a5915265640e8a0a8e1f6def6c709f013ba",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A4",
+       "T": 96,
+       "counts_sha256": "86776e86ed23a1cbfedc47405a2b3c2d0a6af5c287ee7442f9dee7494a51f008",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A6",
+       "T": 96,
+       "counts_sha256": "4eb6c164528db57b70e998e1393ba2c40d4b17c13005ec7d5b1ce8cd55bd3859",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A8",
+       "T": 96,
+       "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T96",
+       "T": 96,
+       "counts_sha256": "0654e358f6e22874cf45c4b1f7425f3a76a26524e0e87ee6f95a3a89c251a891",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A2",
+       "T": 128,
+       "counts_sha256": "aa3b41e949cbeaccc386dbd4e6ea78f343ff95f86f354f7d200fda76345e2fba",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A4",
+       "T": 128,
+       "counts_sha256": "0ff3b6bbc9ed1f3feb8cabfc1e395eb8d2f8b8069eb8712502ca8bef35853e59",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A6",
+       "T": 128,
+       "counts_sha256": "794b88ea43d82fcc8988058a4d7f2d128d0eee368ac4ea15678f0915614ffece",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A8",
+       "T": 128,
+       "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T128",
+       "T": 128,
+       "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T128",
+       "T": 128,
+       "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      }
+     ]
+    },
+    "qwen2-57b-a14b-main.json": {
+     "path": "docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json",
+     "sha256": "506f5859c94d0bdc04e5db68bd948abd1f42ffb6c10d48664e6d114f78da5b0f",
+     "shuffle_seed": 20261014,
+     "decl_copies": null,
+     "cells": [
+      {
+       "label": "L-T1-A8",
+       "T": 1,
+       "counts_sha256": "e0a20d7d0d71a902a09a6827475efd39e64945849c41e527b0a605ec4d7efaeb",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T1",
+       "T": 1,
+       "counts_sha256": "fd0951b1158140d8401457258a93efb71e0e99c16b365021cd6c9f3f4ba49fe1",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A8",
+       "T": 2,
+       "counts_sha256": "6cf9ebbc9f5a6dadc37ad9dfd3486fb04961d10176eef71406ba6dd2c849894e",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A11",
+       "T": 2,
+       "counts_sha256": "a580ddff8d1eebb015ae0dc28125032baf2c21925021989b83e7b95b23a598bd",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A13",
+       "T": 2,
+       "counts_sha256": "0f842e752eba49f4a5719635b0cdb22332a0ba7a51f8c2e5dfbaa7c854872947",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A16",
+       "T": 2,
+       "counts_sha256": "d6d56c9c2eb61833c00fc7b3f091937512da14cb27e4ec8e4d26a23b43b9ffe6",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T2",
+       "T": 2,
+       "counts_sha256": "9b2997d4cf6305c67711af77b0d96dc3f1f24ba4ba9032d37ab0cd5bea0de378",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A8",
+       "T": 4,
+       "counts_sha256": "b988701c42916be04cfdbaba24b39520355c95f26e023989051f86897bef0777",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A16",
+       "T": 4,
+       "counts_sha256": "b8b5f9617359a000cbb37e3cb2269b7275b50f7c2e2f90940ac2724bd87d1cc3",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A24",
+       "T": 4,
+       "counts_sha256": "f0d5d6fd7ac1ce100abc2e1736b07e7d3eb546655de79a5f7c0f622e58cc0066",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A32",
+       "T": 4,
+       "counts_sha256": "6b4cc76cf4891cbba1ea291151ca5365ddefb0a67835735d63e67517dc990244",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T4",
+       "T": 4,
+       "counts_sha256": "496b904549a19ed5261d7be0d639793a603fe4e61e5207e714efa707b9a1581d",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T4",
+       "T": 4,
+       "counts_sha256": "8e83af620a436fc39e5d26f5ad64d3d21b4a93d41e57dabdc3d3bf53a1419130",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A8",
+       "T": 8,
+       "counts_sha256": "78966576c2bf1d80a5e8e089e51de41d630120ac55f1fbbaac6a89f138c0e6b3",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A27",
+       "T": 8,
+       "counts_sha256": "9ec92e1bbcabf5092f8c43806b7c5b4067ee714b90fdfd4f4e87fd83f5d41f25",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A45",
+       "T": 8,
+       "counts_sha256": "1be5dac552949a3f5ba4a68a642d39214227ce97dd20392da842cb22538ffd9e",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A64",
+       "T": 8,
+       "counts_sha256": "ba1e52e365a6fa132081a7bef3fe2800e0a5a907bbdcb8f183b7f1783905ea31",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T8",
+       "T": 8,
+       "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T8",
+       "T": 8,
+       "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      },
+      {
+       "label": "L-T16-A8",
+       "T": 16,
+       "counts_sha256": "d0017cd684966d75f18c7ff0edb4aa77c16c805f2d47468cae1b890526ddbb04",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A27",
+       "T": 16,
+       "counts_sha256": "730cbae6f8394e3c5991d176110341db04568b79a7a564b53b5111d76859284b",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A45",
+       "T": 16,
+       "counts_sha256": "4e38d46721269c21b391b9056cf64b7d3c6a7671f013be1c67cc8773acb181b8",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A64",
+       "T": 16,
+       "counts_sha256": "e87f401f581f58b11782ec39b5c53427f8ad7f15f3a0a82c367f626747d00cb0",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T16",
+       "T": 16,
+       "counts_sha256": "42ad03810cc66d7837170e8349d7c84fbd4dfe4ce3ff94c001b9135bd9bd622b",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T16",
+       "T": 16,
+       "counts_sha256": "ac1de53d3a5551d17b3581b04c9507fa77cf306e98b4e4cfefb6b9d59ac88ed1",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A8",
+       "T": 32,
+       "counts_sha256": "50e50f1359839ccd2cd882f91800a3484df7a99ac699dac9fd276932775a7298",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A27",
+       "T": 32,
+       "counts_sha256": "223cbdf61c0f927148bce794a2d9062109c8d2ea3bb306aace130a4467594f38",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A45",
+       "T": 32,
+       "counts_sha256": "b616a06fc7ef5b8551276bd4890b48480e2983fe39acd4309e1b4fab9f8c06e9",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A64",
+       "T": 32,
+       "counts_sha256": "6380508c114457d6de07b96413a804755262dda074b078dd362bcd5cbef4ee54",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T32",
+       "T": 32,
+       "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T32",
+       "T": 32,
+       "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      },
+      {
+       "label": "L-T64-A8",
+       "T": 64,
+       "counts_sha256": "829eea76732c8fc97e9cbd27d168aea91ea03e586c7656500aa6726e619204d1",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A27",
+       "T": 64,
+       "counts_sha256": "95f26b29628857d9bebbfe3a23c02555897a66eceac1d0406095dd2687171649",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A45",
+       "T": 64,
+       "counts_sha256": "e0daebc4657e06e7ff3ac811edc605c34ace65150b18e81da2c2ed0e07a5ebb6",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A64",
+       "T": 64,
+       "counts_sha256": "ae1eeef26c1a9f56fc53a03e4f8a309e9102fc22fae8746e21bab73860a78b5d",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T64",
+       "T": 64,
+       "counts_sha256": "a6299574e983959cb7315203e17f0266291aaeda692186d87c2e4e7ee7f943f8",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T64",
+       "T": 64,
+       "counts_sha256": "dab014c3ffe62b784fe4c008c7fa816d59b49ba08d9ac2a267f198955d97af49",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A8",
+       "T": 96,
+       "counts_sha256": "ec538cc8dd0d03ae10ad8b2f7ebd6eccff3ccaa805d9c6f5eb4f721d652b99b2",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A27",
+       "T": 96,
+       "counts_sha256": "5112017fcfe414b49d23e129bcb1f904824f65909ba42261cbee008ef1a6fdbd",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A45",
+       "T": 96,
+       "counts_sha256": "e19b485225d4d15874de94f304ffaccc9a3d119b0fa924bc75581193a4e67f18",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A64",
+       "T": 96,
+       "counts_sha256": "68f5d9290a067800723f258a586438e30119bc67603bf633270b126f4b0f40c5",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T96",
+       "T": 96,
+       "counts_sha256": "529f72191d1e2a4f762adeeb66c16f24078b9ca2f711ba5ef16e5f9dad0031ef",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A8",
+       "T": 128,
+       "counts_sha256": "a779b623c48dc18e2bbbc4dcbeef94ad106d05ebaa2ba8623dff526d31f53af8",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A27",
+       "T": 128,
+       "counts_sha256": "cbc4ac2c55568af2cdcc55046375b717f8165ab83479f647b679ece3ac5c0ffa",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A45",
+       "T": 128,
+       "counts_sha256": "9a2775700bb54898120b1576fcc4ff2b598fcfcc3e63c37036d5bbaea1c9e207",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A64",
+       "T": 128,
+       "counts_sha256": "eb520d9e4e041941ec8dbf3665a8c1bc138e087f02580cb3e1385526283c9e68",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T128",
+       "T": 128,
+       "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T128",
+       "T": 128,
+       "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      }
+     ]
+    },
+    "granite-3.0-1b-a400m-main.json": {
+     "path": "docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json",
+     "sha256": "c7ed43441e3aa1957d7a26fbba664b3e47749abba212909dcd68115fcb47d678",
+     "shuffle_seed": 20261014,
+     "decl_copies": null,
+     "cells": [
+      {
+       "label": "L-T1-A8",
+       "T": 1,
+       "counts_sha256": "d97754cd50c8a40933e3852e0e75e1769362d7bbc7ea382e1a562979e110d9f8",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T1",
+       "T": 1,
+       "counts_sha256": "e63c86d1da581fc2751d89ea736d7909c43ec9eee8e134fbd8eb9bbc17809cd1",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A8",
+       "T": 2,
+       "counts_sha256": "405b711e5846a36ceb9c6236e7ea7b480e8024573f6def3999a6dce7502b6196",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A11",
+       "T": 2,
+       "counts_sha256": "5b2c59a4a06b5d0eec394b44234ee558bc382799a59b7ab2c79a8f6f0cc913ca",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A13",
+       "T": 2,
+       "counts_sha256": "0cad8e30608523ae344c112b75cfab75bdbbf60f86f9445c6bdd2497841a4246",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A16",
+       "T": 2,
+       "counts_sha256": "1a709aa9de75945684d647e0de33baf515d49ceb4c84555f268c9ab23b5b1d47",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T2",
+       "T": 2,
+       "counts_sha256": "dfb76ae3bcc0253069aa7ea4f9e4cdd9f19c3bab987ba0c88b2c8d9d948d12a4",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A8",
+       "T": 4,
+       "counts_sha256": "6db87848b72f8f1493439d2ba463028b789a266a07af27707e3cc0b1ec1e8ff1",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A16",
+       "T": 4,
+       "counts_sha256": "3c8ba5038361136f676c828a06d2220f361c2761d2f2d8b0a447c5aa04e943e3",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A24",
+       "T": 4,
+       "counts_sha256": "edaf0c2201a10917e551428422fb989392e1cfad49e3ce6f9f009b46a240a925",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A32",
+       "T": 4,
+       "counts_sha256": "49f6be3b003d7c754bc87ae96c4403b4d5600e8ad0a15b16ff93629a45fd15ee",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T4",
+       "T": 4,
+       "counts_sha256": "81a031e135fa3a9e8a3863cadba7baa8dfc01a69e672e2d28f1529721231878c",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T4",
+       "T": 4,
+       "counts_sha256": "92a26ba1c3444268229deccf71920618c523f59d6093dc70021657608479d157",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A8",
+       "T": 8,
+       "counts_sha256": "07b8bdfb2e1b142f43e064580b0372bedef4452b004bca755ecba05de29d2a97",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A16",
+       "T": 8,
+       "counts_sha256": "7579ec05d0e8e4e4dd2569a6a2e7e451e5f95c49741f02c913b1d4abf9e59b3e",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A24",
+       "T": 8,
+       "counts_sha256": "208bccf87253838e39432f4acf6051240f45a0fa501a51e64ce1b8b8f54b1a4e",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A32",
+       "T": 8,
+       "counts_sha256": "3fbf504da6dfca961e26cd5bea46eab340aecc3c0c449c56f68eaf0a531652f8",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T8",
+       "T": 8,
+       "counts_sha256": "a0e83650146cfd3ac31822eb76bff0389c362a72a7e60db05aef90d8bb6151f6",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T8",
+       "T": 8,
+       "counts_sha256": "a0e83650146cfd3ac31822eb76bff0389c362a72a7e60db05aef90d8bb6151f6",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      },
+      {
+       "label": "L-T16-A8",
+       "T": 16,
+       "counts_sha256": "093d767f7a8f38d8fc06d4584e0cb3c60d80343f572fe87df69c728de47418fe",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A16",
+       "T": 16,
+       "counts_sha256": "998264082b38e2b3440293f79e46df31b8cc8cec04a5a2b9d704779cbd7f19e6",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A24",
+       "T": 16,
+       "counts_sha256": "21a66aebdd3cf636c9063c0384d674eb431896609cc585f7e13dc26efcf14631",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A32",
+       "T": 16,
+       "counts_sha256": "cebd8be7008c419013afb243134e777cd8d76a7c3561e84770000e55b41ab815",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T16",
+       "T": 16,
+       "counts_sha256": "1a998bee927d115085b9faadae182d528f85cf2b3821004809e5257ddc294a5e",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T16",
+       "T": 16,
+       "counts_sha256": "5486f8a19a7edb489518ccb06010e93c5c9f2836f9b346f85b6d2daf26f85752",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A8",
+       "T": 32,
+       "counts_sha256": "d2898df282d442207558c4e9fd1aabadd3e2ed6e81ba23316dceaeaeaa7360b0",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A16",
+       "T": 32,
+       "counts_sha256": "c33533667608dc1784ee1ce42b73a76433452e647452c924c44962899ac11dcc",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A24",
+       "T": 32,
+       "counts_sha256": "00e49c14622dcb4dec42c9b12f17a7f33b37feaa65476d7dd2dad8bf77c501da",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A32",
+       "T": 32,
+       "counts_sha256": "02b4b6c2ab115233d9fa4a0f8ebdf50267ebc3e0ff14e2577aa7b7733d21f349",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T32",
+       "T": 32,
+       "counts_sha256": "242ee1a9c0df90751c7707da7fac507e9e0cae84f9863bb095e9894b7399c4f2",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T32",
+       "T": 32,
+       "counts_sha256": "242ee1a9c0df90751c7707da7fac507e9e0cae84f9863bb095e9894b7399c4f2",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      },
+      {
+       "label": "L-T64-A8",
+       "T": 64,
+       "counts_sha256": "4d89d3314f8606ac050377e37ea9a4238963aa4dd45ca290b45b9399ca92c069",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A16",
+       "T": 64,
+       "counts_sha256": "90b68528e2b98eb994edfa08d61fc0291061acb54550f43f4da6d2a63f9fecef",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A24",
+       "T": 64,
+       "counts_sha256": "021f01a0ba8445e5e62112a795bdc513fb6d2939452156673e3802cad5b6dd9d",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A32",
+       "T": 64,
+       "counts_sha256": "d68e1200665b6baaa88ab1531b8a2763b4f43d9a963ca5936cd760339e0afc85",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "MIN-T64",
+       "T": 64,
+       "counts_sha256": "6ca400f771ad5b4f40a88b8a299575cccacf204e299c9acc232f9bcc2c734c73",
+       "role": "MINCOVER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T64",
+       "T": 64,
+       "counts_sha256": "33ff7c9389a2dee21453b1c8466228b78957f04fd57759213fdcfea5ff0d8f19",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A8",
+       "T": 96,
+       "counts_sha256": "c91a6ddcb59f5253b13175ab78950ba34769955e4482b3306d51ebd328b4a0a1",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A16",
+       "T": 96,
+       "counts_sha256": "64de43e0a1a4eb9b4b88796ef5d98537849de77f7732f2fbb86c2fd89963dc01",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A24",
+       "T": 96,
+       "counts_sha256": "edda21cc2d595930ed4611b13391db2629ba2d60d7607c60dc84f84f5bdc93c3",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A32",
+       "T": 96,
+       "counts_sha256": "c1e7af05fe7af78f9ae589da7cd316732225e1bdad8a6098646e69fd531fb878",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T96",
+       "T": 96,
+       "counts_sha256": "bb1234a4a7a5ff15df4e3fafa0d86fcdddfa4dcf84cdb6a6a657512f4633fdb5",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A8",
+       "T": 128,
+       "counts_sha256": "d47f66ac890bb175dc305ec59a5ad97aa555862151d7c5134b9a08c21eee612f",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A16",
+       "T": 128,
+       "counts_sha256": "1cddf961ea462a51407bbe5105c712e2a1b209155c6d625873a4441aa758556a",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A24",
+       "T": 128,
+       "counts_sha256": "29d1b2d2e53869adb597d562068b37302df5e6d880d3d637fa305325e5f83c03",
+       "role": "LADDER",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A32",
+       "T": 128,
+       "counts_sha256": "70899a26b83cee665409dd71c94bf3b6935428bdb39501da15dce50174a84bed",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T128",
+       "T": 128,
+       "counts_sha256": "a0dd44eeb61f535843ff3b37319a894b2c50110a043da2c921f49442f31ffa46",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "US-T128",
+       "T": 128,
+       "counts_sha256": "a0dd44eeb61f535843ff3b37319a894b2c50110a043da2c921f49442f31ffa46",
+       "role": "UNIFORM-UNSHUFFLED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": false
+      }
+     ]
+    },
+    "qwen2-57b-a14b-ctl.json": {
+     "path": "docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json",
+     "sha256": "5d64b061becff9ac3cfe30ca221adaff82c4d7b80f7b3e830a766aac7dfa95cb",
+     "shuffle_seed": 20261014,
+     "decl_copies": null,
+     "cells": [
+      {
+       "label": "L-T1-A8",
+       "T": 1,
+       "counts_sha256": "e0a20d7d0d71a902a09a6827475efd39e64945849c41e527b0a605ec4d7efaeb",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T1",
+       "T": 1,
+       "counts_sha256": "fd0951b1158140d8401457258a93efb71e0e99c16b365021cd6c9f3f4ba49fe1",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A16",
+       "T": 2,
+       "counts_sha256": "d6d56c9c2eb61833c00fc7b3f091937512da14cb27e4ec8e4d26a23b43b9ffe6",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A8",
+       "T": 2,
+       "counts_sha256": "6cf9ebbc9f5a6dadc37ad9dfd3486fb04961d10176eef71406ba6dd2c849894e",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T2",
+       "T": 2,
+       "counts_sha256": "9b2997d4cf6305c67711af77b0d96dc3f1f24ba4ba9032d37ab0cd5bea0de378",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A32",
+       "T": 4,
+       "counts_sha256": "6b4cc76cf4891cbba1ea291151ca5365ddefb0a67835735d63e67517dc990244",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A8",
+       "T": 4,
+       "counts_sha256": "b988701c42916be04cfdbaba24b39520355c95f26e023989051f86897bef0777",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T4",
+       "T": 4,
+       "counts_sha256": "8e83af620a436fc39e5d26f5ad64d3d21b4a93d41e57dabdc3d3bf53a1419130",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A64",
+       "T": 8,
+       "counts_sha256": "ba1e52e365a6fa132081a7bef3fe2800e0a5a907bbdcb8f183b7f1783905ea31",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A8",
+       "T": 8,
+       "counts_sha256": "78966576c2bf1d80a5e8e089e51de41d630120ac55f1fbbaac6a89f138c0e6b3",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T8",
+       "T": 8,
+       "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A64",
+       "T": 16,
+       "counts_sha256": "e87f401f581f58b11782ec39b5c53427f8ad7f15f3a0a82c367f626747d00cb0",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A8",
+       "T": 16,
+       "counts_sha256": "d0017cd684966d75f18c7ff0edb4aa77c16c805f2d47468cae1b890526ddbb04",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T16",
+       "T": 16,
+       "counts_sha256": "ac1de53d3a5551d17b3581b04c9507fa77cf306e98b4e4cfefb6b9d59ac88ed1",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A64",
+       "T": 32,
+       "counts_sha256": "6380508c114457d6de07b96413a804755262dda074b078dd362bcd5cbef4ee54",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A8",
+       "T": 32,
+       "counts_sha256": "50e50f1359839ccd2cd882f91800a3484df7a99ac699dac9fd276932775a7298",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T32",
+       "T": 32,
+       "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A64",
+       "T": 64,
+       "counts_sha256": "ae1eeef26c1a9f56fc53a03e4f8a309e9102fc22fae8746e21bab73860a78b5d",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A8",
+       "T": 64,
+       "counts_sha256": "829eea76732c8fc97e9cbd27d168aea91ea03e586c7656500aa6726e619204d1",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T64",
+       "T": 64,
+       "counts_sha256": "dab014c3ffe62b784fe4c008c7fa816d59b49ba08d9ac2a267f198955d97af49",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A64",
+       "T": 96,
+       "counts_sha256": "68f5d9290a067800723f258a586438e30119bc67603bf633270b126f4b0f40c5",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A8",
+       "T": 96,
+       "counts_sha256": "ec538cc8dd0d03ae10ad8b2f7ebd6eccff3ccaa805d9c6f5eb4f721d652b99b2",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T96",
+       "T": 96,
+       "counts_sha256": "529f72191d1e2a4f762adeeb66c16f24078b9ca2f711ba5ef16e5f9dad0031ef",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A64",
+       "T": 128,
+       "counts_sha256": "eb520d9e4e041941ec8dbf3665a8c1bc138e087f02580cb3e1385526283c9e68",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A8",
+       "T": 128,
+       "counts_sha256": "a779b623c48dc18e2bbbc4dcbeef94ad106d05ebaa2ba8623dff526d31f53af8",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T128",
+       "T": 128,
+       "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      }
+     ]
+    },
+    "granite-3.0-1b-a400m-ctl.json": {
+     "path": "docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json",
+     "sha256": "625a6b2d028c9d01add279ef758df23c97d4f8816bf066ffc6ef1cb09a4c67d6",
+     "shuffle_seed": 20261014,
+     "decl_copies": null,
+     "cells": [
+      {
+       "label": "L-T1-A8",
+       "T": 1,
+       "counts_sha256": "d97754cd50c8a40933e3852e0e75e1769362d7bbc7ea382e1a562979e110d9f8",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T1",
+       "T": 1,
+       "counts_sha256": "e63c86d1da581fc2751d89ea736d7909c43ec9eee8e134fbd8eb9bbc17809cd1",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A16",
+       "T": 2,
+       "counts_sha256": "1a709aa9de75945684d647e0de33baf515d49ceb4c84555f268c9ab23b5b1d47",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T2-A8",
+       "T": 2,
+       "counts_sha256": "405b711e5846a36ceb9c6236e7ea7b480e8024573f6def3999a6dce7502b6196",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T2",
+       "T": 2,
+       "counts_sha256": "dfb76ae3bcc0253069aa7ea4f9e4cdd9f19c3bab987ba0c88b2c8d9d948d12a4",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A32",
+       "T": 4,
+       "counts_sha256": "49f6be3b003d7c754bc87ae96c4403b4d5600e8ad0a15b16ff93629a45fd15ee",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T4-A8",
+       "T": 4,
+       "counts_sha256": "6db87848b72f8f1493439d2ba463028b789a266a07af27707e3cc0b1ec1e8ff1",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T4",
+       "T": 4,
+       "counts_sha256": "92a26ba1c3444268229deccf71920618c523f59d6093dc70021657608479d157",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A32",
+       "T": 8,
+       "counts_sha256": "3fbf504da6dfca961e26cd5bea46eab340aecc3c0c449c56f68eaf0a531652f8",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T8-A8",
+       "T": 8,
+       "counts_sha256": "07b8bdfb2e1b142f43e064580b0372bedef4452b004bca755ecba05de29d2a97",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T8",
+       "T": 8,
+       "counts_sha256": "a0e83650146cfd3ac31822eb76bff0389c362a72a7e60db05aef90d8bb6151f6",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A32",
+       "T": 16,
+       "counts_sha256": "cebd8be7008c419013afb243134e777cd8d76a7c3561e84770000e55b41ab815",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T16-A8",
+       "T": 16,
+       "counts_sha256": "093d767f7a8f38d8fc06d4584e0cb3c60d80343f572fe87df69c728de47418fe",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T16",
+       "T": 16,
+       "counts_sha256": "5486f8a19a7edb489518ccb06010e93c5c9f2836f9b346f85b6d2daf26f85752",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A32",
+       "T": 32,
+       "counts_sha256": "02b4b6c2ab115233d9fa4a0f8ebdf50267ebc3e0ff14e2577aa7b7733d21f349",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T32-A8",
+       "T": 32,
+       "counts_sha256": "d2898df282d442207558c4e9fd1aabadd3e2ed6e81ba23316dceaeaeaa7360b0",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T32",
+       "T": 32,
+       "counts_sha256": "242ee1a9c0df90751c7707da7fac507e9e0cae84f9863bb095e9894b7399c4f2",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A32",
+       "T": 64,
+       "counts_sha256": "d68e1200665b6baaa88ab1531b8a2763b4f43d9a963ca5936cd760339e0afc85",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T64-A8",
+       "T": 64,
+       "counts_sha256": "4d89d3314f8606ac050377e37ea9a4238963aa4dd45ca290b45b9399ca92c069",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T64",
+       "T": 64,
+       "counts_sha256": "33ff7c9389a2dee21453b1c8466228b78957f04fd57759213fdcfea5ff0d8f19",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A32",
+       "T": 96,
+       "counts_sha256": "c1e7af05fe7af78f9ae589da7cd316732225e1bdad8a6098646e69fd531fb878",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T96-A8",
+       "T": 96,
+       "counts_sha256": "c91a6ddcb59f5253b13175ab78950ba34769955e4482b3306d51ebd328b4a0a1",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T96",
+       "T": 96,
+       "counts_sha256": "bb1234a4a7a5ff15df4e3fafa0d86fcdddfa4dcf84cdb6a6a657512f4633fdb5",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A32",
+       "T": 128,
+       "counts_sha256": "70899a26b83cee665409dd71c94bf3b6935428bdb39501da15dce50174a84bed",
+       "role": "BALANCED",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "L-T128-A8",
+       "T": 128,
+       "counts_sha256": "d47f66ac890bb175dc305ec59a5ad97aa555862151d7c5134b9a08c21eee612f",
+       "role": "LADDER-BOTTOM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      },
+      {
+       "label": "U-T128",
+       "T": 128,
+       "counts_sha256": "a0dd44eeb61f535843ff3b37319a894b2c50110a043da2c921f49442f31ffa46",
+       "role": "UNIFORM",
+       "arms": [
+        "native"
+       ],
+       "shuffle": true
+      }
+     ]
+    }
+   }
+  },
+  "plan_units": [
+   "- prelude est=3 cap=15",
+   "mixtral-8x7b calibrate label=dcal nodrop=1 est=2 cap=30",
+   "mixtral-8x22b r3decode label=dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=15 cap=45",
+   "qwen2-57b-a14b r3decode label=dm histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=16 cap=48",
+   "granite-3.0-1b-a400m r3decode label=dm histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=16 cap=48",
+   "qwen2-57b-a14b r3decode label=dc histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3 drop-group=gr1 est=10 cap=30",
+   "granite-3.0-1b-a400m r3decode label=dc histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3 drop-group=gr1 est=10 cap=30"
+  ],
+  "descriptive": "addendum 2's second-tile cells (an expert past BLOCK_M rows) are DESCRIPTIVE, out of E1-DEC, read as SIGMA-D; their list is the predictions' descriptive_cells",
+  "source": "docs/registered/2026-11-10-decode-addendum6-gh200.json, block 'blind (owner, 2026-11-04, D4-1; addendum 5's pages and units, registered again in addendum 6)' (addendum 5's, unchanged)"
+ },
+ "bars": {
+  "rms_max": 0.03,
+  "max_abs": 0.08,
+  "mean_max": 0.015,
+  "source": "the bars registered for these cells, verbatim: docs/registered/2026-11-04-decode-addendum5-gh200.txt line 9 'new blind bars (owner, D4-1): rms 3% per model, worst cell 8%, |mean| 1.5%' and line 103 'bars: the owner's (D4-1): rms 3%, worst 8%, |mean| 1.5%, per model and pooled, not tightened'; carried unchanged by docs/registered/2026-11-10-decode-addendum6-gh200.txt line 159 'bars: the owner's (D4-1): rms 3%, worst 8%, |mean| 1.5%, per model and pooled, not tightened' (d5common.BARS_OWNER)"
+ },
+ "statistic": "e_dec = (T_v7 - T_meas) / T_meas per valid NATIVE main cell, 0 at or under 1 us absolute (dcommon.e_dec)",
+ "certification": "addenda 5 and 6 set the bars and inherit the rule: addendum 6 line 158 'rules (frozen otherwise): addendum 5's: the power check first; E1-DEC pooled and per model without the second-tile DESCRIPTIVE cells; GD2 voids a model's GRR page; G3-D shuffle voids; G3-D label DESCRIPTIVE; SIGMA-D and the knee rows DESCRIPTIVE; the rivals by rental 7's rule; the scope line d3common.SCOPE'; addendum 5 line 102 'rules (frozen otherwise): decodeB-blind's and addenda 2 and 3's'; the certification itself is docs/registered/2026-10-14-decodeB-blind-gh200.txt's rule line: 'a model is CERTIFIED when its own bar and the pooled bar hold' (score_blind.score)",
+ "scope line": "Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.",
+ "model v7 (frozen)": {
+  "module": "scripts/r3_timing_model_v7.py",
+  "as frozen by": "the v7 gate registration 2026-11-17-v7-gate-gh200 (its freeze: 148 files and constants_sha256 97d4445c3f5f236dc4bd09cf248c0b28ebf702eeb596c07c276f9542fa9c87a6); this registration holds that freeze and adds its own files (freeze, below)",
+  "switches": {
+   "RR": true,
+   "D6FIX": true
+  },
+  "decode branch": "v6d's law at its registered terms; D6FIX re-prices a naive cell v6d prices by v4d''s naive GEMMs at the CAL2 fit v4d' selects with v4d' on every naive cell",
+  "CAL2 refit under v7 (COMPUTED; gate_v7.compute_decode's fit, the same code path)": {
+   "verdict": "GO",
+   "E1_CAL_IN_SAMPLE": {
+    "cells": 91,
+    "rms": 0.016032,
+    "worst": -0.053955,
+    "mean": -0.001724
+   },
+   "rho": "fixed",
+   "constants": {
+    "T0_GR_ms": -0.001867147154960224,
+    "s_naive_GR_ms": -0.0021375435249685803,
+    "s_block_GR_ms": -0.0007223242955973449
+   }
+  },
+  "D6FIX constants (COMPUTED)": {
+   "rho_form": "scaled",
+   "T0_GR_ms": -0.001867147154960224,
+   "s_naive_GR_ms": 0.009550916583607093,
+   "s_block_GR_ms": -0.0007223242955973451
+  }
+ },
+ "predictions": {
+  "label": "COMPUTED by v7 before any page of the three models (finalise_decode.frozen and .predict at the CAL2 refit under v7, d5common.blind5's pages); the scorer reads them from this file",
+  "not_priced": 0,
+  "descriptive_cells": [
+   "granite-3.0-1b-a400m/L-T128-A8",
+   "granite-3.0-1b-a400m/L-T32-A8",
+   "granite-3.0-1b-a400m/L-T64-A8",
+   "granite-3.0-1b-a400m/L-T96-A16",
+   "granite-3.0-1b-a400m/L-T96-A8",
+   "granite-3.0-1b-a400m/MIN-T64",
+   "granite-3.0-1b-a400m/U-T96",
+   "mixtral-8x22b/L-T128-A2",
+   "mixtral-8x22b/L-T32-A2",
+   "mixtral-8x22b/L-T64-A2",
+   "mixtral-8x22b/L-T96-A2",
+   "mixtral-8x22b/L-T96-A4",
+   "mixtral-8x22b/MIN-T64",
+   "qwen2-57b-a14b/L-T128-A8",
+   "qwen2-57b-a14b/L-T32-A8",
+   "qwen2-57b-a14b/L-T64-A8",
+   "qwen2-57b-a14b/L-T96-A8",
+   "qwen2-57b-a14b/MIN-T64"
+  ],
+  "D6FIX rung (DESCRIPTIVE)": {
+   "cells moved by D6FIX": [],
+   "reading": "0 of 143 cells move: every naive main cell of the three models takes the law branch (addendum 6: 2, 7 and 2), so v7's blind prices equal v6d's at this CAL2 fit"
+  },
+  "keys": "ms['v4d'] holds v7's time (the frozen scorers read that key); every rival priced by v7 with the rival's own change (rho other, NAIVE-NODEDUP, eager), roofline, line and OLS as frozen",
+  "frozen": {
+   "rho_form": "fixed",
+   "constants": {
+    "T0_GR_ms": -0.001867147154960224,
+    "s_naive_GR_ms": -0.0021375435249685803,
+    "s_block_GR_ms": -0.0007223242955973449
+   },
+   "tile_params": {
+    "c128": 691.6475590359868,
+    "F_wg": {
+     "w1": 2898.052707811491,
+     "w2": 3346.3006086105324
+    },
+    "variant": "W",
+    "f_form": "F-step",
+    "eta_rival": false,
+    "v4cal": {},
+    "occupancy": {
+     "64x128x64w8s3": {
+      "w1": 3,
+      "w2": 3
+     },
+     "16x64x128w4s4": {
+      "w1": 3,
+      "w2": 3
+     },
+     "32x64x128w4s3": {
+      "w1": 4,
+      "w2": 4
+     },
+     "32x128x64w4s3": {
+      "w1": 4,
+      "w2": 4
+     },
+     "128x128x64w8s3": {
+      "w1": 2,
+      "w2": 2
+     },
+     "64x128x64w4s3": {
+      "w1": 3,
+      "w2": 3
+     }
+    },
+    "counts": {
+     "128x128x64w8s3": {
+      "path": "wgmma",
+      "wgmma": 4,
+      "instruction": "m64n128k16",
+      "dtype": "bf16",
+      "cp_async_cg": 8,
+      "cp_async_bytes_per_thread": 128,
+      "bar_sync": 2,
+      "fence_proxy_async": 1,
+      "wgmma_wait_group": 1,
+      "cp_async_wait_group": 1,
+      "threads": 256,
+      "per_warpgroup": 4,
+      "warpgroups": 2
+     },
+     "64x128x64w8s3": {
+      "path": "wgmma",
+      "wgmma": 4,
+      "instruction": "m64n64k16",
+      "dtype": "bf16",
+      "cp_async_cg": 6,
+      "cp_async_bytes_per_thread": 96,
+      "bar_sync": 2,
+      "fence_proxy_async": 1,
+      "wgmma_wait_group": 1,
+      "cp_async_wait_group": 1,
+      "threads": 256,
+      "per_warpgroup": 4,
+      "warpgroups": 2
+     },
+     "64x128x64w4s3": {
+      "path": "wgmma",
+      "wgmma": 4,
+      "instruction": "m64n128k16",
+      "dtype": "bf16",
+      "cp_async_cg": 12,
+      "cp_async_bytes_per_thread": 192,
+      "bar_sync": 2,
+      "fence_proxy_async": 1,
+      "wgmma_wait_group": 1,
+      "cp_async_wait_group": 1,
+      "threads": 128,
+      "per_warpgroup": 4,
+      "warpgroups": 1
+     },
+     "32x128x64w4s3": {
+      "path": "mma.sync",
+      "mma_sync": 32,
+      "ldmatrix": 16,
+      "cp_async_cg": 10,
+      "ldmatrix_bytes_per_thread": 256,
+      "cp_async_bytes_per_thread": 160,
+      "threads": 128,
+      "wavefronts": 296.0
+     },
+     "16x64x128w4s4": {
+      "path": "mma.sync",
+      "mma_sync": 16,
+      "ldmatrix": 16,
+      "cp_async_cg": 10,
+      "ldmatrix_bytes_per_thread": 256,
+      "cp_async_bytes_per_thread": 160,
+      "threads": 128,
+      "wavefronts": 296.0
+     },
+     "32x64x128w4s3": {
+      "path": "mma.sync",
+      "mma_sync": 32,
+      "ldmatrix": 24,
+      "cp_async_cg": 12,
+      "ldmatrix_bytes_per_thread": 384,
+      "cp_async_bytes_per_thread": 192,
+      "threads": 128,
+      "wavefronts": 432.0
+     }
+    },
+    "law": "v4"
+   },
+   "bars": {
+    "rms_max": 0.03,
+    "max_abs": 0.08,
+    "mean_max": 0.015,
+    "source": "owner 2026-11-04 (addendum 4, D4-1): the CAL bars (3% rms per model, 8% worst cell, 1.5% |mean|), registered before any page of the new models"
+   },
+   "sigma_page": 0.001586,
+   "gd2_band_us": [
+    -0.135994,
+    7.093979
+   ],
+   "g3d_margin_rule": "max(0.3 us, 0.36% x the median reference time)",
+   "rival_fits": {
+    "line": {
+     "verdict": "FITTED",
+     "a_ms": 0.38478405896481427,
+     "b_ms_per_row": -0.0001511733081822436,
+     "cells": 91
+    },
+    "OLS": {
+     "verdict": "FITTED",
+     "cells": 91,
+     "mu": [
+      0.33548039065567503,
+      5.592629592629591,
+      6.188374932931303,
+      0.0989010989010989,
+      0.054945054945054944
+     ],
+     "sd": [
+      0.2714916077504423,
+      2.99003888237061,
+      2.5992223627371955,
+      0.2985291803781565,
+      0.2278729819047004
+     ],
+     "beta": [
+      0.26897433584168406,
+      -0.0065635627445549604,
+      0.0015149987425713497,
+      -0.002687009746008765,
+      0.0011360692220239216
+     ],
+     "a": 0.357413383958104
+    }
+   },
+   "model": {
+    "name": "v7",
+    "module": "scripts/r3_timing_model_v7.py",
+    "switches": {
+     "RR": true,
+     "D6FIX": true
+    },
+    "regime": "decode (v6d's law, D6FIX)",
+    "fixes": {
+     "naive_order": true,
+     "w1_rate": true
+    },
+    "terms": {
+     "regime": {
+      "16x64x128w4s4": {
+       "r_cta_GBps": null,
+       "r1_GBps": null
+      },
+      "32x128x64w4s3": {
+       "r_cta_GBps": null,
+       "r1_GBps": null
+      },
+      "32x64x128w4s3": {
+       "r_cta_GBps": null,
+       "r1_GBps": null
+      },
+      "64x128x64w4s3": {
+       "r_cta_GBps": null,
+       "r1_GBps": null
+      }
+     },
+     "w1_scale": {},
+     "call": {
+      "moe_sum": {
+       "1": 2.1497386175586426,
+       "B_MB": 0.25927191600047833,
+       "k": 0.21602125073500222
+      },
+      "silu_and_mul": {
+       "1": 3.7790369482658464,
+       "B_MB": 0.2728802288749376
+      }
+     },
+     "align_us": {
+      "small-batch": [
+       [
+        8,
+        4.752
+       ],
+       [
+        16,
+        5.552
+       ],
+       [
+        32,
+        7.264
+       ],
+       [
+        40,
+        7.776
+       ],
+       [
+        60,
+        9.184
+       ],
+       [
+        64,
+        11.632
+       ]
+      ],
+      "block-scan": [
+       [
+        40,
+        8.704
+       ],
+       [
+        64,
+        8.128
+       ]
+      ]
+     },
+     "slope_us_per_iteration": 0.526921
+    },
+    "law": {
+     "C0": {
+      "16x64x128w4s4": [
+       [
+        8,
+        2.7208310295312446
+       ],
+       [
+        128,
+        4.704722441735574
+       ]
+      ],
+      "32x64x128w4s3": [
+       [
+        8,
+        2.4001601638571275
+       ],
+       [
+        128,
+        4.704722441735574
+       ]
+      ],
+      "32x128x64w4s3": [
+       [
+        8,
+        2.4001601638571275
+       ],
+       [
+        128,
+        4.704722441735574
+       ]
+      ],
+      "64x128x64w4s3": [
+       [
+        8,
+        2.4001601638571275
+       ],
+       [
+        128,
+        4.704722441735574
+       ]
+      ]
+     },
+     "L_TABLE": [
+      [
+       127969.59523710413,
+       255779.53524837442,
+       510664.08469548373,
+       1019059.4487052565,
+       2030052.499304114,
+       4054203.3963742144,
+       5082196.801023465,
+       6077169.889670409,
+       8193944.004619163,
+       9239649.659211524,
+       12106409.408297844
+      ],
+      [
+       0.8839557771282307,
+       0.8947048094385878,
+       0.9435207824643678,
+       0.9733047165459909,
+       1.0384092160845613,
+       1.381130963833698,
+       1.5873115111097962,
+       1.8233470888617949,
+       2.286611264327609,
+       2.579574761930008,
+       3.526293668752152
+      ]
+     ],
+     "X_SAT": {
+      "64x128x64w4s3": 3612.4196138187617,
+      "16x64x128w4s4": 3781.891121411795,
+      "32x64x128w4s3": 3703.847713349612,
+      "32x128x64w4s3": 3694.3528528800434
+     },
+     "KAPPA": {
+      "64x128x64w4s3": [
+       [
+        0.010101010101010102,
+        1.0
+       ],
+       [
+        0.02018367696333798,
+        1.0024213075060533
+       ],
+       [
+        0.04030489654046236,
+        1.0092165898617511
+       ],
+       [
+        0.0805934060967618,
+        1.0111358574610243
+       ],
+       [
+        0.1611153286518631,
+        1.0210084033613445
+       ],
+       [
+        0.3219179173437849,
+        1.0646687697160884
+       ],
+       [
+        0.402022201092449,
+        1.0537190082644627
+       ],
+       [
+        0.4791241524427666,
+        1.0650602409638557
+       ],
+       [
+        0.6430633065573189,
+        1.0398445092322643
+       ],
+       [
+        0.7236450241699585,
+        1.0461672473867596
+       ],
+       [
+        0.9440894244392145,
+        1.0319284802043422
+       ]
+      ],
+      "16x64x128w4s4": [
+       [
+        0.010101010101010102,
+        1.0
+       ],
+       [
+        0.02018367696333798,
+        1.0024213075060533
+       ],
+       [
+        0.04030489654046236,
+        1.0092165898617511
+       ],
+       [
+        0.0805934060967618,
+        1.0111358574610243
+       ],
+       [
+        0.1611153286518631,
+        1.0210084033613445
+       ],
+       [
+        0.3219179173437849,
+        1.0646687697160884
+       ],
+       [
+        0.402022201092449,
+        1.0537190082644627
+       ],
+       [
+        0.4791241524427666,
+        1.0650602409638557
+       ],
+       [
+        0.6430633065573189,
+        1.0398445092322643
+       ],
+       [
+        0.7236450241699585,
+        1.0461672473867596
+       ],
+       [
+        0.9440894244392145,
+        1.0319284802043422
+       ]
+      ],
+      "32x64x128w4s3": [
+       [
+        0.010101010101010102,
+        1.0
+       ],
+       [
+        0.02018367696333798,
+        1.0024213075060533
+       ],
+       [
+        0.04030489654046236,
+        1.0092165898617511
+       ],
+       [
+        0.0805934060967618,
+        1.0111358574610243
+       ],
+       [
+        0.1611153286518631,
+        1.0210084033613445
+       ],
+       [
+        0.3219179173437849,
+        1.0646687697160884
+       ],
+       [
+        0.402022201092449,
+        1.0537190082644627
+       ],
+       [
+        0.4791241524427666,
+        1.0650602409638557
+       ],
+       [
+        0.4967664957768306,
+        1.079293049916408
+       ],
+       [
+        0.7399951323128958,
+        1.1003499633759257
+       ],
+       [
+        0.8429986461454643,
+        1.0936806698633077
+       ],
+       [
+        0.9710788638131717,
+        1.0257858546168959
+       ]
+      ],
+      "32x128x64w4s3": [
+       [
+        0.010101010101010102,
+        1.0
+       ],
+       [
+        0.02018367696333798,
+        1.0024213075060533
+       ],
+       [
+        0.04030489654046236,
+        1.0092165898617511
+       ],
+       [
+        0.0805934060967618,
+        1.0111358574610243
+       ],
+       [
+        0.1611153286518631,
+        1.0210084033613445
+       ],
+       [
+        0.3219179173437849,
+        1.0646687697160884
+       ],
+       [
+        0.3707799133913973,
+        1.0771679805942995
+       ],
+       [
+        0.49723462513452776,
+        1.0384155098133079
+       ],
+       [
+        0.7343658836104111,
+        1.1048973524567112
+       ],
+       [
+        0.9624030643312559,
+        1.0193166691317852
+       ]
+      ]
+     },
+     "N_IF": {
+      "64x128x64w4s3": 2,
+      "16x64x128w4s4": 3,
+      "32x128x64w4s3": 2,
+      "32x64x128w4s3": 2
+     }
+    },
+    "D6FIX": {
+     "rho_form": "scaled",
+     "T0_GR_ms": -0.001867147154960224,
+     "s_naive_GR_ms": 0.009550916583607093,
+     "s_block_GR_ms": -0.0007223242955973451
+    },
+    "constants_sha256": "97d4445c3f5f236dc4bd09cf248c0b28ebf702eeb596c07c276f9542fa9c87a6"
+   },
+   "g3d_label": "DESCRIPTIVE (addendum 3, owner 2026-11-03; kept by addenda 5 and 6): computed as registered and reported per model; never voids a model's certification. G3-D shuffle voids as registered"
+  },
+  "cells": [
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T1-A2",
+    "T": 1,
+    "role": "BALANCED",
+    "counts_sha256": "36ab315e00463a5ef1b7c4aea033f156881e6a1c08727d06399cfd3416fbe242",
+    "ms": {
+     "v4d": 0.3450370670360543,
+     "rho other": 0.3450370670360543,
+     "NAIVE-NODEDUP": 0.3450370670360543,
+     "eager": 0.4052589427111647,
+     "roofline": 0.333882273485202,
+     "line": 0.3844817123484498,
+     "OLS": 0.3512243389633961
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T1",
+    "T": 1,
+    "role": "UNIFORM",
+    "counts_sha256": "8b538013fc2e24005fcd5ca673f013e611ba9dadb6ebccd1715cdf4116fe104f",
+    "ms": {
+     "v4d": 0.3450370670360543,
+     "rho other": 0.3450370670360543,
+     "NAIVE-NODEDUP": 0.3450370670360543,
+     "eager": 0.4052589427111647,
+     "roofline": 0.333882273485202,
+     "line": 0.3844817123484498,
+     "OLS": 0.3512243389633961
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T2-A2",
+    "T": 2,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "41e6eddbc39078e17135931b7e829829ea5206c016c1b91b6719e783873b1fba",
+    "ms": {
+     "v4d": 0.351989818796973,
+     "rho other": 0.351989818796973,
+     "NAIVE-NODEDUP": 0.351989818796973,
+     "eager": 0.4100741509471148,
+     "roofline": 0.333882273485202,
+     "line": 0.3841793657320853,
+     "OLS": 0.364365931910512
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T2-A3",
+    "T": 2,
+    "role": "LADDER",
+    "counts_sha256": "8318bbca042ba977938d901c605eae42da4c9b3fb6ddaab733a2ca2473e6ff91",
+    "ms": {
+     "v4d": 0.5110078329257371,
+     "rho other": 0.5110078329257371,
+     "NAIVE-NODEDUP": 0.5110078329257371,
+     "eager": 0.5690921650758789,
+     "roofline": 0.5017569838052832,
+     "line": 0.3841793657320853,
+     "OLS": 0.5269102530862969
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 3,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T2-A4",
+    "T": 2,
+    "role": "BALANCED",
+    "counts_sha256": "b8fa4fa28b07b20c2e6cb1feb32275bb07e225e3e7c632253ccdaddb54e8f05c",
+    "ms": {
+     "v4d": 0.6720513812043919,
+     "rho other": 0.6720513812043919,
+     "NAIVE-NODEDUP": 0.6720513812043919,
+     "eager": 0.7301357133545336,
+     "roofline": 0.6696316941253643,
+     "line": 0.3841793657320853,
+     "OLS": 0.6861208756979826
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T2",
+    "T": 2,
+    "role": "UNIFORM",
+    "counts_sha256": "0367fc81edfd90be4d890b22821c91b92870006be93a221d487f941e0649128d",
+    "ms": {
+     "v4d": 0.5110078329257371,
+     "rho other": 0.5110078329257371,
+     "NAIVE-NODEDUP": 0.5110078329257371,
+     "eager": 0.5690921650758789,
+     "roofline": 0.5017569838052832,
+     "line": 0.3841793657320853,
+     "OLS": 0.5269102530862969
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 3,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T4-A2",
+    "T": 4,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "03768fbd70e26bfa410d54da5648231c96b6b07575d0c0350d12b92b0051749d",
+    "ms": {
+     "v4d": 0.3521162352688732,
+     "rho other": 0.3521162352688732,
+     "NAIVE-NODEDUP": 0.3521162352688732,
+     "eager": 0.410200567419015,
+     "roofline": 0.333882273485202,
+     "line": 0.38357467249935634,
+     "OLS": 0.3650059564514811
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T4-A4",
+    "T": 4,
+    "role": "LADDER",
+    "counts_sha256": "b38fda26cc1c6e74a86a5e4b10a422a302ca8bdb192157fe0328092d05583caa",
+    "ms": {
+     "v4d": 0.6721777976762919,
+     "rho other": 0.6721777976762919,
+     "NAIVE-NODEDUP": 0.6721777976762919,
+     "eager": 0.7302621298264337,
+     "roofline": 0.6696316941253643,
+     "line": 0.38357467249935634,
+     "OLS": 0.6906654133584147
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T4-A6",
+    "T": 4,
+    "role": "LADDER",
+    "counts_sha256": "4e9bd09202df422a2bb5e0d0ab4cb704ed3b7753bd250f899b0139e35d59e956",
+    "ms": {
+     "v4d": 0.9973268050775006,
+     "rho other": 0.9973268050775006,
+     "NAIVE-NODEDUP": 0.9973268050775006,
+     "eager": 1.0554111372276422,
+     "roofline": 1.0053811147655265,
+     "line": 0.38357467249935634,
+     "OLS": 1.0161573497786816
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 6,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T4-A8",
+    "T": 4,
+    "role": "BALANCED",
+    "counts_sha256": "3c1425b38d52d1967a20a1ce4abe58b11af7d5260e368e378cbbc12574a967e8",
+    "ms": {
+     "v4d": 1.3153103342695631,
+     "rho other": 1.3153103342695631,
+     "NAIVE-NODEDUP": 1.3153103342695631,
+     "eager": 1.373394666419705,
+     "roofline": 1.3411305354056886,
+     "line": 0.38357467249935634,
+     "OLS": 1.3379122935661523
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "MIN-T4",
+    "T": 4,
+    "role": "MINCOVER",
+    "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+    "ms": {
+     "v4d": 0.3521162352688732,
+     "rho other": 0.3521162352688732,
+     "NAIVE-NODEDUP": 0.3521162352688732,
+     "eager": 0.410200567419015,
+     "roofline": 0.333882273485202,
+     "line": 0.38357467249935634,
+     "OLS": 0.3650059564514811
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T4",
+    "T": 4,
+    "role": "UNIFORM",
+    "counts_sha256": "c65458dddd927fd7d6f41524a4b94775ae969a92340776b61146c71d018f9981",
+    "ms": {
+     "v4d": 0.9973268050775005,
+     "rho other": 0.9973268050775005,
+     "NAIVE-NODEDUP": 0.9973268050775005,
+     "eager": 1.0554111372276422,
+     "roofline": 1.0053811147655265,
+     "line": 0.38357467249935634,
+     "OLS": 1.0161573497786816
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 6,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T8-A2",
+    "T": 8,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "c223dd0555514e9292abc5d5af69105b47f68844c8ead9d53f5f5be89493358d",
+    "ms": {
+     "v4d": 0.3523690682126735,
+     "rho other": 0.3523690682126735,
+     "NAIVE-NODEDUP": 0.3523690682126735,
+     "eager": 0.4104534003628153,
+     "roofline": 0.333882273485202,
+     "line": 0.38236528603389836,
+     "OLS": 0.365095782845941
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T8-A4",
+    "T": 8,
+    "role": "LADDER",
+    "counts_sha256": "aa8817a914afc190e6c142636620e1d87579460fdba12a1d4919362cce5a4625",
+    "ms": {
+     "v4d": 0.6724306306200922,
+     "rho other": 0.6724306306200922,
+     "NAIVE-NODEDUP": 0.6724306306200922,
+     "eager": 0.730514962770234,
+     "roofline": 0.6696316941253643,
+     "line": 0.38236528603389836,
+     "OLS": 0.6907954282666715
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T8-A6",
+    "T": 8,
+    "role": "LADDER",
+    "counts_sha256": "fc6c710eba279286b8545509fdd0543777d8399ac69958234c3860150dd0427f",
+    "ms": {
+     "v4d": 0.997579638021301,
+     "rho other": 0.997579638021301,
+     "NAIVE-NODEDUP": 0.997579638021301,
+     "eager": 1.0556639701714428,
+     "roofline": 1.0053811147655265,
+     "line": 0.38236528603389836,
+     "OLS": 1.0163935219994351
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 6,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T8-A8",
+    "T": 8,
+    "role": "BALANCED",
+    "counts_sha256": "7d179ef22f20b3110950a8b8133fab4552fe8ffc4c97531fe8592b0ec0b0899b",
+    "ms": {
+     "v4d": 1.3155631672133634,
+     "rho other": 1.3155631672133634,
+     "NAIVE-NODEDUP": 1.3155631672133634,
+     "eager": 1.3736474993635053,
+     "roofline": 1.3411305354056886,
+     "line": 0.38236528603389836,
+     "OLS": 1.3416495254215086
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T8",
+    "T": 8,
+    "role": "UNIFORM",
+    "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+    "ms": {
+     "v4d": 1.3155631672133634,
+     "rho other": 1.3155631672133634,
+     "NAIVE-NODEDUP": 1.3155631672133634,
+     "eager": 1.3736474993635053,
+     "roofline": 1.3411305354056886,
+     "line": 0.38236528603389836,
+     "OLS": 1.3416495254215086
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "US-T8",
+    "T": 8,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+    "ms": {
+     "v4d": 1.3155631672133634,
+     "rho other": 1.3155631672133634,
+     "NAIVE-NODEDUP": 1.3155631672133634,
+     "eager": 1.3736474993635053,
+     "roofline": 1.3411305354056886,
+     "line": 0.38236528603389836,
+     "OLS": 1.3416495254215086
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T16-A2",
+    "T": 16,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "2da27d04377a66e8fbad8be2041f30f38973f69615f44fffe3a11b40119cee8a",
+    "ms": {
+     "v4d": 0.3528747341002741,
+     "rho other": 0.3528747341002741,
+     "NAIVE-NODEDUP": 0.3528747341002741,
+     "eager": 0.4109590662504159,
+     "roofline": 0.333882273485202,
+     "line": 0.3799465131029825,
+     "OLS": 0.3651735966600456
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T16-A4",
+    "T": 16,
+    "role": "LADDER",
+    "counts_sha256": "fe06d435fe1514837ae6ec308877f357bee16a40d2b065014966ea4e74ad6a3e",
+    "ms": {
+     "v4d": 0.6729362965076929,
+     "rho other": 0.6729362965076929,
+     "NAIVE-NODEDUP": 0.6729362965076929,
+     "eager": 0.7310206286578347,
+     "roofline": 0.6696316941253643,
+     "line": 0.3799465131029825,
+     "OLS": 0.6909016653855657
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T16-A6",
+    "T": 16,
+    "role": "LADDER",
+    "counts_sha256": "c54dc19cd1bdf85b0a89abb91946529d7ec73a60f38932e151d06bae7ee4cb25",
+    "ms": {
+     "v4d": 0.9980853039089016,
+     "rho other": 0.9980853039089016,
+     "NAIVE-NODEDUP": 0.9980853039089016,
+     "eager": 1.0561696360590433,
+     "roofline": 1.0053811147655265,
+     "line": 0.3799465131029825,
+     "OLS": 1.0165611222924995
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 6,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T16-A8",
+    "T": 16,
+    "role": "BALANCED",
+    "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+    "ms": {
+     "v4d": 1.3160688331009642,
+     "rho other": 1.3160688331009642,
+     "NAIVE-NODEDUP": 1.3160688331009642,
+     "eager": 1.374153165251106,
+     "roofline": 1.3411305354056886,
+     "line": 0.3799465131029825,
+     "OLS": 1.3420530587127661
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "MIN-T16",
+    "T": 16,
+    "role": "MINCOVER",
+    "counts_sha256": "87ae52f91d993510d3ba97ab61e9ea63966d44e9838111859f3a10a427006aae",
+    "ms": {
+     "v4d": 0.3528747341002741,
+     "rho other": 0.3528747341002741,
+     "NAIVE-NODEDUP": 0.3528747341002741,
+     "eager": 0.4109590662504159,
+     "roofline": 0.333882273485202,
+     "line": 0.3799465131029825,
+     "OLS": 0.3651735966600456
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T16",
+    "T": 16,
+    "role": "UNIFORM",
+    "counts_sha256": "29114c9dea0f015473848d7256703399990709813ec6f640dd1fad2fa209c5fa",
+    "ms": {
+     "v4d": 1.3160688331009645,
+     "rho other": 1.3160688331009645,
+     "NAIVE-NODEDUP": 1.3160688331009645,
+     "eager": 1.3741531652511063,
+     "roofline": 1.3411305354056886,
+     "line": 0.3799465131029825,
+     "OLS": 1.3420530587127661
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T32-A2",
+    "T": 32,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "5f03e82ce2462b10190d6e12cc8af094a8f114cf723f1c95cfb997ad547d0480",
+    "ms": {
+     "v4d": 0.6744745492828943,
+     "rho other": 0.6744745492828943,
+     "NAIVE-NODEDUP": 0.6744745492828943,
+     "eager": 0.732558881433036,
+     "roofline": 0.333882273485202,
+     "line": 0.37510896724115067,
+     "OLS": 0.35843295571133826
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T32-A4",
+    "T": 32,
+    "role": "LADDER",
+    "counts_sha256": "8cbd50b9547921c85bcb9c8156f2c84f364e530faec78de51c4ec1b646120e0f",
+    "ms": {
+     "v4d": 0.6744745492828943,
+     "rho other": 0.6744745492828943,
+     "NAIVE-NODEDUP": 0.6744745492828943,
+     "eager": 0.732558881433036,
+     "roofline": 0.6696316941253643,
+     "line": 0.37510896724115067,
+     "OLS": 0.6910693055941303
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T32-A6",
+    "T": 32,
+    "role": "LADDER",
+    "counts_sha256": "f01e249aba0bed03a5d87d501dc13e057c13bf787c5d7127de6830123d7a1933",
+    "ms": {
+     "v4d": 0.9996235566841031,
+     "rho other": 0.9996235566841031,
+     "NAIVE-NODEDUP": 0.9996235566841031,
+     "eager": 1.0577078888342448,
+     "roofline": 1.0053811147655265,
+     "line": 0.37510896724115067,
+     "OLS": 1.0167973743196506
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 6,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T32-A8",
+    "T": 32,
+    "role": "BALANCED",
+    "counts_sha256": "355d07fa606531f96bb17ecb89e9e60344810958b45fe43a61e659bed52a4a21",
+    "ms": {
+     "v4d": 1.3176070858761655,
+     "rho other": 1.3176070858761655,
+     "NAIVE-NODEDUP": 1.3176070858761655,
+     "eager": 1.3756914180263073,
+     "roofline": 1.3411305354056886,
+     "line": 0.37510896724115067,
+     "OLS": 1.342456831226584
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T32",
+    "T": 32,
+    "role": "UNIFORM",
+    "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+    "ms": {
+     "v4d": 1.3176070858761657,
+     "rho other": 1.3176070858761657,
+     "NAIVE-NODEDUP": 1.3176070858761657,
+     "eager": 1.3756914180263076,
+     "roofline": 1.3411305354056886,
+     "line": 0.37510896724115067,
+     "OLS": 1.342456831226584
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "US-T32",
+    "T": 32,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+    "ms": {
+     "v4d": 1.3176070858761657,
+     "rho other": 1.3176070858761657,
+     "NAIVE-NODEDUP": 1.3176070858761657,
+     "eager": 1.3756914180263076,
+     "roofline": 1.3411305354056886,
+     "line": 0.37510896724115067,
+     "OLS": 1.342456831226584
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T64-A2",
+    "T": 64,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "041cec87a6a74a40107490f5ca47b5b0f083a2313fa6f813475c76a1e457b08a",
+    "ms": {
+     "v4d": 0.7184021479080689,
+     "rho other": 0.7184021479080689,
+     "NAIVE-NODEDUP": 0.7184021479080689,
+     "eager": 0.7764864800582106,
+     "roofline": 0.333882273485202,
+     "line": 0.3654338755174871,
+     "OLS": 0.3618032761856919
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T64-A4",
+    "T": 64,
+    "role": "LADDER",
+    "counts_sha256": "08e818be3b1c2710ed04c62c4de1e67c1805ddaf46a70cea79b07637e35e4f12",
+    "ms": {
+     "v4d": 0.7184021479080689,
+     "rho other": 0.7184021479080689,
+     "NAIVE-NODEDUP": 0.7184021479080689,
+     "eager": 0.7764864800582106,
+     "roofline": 0.6696316941253643,
+     "line": 0.3654338755174871,
+     "OLS": 0.694439626068484
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T64-A6",
+    "T": 64,
+    "role": "LADDER",
+    "counts_sha256": "6a6145d9b0926b0429a20caf7aee72c333a2667740c1b02f89a6dc9fd3ece9d0",
+    "ms": {
+     "v4d": 1.0605278560022946,
+     "rho other": 1.0605278560022946,
+     "NAIVE-NODEDUP": 1.0605278560022946,
+     "eager": 1.1186121881524365,
+     "roofline": 1.0053811147655265,
+     "line": 0.3654338755174871,
+     "OLS": 1.0218528550311812
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 6,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T64-A8",
+    "T": 64,
+    "role": "BALANCED",
+    "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+    "ms": {
+     "v4d": 1.359543500908844,
+     "rho other": 1.359543500908844,
+     "NAIVE-NODEDUP": 1.359543500908844,
+     "eager": 1.4176278330589858,
+     "roofline": 1.3411305354056886,
+     "line": 0.3654338755174871,
+     "OLS": 1.3491974721752915
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "MIN-T64",
+    "T": 64,
+    "role": "MINCOVER",
+    "counts_sha256": "20592ddc3ffe20daeebcf5ab2110c34457de5bfd05fbeacf067a7c9f8436bbcd",
+    "ms": {
+     "v4d": 0.7184021479080689,
+     "rho other": 0.7184021479080689,
+     "NAIVE-NODEDUP": 0.7184021479080689,
+     "eager": 0.7764864800582106,
+     "roofline": 0.333882273485202,
+     "line": 0.3654338755174871,
+     "OLS": 0.3618032761856919
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T64",
+    "T": 64,
+    "role": "UNIFORM",
+    "counts_sha256": "6fa4213ae3f2d8551b113f68dc4a71b6248715263fac917479903e5bd7d6ab4f",
+    "ms": {
+     "v4d": 1.359543500908844,
+     "rho other": 1.359543500908844,
+     "NAIVE-NODEDUP": 1.359543500908844,
+     "eager": 1.4176278330589858,
+     "roofline": 1.3411305354056886,
+     "line": 0.3654338755174871,
+     "OLS": 1.3491974721752915
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T96-A2",
+    "T": 96,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "71f65999b90c014406bf8ab372f36a5915265640e8a0a8e1f6def6c709f013ba",
+    "ms": {
+     "v4d": 1.044476335705194,
+     "rho other": 1.044476335705194,
+     "NAIVE-NODEDUP": 1.044476335705194,
+     "eager": 1.102560667855336,
+     "roofline": 0.333882273485202,
+     "line": 0.3557587837938235,
+     "OLS": 0.36392712430574164
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T96-A4",
+    "T": 96,
+    "role": "LADDER",
+    "counts_sha256": "86776e86ed23a1cbfedc47405a2b3c2d0a6af5c287ee7442f9dee7494a51f008",
+    "ms": {
+     "v4d": 1.4122758865690337,
+     "rho other": 1.4122758865690337,
+     "NAIVE-NODEDUP": 1.4122758865690337,
+     "eager": 1.4703602187191755,
+     "roofline": 0.6696316941253643,
+     "line": 0.3557587837938235,
+     "OLS": 0.6938681335397039
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T96-A6",
+    "T": 96,
+    "role": "LADDER",
+    "counts_sha256": "4eb6c164528db57b70e998e1393ba2c40d4b17c13005ec7d5b1ce8cd55bd3859",
+    "ms": {
+     "v4d": 1.044476335705194,
+     "rho other": 1.044476335705194,
+     "NAIVE-NODEDUP": 1.044476335705194,
+     "eager": 1.102560667855336,
+     "roofline": 1.0053811147655265,
+     "line": 0.3557587837938235,
+     "OLS": 1.0291998240713258
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 6,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T96-A8",
+    "T": 96,
+    "role": "BALANCED",
+    "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+    "ms": {
+     "v4d": 1.4122758865690337,
+     "rho other": 1.4122758865690337,
+     "NAIVE-NODEDUP": 1.4122758865690337,
+     "eager": 1.4703602187191755,
+     "roofline": 1.3411305354056886,
+     "line": 0.3557587837938235,
+     "OLS": 1.359140833305288
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T96",
+    "T": 96,
+    "role": "UNIFORM",
+    "counts_sha256": "0654e358f6e22874cf45c4b1f7425f3a76a26524e0e87ee6f95a3a89c251a891",
+    "ms": {
+     "v4d": 1.4122758865690332,
+     "rho other": 1.4122758865690332,
+     "NAIVE-NODEDUP": 1.4122758865690332,
+     "eager": 1.470360218719175,
+     "roofline": 1.3411305354056886,
+     "line": 0.3557587837938235,
+     "OLS": 1.359140833305288
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T128-A2",
+    "T": 128,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "aa3b41e949cbeaccc386dbd4e6ea78f343ff95f86f354f7d200fda76345e2fba",
+    "ms": {
+     "v4d": 0.7384769138298066,
+     "rho other": 0.7384769138298066,
+     "NAIVE-NODEDUP": 0.7384769138298066,
+     "eager": 0.7965612459799484,
+     "roofline": 0.333882273485202,
+     "line": 0.3460836920701599,
+     "OLS": 0.36476970442433004
+    },
+    "path": "small-batch",
+    "tile": "64x128x64w4s3",
+    "A": 2,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T128-A4",
+    "T": 128,
+    "role": "LADDER",
+    "counts_sha256": "0ff3b6bbc9ed1f3feb8cabfc1e395eb8d2f8b8069eb8712502ca8bef35853e59",
+    "ms": {
+     "v4d": 0.7384769138298066,
+     "rho other": 0.7384769138298066,
+     "NAIVE-NODEDUP": 0.7384769138298066,
+     "eager": 0.7965612459799484,
+     "roofline": 0.6696316941253643,
+     "line": 0.3460836920701599,
+     "OLS": 0.6974060543071221
+    },
+    "path": "small-batch",
+    "tile": "64x128x64w4s3",
+    "A": 4,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T128-A6",
+    "T": 128,
+    "role": "LADDER",
+    "counts_sha256": "794b88ea43d82fcc8988058a4d7f2d128d0eee368ac4ea15678f0915614ffece",
+    "ms": {
+     "v4d": 1.0617205187115644,
+     "rho other": 1.0617205187115644,
+     "NAIVE-NODEDUP": 1.0617205187115644,
+     "eager": 1.1198048508617062,
+     "roofline": 1.0053811147655265,
+     "line": 0.3460836920701599,
+     "OLS": 1.0265044834224961
+    },
+    "path": "small-batch",
+    "tile": "64x128x64w4s3",
+    "A": 6,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "L-T128-A8",
+    "T": 128,
+    "role": "BALANCED",
+    "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+    "ms": {
+     "v4d": 1.4153157639122964,
+     "rho other": 1.4153157639122964,
+     "NAIVE-NODEDUP": 1.4153157639122964,
+     "eager": 1.4734000960624383,
+     "roofline": 1.3411305354056886,
+     "line": 0.3460836920701599,
+     "OLS": 1.3555343406101807
+    },
+    "path": "small-batch",
+    "tile": "64x128x64w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "U-T128",
+    "T": 128,
+    "role": "UNIFORM",
+    "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+    "ms": {
+     "v4d": 1.4153157639122964,
+     "rho other": 1.4153157639122964,
+     "NAIVE-NODEDUP": 1.4153157639122964,
+     "eager": 1.4734000960624383,
+     "roofline": 1.3411305354056886,
+     "line": 0.3460836920701599,
+     "OLS": 1.3555343406101807
+    },
+    "path": "small-batch",
+    "tile": "64x128x64w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "mixtral-8x22b",
+    "page": "mixtral-8x22b-main",
+    "label": "US-T128",
+    "T": 128,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+    "ms": {
+     "v4d": 1.4153157639122964,
+     "rho other": 1.4153157639122964,
+     "NAIVE-NODEDUP": 1.4153157639122964,
+     "eager": 1.4734000960624383,
+     "roofline": 1.3411305354056886,
+     "line": 0.3460836920701599,
+     "OLS": 1.3555343406101807
+    },
+    "path": "small-batch",
+    "tile": "64x128x64w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T1-A8",
+    "T": 1,
+    "role": "BALANCED",
+    "counts_sha256": "e0a20d7d0d71a902a09a6827475efd39e64945849c41e527b0a605ec4d7efaeb",
+    "ms": {
+     "v4d": 0.1363884756763823,
+     "rho other": 0.1363884756763823,
+     "NAIVE-NODEDUP": 0.1363884756763823,
+     "eager": 0.19661035135149268,
+     "roofline": 0.12054149578676558,
+     "line": 0.38357467249935634,
+     "OLS": 0.1405711994612009
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T1",
+    "T": 1,
+    "role": "UNIFORM",
+    "counts_sha256": "fd0951b1158140d8401457258a93efb71e0e99c16b365021cd6c9f3f4ba49fe1",
+    "ms": {
+     "v4d": 0.1363884756763823,
+     "rho other": 0.1363884756763823,
+     "NAIVE-NODEDUP": 0.1363884756763823,
+     "eager": 0.19661035135149268,
+     "roofline": 0.12054149578676558,
+     "line": 0.38357467249935634,
+     "OLS": 0.1405711994612009
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T2-A8",
+    "T": 2,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "6cf9ebbc9f5a6dadc37ad9dfd3486fb04961d10176eef71406ba6dd2c849894e",
+    "ms": {
+     "v4d": 0.2507180026897589,
+     "rho other": 0.2507180026897589,
+     "NAIVE-NODEDUP": 0.2507180026897589,
+     "eager": 0.3109398783648693,
+     "roofline": 0.12054149578676558,
+     "line": 0.38236528603389836,
+     "OLS": 0.13454009966498906
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T2-A11",
+    "T": 2,
+    "role": "LADDER",
+    "counts_sha256": "a580ddff8d1eebb015ae0dc28125032baf2c21925021989b83e7b95b23a598bd",
+    "ms": {
+     "v4d": 0.2507180026897589,
+     "rho other": 0.2507180026897589,
+     "NAIVE-NODEDUP": 0.2507180026897589,
+     "eager": 0.3109398783648693,
+     "roofline": 0.16644473688991276,
+     "line": 0.38236528603389836,
+     "OLS": 0.180017725625527
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 11,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T2-A13",
+    "T": 2,
+    "role": "LADDER",
+    "counts_sha256": "0f842e752eba49f4a5719635b0cdb22332a0ba7a51f8c2e5dfbaa7c854872947",
+    "ms": {
+     "v4d": 0.2507180026897589,
+     "rho other": 0.2507180026897589,
+     "NAIVE-NODEDUP": 0.2507180026897589,
+     "eager": 0.3109398783648693,
+     "roofline": 0.19704689762534422,
+     "line": 0.38236528603389836,
+     "OLS": 0.21033614293255232
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 13,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T2-A16",
+    "T": 2,
+    "role": "BALANCED",
+    "counts_sha256": "d6d56c9c2eb61833c00fc7b3f091937512da14cb27e4ec8e4d26a23b43b9ffe6",
+    "ms": {
+     "v4d": 0.2507180026897589,
+     "rho other": 0.2507180026897589,
+     "NAIVE-NODEDUP": 0.2507180026897589,
+     "eager": 0.3109398783648693,
+     "roofline": 0.2429501387284914,
+     "line": 0.38236528603389836,
+     "OLS": 0.25581376889309027
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T2",
+    "T": 2,
+    "role": "UNIFORM",
+    "counts_sha256": "9b2997d4cf6305c67711af77b0d96dc3f1f24ba4ba9032d37ab0cd5bea0de378",
+    "ms": {
+     "v4d": 0.2507180026897589,
+     "rho other": 0.2507180026897589,
+     "NAIVE-NODEDUP": 0.2507180026897589,
+     "eager": 0.3109398783648693,
+     "roofline": 0.22764905836077567,
+     "line": 0.38236528603389836,
+     "OLS": 0.24065456023957765
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 15,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T4-A8",
+    "T": 4,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "b988701c42916be04cfdbaba24b39520355c95f26e023989051f86897bef0777",
+    "ms": {
+     "v4d": 0.15030879221845841,
+     "rho other": 0.15030879221845841,
+     "NAIVE-NODEDUP": 0.15030879221845841,
+     "eager": 0.2083931243686002,
+     "roofline": 0.12054149578676558,
+     "line": 0.3799465131029825,
+     "OLS": 0.15428800608292562
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T4-A16",
+    "T": 4,
+    "role": "LADDER",
+    "counts_sha256": "b8b5f9617359a000cbb37e3cb2269b7275b50f7c2e2f90940ac2724bd87d1cc3",
+    "ms": {
+     "v4d": 0.26458806155946585,
+     "rho other": 0.26458806155946585,
+     "NAIVE-NODEDUP": 0.26458806155946585,
+     "eager": 0.32267239370960765,
+     "roofline": 0.2429501387284914,
+     "line": 0.3799465131029825,
+     "OLS": 0.26929433287948945
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T4-A24",
+    "T": 4,
+    "role": "LADDER",
+    "counts_sha256": "f0d5d6fd7ac1ce100abc2e1736b07e7d3eb546655de79a5f7c0f622e58cc0066",
+    "ms": {
+     "v4d": 0.382043710879043,
+     "rho other": 0.382043710879043,
+     "NAIVE-NODEDUP": 0.382043710879043,
+     "eager": 0.4401280430291848,
+     "roofline": 0.3653587816702172,
+     "line": 0.3799465131029825,
+     "OLS": 0.3841331579566957
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 24,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T4-A32",
+    "T": 4,
+    "role": "BALANCED",
+    "counts_sha256": "6b4cc76cf4891cbba1ea291151ca5365ddefb0a67835735d63e67517dc990244",
+    "ms": {
+     "v4d": 0.4987806752737641,
+     "rho other": 0.4987806752737641,
+     "NAIVE-NODEDUP": 0.4987806752737641,
+     "eager": 0.5568650074239059,
+     "roofline": 0.487767424611943,
+     "line": 0.3799465131029825,
+     "OLS": 0.49529973555737106
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "MIN-T4",
+    "T": 4,
+    "role": "MINCOVER",
+    "counts_sha256": "496b904549a19ed5261d7be0d639793a603fe4e61e5207e714efa707b9a1581d",
+    "ms": {
+     "v4d": 0.15030879221845841,
+     "rho other": 0.15030879221845841,
+     "NAIVE-NODEDUP": 0.15030879221845841,
+     "eager": 0.2083931243686002,
+     "roofline": 0.12054149578676558,
+     "line": 0.3799465131029825,
+     "OLS": 0.15428800608292562
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T4",
+    "T": 4,
+    "role": "UNIFORM",
+    "counts_sha256": "8e83af620a436fc39e5d26f5ad64d3d21b4a93d41e57dabdc3d3bf53a1419130",
+    "ms": {
+     "v4d": 0.42592508311291094,
+     "rho other": 0.42592508311291094,
+     "NAIVE-NODEDUP": 0.42592508311291094,
+     "eager": 0.48400941526305274,
+     "roofline": 0.4112620227733644,
+     "line": 0.3799465131029825,
+     "OLS": 0.42707549333574074
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 27,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T8-A8",
+    "T": 8,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "78966576c2bf1d80a5e8e089e51de41d630120ac55f1fbbaac6a89f138c0e6b3",
+    "ms": {
+     "v4d": 0.1505098229079351,
+     "rho other": 0.1505098229079351,
+     "NAIVE-NODEDUP": 0.1505098229079351,
+     "eager": 0.20859415505807688,
+     "roofline": 0.12054149578676558,
+     "line": 0.37510896724115067,
+     "OLS": 0.15478176530823304
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T8-A27",
+    "T": 8,
+    "role": "LADDER",
+    "counts_sha256": "9ec92e1bbcabf5092f8c43806b7c5b4067ee714b90fdfd4f4e87fd83f5d41f25",
+    "ms": {
+     "v4d": 0.4261261138023877,
+     "rho other": 0.4261261138023877,
+     "NAIVE-NODEDUP": 0.4261261138023877,
+     "eager": 0.4842104459525295,
+     "roofline": 0.4112620227733644,
+     "line": 0.37510896724115067,
+     "OLS": 0.4282413475801764
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 27,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T8-A45",
+    "T": 8,
+    "role": "LADDER",
+    "counts_sha256": "1be5dac552949a3f5ba4a68a642d39214227ce97dd20392da842cb22538ffd9e",
+    "ms": {
+     "v4d": 0.6911882959104679,
+     "rho other": 0.6911882959104679,
+     "NAIVE-NODEDUP": 0.6911882959104679,
+     "eager": 0.7492726280606097,
+     "roofline": 0.6866814693922475,
+     "line": 0.37510896724115067,
+     "OLS": 0.6871487704924553
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 45,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T8-A64",
+    "T": 8,
+    "role": "BALANCED",
+    "counts_sha256": "ba1e52e365a6fa132081a7bef3fe2800e0a5a907bbdcb8f183b7f1783905ea31",
+    "ms": {
+     "v4d": 0.9680716967932967,
+     "rho other": 0.9680716967932967,
+     "NAIVE-NODEDUP": 0.9680716967932967,
+     "eager": 1.0261560289434384,
+     "roofline": 0.9774019963788463,
+     "line": 0.37510896724115067,
+     "OLS": 0.9562700132849287
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T8",
+    "T": 8,
+    "role": "UNIFORM",
+    "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+    "ms": {
+     "v4d": 0.6292860446831915,
+     "rho other": 0.6292860446831915,
+     "NAIVE-NODEDUP": 0.6292860446831915,
+     "eager": 0.6873703768333332,
+     "roofline": 0.6254771479213846,
+     "line": 0.37510896724115067,
+     "OLS": 0.629638806192353
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 41,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "US-T8",
+    "T": 8,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+    "ms": {
+     "v4d": 0.6292860446831915,
+     "rho other": 0.6292860446831915,
+     "NAIVE-NODEDUP": 0.6292860446831915,
+     "eager": 0.6873703768333332,
+     "roofline": 0.6254771479213846,
+     "line": 0.37510896724115067,
+     "OLS": 0.629638806192353
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 41,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T16-A8",
+    "T": 16,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "d0017cd684966d75f18c7ff0edb4aa77c16c805f2d47468cae1b890526ddbb04",
+    "ms": {
+     "v4d": 0.1514388052868885,
+     "rho other": 0.1514388052868885,
+     "NAIVE-NODEDUP": 0.1514388052868885,
+     "eager": 0.20952313743703027,
+     "roofline": 0.12054149578676558,
+     "line": 0.3654338755174871,
+     "OLS": 0.1548219738164341
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T16-A27",
+    "T": 16,
+    "role": "LADDER",
+    "counts_sha256": "730cbae6f8394e3c5991d176110341db04568b79a7a564b53b5111d76859284b",
+    "ms": {
+     "v4d": 0.427055096181341,
+     "rho other": 0.427055096181341,
+     "NAIVE-NODEDUP": 0.427055096181341,
+     "eager": 0.4851394283314828,
+     "roofline": 0.4112620227733644,
+     "line": 0.3654338755174871,
+     "OLS": 0.4283011699136317
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 27,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T16-A45",
+    "T": 16,
+    "role": "LADDER",
+    "counts_sha256": "4e38d46721269c21b391b9056cf64b7d3c6a7671f013be1c67cc8773acb181b8",
+    "ms": {
+     "v4d": 0.6921172782894215,
+     "rho other": 0.6921172782894215,
+     "NAIVE-NODEDUP": 0.6921172782894215,
+     "eager": 0.7502016104395632,
+     "roofline": 0.6866814693922475,
+     "line": 0.3654338755174871,
+     "OLS": 0.6872600909082978
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 45,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T16-A64",
+    "T": 16,
+    "role": "BALANCED",
+    "counts_sha256": "e87f401f581f58b11782ec39b5c53427f8ad7f15f3a0a82c367f626747d00cb0",
+    "ms": {
+     "v4d": 0.9690006791722504,
+     "rho other": 0.9690006791722504,
+     "NAIVE-NODEDUP": 0.9690006791722504,
+     "eager": 1.0270850113223922,
+     "roofline": 0.9774019963788463,
+     "line": 0.3654338755174871,
+     "OLS": 0.9599425280697254
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "MIN-T16",
+    "T": 16,
+    "role": "MINCOVER",
+    "counts_sha256": "42ad03810cc66d7837170e8349d7c84fbd4dfe4ce3ff94c001b9135bd9bd622b",
+    "ms": {
+     "v4d": 0.1514388052868885,
+     "rho other": 0.1514388052868885,
+     "NAIVE-NODEDUP": 0.1514388052868885,
+     "eager": 0.20952313743703027,
+     "roofline": 0.12054149578676558,
+     "line": 0.3654338755174871,
+     "OLS": 0.1548219738164341
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T16",
+    "T": 16,
+    "role": "UNIFORM",
+    "counts_sha256": "ac1de53d3a5551d17b3581b04c9507fa77cf306e98b4e4cfefb6b9d59ac88ed1",
+    "ms": {
+     "v4d": 0.8669409495229264,
+     "rho other": 0.8669409495229264,
+     "NAIVE-NODEDUP": 0.8669409495229264,
+     "eager": 0.9250252816730682,
+     "roofline": 0.8702944338048362,
+     "line": 0.3654338755174871,
+     "OLS": 0.8596942267745276
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 57,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T32-A8",
+    "T": 32,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "50e50f1359839ccd2cd882f91800a3484df7a99ac699dac9fd276932775a7298",
+    "ms": {
+     "v4d": 0.2675760393858027,
+     "rho other": 0.2675760393858027,
+     "NAIVE-NODEDUP": 0.2675760393858027,
+     "eager": 0.3256603715359445,
+     "roofline": 0.12054149578676558,
+     "line": 0.3460836920701599,
+     "OLS": 0.14879087402022229
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T32-A27",
+    "T": 32,
+    "role": "LADDER",
+    "counts_sha256": "223cbdf61c0f927148bce794a2d9062109c8d2ea3bb306aace130a4467594f38",
+    "ms": {
+     "v4d": 0.4289130609392478,
+     "rho other": 0.4289130609392478,
+     "NAIVE-NODEDUP": 0.4289130609392478,
+     "eager": 0.4869973930893896,
+     "roofline": 0.4112620227733644,
+     "line": 0.3460836920701599,
+     "OLS": 0.4284050477112574
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 27,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T32-A45",
+    "T": 32,
+    "role": "LADDER",
+    "counts_sha256": "b616a06fc7ef5b8551276bd4890b48480e2983fe39acd4309e1b4fab9f8c06e9",
+    "ms": {
+     "v4d": 0.6939752430473282,
+     "rho other": 0.6939752430473282,
+     "NAIVE-NODEDUP": 0.6939752430473282,
+     "eager": 0.7520595751974699,
+     "roofline": 0.6866814693922475,
+     "line": 0.3460836920701599,
+     "OLS": 0.6874340242946901
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 45,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T32-A64",
+    "T": 32,
+    "role": "BALANCED",
+    "counts_sha256": "6380508c114457d6de07b96413a804755262dda074b078dd362bcd5cbef4ee54",
+    "ms": {
+     "v4d": 0.9708586439301571,
+     "rho other": 0.9708586439301571,
+     "NAIVE-NODEDUP": 0.9708586439301571,
+     "eager": 1.0289429760802988,
+     "roofline": 0.9774019963788463,
+     "line": 0.3460836920701599,
+     "OLS": 0.9605821585668626
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T32",
+    "T": 32,
+    "role": "UNIFORM",
+    "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+    "ms": {
+     "v4d": 0.9530431456972702,
+     "rho other": 0.9530431456972702,
+     "NAIVE-NODEDUP": 0.9530431456972702,
+     "eager": 1.011127477847412,
+     "roofline": 0.9621009160111306,
+     "line": 0.3460836920701599,
+     "OLS": 0.9462234641162974
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 63,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "US-T32",
+    "T": 32,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+    "ms": {
+     "v4d": 0.9530431456972702,
+     "rho other": 0.9530431456972702,
+     "NAIVE-NODEDUP": 0.9530431456972702,
+     "eager": 1.011127477847412,
+     "roofline": 0.9621009160111306,
+     "line": 0.3460836920701599,
+     "OLS": 0.9462234641162974
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 63,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T64-A8",
+    "T": 64,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "829eea76732c8fc97e9cbd27d168aea91ea03e586c7656500aa6726e619204d1",
+    "ms": {
+     "v4d": 0.28012704395055804,
+     "rho other": 0.28012704395055804,
+     "NAIVE-NODEDUP": 0.28012704395055804,
+     "eager": 0.33821137610069985,
+     "roofline": 0.12054149578676558,
+     "line": 0.30738332517550554,
+     "OLS": 0.15182553369234977
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T64-A27",
+    "T": 64,
+    "role": "LADDER",
+    "counts_sha256": "95f26b29628857d9bebbfe3a23c02555897a66eceac1d0406095dd2687171649",
+    "ms": {
+     "v4d": 0.4499456872000808,
+     "rho other": 0.4499456872000808,
+     "NAIVE-NODEDUP": 0.4499456872000808,
+     "eager": 0.5080300193502226,
+     "roofline": 0.4112620227733644,
+     "line": 0.30738332517550554,
+     "OLS": 0.4335171024903544
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 27,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T64-A45",
+    "T": 64,
+    "role": "LADDER",
+    "counts_sha256": "e0daebc4657e06e7ff3ac811edc605c34ace65150b18e81da2c2ed0e07a5ebb6",
+    "ms": {
+     "v4d": 0.7152587479916851,
+     "rho other": 0.7152587479916851,
+     "NAIVE-NODEDUP": 0.7152587479916851,
+     "eager": 0.7733430801418268,
+     "roofline": 0.6866814693922475,
+     "line": 0.30738332517550554,
+     "OLS": 0.6959516910062272
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 45,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T64-A64",
+    "T": 64,
+    "role": "BALANCED",
+    "counts_sha256": "ae1eeef26c1a9f56fc53a03e4f8a309e9102fc22fae8746e21bab73860a78b5d",
+    "ms": {
+     "v4d": 0.9969962265767646,
+     "rho other": 0.9969962265767646,
+     "NAIVE-NODEDUP": 0.9969962265767646,
+     "eager": 1.0550805587269063,
+     "roofline": 0.9774019963788463,
+     "line": 0.30738332517550554,
+     "OLS": 0.9727341563810263
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "MIN-T64",
+    "T": 64,
+    "role": "MINCOVER",
+    "counts_sha256": "a6299574e983959cb7315203e17f0266291aaeda692186d87c2e4e7ee7f943f8",
+    "ms": {
+     "v4d": 0.28012704395055804,
+     "rho other": 0.28012704395055804,
+     "NAIVE-NODEDUP": 0.28012704395055804,
+     "eager": 0.33821137610069985,
+     "roofline": 0.12054149578676558,
+     "line": 0.30738332517550554,
+     "OLS": 0.15182553369234977
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T64",
+    "T": 64,
+    "role": "UNIFORM",
+    "counts_sha256": "dab014c3ffe62b784fe4c008c7fa816d59b49ba08d9ac2a267f198955d97af49",
+    "ms": {
+     "v4d": 0.9969962265767646,
+     "rho other": 0.9969962265767646,
+     "NAIVE-NODEDUP": 0.9969962265767646,
+     "eager": 1.0550805587269063,
+     "roofline": 0.9774019963788463,
+     "line": 0.30738332517550554,
+     "OLS": 0.9727341563810263
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T96-A8",
+    "T": 96,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "ec538cc8dd0d03ae10ad8b2f7ebd6eccff3ccaa805d9c6f5eb4f721d652b99b2",
+    "ms": {
+     "v4d": 0.4114804964478972,
+     "rho other": 0.4114804964478972,
+     "NAIVE-NODEDUP": 0.4114804964478972,
+     "eager": 0.469564828598039,
+     "roofline": 0.12054149578676558,
+     "line": 0.2686829582808512,
+     "OLS": 0.15368325319767506
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T96-A27",
+    "T": 96,
+    "role": "LADDER",
+    "counts_sha256": "5112017fcfe414b49d23e129bcb1f904824f65909ba42261cbee008ef1a6fdbd",
+    "ms": {
+     "v4d": 0.46796182832096006,
+     "rho other": 0.46796182832096006,
+     "NAIVE-NODEDUP": 0.46796182832096006,
+     "eager": 0.5260461604711019,
+     "roofline": 0.4112620227733644,
+     "line": 0.2686829582808512,
+     "OLS": 0.4408311928552312
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 27,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T96-A45",
+    "T": 96,
+    "role": "LADDER",
+    "counts_sha256": "e19b485225d4d15874de94f304ffaccc9a3d119b0fa924bc75581193a4e67f18",
+    "ms": {
+     "v4d": 0.7193580615443573,
+     "rho other": 0.7193580615443573,
+     "NAIVE-NODEDUP": 0.7193580615443573,
+     "eager": 0.7774423936944991,
+     "roofline": 0.6866814693922475,
+     "line": 0.2686829582808512,
+     "OLS": 0.7083961288281087
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 45,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T96-A64",
+    "T": 96,
+    "role": "BALANCED",
+    "counts_sha256": "68f5d9290a067800723f258a586438e30119bc67603bf633270b126f4b0f40c5",
+    "ms": {
+     "v4d": 1.0057652157394954,
+     "rho other": 1.0057652157394954,
+     "NAIVE-NODEDUP": 1.0057652157394954,
+     "eager": 1.0638495478896373,
+     "roofline": 0.9774019963788463,
+     "line": 0.2686829582808512,
+     "OLS": 0.9906869740084898
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T96",
+    "T": 96,
+    "role": "UNIFORM",
+    "counts_sha256": "529f72191d1e2a4f762adeeb66c16f24078b9ca2f711ba5ef16e5f9dad0031ef",
+    "ms": {
+     "v4d": 1.0057652157394954,
+     "rho other": 1.0057652157394954,
+     "NAIVE-NODEDUP": 1.0057652157394954,
+     "eager": 1.0638495478896373,
+     "roofline": 0.9774019963788463,
+     "line": 0.2686829582808512,
+     "OLS": 0.9906869740084898
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T128-A8",
+    "T": 128,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "a779b623c48dc18e2bbbc4dcbeef94ad106d05ebaa2ba8623dff526d31f53af8",
+    "ms": {
+     "v4d": 0.2925254022357796,
+     "rho other": 0.2925254022357796,
+     "NAIVE-NODEDUP": 0.2925254022357796,
+     "eager": 0.33127650046261203,
+     "roofline": 0.12054149578676558,
+     "line": 0.2299825913861968,
+     "OLS": 0.15943200170875357
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 8,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T128-A27",
+    "T": 128,
+    "role": "LADDER",
+    "counts_sha256": "cbc4ac2c55568af2cdcc55046375b717f8165ab83479f647b679ece3ac5c0ffa",
+    "ms": {
+     "v4d": 0.45227052618986563,
+     "rho other": 0.45227052618986563,
+     "NAIVE-NODEDUP": 0.45227052618986563,
+     "eager": 0.49102162441669805,
+     "roofline": 0.4112620227733644,
+     "line": 0.2299825913861968,
+     "OLS": 0.44319876701560484
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 27,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T128-A45",
+    "T": 128,
+    "role": "LADDER",
+    "counts_sha256": "9a2775700bb54898120b1576fcc4ff2b598fcfcc3e63c37036d5bbaea1c9e207",
+    "ms": {
+     "v4d": 0.732113648395219,
+     "rho other": 0.732113648395219,
+     "NAIVE-NODEDUP": 0.732113648395219,
+     "eager": 0.7708647466220514,
+     "roofline": 0.6866814693922475,
+     "line": 0.2299825913861968,
+     "OLS": 0.7090319727106521
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 45,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "L-T128-A64",
+    "T": 128,
+    "role": "BALANCED",
+    "counts_sha256": "eb520d9e4e041941ec8dbf3665a8c1bc138e087f02580cb3e1385526283c9e68",
+    "ms": {
+     "v4d": 1.0162349208773287,
+     "rho other": 1.0162349208773287,
+     "NAIVE-NODEDUP": 1.0162349208773287,
+     "eager": 1.0549860191041611,
+     "roofline": 0.9774019963788463,
+     "line": 0.2299825913861968,
+     "OLS": 0.9894183598353932
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "U-T128",
+    "T": 128,
+    "role": "UNIFORM",
+    "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+    "ms": {
+     "v4d": 1.0162349208773287,
+     "rho other": 1.0162349208773287,
+     "NAIVE-NODEDUP": 1.0162349208773287,
+     "eager": 1.0549860191041611,
+     "roofline": 0.9774019963788463,
+     "line": 0.2299825913861968,
+     "OLS": 0.9894183598353932
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "page": "qwen2-57b-a14b-main",
+    "label": "US-T128",
+    "T": 128,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+    "ms": {
+     "v4d": 1.0162349208773287,
+     "rho other": 1.0162349208773287,
+     "NAIVE-NODEDUP": 1.0162349208773287,
+     "eager": 1.0549860191041611,
+     "roofline": 0.9774019963788463,
+     "line": 0.2299825913861968,
+     "OLS": 0.9894183598353932
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 64,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T1-A8",
+    "T": 1,
+    "role": "BALANCED",
+    "counts_sha256": "d97754cd50c8a40933e3852e0e75e1769362d7bbc7ea382e1a562979e110d9f8",
+    "ms": {
+     "v4d": 0.02076341744071626,
+     "rho other": 0.02076341744071626,
+     "NAIVE-NODEDUP": 0.02076341744071626,
+     "eager": 0.08098529311582664,
+     "roofline": 0.005127632441709822,
+     "line": 0.38357467249935634,
+     "OLS": 0.03083947168021195
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T1",
+    "T": 1,
+    "role": "UNIFORM",
+    "counts_sha256": "e63c86d1da581fc2751d89ea736d7909c43ec9eee8e134fbd8eb9bbc17809cd1",
+    "ms": {
+     "v4d": 0.02076341744071626,
+     "rho other": 0.02076341744071626,
+     "NAIVE-NODEDUP": 0.02076341744071626,
+     "eager": 0.08098529311582664,
+     "roofline": 0.005127632441709822,
+     "line": 0.38357467249935634,
+     "OLS": 0.03083947168021195
+    },
+    "path": "naive",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T2-A8",
+    "T": 2,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "405b711e5846a36ceb9c6236e7ea7b480e8024573f6def3999a6dce7502b6196",
+    "ms": {
+     "v4d": 0.030176446170145393,
+     "rho other": 0.030176446170145393,
+     "NAIVE-NODEDUP": 0.030176446170145393,
+     "eager": 0.08826077832028718,
+     "roofline": 0.005127632441709822,
+     "line": 0.38236528603389836,
+     "OLS": 0.043074668117876524
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T2-A11",
+    "T": 2,
+    "role": "LADDER",
+    "counts_sha256": "5b2c59a4a06b5d0eec394b44234ee558bc382799a59b7ab2c79a8f6f0cc913ca",
+    "ms": {
+     "v4d": 0.032748657501285125,
+     "rho other": 0.032748657501285125,
+     "NAIVE-NODEDUP": 0.032748657501285125,
+     "eager": 0.09083298965142692,
+     "roofline": 0.007750674790461091,
+     "line": 0.38236528603389836,
+     "OLS": 0.04486864372013516
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 11,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T2-A13",
+    "T": 2,
+    "role": "LADDER",
+    "counts_sha256": "0cad8e30608523ae344c112b75cfab75bdbbf60f86f9445c6bdd2497841a4246",
+    "ms": {
+     "v4d": 0.0344716559350945,
+     "rho other": 0.0344716559350945,
+     "NAIVE-NODEDUP": 0.0344716559350945,
+     "eager": 0.0925559880852363,
+     "roofline": 0.009499369689628601,
+     "line": 0.38236528603389836,
+     "OLS": 0.04595101970730553
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 13,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T2-A16",
+    "T": 2,
+    "role": "BALANCED",
+    "counts_sha256": "1a709aa9de75945684d647e0de33baf515d49ceb4c84555f268c9ab23b5b1d47",
+    "ms": {
+     "v4d": 0.03670605833775031,
+     "rho other": 0.03670605833775031,
+     "NAIVE-NODEDUP": 0.03670605833775031,
+     "eager": 0.09479039048789209,
+     "roofline": 0.012122412038379868,
+     "line": 0.38236528603389836,
+     "OLS": 0.04535114113161437
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T2",
+    "T": 2,
+    "role": "UNIFORM",
+    "counts_sha256": "dfb76ae3bcc0253069aa7ea4f9e4cdd9f19c3bab987ba0c88b2c8d9d948d12a4",
+    "ms": {
+     "v4d": 0.03670605833775031,
+     "rho other": 0.03670605833775031,
+     "NAIVE-NODEDUP": 0.03670605833775031,
+     "eager": 0.09479039048789209,
+     "roofline": 0.012122412038379868,
+     "line": 0.38236528603389836,
+     "OLS": 0.04535114113161437
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T4-A8",
+    "T": 4,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "6db87848b72f8f1493439d2ba463028b789a266a07af27707e3cc0b1ec1e8ff1",
+    "ms": {
+     "v4d": 0.030199416579066496,
+     "rho other": 0.030199416579066496,
+     "NAIVE-NODEDUP": 0.030199416579066496,
+     "eager": 0.08828374872920829,
+     "roofline": 0.005127632441709822,
+     "line": 0.3799465131029825,
+     "OLS": 0.04371349809865416
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T4-A16",
+    "T": 4,
+    "role": "LADDER",
+    "counts_sha256": "3c8ba5038361136f676c828a06d2220f361c2761d2f2d8b0a447c5aa04e943e3",
+    "ms": {
+     "v4d": 0.03672902874667141,
+     "rho other": 0.03672902874667141,
+     "NAIVE-NODEDUP": 0.03672902874667141,
+     "eager": 0.09481336089681319,
+     "roofline": 0.012122412038379868,
+     "line": 0.3799465131029825,
+     "OLS": 0.04898838671485728
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T4-A24",
+    "T": 4,
+    "role": "LADDER",
+    "counts_sha256": "edaf0c2201a10917e551428422fb989392e1cfad49e3ce6f9f009b46a240a925",
+    "ms": {
+     "v4d": 0.043409886917060075,
+     "rho other": 0.043409886917060075,
+     "NAIVE-NODEDUP": 0.043409886917060075,
+     "eager": 0.10149421906720187,
+     "roofline": 0.019117191635049914,
+     "line": 0.3799465131029825,
+     "OLS": 0.054096351419677446
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 24,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T4-A32",
+    "T": 4,
+    "role": "BALANCED",
+    "counts_sha256": "49f6be3b003d7c754bc87ae96c4403b4d5600e8ad0a15b16ff93629a45fd15ee",
+    "ms": {
+     "v4d": 0.050961055627177086,
+     "rho other": 0.050961055627177086,
+     "NAIVE-NODEDUP": 0.050961055627177086,
+     "eager": 0.10904538777731887,
+     "roofline": 0.02611197123171996,
+     "line": 0.3799465131029825,
+     "OLS": 0.05637282443341529
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "MIN-T4",
+    "T": 4,
+    "role": "MINCOVER",
+    "counts_sha256": "81a031e135fa3a9e8a3863cadba7baa8dfc01a69e672e2d28f1529721231878c",
+    "ms": {
+     "v4d": 0.030199416579066496,
+     "rho other": 0.030199416579066496,
+     "NAIVE-NODEDUP": 0.030199416579066496,
+     "eager": 0.08828374872920829,
+     "roofline": 0.005127632441709822,
+     "line": 0.3799465131029825,
+     "OLS": 0.04371349809865416
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T4",
+    "T": 4,
+    "role": "UNIFORM",
+    "counts_sha256": "92a26ba1c3444268229deccf71920618c523f59d6093dc70021657608479d157",
+    "ms": {
+     "v4d": 0.042578819052306226,
+     "rho other": 0.042578819052306226,
+     "NAIVE-NODEDUP": 0.042578819052306226,
+     "eager": 0.10066315120244801,
+     "roofline": 0.018242844185466157,
+     "line": 0.3799465131029825,
+     "OLS": 0.05347589590810936
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 23,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T8-A8",
+    "T": 8,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "07b8bdfb2e1b142f43e064580b0372bedef4452b004bca755ecba05de29d2a97",
+    "ms": {
+     "v4d": 0.0307722783969087,
+     "rho other": 0.0307722783969087,
+     "NAIVE-NODEDUP": 0.0307722783969087,
+     "eager": 0.08885661054705049,
+     "roofline": 0.005127632441709822,
+     "line": 0.37510896724115067,
+     "OLS": 0.04376009397682751
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T8-A16",
+    "T": 8,
+    "role": "LADDER",
+    "counts_sha256": "7579ec05d0e8e4e4dd2569a6a2e7e451e5f95c49741f02c913b1d4abf9e59b3e",
+    "ms": {
+     "v4d": 0.037301890564513614,
+     "rho other": 0.037301890564513614,
+     "NAIVE-NODEDUP": 0.037301890564513614,
+     "eager": 0.09538622271465541,
+     "roofline": 0.012122412038379868,
+     "line": 0.37510896724115067,
+     "OLS": 0.0490569122027294
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T8-A24",
+    "T": 8,
+    "role": "LADDER",
+    "counts_sha256": "208bccf87253838e39432f4acf6051240f45a0fa501a51e64ce1b8b8f54b1a4e",
+    "ms": {
+     "v4d": 0.04398274873490228,
+     "rho other": 0.04398274873490228,
+     "NAIVE-NODEDUP": 0.04398274873490228,
+     "eager": 0.10206708088504407,
+     "roofline": 0.019117191635049914,
+     "line": 0.37510896724115067,
+     "OLS": 0.0542259604743498
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 24,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T8-A32",
+    "T": 8,
+    "role": "BALANCED",
+    "counts_sha256": "3fbf504da6dfca961e26cd5bea46eab340aecc3c0c449c56f68eaf0a531652f8",
+    "ms": {
+     "v4d": 0.05153391744501929,
+     "rho other": 0.05153391744501929,
+     "NAIVE-NODEDUP": 0.05153391744501929,
+     "eager": 0.10961824959516109,
+     "roofline": 0.02611197123171996,
+     "line": 0.37510896724115067,
+     "OLS": 0.058805933487708684
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T8",
+    "T": 8,
+    "role": "UNIFORM",
+    "counts_sha256": "a0e83650146cfd3ac31822eb76bff0389c362a72a7e60db05aef90d8bb6151f6",
+    "ms": {
+     "v4d": 0.04869433825945127,
+     "rho other": 0.04869433825945127,
+     "NAIVE-NODEDUP": 0.04869433825945127,
+     "eager": 0.10677867040959306,
+     "roofline": 0.022614581433384937,
+     "line": 0.37510896724115067,
+     "OLS": 0.05668484759930453
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 28,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "US-T8",
+    "T": 8,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "a0e83650146cfd3ac31822eb76bff0389c362a72a7e60db05aef90d8bb6151f6",
+    "ms": {
+     "v4d": 0.04869433825945127,
+     "rho other": 0.04869433825945127,
+     "NAIVE-NODEDUP": 0.04869433825945127,
+     "eager": 0.10677867040959306,
+     "roofline": 0.022614581433384937,
+     "line": 0.37510896724115067,
+     "OLS": 0.05668484759930453
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 28,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T16-A8",
+    "T": 16,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "093d767f7a8f38d8fc06d4584e0cb3c60d80343f572fe87df69c728de47418fe",
+    "ms": {
+     "v4d": 0.03191800203259311,
+     "rho other": 0.03191800203259311,
+     "NAIVE-NODEDUP": 0.03191800203259311,
+     "eager": 0.0900023341827349,
+     "roofline": 0.005127632441709822,
+     "line": 0.3654338755174871,
+     "OLS": 0.043843409311857706
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T16-A16",
+    "T": 16,
+    "role": "LADDER",
+    "counts_sha256": "998264082b38e2b3440293f79e46df31b8cc8cec04a5a2b9d704779cbd7f19e6",
+    "ms": {
+     "v4d": 0.03844761420019803,
+     "rho other": 0.03844761420019803,
+     "NAIVE-NODEDUP": 0.03844761420019803,
+     "eager": 0.09653194635033982,
+     "roofline": 0.012122412038379868,
+     "line": 0.3654338755174871,
+     "OLS": 0.04917369266365479
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T16-A24",
+    "T": 16,
+    "role": "LADDER",
+    "counts_sha256": "21a66aebdd3cf636c9063c0384d674eb431896609cc585f7e13dc26efcf14631",
+    "ms": {
+     "v4d": 0.04512847237058668,
+     "rho other": 0.04512847237058668,
+     "NAIVE-NODEDUP": 0.04512847237058668,
+     "eager": 0.10321280452072848,
+     "roofline": 0.019117191635049914,
+     "line": 0.3654338755174871,
+     "OLS": 0.054421559726920865
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 24,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T16-A32",
+    "T": 16,
+    "role": "BALANCED",
+    "counts_sha256": "cebd8be7008c419013afb243134e777cd8d76a7c3561e84770000e55b41ab815",
+    "ms": {
+     "v4d": 0.05267964108070369,
+     "rho other": 0.05267964108070369,
+     "NAIVE-NODEDUP": 0.05267964108070369,
+     "eager": 0.11076397323084548,
+     "roofline": 0.02611197123171996,
+     "line": 0.3654338755174871,
+     "OLS": 0.059440268424754805
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "MIN-T16",
+    "T": 16,
+    "role": "MINCOVER",
+    "counts_sha256": "1a998bee927d115085b9faadae182d528f85cf2b3821004809e5257ddc294a5e",
+    "ms": {
+     "v4d": 0.03191800203259311,
+     "rho other": 0.03191800203259311,
+     "NAIVE-NODEDUP": 0.03191800203259311,
+     "eager": 0.0900023341827349,
+     "roofline": 0.005127632441709822,
+     "line": 0.3654338755174871,
+     "OLS": 0.043843409311857706
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T16",
+    "T": 16,
+    "role": "UNIFORM",
+    "counts_sha256": "5486f8a19a7edb489518ccb06010e93c5c9f2836f9b346f85b6d2daf26f85752",
+    "ms": {
+     "v4d": 0.05267964108070369,
+     "rho other": 0.05267964108070369,
+     "NAIVE-NODEDUP": 0.05267964108070369,
+     "eager": 0.11076397323084548,
+     "roofline": 0.02611197123171996,
+     "line": 0.3654338755174871,
+     "OLS": 0.059440268424754805
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T32-A8",
+    "T": 32,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "d2898df282d442207558c4e9fd1aabadd3e2ed6e81ba23316dceaeaeaa7360b0",
+    "ms": {
+     "v4d": 0.04073906147156684,
+     "rho other": 0.04073906147156684,
+     "NAIVE-NODEDUP": 0.04073906147156684,
+     "eager": 0.09882339362170864,
+     "roofline": 0.005127632441709822,
+     "line": 0.3460836920701599,
+     "OLS": 0.04242432700686671
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T32-A16",
+    "T": 32,
+    "role": "LADDER",
+    "counts_sha256": "c33533667608dc1784ee1ce42b73a76433452e647452c924c44962899ac11dcc",
+    "ms": {
+     "v4d": 0.04073906147156684,
+     "rho other": 0.04073906147156684,
+     "NAIVE-NODEDUP": 0.04073906147156684,
+     "eager": 0.09882339362170864,
+     "roofline": 0.012122412038379868,
+     "line": 0.3460836920701599,
+     "OLS": 0.04935425096275825
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T32-A24",
+    "T": 32,
+    "role": "LADDER",
+    "counts_sha256": "00e49c14622dcb4dec42c9b12f17a7f33b37feaa65476d7dd2dad8bf77c501da",
+    "ms": {
+     "v4d": 0.047419919641955494,
+     "rho other": 0.047419919641955494,
+     "NAIVE-NODEDUP": 0.047419919641955494,
+     "eager": 0.10550425179209728,
+     "roofline": 0.019117191635049914,
+     "line": 0.3460836920701599,
+     "OLS": 0.05468453431455522
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 24,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T32-A32",
+    "T": 32,
+    "role": "BALANCED",
+    "counts_sha256": "02b4b6c2ab115233d9fa4a0f8ebdf50267ebc3e0ff14e2577aa7b7733d21f349",
+    "ms": {
+     "v4d": 0.054971088352072525,
+     "rho other": 0.054971088352072525,
+     "NAIVE-NODEDUP": 0.054971088352072525,
+     "eager": 0.11305542050221432,
+     "roofline": 0.02611197123171996,
+     "line": 0.3460836920701599,
+     "OLS": 0.059932401377821354
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T32",
+    "T": 32,
+    "role": "UNIFORM",
+    "counts_sha256": "242ee1a9c0df90751c7707da7fac507e9e0cae84f9863bb095e9894b7399c4f2",
+    "ms": {
+     "v4d": 0.05497108835207252,
+     "rho other": 0.05497108835207252,
+     "NAIVE-NODEDUP": 0.05497108835207252,
+     "eager": 0.11305542050221432,
+     "roofline": 0.02611197123171996,
+     "line": 0.3460836920701599,
+     "OLS": 0.059932401377821354
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "US-T32",
+    "T": 32,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "242ee1a9c0df90751c7707da7fac507e9e0cae84f9863bb095e9894b7399c4f2",
+    "ms": {
+     "v4d": 0.05497108835207252,
+     "rho other": 0.05497108835207252,
+     "NAIVE-NODEDUP": 0.05497108835207252,
+     "eager": 0.11305542050221432,
+     "roofline": 0.02611197123171996,
+     "line": 0.3460836920701599,
+     "OLS": 0.059932401377821354
+    },
+    "path": "small-batch",
+    "tile": "16x64x128w4s4",
+    "A": 32,
+    "sub_wave": false
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T64-A8",
+    "T": 64,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "4d89d3314f8606ac050377e37ea9a4238963aa4dd45ca290b45b9399ca92c069",
+    "ms": {
+     "v4d": 0.046293621597182935,
+     "rho other": 0.046293621597182935,
+     "NAIVE-NODEDUP": 0.046293621597182935,
+     "eager": 0.10437795374732473,
+     "roofline": 0.005127632441709822,
+     "line": 0.30738332517550554,
+     "OLS": 0.04315296067178487
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T64-A16",
+    "T": 64,
+    "role": "LADDER",
+    "counts_sha256": "90b68528e2b98eb994edfa08d61fc0291061acb54550f43f4da6d2a63f9fecef",
+    "ms": {
+     "v4d": 0.046293621597182935,
+     "rho other": 0.046293621597182935,
+     "NAIVE-NODEDUP": 0.046293621597182935,
+     "eager": 0.10437795374732473,
+     "roofline": 0.012122412038379868,
+     "line": 0.30738332517550554,
+     "OLS": 0.050082884627676405
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T64-A24",
+    "T": 64,
+    "role": "LADDER",
+    "counts_sha256": "021f01a0ba8445e5e62112a795bdc513fb6d2939452156673e3802cad5b6dd9d",
+    "ms": {
+     "v4d": 0.0544425453946587,
+     "rho other": 0.0544425453946587,
+     "NAIVE-NODEDUP": 0.0544425453946587,
+     "eager": 0.1125268775448005,
+     "roofline": 0.019117191635049914,
+     "line": 0.30738332517550554,
+     "OLS": 0.05577471952397983
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 24,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T64-A32",
+    "T": 64,
+    "role": "BALANCED",
+    "counts_sha256": "d68e1200665b6baaa88ab1531b8a2763b4f43d9a963ca5936cd760339e0afc85",
+    "ms": {
+     "v4d": 0.05925038560914912,
+     "rho other": 0.05925038560914912,
+     "NAIVE-NODEDUP": 0.05925038560914912,
+     "eager": 0.11733471775929091,
+     "roofline": 0.02611197123171996,
+     "line": 0.30738332517550554,
+     "OLS": 0.06139161074320132
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 32,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "MIN-T64",
+    "T": 64,
+    "role": "MINCOVER",
+    "counts_sha256": "6ca400f771ad5b4f40a88b8a299575cccacf204e299c9acc232f9bcc2c734c73",
+    "ms": {
+     "v4d": 0.046293621597182935,
+     "rho other": 0.046293621597182935,
+     "NAIVE-NODEDUP": 0.046293621597182935,
+     "eager": 0.10437795374732473,
+     "roofline": 0.005127632441709822,
+     "line": 0.30738332517550554,
+     "OLS": 0.04315296067178487
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T64",
+    "T": 64,
+    "role": "UNIFORM",
+    "counts_sha256": "33ff7c9389a2dee21453b1c8466228b78957f04fd57759213fdcfea5ff0d8f19",
+    "ms": {
+     "v4d": 0.05925038560914912,
+     "rho other": 0.05925038560914912,
+     "NAIVE-NODEDUP": 0.05925038560914912,
+     "eager": 0.11733471775929091,
+     "roofline": 0.02611197123171996,
+     "line": 0.30738332517550554,
+     "OLS": 0.06139161074320132
+    },
+    "path": "small-batch",
+    "tile": "32x64x128w4s3",
+    "A": 32,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T96-A8",
+    "T": 96,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "c91a6ddcb59f5253b13175ab78950ba34769955e4482b3306d51ebd328b4a0a1",
+    "ms": {
+     "v4d": 0.05836948610909305,
+     "rho other": 0.05836948610909305,
+     "NAIVE-NODEDUP": 0.05836948610909305,
+     "eager": 0.11645381825923484,
+     "roofline": 0.005127632441709822,
+     "line": 0.2686829582808512,
+     "OLS": 0.043281691184325344
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T96-A16",
+    "T": 96,
+    "role": "LADDER",
+    "counts_sha256": "64de43e0a1a4eb9b4b88796ef5d98537849de77f7732f2fbb86c2fd89963dc01",
+    "ms": {
+     "v4d": 0.0644802422896964,
+     "rho other": 0.0644802422896964,
+     "NAIVE-NODEDUP": 0.0644802422896964,
+     "eager": 0.12256457443983819,
+     "roofline": 0.012122412038379868,
+     "line": 0.2686829582808512,
+     "OLS": 0.049505885592489474
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T96-A24",
+    "T": 96,
+    "role": "LADDER",
+    "counts_sha256": "edda21cc2d595930ed4611b13391db2629ba2d60d7607c60dc84f84f5bdc93c3",
+    "ms": {
+     "v4d": 0.05836948610909305,
+     "rho other": 0.05836948610909305,
+     "NAIVE-NODEDUP": 0.05836948610909305,
+     "eager": 0.11645381825923484,
+     "roofline": 0.019117191635049914,
+     "line": 0.2686829582808512,
+     "OLS": 0.05714153909610831
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 24,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T96-A32",
+    "T": 96,
+    "role": "BALANCED",
+    "counts_sha256": "c1e7af05fe7af78f9ae589da7cd316732225e1bdad8a6098646e69fd531fb878",
+    "ms": {
+     "v4d": 0.0644802422896964,
+     "rho other": 0.0644802422896964,
+     "NAIVE-NODEDUP": 0.0644802422896964,
+     "eager": 0.12256457443983819,
+     "roofline": 0.02611197123171996,
+     "line": 0.2686829582808512,
+     "OLS": 0.06336573350427244
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 32,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T96",
+    "T": 96,
+    "role": "UNIFORM",
+    "counts_sha256": "bb1234a4a7a5ff15df4e3fafa0d86fcdddfa4dcf84cdb6a6a657512f4633fdb5",
+    "ms": {
+     "v4d": 0.0663022033634883,
+     "rho other": 0.0663022033634883,
+     "NAIVE-NODEDUP": 0.0663022033634883,
+     "eager": 0.12438653551363009,
+     "roofline": 0.02611197123171996,
+     "line": 0.2686829582808512,
+     "OLS": 0.0631798205847457
+    },
+    "path": "small-batch",
+    "tile": "32x128x64w4s3",
+    "A": 32,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T128-A8",
+    "T": 128,
+    "role": "LADDER-BOTTOM",
+    "counts_sha256": "d47f66ac890bb175dc305ec59a5ad97aa555862151d7c5134b9a08c21eee612f",
+    "ms": {
+     "v4d": 0.04013866780132525,
+     "rho other": 0.04013866780132525,
+     "NAIVE-NODEDUP": 0.04013866780132525,
+     "eager": 0.07888976602815767,
+     "roofline": 0.005127632441709822,
+     "line": 0.2299825913861968,
+     "OLS": 0.04846308223702561
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 8,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T128-A16",
+    "T": 128,
+    "role": "LADDER",
+    "counts_sha256": "1cddf961ea462a51407bbe5105c712e2a1b209155c6d625873a4441aa758556a",
+    "ms": {
+     "v4d": 0.04013866780132525,
+     "rho other": 0.04013866780132525,
+     "NAIVE-NODEDUP": 0.04013866780132525,
+     "eager": 0.07888976602815767,
+     "roofline": 0.012122412038379868,
+     "line": 0.2299825913861968,
+     "OLS": 0.05539300619291715
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 16,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T128-A24",
+    "T": 128,
+    "role": "LADDER",
+    "counts_sha256": "29d1b2d2e53869adb597d562068b37302df5e6d880d3d637fa305325e5f83c03",
+    "ms": {
+     "v4d": 0.047495660430243274,
+     "rho other": 0.047495660430243274,
+     "NAIVE-NODEDUP": 0.047495660430243274,
+     "eager": 0.08624675865707569,
+     "roofline": 0.019117191635049914,
+     "line": 0.2299825913861968,
+     "OLS": 0.06144608746055413
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 24,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "L-T128-A32",
+    "T": 128,
+    "role": "BALANCED",
+    "counts_sha256": "70899a26b83cee665409dd71c94bf3b6935428bdb39501da15dce50174a84bed",
+    "ms": {
+     "v4d": 0.05401208312401603,
+     "rho other": 0.05401208312401603,
+     "NAIVE-NODEDUP": 0.05401208312401603,
+     "eager": 0.09276318135084845,
+     "roofline": 0.02611197123171996,
+     "line": 0.2299825913861968,
+     "OLS": 0.0674308948536288
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 32,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "U-T128",
+    "T": 128,
+    "role": "UNIFORM",
+    "counts_sha256": "a0dd44eeb61f535843ff3b37319a894b2c50110a043da2c921f49442f31ffa46",
+    "ms": {
+     "v4d": 0.05401208312401603,
+     "rho other": 0.05401208312401603,
+     "NAIVE-NODEDUP": 0.05401208312401603,
+     "eager": 0.09276318135084845,
+     "roofline": 0.02611197123171996,
+     "line": 0.2299825913861968,
+     "OLS": 0.0674308948536288
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 32,
+    "sub_wave": true
+   },
+   {
+    "model": "granite-3.0-1b-a400m",
+    "page": "granite-3.0-1b-a400m-main",
+    "label": "US-T128",
+    "T": 128,
+    "role": "UNIFORM-UNSHUFFLED",
+    "counts_sha256": "a0dd44eeb61f535843ff3b37319a894b2c50110a043da2c921f49442f31ffa46",
+    "ms": {
+     "v4d": 0.05401208312401603,
+     "rho other": 0.05401208312401603,
+     "NAIVE-NODEDUP": 0.05401208312401603,
+     "eager": 0.09276318135084845,
+     "roofline": 0.02611197123171996,
+     "line": 0.2299825913861968,
+     "OLS": 0.0674308948536288
+    },
+    "path": "block-scan",
+    "tile": "64x128x64w4s3",
+    "A": 32,
+    "sub_wave": true
+   }
+  ]
+ },
+ "rental": {
+  "units_min": 72,
+  "boot_setup_min": 25,
+  "wall_min": 111,
+  "cost_usd": 4.24,
+  "rate": "gpu_1x_gh200 at $2.29/h",
+  "deadline_after_launch_min": 125,
+  "hard_cap_after_launch_min": 140,
+  "cost_at_hard_cap_usd": 5.34,
+  "rule": "units (prelude, calibrate and the CAL census included) x 1/0.84 (rentals 4 to 7) plus 25 min boot and setup; deadline launch + wall + 15 min, rounded to 5 min; the guardian's hard cap 15 min later",
+  "plan": "scripts/plans/rentalV7B-decode-blind-2026-11.plan",
+  "plan_sha256": "74ded4bc06b40dde38e3d19ba15b244555ccf7e6223cdf808b8032ad2d7c908e",
+  "driver": "scripts/gh200_decode_session.sh (pinned, unchanged)",
+  "launcher": "scripts/vm_run_v7b.sh: scripts/vm_run_rr.sh (RR's, with the apt-lock fix MOE_VM_APT_BUDGET_S and the prepare lock handling) with three changes marked V7B: the decode driver is its only session driver and the default, and start refuses a plan with a DRAFT line",
+  "lock": "1710 MHz at G 1 (G4 1705), 700 W (prelude), as every decode rental",
+  "guardian": "outside the repository (moe-kernels-work 2026-11-17 guardians/tV7B_*): deadline launch + 125 min, hard cap launch + 140 min, terminate on the cap"
+ },
+ "disclosures": [
+  "the owner's reopening of 2026-11-17: decode closed after v6d under the stopping rule of 2026-11-10 and reopened for v7 with every decode page, both decode blind failures and both NO-GO gates in view (a forking path the paper must disclose)",
+  "the gate outcome is known before this registration: design-v7 priced the decode gate pages (CAL2 GO; re-score about 3.19% with D6FIX), and the v7 build computed CAL2 under v7 (GO, 1.60% rms) and the re-score (3.19%) before the gate registration; this draft recomputes the CAL2 refit (the same numbers) and does not re-score the SEEN blind",
+  "D6-24 was found on SEEN pages after addendum 6's gate, and D6FIX chosen knowing it moves the 13 seen v4d'-branch cells from 13.2% to 1.36% rms; on this blind's 143 cells D6FIX moves none (every naive main cell takes the law branch), so v7's blind prices equal v6d's at the same CAL2 fit",
+  "Qwen2-57B-A14B's decode-size calls were timed before the decode stage: vLLM and SGLang fused_experts at T 1 to 128 on H200 (tuned config) and on A100 (2026-08-28 a100-cross-card, vLLM's default config: its decode tiles on another card); none on a GH200, none under this apparatus, and no decode constant was fitted on them",
+  "every v7 decode constant was read or fitted on SEEN pages (PC, PC2, DS, CAL2); v6d's choices were made after the old decode blind was seen",
+  "the bars are the ones registered for these cells before any page: addendum 5 line 9 'new blind bars (owner, D4-1): rms 3% per model, worst cell 8%, |mean| 1.5%', carried unchanged by addendum 6 (2026-11-10, line 159); the cells were registered on 2026-11-04 (addendum 5) and again under v6d (addendum 6), never run",
+  "v7's re-score of the SEEN decode blind (about 3.19% pooled; Granite-3B 5.85% rms, Qwen1.5 with D6FIX about 2%) suggests a hard test at 3% per model (ESTIMATE below)"
+ ],
+ "expected (ESTIMATE, judgment, not computed)": "v7 prices these cells exactly as v6d did at the same fit; addendum 6 estimated, at these bars, the pooled bar holding about 0.05, at least one model certified about 0.05, per-model odds at a model's own bars Qwen2-57B about 0.45, Mixtral-8x22B about 0.35, Granite-1B about 0.05 (addendum 6 'expected', quoted, not recomputed)",
+ "unchanged": "every earlier registration, page, verdict and pinned file; the decode driver and setup_vm.sh; the 1710 lock and 700 W; the v7 gate registration and its bars",
+ "freeze": {
+  "statement": "the scorer (score_blind_v7.py) refuses unless every file of the v7 gate registration's freeze has its sha256 there and v7's constants hash is the one registered there (v7 as the gate froze it), and every file under 'own' has its sha256 here; the plan's sha256 is computed by the registration builder from the same document",
+  "gate registration": {
+   "name": "2026-11-17-v7-gate-gh200",
+   "json sha256": "6336a5c91679c24a0777bced6e7deb379c59e6f342c4b41ae4fcb90ae8ae5af1",
+   "files": 148,
+   "constants_sha256": "97d4445c3f5f236dc4bd09cf248c0b28ebf702eeb596c07c276f9542fa9c87a6"
+  },
+  "own": {
+   "docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json": "c6ca50e390038e6b0d56d4f0b03ef77aa46fb0e3f0117a82113b2f8ac4c623e1",
+   "docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json": "506f5859c94d0bdc04e5db68bd948abd1f42ffb6c10d48664e6d114f78da5b0f",
+   "docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json": "c7ed43441e3aa1957d7a26fbba664b3e47749abba212909dcd68115fcb47d678",
+   "docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json": "5d64b061becff9ac3cfe30ca221adaff82c4d7b80f7b3e830a766aac7dfa95cb",
+   "docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json": "625a6b2d028c9d01add279ef758df23c97d4f8816bf066ffc6ef1cb09a4c67d6",
+   "scripts/gh200_decode_session.sh": "a4a906a229c41153ae8a736919430da371a94c90ddf863f4adf37c2d2e52076d",
+   "scripts/setup_vm.sh": "e4672e0284094215ee8117dff63ec47b63eb2bbcca261ebd987e7b29023f416f",
+   "scripts/vm_results_push.sh": "b09221033775aa352473096f26a1e7c9c345c7cea2c8fe0610d2701162fea87c",
+   "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+   "scripts/vm_run_v7b.sh": "251bb5e9de2aa2954ff425a244ccfb3924e59e8e84d8f6759d76df6f3fb32cd5",
+   "scripts/vm_run_rr.sh": "06d70833986aa733f01f15525cffa914b40bb8c6b0d0a3c244fce4af69428663",
+   "scripts/scoring/v7blind/v7bcommon.py": "55462f94bf859afa868e02a23b91f5123f32e84d909a78d139922ac7a6eeddca",
+   "scripts/scoring/v7blind/register_v7_blind.py": "01c1dc733748fd4faa08f4dcde0ceabef80cf2ba60c0d47e0af90a95940e8acd",
+   "scripts/scoring/v7blind/score_blind_v7.py": "4ed3b04f8e4d06c67a1a792af8ef9c909a1f16f723ef9ab11cf22b6a4bee8266",
+   "scripts/scoring/decode/cal2.score.json": "f71e547740141c5c0bb16342ad55a0eda20662ef51e4d633919ee4de14665754",
+   "scripts/scoring/decode/decodeB.finalised.json": "0863cba725abe063a8cec568f5ae5e4e5ecf5ae9ead92566c3f235f7d6288cc7",
+   "scripts/scoring/decode/blind.score.txt": "f722cb9bdc3433f3d1cb0e58276b50ca9d7c93bd39d57e04c0cbd6307524aa04",
+   "scripts/scoring/decode/regdecode.py": "e39a7eccc52811933473da1c9e23b81e9aed7f24406b30c2d72d2f482bcd2e28",
+   "docs/registered/2026-10-14-decodeB-blind-gh200.json": "f5241a5e7dc3a31189bba0863034802c91182b98c6a3ba50cc2a44064c93e570",
+   "docs/registered/2026-10-14-decodeB-blind-gh200.txt": "63364909784c7d3230626ed5c4ef3d4e717271e66ae4e2a632c5da4db4384869",
+   "docs/registered/2026-10-28-decode-addendum2-gh200.json": "5d5cfed099a0104d91c3ecd834886ebf0ac391461ca7c6aee889176dc9bde75a",
+   "docs/registered/2026-10-29-decode-addendum3-gh200.json": "87ed9a870ef6a242a376ce92fcff26b377e0f952f3ec299f750d15279f3fa07e",
+   "docs/registered/2026-10-29-decode-addendum3-gh200.txt": "fb3382e763047048f621c31013543cb2d6d3e5d0a53569580ff8c57e8d47f8c3",
+   "docs/registered/2026-11-04-decode-addendum5-gh200.json": "cd04f8e5300c694ce33239993f8d5b80275c82d22e8b559c71912210e6ffd4f1",
+   "docs/registered/2026-11-04-decode-addendum5-gh200.txt": "0921e354806538b1543265251198fa5f69357acd1c334427fc775540ec79c9fe",
+   "docs/registered/2026-11-17-v7-gate-gh200.json": "6336a5c91679c24a0777bced6e7deb379c59e6f342c4b41ae4fcb90ae8ae5af1",
+   "docs/registered/2026-11-17-v7-gate-gh200.txt": "16557b8165ebff50021b24de7d1e3974f225a0d5d0c66326e1108e5f2885646f"
+  }
+ }
+}

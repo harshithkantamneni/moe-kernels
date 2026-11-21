@@ -1,0 +1,389 @@
+{
+ "what": "committed scorer outputs for OUTLINE ledger rows 10 to 43 (gap 6.8)",
+ "m5_note": "grading/checks/m5_scores.py reads no manifest; it counts any committed JSON with \"tool\": \"scripts/cross_model_score.py\" as MISMATCH (rerun not implemented there). tests/test_paper_crossmodel.py is the rerun check.",
+ "runs": [
+  {
+   "output": [
+    "scripts/scoring/crossmodel/olmoe-1b-7b.score.json",
+    "scripts/scoring/crossmodel/olmoe-1b-7b.score.txt"
+   ],
+   "scorer": "scripts/cross_model_score.py",
+   "scorer_commit": "7d9a1a1",
+   "argv": [
+    "scripts/cross_model_score.py",
+    "--target",
+    "olmoe-1b-7b",
+    "--source-timed",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-04d9320b",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g3-l2flushtrue-modelmixtral_8x7b-e20972ef",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g32-l2flushtrue-modelmixtral_8x7-8ab16728",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-848523de",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g8-l2flushtrue-modelmixtral_8x7b-2085264b",
+    "--source-counters",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--target-timed",
+    "results/published/2026-09-29-nvidia_gh200_480gb-olmoe-session/results/gaps-nvidia_gh200_480gb/private_weight_reference",
+    "--target-counters",
+    "results/published/2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--out",
+    "scripts/scoring/crossmodel/olmoe-1b-7b.score.json"
+   ],
+   "stdout_to": "scripts/scoring/crossmodel/olmoe-1b-7b.score.txt",
+   "registration": "docs/registered/2026-09-29-olmoe-1b-7b-gh200.json",
+   "ledger_rows": [
+    20
+   ],
+   "quantity": "time from the target's own counted bytes",
+   "head_flags": [
+    "--no-cta-fixed",
+    "--no-cores"
+   ]
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/qwen1.5-moe-a2.7b.score.json",
+    "scripts/scoring/crossmodel/qwen1.5-moe-a2.7b.score.txt"
+   ],
+   "scorer": "scripts/cross_model_score.py",
+   "scorer_commit": "0f77622",
+   "argv": [
+    "scripts/cross_model_score.py",
+    "--target",
+    "qwen1.5-moe-a2.7b",
+    "--source-timed",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-04d9320b",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g3-l2flushtrue-modelmixtral_8x7b-e20972ef",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g32-l2flushtrue-modelmixtral_8x7-8ab16728",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-848523de",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g8-l2flushtrue-modelmixtral_8x7b-2085264b",
+    "--source-counters",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--target-timed",
+    "results/published/2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/gaps-nvidia_gh200_480gb/private_weight_reference",
+    "--target-counters",
+    "results/published/2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--out",
+    "scripts/scoring/crossmodel/qwen1.5-moe-a2.7b.score.json"
+   ],
+   "stdout_to": "scripts/scoring/crossmodel/qwen1.5-moe-a2.7b.score.txt",
+   "registration": "docs/registered/2026-09-29-qwen1.5-moe-a2.7b-gh200.json",
+   "ledger_rows": [
+    25
+   ],
+   "quantity": "time from the target's own counted bytes",
+   "head_flags": [
+    "--no-cores"
+   ]
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/phi-3.5-moe.score.json",
+    "scripts/scoring/crossmodel/phi-3.5-moe.score.txt"
+   ],
+   "scorer": "scripts/cross_model_score.py",
+   "scorer_commit": "0f77622",
+   "argv": [
+    "scripts/cross_model_score.py",
+    "--target",
+    "phi-3.5-moe",
+    "--source-timed",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-04d9320b",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g3-l2flushtrue-modelmixtral_8x7b-e20972ef",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g32-l2flushtrue-modelmixtral_8x7-8ab16728",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-848523de",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g8-l2flushtrue-modelmixtral_8x7b-2085264b",
+    "--source-counters",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--target-timed",
+    "results/published/2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/gaps-nvidia_gh200_480gb/private_weight_reference",
+    "--target-counters",
+    "results/published/2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--out",
+    "scripts/scoring/crossmodel/phi-3.5-moe.score.json"
+   ],
+   "stdout_to": "scripts/scoring/crossmodel/phi-3.5-moe.score.txt",
+   "registration": "docs/registered/2026-09-29-phi-3.5-moe-gh200.json",
+   "ledger_rows": [
+    29
+   ],
+   "quantity": "time from the target's own counted bytes",
+   "head_flags": [
+    "--no-cores"
+   ]
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/jetmoe-8b.score.json",
+    "scripts/scoring/crossmodel/jetmoe-8b.score.txt"
+   ],
+   "scorer": "scripts/cross_model_score.py",
+   "scorer_commit": "0f77622",
+   "argv": [
+    "scripts/cross_model_score.py",
+    "--target",
+    "jetmoe-8b",
+    "--source-timed",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-04d9320b",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g3-l2flushtrue-modelmixtral_8x7b-e20972ef",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g32-l2flushtrue-modelmixtral_8x7-8ab16728",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-848523de",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g8-l2flushtrue-modelmixtral_8x7b-2085264b",
+    "--source-counters",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--target-timed",
+    "results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g3-l2flushtrue-modeljetmoe_8b-n64-p-593be327",
+    "results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g32-l2flushtrue-modeljetmoe_8b-n64-1f286b22",
+    "results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modeljetmoe_8b-n64-p-9b196085",
+    "results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modeljetmoe_8b-n64-p-d9bd231b",
+    "--target-counters",
+    "results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--out",
+    "scripts/scoring/crossmodel/jetmoe-8b.score.json"
+   ],
+   "stdout_to": "scripts/scoring/crossmodel/jetmoe-8b.score.txt",
+   "registration": "docs/registered/2026-09-29-jetmoe-8b-gh200.json",
+   "ledger_rows": [
+    33
+   ],
+   "quantity": "time from the target's own counted bytes",
+   "head_flags": [
+    "--no-cores"
+   ]
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/granite-3.0-3b-a800m.score.json",
+    "scripts/scoring/crossmodel/granite-3.0-3b-a800m.score.txt"
+   ],
+   "scorer": "scripts/cross_model_score.py",
+   "scorer_commit": "0f77622",
+   "argv": [
+    "scripts/cross_model_score.py",
+    "--target",
+    "granite-3.0-3b-a800m",
+    "--source-timed",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-04d9320b",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g3-l2flushtrue-modelmixtral_8x7b-e20972ef",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g32-l2flushtrue-modelmixtral_8x7-8ab16728",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-848523de",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g8-l2flushtrue-modelmixtral_8x7b-2085264b",
+    "--source-counters",
+    "results/published/2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--target-timed",
+    "results/published/2026-09-30-nvidia_gh200_480gb-granite-session/results/gaps-nvidia_gh200_480gb/private_weight_reference",
+    "--target-counters",
+    "results/published/2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710",
+    "--out",
+    "scripts/scoring/crossmodel/granite-3.0-3b-a800m.score.json"
+   ],
+   "stdout_to": "scripts/scoring/crossmodel/granite-3.0-3b-a800m.score.txt",
+   "registration": "docs/registered/2026-09-29-granite-3.0-3b-a800m-gh200.json",
+   "ledger_rows": [
+    37
+   ],
+   "quantity": "time from the target's own counted bytes",
+   "head_flags": [
+    "--no-cores"
+   ]
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/8x22b.registered.json",
+    "scripts/scoring/crossmodel/8x22b.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "8x22b",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/2026-09-27-mixtral-8x22b-gh200.json",
+   "session": "results/published/2026-09-28-nvidia_gh200_480gb-8x22b-session",
+   "ledger_rows": [
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/qwen2.registered.json",
+    "scripts/scoring/crossmodel/qwen2.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "qwen2",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/2026-09-28-qwen2-57b-a14b-gh200.json",
+   "session": "results/published/2026-09-28-nvidia_gh200_480gb-qwen2-57b-session",
+   "ledger_rows": [
+    15,
+    16,
+    17,
+    18,
+    19
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/olmoe.registered.json",
+    "scripts/scoring/crossmodel/olmoe.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "olmoe",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/2026-09-29-olmoe-1b-7b-gh200.json",
+   "session": "results/published/2026-09-29-nvidia_gh200_480gb-olmoe-session",
+   "ledger_rows": [
+    21,
+    22,
+    23
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/qwen1.5.registered.json",
+    "scripts/scoring/crossmodel/qwen1.5.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "qwen1.5",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/2026-09-29-qwen1.5-moe-a2.7b-gh200.json",
+   "session": "results/published/2026-09-29-nvidia_gh200_480gb-qwen1.5-session",
+   "ledger_rows": [
+    26,
+    27,
+    28
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/phi3.5.registered.json",
+    "scripts/scoring/crossmodel/phi3.5.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "phi3.5",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/2026-09-29-phi-3.5-moe-gh200.json",
+   "session": "results/published/2026-09-29-nvidia_gh200_480gb-phi3.5-session",
+   "ledger_rows": [
+    30,
+    31,
+    32
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/jetmoe.registered.json",
+    "scripts/scoring/crossmodel/jetmoe.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "jetmoe",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/2026-09-29-jetmoe-8b-gh200.json",
+   "session": "results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session",
+   "ledger_rows": [
+    34,
+    35,
+    36
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/granite.registered.json",
+    "scripts/scoring/crossmodel/granite.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "granite",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/2026-09-29-granite-3.0-3b-a800m-gh200.json",
+   "session": "results/published/2026-09-30-nvidia_gh200_480gb-granite-session",
+   "ledger_rows": [
+    37,
+    38,
+    39,
+    40
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/jetmoe-floor.registered.json",
+    "scripts/scoring/crossmodel/jetmoe-floor.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "jetmoe-floor",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/README.md 2026-09-30 floor-only",
+   "session": "results/published/2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session",
+   "ledger_rows": [
+    42
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  },
+  {
+   "output": [
+    "scripts/scoring/crossmodel/mixtral-floor.registered.json",
+    "scripts/scoring/crossmodel/mixtral-floor.registered.txt"
+   ],
+   "scorer": "scripts/paper/score_registered.py",
+   "scorer_commit": "this tree",
+   "argv": [
+    "scripts/paper/score_registered.py",
+    "mixtral-floor",
+    "--out-dir",
+    "scripts/scoring/crossmodel"
+   ],
+   "registration": "docs/registered/README.md 2026-09-30 floor-only",
+   "session": "results/published/2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session",
+   "ledger_rows": [
+    43
+   ],
+   "quantity": "time from predicted bytes, G>=8 slope, floor, bytes"
+  }
+ ]
+}

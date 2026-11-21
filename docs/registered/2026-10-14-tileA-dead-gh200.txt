@@ -1,0 +1,53 @@
+REGISTERED 2026-10-14, before any tile-stage page: the tile stage, rental A, 2026-10-14-tileA-dead-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4
+tool: scorer scripts/scoring/tileA/score_dead.py; tcommon.dead_rule
+
+c128 600: {'D': 12.13104, 'D2': 11.94816, 'SLOT': 24.6888, 'kappa 0.15': 12.13104, 'kappa 0': 12.13104, 'd 1.06': 12.92352}
+c128 900: {'D': 10.019166, 'D2': 10.104338, 'SLOT': 24.6888, 'kappa 0.15': 12.13104, 'kappa 0': 12.13104, 'd 1.06': 11.406526}
+c128 1100: {'D': 7.570465, 'D2': 7.843998, 'SLOT': 24.6888, 'kappa 0.15': 12.13104, 'kappa 0': 12.13104, 'd 1.06': 8.957825}
+
+what: the dead-CTA lever at occupancy 2 (design-tile 3.1 step 7, design-tile-review 7): SHARED at 15 against 9 copies on OLMoE 128x128x64 w8 G 1, where the hidden window kappa x occ x S' x c is half R3's
+pages:
+  units:
+    - olmoe-1b-7b timed label=d9 (declared-copies 9)
+    - olmoe-1b-7b timed label=d15 (declared-copies 15)
+  files: (in the JSON)
+  drop_group: dk (dropped first)
+  tread: n 1, uniform and balanced (design-tile-review 7 and 9.12: the increment does not depend on n)
+statistic: per (label): delta = [(T_S - T_N) at c15 - (T_S - T_N) at c9] - [(A_S - A_N) at c15 - (A_S - A_N) at c9], the second bracket the align growth read off each page's own align_probe (design-tile-review 9.12); delta is the median over the page's (label) cells
+se: se(delta) = 2 x sigma_page x mean(T) / sqrt(cells): four timed cells per difference; sigma_page is tA-rep's when it ran, else rental 3's 0.18% (design-tile-review 9.8)
+laws_predicted_us (derived from the v2 forms at the tile):
+  c128 600:
+    D: 12.13104
+    D2: 11.94816
+    SLOT: 24.6888
+    kappa 0.15: 12.13104
+    kappa 0: 12.13104
+    d 1.06: 12.92352
+  c128 900:
+    D: 10.019166
+    D2: 10.104338
+    SLOT: 24.6888
+    kappa 0.15: 12.13104
+    kappa 0: 12.13104
+    d 1.06: 11.406526
+  c128 1100:
+    D: 7.570465
+    D2: 7.843998
+    SLOT: 24.6888
+    kappa 0.15: 12.13104
+    kappa 0: 12.13104
+    d 1.06: 8.957825
+rule:
+  D against SLOT: each law's z = (delta - law) / se; EXCLUDED when |z| > 3. D (0.995 ns, kappa 0.325) and SLOT (4.05 ns / occ) differ by 12 to 17 us here (at R3's occupancy they did not separate)
+  kappa 0.325 against smaller kappa: scored only when the measured c_128 >= 900 cycles (below it every kappa hides nothing and the laws coincide); the comparison is D against 'kappa 0.15' and 'kappa 0'
+  NOT SEPARABLE (stated before the page):
+    - D2 against D (v2): within 0.3 us at every c_128
+    - kappa 0 against kappa 0.15: identical at every c_128 here
+  consequence: none for E1-TILE (NATIVE): the reading informs term (b)'s copies question (D9) and E1-TILE-S
+labels:
+  pages: BLIND-CALMODEL (OLMoE is CAL-counters for d and kappa: the laws' constants are SEEN-fitted)
+seen_data:
+  - d 0.995, kappa 0.325 (v2, CAL)
+  - D2, SLOT, kappa 0.15, d 1.06 (SEEN readings of rental 7, design-tile 6)

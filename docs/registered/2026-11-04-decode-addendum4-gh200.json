@@ -1,0 +1,1774 @@
+{
+ "registered": "2026-11-04, before any DS page",
+ "name": "2026-11-04-decode-addendum4-gh200",
+ "status": "REGISTERED BEFORE ANY DS PAGE: the decode stage's fourth addendum, a MEASUREMENT registration only (no model form, no constant, no gate); every earlier decode registration stays byte-identical (pinned here); every registered verdict stands (the decode blind FAIL of 2026-11-04 included)",
+ "design": "the decode blind FAIL's two offline diagnoses (~/code/moe-kernels-work/2026-11-04/diag-blind/DIAGNOSIS.md (offline, read-only against 82364213); ~/code/moe-kernels-work/2026-11-04/diag-residual/DIAGNOSIS.md (offline, read-only against b2fb3402)) and the owner's decisions of 2026-11-04. Kept from the earlier builds of this addendum (never registered): D4-2a a short DESCRIPTIVE settling rental DS on SEEN models; D4-5 the align-loop slope measured, not assumed 0. Superseded by D4-7 (never registered, never code): D4-2b v4d'' and its terms, D4-2c the new blind's pages and scorers, D4-3 the gate, finalisation and blind wrappers, D4-4 the coded launch gate, D4-6 the re-registered model readings (DRAIN, W1RATE, CALL, BLOCK as v4d'' terms, BLOCKING). D4-7 (owner, 2026-11-04, after the v3 build's POST-HOC preview): DS registers NO model form and no v4d'' constants; its registration is a measurement registration only (the units and cells, the stop rules, and what each reading is and how it is computed from the pages, all DESCRIPTIVE); every DS unit is nodrop; Phi T 96 A 5 and T 128 A 3 are added, and the ladders must identify both regimes (sub-wave few-CTA slow cells and wave-boundary drain) on every decode tile, the cheapest SEEN cells added where a tile lacks them; the v4d'' model, the gate and the finalise and score scripts for the new blind are removed, to be built in the next round after DS; the future gate is recorded as intent only. D4-8 (owner, 2026-11-04, after the v4 build showed every expert of Phi T 96 A 5 and T 128 A 3 past BLOCK_M): those two cells are replaced by Phi T 80 A 5, Phi T 80 A 6, OLMoE T 128 A 16 and OLMoE T 128 A 32, a third DRAIN model on 32x128x64w4s3 and 64x128x64w4s3 (A 32 gives OLMoE a crossing row past one boundary, as JetMoE's and Qwen1.5's), each checked for rows per expert against BLOCK_M and its wave structure; and DS runs a tile census of its own with CAL's census gate: the reader's occupancy stop rule reads DS's census, CAL2's census becomes a reported cross-check, and a difference between the two is a STOP for the per-CTA readings",
+ "tool": "after DS: scripts/scoring/decode/read_ds.py <DS tree> <out> (DESCRIPTIVE readings); scripts/scoring/decode/reproduce_d4.py results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session/results results/published/2026-11-04-nvidia_gh200_480gb-decodeBlind-session/results",
+ "measurement registration (owner, 2026-11-04, D4-7)": {
+  "decision (owner, 2026-11-04, D4-7)": "DS registers no model form and no v4d'' constants. Its registration is a measurement registration only: the units and cells; the stop rules; and what each reading is and how it is computed from the pages, all DESCRIPTIVE",
+  "the model form": "The decode model form for the new blind will be chosen after DS, from DS's and CAL2's pages; it will be frozen and registered before any page of the three new blind models (Mixtral-8x22B, Qwen2-57B-A14B, Granite-3.0-1B-A400M), which remain unseen",
+  "disclosure (plain words)": "The earlier decode blind pages (Phi-3.5, Qwen1.5, JetMoE, deepseek-v2-lite, Granite-3B; published 2026-11-04) were seen during the diagnosis: the two offline diagnoses of 2026-11-04 read them, and what they showed (a drain at wave boundaries, slow few-CTA GEMMs, per-model call kernels, a per-tile w1 rate) chose what DS measures; any later re-score of those pages is a weak sanity floor, never a test",
+  "not registered here": [
+   "any decode model form (v4d'' of the earlier builds is removed)",
+   "any constant",
+   "any launch gate in code",
+   "the new blind's pages, plan, finalisation or scorer"
+  ],
+  "cells added (COMPUTED)": {
+   "cells": [
+    {
+     "model": "phi-3.5-moe",
+     "cell": "S-T80-A5",
+     "tile": "32x128x64w4s3",
+     "BLOCK_M": 32,
+     "path": "small-batch",
+     "rows_per_expert": [
+      32,
+      32
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 500,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 1.059389
+      },
+      "w2": {
+       "n": 160,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 1.659392
+      }
+     },
+     "why": "DRAIN",
+     "pairs": 1,
+     "profiled_s": 18.0
+    },
+    {
+     "model": "phi-3.5-moe",
+     "cell": "S-T80-A6",
+     "tile": "32x128x64w4s3",
+     "BLOCK_M": 32,
+     "path": "small-batch",
+     "rows_per_expert": [
+      26,
+      27
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 600,
+       "S": 528,
+       "wave": "crossing",
+       "b_MB": 1.058953
+      },
+      "w2": {
+       "n": 192,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 1.657259
+      }
+     },
+     "why": "DRAIN",
+     "pairs": 1,
+     "profiled_s": 18.0
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "cell": "S-T128-A16",
+     "tile": "64x128x64w4s3",
+     "BLOCK_M": 64,
+     "path": "block-scan",
+     "rows_per_expert": [
+      64,
+      64
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_MB": 0.557056
+      },
+      "w2": {
+       "n": 256,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_MB": 0.28672
+      }
+     },
+     "why": "DRAIN",
+     "pairs": 1,
+     "profiled_s": 18.0
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "cell": "S-T128-A32",
+     "tile": "64x128x64w4s3",
+     "BLOCK_M": 64,
+     "path": "block-scan",
+     "rows_per_expert": [
+      32,
+      32
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_MB": 0.548864
+      },
+      "w2": {
+       "n": 512,
+       "S": 396,
+       "wave": "crossing",
+       "b_MB": 0.282624
+      }
+     },
+     "why": "DRAIN",
+     "pairs": 1,
+     "profiled_s": 18.0
+    },
+    {
+     "model": "phi-3.5-moe",
+     "cell": "S-T96-A16",
+     "tile": "32x128x64w4s3",
+     "BLOCK_M": 32,
+     "path": "small-batch",
+     "rows_per_expert": [
+      12,
+      12
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 1600,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_MB": 1.057751
+      },
+      "w2": {
+       "n": 512,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 1.651392
+      }
+     },
+     "why": "SUBWAVE",
+     "pairs": 1,
+     "profiled_s": 18.0
+    },
+    {
+     "model": "qwen1.5-moe-a2.7b",
+     "cell": "S-T96-A12",
+     "tile": "32x128x64w4s3",
+     "BLOCK_M": 32,
+     "path": "small-batch",
+     "rows_per_expert": [
+      32,
+      32
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 264,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 0.538438
+      },
+      "w2": {
+       "n": 192,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 0.374272
+      }
+     },
+     "why": "SUBWAVE",
+     "pairs": 1,
+     "profiled_s": 18.0
+    },
+    {
+     "model": "qwen1.5-moe-a2.7b",
+     "cell": "S-T96-A24",
+     "tile": "32x128x64w4s3",
+     "BLOCK_M": 32,
+     "path": "small-batch",
+     "rows_per_expert": [
+      16,
+      16
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 528,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 0.535459
+      },
+      "w2": {
+       "n": 384,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 0.371456
+      }
+     },
+     "why": "SUBWAVE",
+     "pairs": 1,
+     "profiled_s": 18.0
+    },
+    {
+     "model": "mixtral-8x7b",
+     "cell": "S-T96-A7",
+     "tile": "32x128x64w4s3",
+     "BLOCK_M": 32,
+     "path": "small-batch",
+     "rows_per_expert": [
+      27,
+      28
+     ],
+     "experts_over_BLOCK_M": 0,
+     "enters_gemm_readings": true,
+     "gemms": {
+      "w1": {
+       "n": 1568,
+       "S": 528,
+       "wave": "multi-wave",
+       "b_MB": 1.057771
+      },
+      "w2": {
+       "n": 224,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 3.702784
+      }
+     },
+     "why": "W1RATE",
+     "pairs": 1,
+     "profiled_s": 18.0
+    }
+   ],
+   "units": {
+    "phi-3.5-moe": {
+     "est (before, after)": [
+      6,
+      7
+     ]
+    },
+    "olmoe-1b-7b": {
+     "est (before, after)": [
+      4,
+      5
+     ]
+    },
+    "qwen1.5-moe-a2.7b": {
+     "est (before, after)": [
+      6,
+      6
+     ]
+    },
+    "mixtral-8x7b": {
+     "est (before, after)": [
+      6,
+      7
+     ]
+    }
+   },
+   "units min (before, with the cells, with the cells and the census)": [
+    40,
+    43,
+    49
+   ],
+   "wall min (same)": [
+    73,
+    76,
+    83
+   ],
+   "cost at $2.29/h (same)": [
+    2.79,
+    2.9,
+    3.17
+   ],
+   "unit min added (cells, census)": [
+    3,
+    6
+   ],
+   "cost added at $2.29/h": 0.38,
+   "profiled time added by the cells": "144 s (about $0.11 at $2.29/h before the estimator's rounding)"
+  },
+  "the cells D4-8 replaced (COMPUTED)": {
+   "cells": [
+    {
+     "model": "phi-3.5-moe",
+     "cell": "S-T96-A5",
+     "tile": "32x128x64w4s3",
+     "BLOCK_M": 32,
+     "path": "small-batch",
+     "rows_per_expert": [
+      38,
+      39
+     ],
+     "experts_over_BLOCK_M": 5,
+     "enters_gemm_readings": false,
+     "gemms": {
+      "w1": {
+       "n": 1000,
+       "S": 528,
+       "wave": "crossing",
+       "b_MB": 1.058341
+      },
+      "w2": {
+       "n": 320,
+       "S": 528,
+       "wave": "sub-wave",
+       "b_MB": 1.654272
+      }
+     }
+    },
+    {
+     "model": "phi-3.5-moe",
+     "cell": "S-T128-A3",
+     "tile": "64x128x64w4s3",
+     "BLOCK_M": 64,
+     "path": "small-batch",
+     "rows_per_expert": [
+      85,
+      86
+     ],
+     "experts_over_BLOCK_M": 3,
+     "enters_gemm_readings": false,
+     "gemms": {
+      "w1": {
+       "n": 600,
+       "S": 396,
+       "wave": "crossing",
+       "b_MB": 1.068455
+      },
+      "w2": {
+       "n": 192,
+       "S": 396,
+       "wave": "sub-wave",
+       "b_MB": 1.671851
+      }
+     }
+    }
+   ],
+   "why": "Phi T 96 A 5 (32x128x64w4s3, BLOCK_M 32) holds 38 to 39 rows per expert and T 128 A 3 (64x128x64w4s3, BLOCK_M 64) 85 to 86: every expert is past BLOCK_M, so both fell outside the GEMM readings' row rule and entered CALLS and ALIGN only; their w1 GEMMs run two M-tiles per expert and cross a wave (n 1000 and 600). D4-8 replaces them"
+  },
+  "the owner's four cells of D4-8 (plain words; cells added holds the COMPUTED checks)": "Phi T 80 A 5 holds 32 rows per expert against BLOCK_M 32 (none past) with w1 n 500 within one wave (S 528), and Phi T 80 A 6 holds 26 to 27 rows with w1 n 600 across one boundary (S < n < 2S); together they make phi-3.5-moe/T80/w1 MIXED on 32x128x64w4s3 (b 1.06 MB), a third DRAIN model there beside JetMoE and Qwen1.5. OLMoE T 128 A 16 holds 64 rows per expert against BLOCK_M 64 (none past), block-scan, w1 and w2 n 256 within one wave (S 396), and a second block-scan row at E 64. OLMoE T 128 A 32 holds 32 rows per expert (block-scan) with w1 and w2 n 512 past one boundary (S < n < 2S), as JetMoE's and Qwen1.5's crossing rows on that tile; with T 128 A 64 (n 1024, 2.59 waves) they make olmoe-1b-7b/T128/w1 and /w2 MIXED on 64x128x64w4s3 (b 0.55 and 0.28 MB), a third DRAIN model there beside JetMoE and Qwen1.5",
+  "DS's own census (owner, 2026-11-04, D4-8)": "- tilecensus label=ds tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=jetmoe-8b,phi-3.5-moe,mixtral-8x7b,granite-3.0-3b-a800m,qwen1.5-moe-a2.7b,olmoe-1b-7b nodrop=1 est=6 cap=25: about 6 unit-min, read by the census gate and the occupancy rule; CAL2's census is a reported cross-check, and a difference is a STOP for the per-CTA readings",
+  "identification on DS's own pages (COMPUTED, if every unit runs)": {
+   "SUBWAVE": {
+    "16x64x128w4s4": {
+     "ladders": [
+      "jetmoe-8b/T4/w2",
+      "mixtral-8x7b/T4/w2",
+      "phi-3.5-moe/T4/w2"
+     ],
+     "models": [
+      "jetmoe-8b",
+      "mixtral-8x7b",
+      "phi-3.5-moe"
+     ],
+     "few_cta_n": {
+      "jetmoe-8b/T4/w2": 64,
+      "mixtral-8x7b/T4/w2": 128,
+      "phi-3.5-moe/T4/w2": 128
+     },
+     "identified": true
+    },
+    "32x64x128w4s3": {
+     "ladders": [
+      "jetmoe-8b/T64/w2",
+      "mixtral-8x7b/T64/w2"
+     ],
+     "models": [
+      "jetmoe-8b",
+      "mixtral-8x7b"
+     ],
+     "few_cta_n": {
+      "jetmoe-8b/T64/w2": 128,
+      "mixtral-8x7b/T64/w2": 256
+     },
+     "identified": true
+    },
+    "32x128x64w4s3": {
+     "ladders": [
+      "phi-3.5-moe/T96/w2",
+      "qwen1.5-moe-a2.7b/T96/w1"
+     ],
+     "models": [
+      "phi-3.5-moe",
+      "qwen1.5-moe-a2.7b"
+     ],
+     "few_cta_n": {
+      "phi-3.5-moe/T96/w2": 192,
+      "qwen1.5-moe-a2.7b/T96/w1": 264
+     },
+     "identified": true
+    },
+    "64x128x64w4s3": {
+     "ladders": [
+      "jetmoe-8b/T128/w2",
+      "mixtral-8x7b/T128/w2",
+      "phi-3.5-moe/T128/w2"
+     ],
+     "models": [
+      "jetmoe-8b",
+      "mixtral-8x7b",
+      "phi-3.5-moe"
+     ],
+     "few_cta_n": {
+      "jetmoe-8b/T128/w2": 64,
+      "mixtral-8x7b/T128/w2": 128,
+      "phi-3.5-moe/T128/w2": 128
+     },
+     "identified": true
+    }
+   },
+   "DRAIN": {
+    "16x64x128w4s4": {
+     "ladders": [
+      "granite-3.0-3b-a800m/T4/w1",
+      "granite-3.0-3b-a800m/T4/w2",
+      "granite-3.0-3b-a800m/T8/w1",
+      "granite-3.0-3b-a800m/T8/w2",
+      "jetmoe-8b/T4/w1",
+      "olmoe-1b-7b/T4/w1",
+      "olmoe-1b-7b/T4/w2",
+      "olmoe-1b-7b/T8/w1",
+      "olmoe-1b-7b/T8/w2",
+      "qwen1.5-moe-a2.7b/T4/w1",
+      "qwen1.5-moe-a2.7b/T4/w2",
+      "qwen1.5-moe-a2.7b/T8/w1",
+      "qwen1.5-moe-a2.7b/T8/w2"
+     ],
+     "models": [
+      "granite-3.0-3b-a800m",
+      "jetmoe-8b",
+      "olmoe-1b-7b",
+      "qwen1.5-moe-a2.7b"
+     ],
+     "identified": true
+    },
+    "32x64x128w4s3": {
+     "ladders": [
+      "granite-3.0-3b-a800m/T64/w1",
+      "granite-3.0-3b-a800m/T64/w2",
+      "phi-3.5-moe/T64/w2",
+      "qwen1.5-moe-a2.7b/T64/w1",
+      "qwen1.5-moe-a2.7b/T64/w2"
+     ],
+     "models": [
+      "granite-3.0-3b-a800m",
+      "phi-3.5-moe",
+      "qwen1.5-moe-a2.7b"
+     ],
+     "identified": true
+    },
+    "32x128x64w4s3": {
+     "ladders": [
+      "jetmoe-8b/T96/w1",
+      "phi-3.5-moe/T80/w1",
+      "qwen1.5-moe-a2.7b/T96/w1"
+     ],
+     "models": [
+      "jetmoe-8b",
+      "phi-3.5-moe",
+      "qwen1.5-moe-a2.7b"
+     ],
+     "identified": true
+    },
+    "64x128x64w4s3": {
+     "ladders": [
+      "jetmoe-8b/T128/w1",
+      "olmoe-1b-7b/T128/w1",
+      "olmoe-1b-7b/T128/w2",
+      "qwen1.5-moe-a2.7b/T128/w1",
+      "qwen1.5-moe-a2.7b/T128/w2"
+     ],
+     "models": [
+      "jetmoe-8b",
+      "olmoe-1b-7b",
+      "qwen1.5-moe-a2.7b"
+     ],
+     "identified": true
+    }
+   },
+   "W1RATE": {
+    "16x64x128w4s4": {
+     "ladders": [
+      "jetmoe-8b/T4",
+      "mixtral-8x7b/T4",
+      "phi-3.5-moe/T4",
+      "qwen1.5-moe-a2.7b/T8"
+     ],
+     "models": [
+      "jetmoe-8b",
+      "mixtral-8x7b",
+      "phi-3.5-moe",
+      "qwen1.5-moe-a2.7b"
+     ],
+     "identified": true
+    },
+    "32x64x128w4s3": {
+     "ladders": [
+      "jetmoe-8b/T64",
+      "mixtral-8x7b/T64",
+      "phi-3.5-moe/T64"
+     ],
+     "models": [
+      "jetmoe-8b",
+      "mixtral-8x7b",
+      "phi-3.5-moe"
+     ],
+     "identified": true
+    },
+    "32x128x64w4s3": {
+     "ladders": [
+      "mixtral-8x7b/T96",
+      "phi-3.5-moe/T96"
+     ],
+     "models": [
+      "mixtral-8x7b",
+      "phi-3.5-moe"
+     ],
+     "identified": true
+    },
+    "64x128x64w4s3": {
+     "ladders": [
+      "mixtral-8x7b/T128",
+      "olmoe-1b-7b/T128",
+      "phi-3.5-moe/T128"
+     ],
+     "models": [
+      "mixtral-8x7b",
+      "olmoe-1b-7b",
+      "phi-3.5-moe"
+     ],
+     "identified": true
+    }
+   },
+   "CALLS": {
+    "silu_and_mul": {
+     "x_by_model": {
+      "jetmoe-8b": 5632.0,
+      "phi-3.5-moe": 6400.0,
+      "mixtral-8x7b": 14336.0,
+      "granite-3.0-3b-a800m": 512.0,
+      "qwen1.5-moe-a2.7b": 1408.0,
+      "olmoe-1b-7b": 1024.0
+     },
+     "identified": true
+    },
+    "moe_sum": {
+     "x_by_model": {
+      "jetmoe-8b": 4096.0,
+      "phi-3.5-moe": 8192.0,
+      "mixtral-8x7b": 8192.0,
+      "granite-3.0-3b-a800m": 12288.0,
+      "qwen1.5-moe-a2.7b": 8192.0,
+      "olmoe-1b-7b": 16384.0
+     },
+     "identified": true
+    }
+   },
+   "BLOCK": {
+    "block_scan_E": [
+     40,
+     64
+    ],
+    "identified": true
+   },
+   "SLOPE": {
+    "iterations_by_E": {
+     "8": [
+      1,
+      4,
+      6,
+      8
+     ],
+     "16": [
+      1,
+      4,
+      5,
+      6,
+      8
+     ],
+     "32": [
+      1,
+      4
+     ],
+     "40": [
+      1,
+      2,
+      13,
+      20,
+      24
+     ],
+     "60": [
+      1,
+      5,
+      7,
+      9
+     ],
+     "64": [
+      1,
+      8
+     ]
+    },
+    "identified": true
+   },
+   "both_regimes_on_every_tile": true,
+   "all_identified": true
+  },
+  "every unit nodrop": "a unit that does not run leaves readings NOT IDENTIFIED; DS is DESCRIPTIVE, so nothing blocks"
+ },
+ "settling rental DS (owner, 2026-11-04, D4-2a)": {
+  "label": "DESCRIPTIVE: a rental of counter pages on SEEN models; every reading describes its pages",
+  "census unit (owner, 2026-11-04, D4-8)": "- tilecensus label=ds tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=jetmoe-8b,phi-3.5-moe,mixtral-8x7b,granite-3.0-3b-a800m,qwen1.5-moe-a2.7b,olmoe-1b-7b nodrop=1 est=6 cap=25",
+  "units": [
+   {
+    "model": "jetmoe-8b",
+    "step": "decodebytes",
+    "label": "ds",
+    "page": "docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json",
+    "keys": "kernels=wide",
+    "drop": "nodrop",
+    "est": 7,
+    "cap": 21
+   },
+   {
+    "model": "phi-3.5-moe",
+    "step": "decodebytes",
+    "label": "ds",
+    "page": "docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json",
+    "keys": "kernels=wide",
+    "drop": "nodrop",
+    "est": 7,
+    "cap": 21
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "decodebytes",
+    "label": "ds",
+    "page": "docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json",
+    "keys": "kernels=wide",
+    "drop": "nodrop",
+    "est": 7,
+    "cap": 21
+   },
+   {
+    "model": "granite-3.0-3b-a800m",
+    "step": "decodebytes",
+    "label": "ds",
+    "page": "docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json",
+    "keys": "kernels=wide",
+    "drop": "nodrop",
+    "est": 6,
+    "cap": 18
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "step": "decodebytes",
+    "label": "ds",
+    "page": "docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json",
+    "keys": "kernels=wide",
+    "drop": "nodrop",
+    "est": 6,
+    "cap": 18
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "decodebytes",
+    "label": "ds",
+    "page": "docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json",
+    "keys": "kernels=wide",
+    "drop": "nodrop",
+    "est": 5,
+    "cap": 15
+   }
+  ],
+  "plan": "scripts/plans/rentalDS-settle-d4-2026-11.plan",
+  "plan_sha256": "fec3c67f4910ddb4219ea3d60ef9b3c0073938a160872cd0125f5202c0a1aee2",
+  "driver": "scripts/gh200_decode3_session.sh (addendum 3's D3 copy, unchanged: its kernels=wide key runs dram_counter_route_decode3.py --kernels wide; DECL arms run through the pinned counter child's declared-copies path); no D4 driver copy, so vm_run.sh and docs/LAMBDA.md are unchanged",
+  "pages": {
+   "jetmoe-8b-ds.json": {
+    "path": "docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json",
+    "sha256": "29cacae04093c85d8da45309e896c5f364fe1a26939dc99401c5171adfe509c6",
+    "shuffle_seed": 20261014,
+    "decl_copies": 4,
+    "cells": [
+     {
+      "label": "S-T4-A2",
+      "T": 4,
+      "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A3",
+      "T": 4,
+      "counts_sha256": "22afe399d2751569dec53a015da99207c5fad933593883d369c4a230de2c088a",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A4",
+      "T": 4,
+      "counts_sha256": "ef2fb99443de686f4e0fd9aa8d510724541d339f7555e035887dba19697df430",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A8",
+      "T": 4,
+      "counts_sha256": "3c1425b38d52d1967a20a1ce4abe58b11af7d5260e368e378cbbc12574a967e8",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A8",
+      "T": 8,
+      "counts_sha256": "7d179ef22f20b3110950a8b8133fab4552fe8ffc4c97531fe8592b0ec0b0899b",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T16-A8",
+      "T": 16,
+      "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A4",
+      "T": 64,
+      "counts_sha256": "e90d02ab7a19ced397a580e4cc9f946f15d52240cea55c4d9607ce1b5b46a68c",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A8",
+      "T": 64,
+      "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A6",
+      "T": 96,
+      "counts_sha256": "c7dcd4a7d24e53328217e5b68a9874ae9c1cecf0042f18dcf6756a80a38f060a",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A8",
+      "T": 96,
+      "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A4",
+      "T": 128,
+      "counts_sha256": "b3a5e6524e6e3789aa20f6b83343907075feaf0ca1f5f69f5c59cb20b59cdaf7",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A8",
+      "T": 128,
+      "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ],
+    "what": "DS: the settling rental's counter page (kernels=wide: align, silu_and_mul, moe_sum and the GEMMs) on a SEEN model, DESCRIPTIVE: GEMM ladders on both sides of one wave and within a single wave, few-CTA long-slab cells, w1 byte-rate pairs, the call kernels, one-iteration and block-scan align cells (DECL arms declare E x C)"
+   },
+   "phi-3.5-moe-ds.json": {
+    "path": "docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json",
+    "sha256": "c44a841fdca46b70fef05d04f59c7f8dff613531802dd34b3012c8c4d82037e3",
+    "shuffle_seed": 20261014,
+    "decl_copies": 2,
+    "cells": [
+     {
+      "label": "S-T4-A2",
+      "T": 4,
+      "counts_sha256": "c7c4738f7b625b1aec27e03e2abd523c058fc3af31de2f360e44d8b55a886b80",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A4",
+      "T": 4,
+      "counts_sha256": "8964bb3d1d42ec7dce119be6a5e41459a7b418d266b57c417a610b1d705d1e1a",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A8",
+      "T": 8,
+      "counts_sha256": "9afeb07e16a6f97d7a06e93ce54318abd03c1b559ed0ac7f068202b52f6f6d18",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T16-A16",
+      "T": 16,
+      "counts_sha256": "1ce2b747a3a5f702da8249a953ec29eeefd40a5c3116f9e0530cd9326d078bd5",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A4",
+      "T": 64,
+      "counts_sha256": "c7091effba52b972a525f929c0f58b40906bbe085b66f98a076566b4e3e66126",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A16",
+      "T": 64,
+      "counts_sha256": "fe6b101a2a634b986225e6461378ec8ec13b80e09576b0736d1f6198e1a69fd0",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T80-A5",
+      "T": 80,
+      "counts_sha256": "c1972efe7ba74211cfc52fe754fcd9dd50f97a0e4b3e5dbd4890ac1e1852e734",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T80-A6",
+      "T": 80,
+      "counts_sha256": "95a939c0b3e96441794abec5e7aca94005527a56f14ab536578d27338565e951",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A6",
+      "T": 96,
+      "counts_sha256": "515763f054fb8c65c739bfdae8b03eb7edee104e7dd767877955a4cee76121ad",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A8",
+      "T": 96,
+      "counts_sha256": "c52dae2454f5c384f3d812123f3b87e27878831cedd58070a4eacae7c4e3a239",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A16",
+      "T": 96,
+      "counts_sha256": "aff7922df793678d9978d1d4113bdd9ea75d1c080838a93f39b9c0a606aadab7",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A4",
+      "T": 128,
+      "counts_sha256": "2d1933934fdfcb8194f361618be900599953f1fe7e2dd3e77619ff59a9d0a854",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A8",
+      "T": 128,
+      "counts_sha256": "bcea8abb4d08fcbb37c148be7b55de277745f81eac072bba8e67a63c70c7c7a4",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ],
+    "what": "DS: the settling rental's counter page (kernels=wide: align, silu_and_mul, moe_sum and the GEMMs) on a SEEN model, DESCRIPTIVE: GEMM ladders on both sides of one wave and within a single wave, few-CTA long-slab cells, w1 byte-rate pairs, the call kernels, one-iteration and block-scan align cells (DECL arms declare E x C)"
+   },
+   "mixtral-8x7b-ds.json": {
+    "path": "docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json",
+    "sha256": "b8b8703316b19c67b765ae93c282eba42e0a0978a6549d748f50d17023db9318",
+    "shuffle_seed": 20261014,
+    "decl_copies": 2,
+    "cells": [
+     {
+      "label": "S-T4-A2",
+      "T": 4,
+      "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A3",
+      "T": 4,
+      "counts_sha256": "22afe399d2751569dec53a015da99207c5fad933593883d369c4a230de2c088a",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A4",
+      "T": 4,
+      "counts_sha256": "ef2fb99443de686f4e0fd9aa8d510724541d339f7555e035887dba19697df430",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T16-A8",
+      "T": 16,
+      "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+      "role": "DS-ALIGN",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A4",
+      "T": 64,
+      "counts_sha256": "e90d02ab7a19ced397a580e4cc9f946f15d52240cea55c4d9607ce1b5b46a68c",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A8",
+      "T": 64,
+      "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A6",
+      "T": 96,
+      "counts_sha256": "c7dcd4a7d24e53328217e5b68a9874ae9c1cecf0042f18dcf6756a80a38f060a",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A7",
+      "T": 96,
+      "counts_sha256": "da92f7d20816b56504e16dc74d54d65e3d08fd8d014488b22b5e806f79adc949",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A8",
+      "T": 96,
+      "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A4",
+      "T": 128,
+      "counts_sha256": "b3a5e6524e6e3789aa20f6b83343907075feaf0ca1f5f69f5c59cb20b59cdaf7",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A8",
+      "T": 128,
+      "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ],
+    "what": "DS: the settling rental's counter page (kernels=wide: align, silu_and_mul, moe_sum and the GEMMs) on a SEEN model, DESCRIPTIVE: GEMM ladders on both sides of one wave and within a single wave, few-CTA long-slab cells, w1 byte-rate pairs, the call kernels, one-iteration and block-scan align cells (DECL arms declare E x C)"
+   },
+   "granite-3.0-3b-a800m-ds.json": {
+    "path": "docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json",
+    "sha256": "d96c433afc018771076cbf6068f82256f32ecb2605492d10fa2a3dbda74e4a83",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "S-T2-A8",
+      "T": 2,
+      "counts_sha256": "dfc50dd772fab4a00bac52262f17e64bcb7985aba40e2b36a43dc5338cdff9a7",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A8",
+      "T": 4,
+      "counts_sha256": "9e17351e46bebd6afc258ce46d82da209261a9bc5384c7810c39cff94997a053",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A16",
+      "T": 4,
+      "counts_sha256": "f925dee89ee56525913ec850ac60a14800a51f6572613f8f30529e9358259843",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A32",
+      "T": 4,
+      "counts_sha256": "40e00f20b35deb12de73a4f0736d306983bef6855a13263a35712531474906ec",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A8",
+      "T": 8,
+      "counts_sha256": "4665cc599a0b84533c76782c07c588d5c93a47ed1a13b7dc9012b5f213124af6",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A40",
+      "T": 8,
+      "counts_sha256": "eb75662e6298eaee05235b8bde8945af2192706c34a37ccfd262f011dabcdb81",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A16",
+      "T": 64,
+      "counts_sha256": "b5c6a75f008c9494309d00cbd75383709f14f8c0708d5c6e3af4bcba49262c24",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A40",
+      "T": 64,
+      "counts_sha256": "a864072619f4a77db70d69a4d36c8ee10a74c67467bca2947c8dc69f054c15ae",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A32",
+      "T": 96,
+      "counts_sha256": "20df5e6ac17827fd7957cf5c2efaa826036af6e4ffebee079cc79b0fb3c5abd8",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A40",
+      "T": 96,
+      "counts_sha256": "9a1bb8d9c965f7001efe35d8328ceb0d6ef25e482869b0c1bb9c3fc65dbf4efd",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T120-A40",
+      "T": 120,
+      "counts_sha256": "9cf1ab11f108fc058daa4210f4dda7c299fd90ef41992f9a0cd810c180645043",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A40",
+      "T": 128,
+      "counts_sha256": "d8a6c2cd1730f58cc5f23812224aba7fee3d503049a68c05999b2b0d03777562",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ],
+    "what": "DS: the settling rental's counter page (kernels=wide: align, silu_and_mul, moe_sum and the GEMMs) on a SEEN model, DESCRIPTIVE: GEMM ladders on both sides of one wave and within a single wave, few-CTA long-slab cells, w1 byte-rate pairs, the call kernels, one-iteration and block-scan align cells (DECL arms declare E x C)"
+   },
+   "qwen1.5-moe-a2.7b-ds.json": {
+    "path": "docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json",
+    "sha256": "fc27d04465decc9fbb27fe1f006e5d82f77ba56697811b6dba2260f19041552f",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "S-T4-A4",
+      "T": 4,
+      "counts_sha256": "be064232101d9671bc7ad56feb5f1f216f7fc837c457a5941ce0326dbb9dcd60",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A16",
+      "T": 4,
+      "counts_sha256": "2827a68ea12d4404e3d0cad3b74fc1a34f3c9a2feff4fcff3c1f62a9284d4137",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A4",
+      "T": 8,
+      "counts_sha256": "a1e76e7fe4bb81434d86f22cfce36349575e1a42da0ad31a863bae4a115231d9",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A16",
+      "T": 8,
+      "counts_sha256": "0bdff909b9befb56fa0a2db63506ac46afbf2636caae31d6e8c6951490810bf9",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A32",
+      "T": 8,
+      "counts_sha256": "bd6f14140b8e3857d82f52582abd25b2835b925f45d4262d0ed04b9391030921",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A8",
+      "T": 64,
+      "counts_sha256": "fb684bb1e5c69ef9a1dcb51752551017be043a442375540edcc7f91d3698cfa7",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A60",
+      "T": 64,
+      "counts_sha256": "5a7348d635f42bb0108d156d1d70cf88a264872d077a3d65c62f9ebe16b8caf3",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A12",
+      "T": 96,
+      "counts_sha256": "1dd756842f025ef8724b678bfbf2e9f7466b0505f7ec0c228e3d6e8e93e07c29",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A16",
+      "T": 96,
+      "counts_sha256": "b5ef7fb59768c0aa713add28f6b2227652c12e6240c06bcedb7a19d5e70b20cb",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A24",
+      "T": 96,
+      "counts_sha256": "63bc3dab0c2a0a9fd7e03ebb00c597fbe413de725c5c7148754172966aa85c2a",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T96-A32",
+      "T": 96,
+      "counts_sha256": "918e2b1d81439013601f95f23297a200109e139f017ca50449b5dbf28254591d",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A8",
+      "T": 128,
+      "counts_sha256": "843102ce562f31965ab7f742076778c122d674978bfc7eb605c4074ab7398c71",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A32",
+      "T": 128,
+      "counts_sha256": "2b3069275ad650653bd4df23bb1bd5bdf053c3511b10aaf45e2be02d2e1bb8e9",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ],
+    "what": "DS: the settling rental's counter page (kernels=wide: align, silu_and_mul, moe_sum and the GEMMs) on a SEEN model, DESCRIPTIVE: GEMM ladders on both sides of one wave and within a single wave, few-CTA long-slab cells, w1 byte-rate pairs, the call kernels, one-iteration and block-scan align cells (DECL arms declare E x C)"
+   },
+   "olmoe-1b-7b-ds.json": {
+    "path": "docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json",
+    "sha256": "c3c4fc8aa35eb3b8a4e72e30e6397c35e2dafa78822e2cfef3e76b872f212c69",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "S-T4-A8",
+      "T": 4,
+      "counts_sha256": "496b904549a19ed5261d7be0d639793a603fe4e61e5207e714efa707b9a1581d",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T4-A32",
+      "T": 4,
+      "counts_sha256": "ba5268ca178b576111561bacb846a671af5c62b0558d7ceddb7d2d2074e6857e",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A8",
+      "T": 8,
+      "counts_sha256": "0c8420eecf584c8c12c8eada16c652be3a32396d3b2484957325c9b49050e628",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T8-A64",
+      "T": 8,
+      "counts_sha256": "ba1e52e365a6fa132081a7bef3fe2800e0a5a907bbdcb8f183b7f1783905ea31",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T64-A64",
+      "T": 64,
+      "counts_sha256": "ae1eeef26c1a9f56fc53a03e4f8a309e9102fc22fae8746e21bab73860a78b5d",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A16",
+      "T": 128,
+      "counts_sha256": "6a143768289e0d17755b379c6a0148b0b3e5d6beb08dc8377daa0ef62fcfc386",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A32",
+      "T": 128,
+      "counts_sha256": "1bb52453a2a4766a681693b52b21a07efcc8a29623cf6f17be56fcda282bff43",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "S-T128-A64",
+      "T": 128,
+      "counts_sha256": "eb520d9e4e041941ec8dbf3665a8c1bc138e087f02580cb3e1385526283c9e68",
+      "role": "DS",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ],
+    "what": "DS: the settling rental's counter page (kernels=wide: align, silu_and_mul, moe_sum and the GEMMs) on a SEEN model, DESCRIPTIVE: GEMM ladders on both sides of one wave and within a single wave, few-CTA long-slab cells, w1 byte-rate pairs, the call kernels, one-iteration and block-scan align cells (DECL arms declare E x C)"
+   }
+  },
+  "estimates": "the wide route's rule (d3common): 0.6 s per profiled launch, 3 calls and 2 warmups profiled, 6 launches per call, per (cell, arm), plus 2 min of setup per unit"
+ },
+ "stop rules (registered before any DS page)": {
+  "prelude (the D3 driver, unchanged)": "the session STOPS before any page unless: the checkout is clean, passwordless sudo works, the GPU is idle, the supported clocks list 1710 MHz, persistence mode reads Enabled, and the GPU power limit set with -pl 700 -sc 0 reads back 700 W within 1 W",
+  "lock (the D3 driver, unchanged)": "every DS page runs under locked_run at the 1710 MHz lock: the lock is set and read back from clocks.sm (two tries) before the counter route starts, else the unit exits 2 and writes no page; the page sits under lock1710 and the reader reads only that path (score_cal.counter_page). G4 (1705 MHz) is a timed-page gate; DS has no timed page",
+  "POWER (the reader, addendum 2's rule)": "read_ds.py reads nothing unless exactly one session power-set.txt reads a GPU Current Power Limit of 700 W within 1 W",
+  "PAGE (the reader, per DS page)": "a counter page is read only when its manifest's page_sha256 is the registered DS page's, its V_ALIGN_grid gate reads PASS (every GEMM launch's grid is the child's readback), its kernel filter is wide, and its software versions are the CAL2 session's (python 3.12.16, torch 2.13.0, triton 3.7.1, vllm 0.27.1; python on major.minor, its patch level recorded and printed, DESCRIPTIVE; torch, triton and vllm exact); else none of its rows enters any reading. Refused cells are left out",
+  "ROW SANITY (the reader, per row)": "a GEMM row is refused, left out of every reading and listed (read_ds.py's REFUSED ROWS) unless its ncu time L and counted bytes B are finite and positive and B lies within 0.5 to 2 x n b (n live CTAs x v4d''s bytes per CTA; a factor of 2 either way, a garbled-row guard, not a fit: CAL2's SEEN counter pages read 0.94 to 1.00, POST-HOC), and its implied DRAM rate B / L is at most 4022 GB/s (owner, 2026-11-04: the GH200's HBM3 spec peak; no DRAM read runs faster, so a row past it holds garbled bytes or a garbled time. The published decode counter pages never exceed 3,768 GB/s, MEASURED, 6.3% under the peak; W1RATE's c_t above it reads NOT IDENTIFIED). A call or align class time that is not finite and positive is refused and listed the same way. A fit whose result is not finite reads NOT IDENTIFIED",
+  "CENSUS GATE (the reader, on DS's own census; owner, 2026-11-04, D4-8)": "DS runs its own tile census (the plan's tilecensus unit: the pinned tile_census.py, compile only, the four decode tiles on the six DS models, nodrop, as CAL2's unit). The census gate CAL used (decodeC-cal's census rule, the tile stage's build-tile-review 9) reads it: exactly one DS census file (<date>-<card>-tile-census-<model>-ds/tile-census.json), and no MMA path mismatch in it; a missing census or a path mismatch is a STOP for the per-CTA readings (LADDERS, SUBWAVE, DRAIN, W1RATE), never a fallback to CAL2's census",
+  "CENSUS (the reader, per decode tile, on DS's own census)": "S comes from the census occupancy. DS's census must read, for every DS model's w1 and w2 on the tile, the occupancy S uses (3 CTAs per SM on 16x64x128w4s4 and 64x128x64w4s3, 4 on 32x64x128w4s3 and 32x128x64w4s3); else LADDERS, SUBWAVE, DRAIN and W1RATE read NOT READ on that tile",
+  "CENSUS CROSS-CHECK (the reader; reported, not gating; owner, 2026-11-04, D4-8)": "CAL2's published tile census (results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session/results/2026-11-03-nvidia_gh200_480gb-tile-census-mixtral-8x7b-dec/tile-census.json; MEASURED 2026-11-03) is read under the same occupancy rule and reported, not gating. DS's census is compared with CAL2's entry by entry for every DS model, decode tile and GEMM (the config and regs, shared, num_warps, mma, occupancy, ptx_counts): SAME, or DIFFERS with every difference listed. DIFFERS is a STOP for the per-CTA readings (LADDERS, SUBWAVE, DRAIN, W1RATE), reported with the differences; CALLS, ALIGN, BLOCK and SLOPE do not take S and still read",
+  "G-BAND (not a DS rule)": "A2's G-BAND gates the sag estimator's f128 counter clocks on the tile and CAL rentals; DS fits no sag estimator, takes no f128 page, and the D3 driver has no gate step. It does not apply to DS",
+  "budget (the driver and the guardian, unchanged)": "a unit whose estimate is over the minutes left before the deadline is SKIPPED; every DS unit is nodrop, so nothing is dropped early; the guardian terminates at the hard cap; a step after which the card cannot be made safe (hygiene) STOPS the session",
+  "never": "no DS reading is a STOP (only the stop rules above stop anything); a reading that does not identify is reported NOT IDENTIFIED"
+ },
+ "readings (registered before any DS page)": {
+  "every reading": "DESCRIPTIVE: computed from DS's pages by the rule below, registered before any DS page; none is a model term, none is a STOP, none is a bar, and none changes a registered verdict. A reading that does not clear its IDENTIFIED rule reads NOT IDENTIFIED and is reported (read_ds.py's NOT_IDENTIFIED list); nothing falls back. Rows: the six DS pages' NATIVE arms (DECL arms in ALIGN and SLOPE only), cells on the small-batch or block-scan path with no expert past BLOCK_M (GEMM readings), refused cells and pages that fail PAGE left out, tiles whose CENSUS fails left out, and no per-CTA reading (LADDERS, SUBWAVE, DRAIN, W1RATE) under a census STOP. Per GEMM row: n live CTAs, S = 132 x the census occupancy (396 on 16x64x128w4s4 and 64x128x64w4s3, 528 on 32x64x128w4s3 and 32x128x64w4s3), b = v4d''s bytes per CTA ((the GEMM's reads + the output tile x n) / n), F = the GEMM's compute floor, B = the counted dram__bytes_read, L = the counter page's gpu__time_duration in us, Dc = B / c (c = W1RATE's c_t on the row's tile for w1; 3895.49 GB/s, the counters' MEASURED rate, fix R, for w2, its only rate), X = L - max(Dc, F). NO FALLBACK (owner, 2026-11-04; this rule covers every reading): w1's bytes are priced only at W1RATE's c_t on the row's tile, never at 3895.49 GB/s or any other fallback. On a tile where W1RATE reads no rate, a w1 row is not priced (Dc and X none): SUBWAVE reads NOT IDENTIFIED there when its fitted ladders hold a w1 row, DRAIN when its mixed ladders do, and LADDERS shows the w1 rows unpriced; W1RATE takes no c, and CALLS, ALIGN, BLOCK and SLOPE price no bytes. A LADDER is one (model, T, GEMM); its rows share one offset c0 (the counter page's per-kernel time outside the stream)",
+  "LADDERS (DESCRIPTIVE; the GEMM ladders on both sides of one wave and within a single wave)": "per decode tile every ladder's rows by n: n, S, the wave class (sub-wave n <= S, crossing S < n < 2S, multi-wave n >= 2S), b, B, L, Dc, F and X; and which ladders are MIXED (a row with n <= S and a row with n > S: both sides of one wave) and which are SUBWAVE-qualifying (within one wave: two or more sub-wave rows whose n span a factor of 2 or more, every one with b >= 0.5 MB; its smallest n is its few-CTA row). No fit",
+  "SUBWAVE (DESCRIPTIVE; few-CTA long-slab cells within a single wave)": "rows: the sub-wave rows (n <= S) of every ladder holding two or more. FORMULA per decode tile t: r_cta,t minimises sum ((c0 + max(Dc, F, b / r) - L) / L)^2 over those rows, every c0 free (weighted least squares at each r), r over the registered grid: no ceiling, then 10 x 1.02^j GB/s for j = 0 to 232 (10 to 990 GB/s), ties to the first minimum in that order. r_cta,t is the per-CTA streaming rate a GEMM of few long-slab CTAs runs at when its CTAs cannot fill the DRAM pipe. IDENTIFIED with at least 2 qualifying ladders from at least 2 models (SUBWAVE-qualifying); else NOT IDENTIFIED and not fitted. Reported beside: the binding rows (b / r over max(Dc, F)), the offsets, the relative rms at the fit and with no ceiling",
+  "DRAIN (DESCRIPTIVE; the wave-boundary drain)": "rows: every row of the tile's MIXED ladders; d = 1 when n > S (the GEMM crosses a wave boundary), else 0. FORMULA per decode tile t: q_t minimises sum ((c0 + max(Dc, F, b / r_cta,t) + d b q - L) / L)^2, every c0 free (closed-form weighted least squares), r_cta,t SUBWAVE's reading on the tile (no ceiling when it reads none or is NOT IDENTIFIED); NO FALLBACK as stated under every reading; a q_t at or under 0 is set to 0 (no drain) and the offsets refitted; r1_t = 1 / q_t GB/s, the rate of the one slab per CTA past the boundary. IDENTIFIED with at least 2 qualifying ladders from at least 2 models (MIXED). Reported beside: q's standard error, the offsets, the relative rms at the fit and with no drain",
+  "W1RATE (DESCRIPTIVE; the per-tile w1 byte-rate pairs)": "rows: the w1 rows with n > S on each decode tile, past at least one wave boundary (a multi-wave row, n >= 2S, crosses more than one, so the ladder's offset holds a boundary cost only as far as its rows cross the same number of boundaries, and any difference falls into u_t). A ladder is one (model, T); it is usable with two or more rows whose B span at least 100 MB (fix R's cut). FORMULA per tile t: L = c0_ladder + B u_t by ordinary least squares over the usable ladders' rows, c_t = 1 / u_t the counters' marginal w1 rate (GB/s); beside, its ratio to v4d's 3577.96 GB/s. IDENTIFIED with at least 2 qualifying ladders from at least 2 models (usable). On 16x64x128w4s4 it re-reads fix R (0.918488, MEASURED 2026-11-03), a replicate; fix R itself is unchanged",
+  "CALLS (DESCRIPTIVE; silu_and_mul, moe_sum and the align kernel per call, per model)": "the wide kernel filter (moe_align_block_size* and count_and_sort_expert_tokens* as align; act_and_mul* and silu* as silu_and_mul; moe_sum* as moe_sum; kernel replay, --cache-control all). rows: every NATIVE cell's class time (gpu__time_duration summed per call, the median over the 3 measured calls). Per model and class: the median, minimum and maximum us over its cells and the median per T. Beside, per call class, one summary line us = a + b x + g B / 1 MB by ordinary least squares over every NATIVE row (silu_and_mul x = I, B = T k 3 I x 2 bytes; moe_sum x = k H, B = (T k H + T H) x 2 bytes; H, I, k from the model's config), computed with rows from at least 3 models holding at least 3 distinct x. The line summarises DS's pages; it is not a model term and not a rule for any other model",
+  "ALIGN (DESCRIPTIVE; the align kernel across E)": "rows: every (cell, arm) with an align-class time, at the declared E (E on a NATIVE arm, E x C on a DECL arm: JetMoE C 4 and Phi C 2 declare 32, Mixtral C 2 declares 16) and the path vLLM takes at that E. Small-batch points: per E the median over NATIVE rows at one loop iteration (ceil(numel / max(E, 32)) = 1): E 8, 16, 40, 60, 64; DECL's E 32 enters only when DECL TRANSFERS (Mixtral's DECL E 16 median within 1 us of Phi's NATIVE E 16 median), else the DECL points are dropped. Block-scan points: BLOCK",
+  "BLOCK (DESCRIPTIVE; the block-scan constants per E)": "per declared E the median align-pair ncu time over NATIVE block-scan rows (Granite-3B T 128 A 40 at E 40, OLMoE T 128 A 64 at E 64). IDENTIFIED with points at 2 or more E",
+  "SLOPE (DESCRIPTIVE; the align slope)": "rows: the small-batch align rows ALIGN reads (NATIVE, and DECL when DECL TRANSFERS), each at its declared E and its loop iterations ceil(numel / max(E, 32)). FORMULA: align_us = a_E + s (iterations - 1), one intercept per declared E and one slope s, by ordinary least squares over every row of an E holding two or more iteration counts. IDENTIFIED with 2 or more such E. Beside: s over its OLS standard error (DIFFERS FROM 0 at |t| >= 2, else NOT DISTINGUISHABLE FROM 0), the per-E slopes over every arm and their median, the iterations read (DS spans 1 to 24: Granite-3B T 120 A 40)"
+ },
+ "published-tree reproduction": {
+  "tool": "scripts/scoring/decode/reproduce_d4.py results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session/results results/published/2026-11-04-nvidia_gh200_480gb-decodeBlind-session/results",
+  "rule": "the CAL2 tree under v4d' (score_cal_d3's rules, frozen) reproduces the committed CAL2 score (the selected rho form, T0_GR, s_naive, s_block and the in-sample E1 statistics), and the decode blind tree under the committed finalisation (score_blind_d3.score, frozen) reproduces the committed blind score (E1-DEC pooled and per model), each to 1e-9 relative. DESCRIPTIVE: it changes no verdict"
+ },
+ "next round (RECORDED INTENT, not code; owner, 2026-11-04, D4-7)": {
+  "label": "RECORDED INTENT, NOT CODE: nothing here runs, scores or gates; the next round builds and registers it",
+  "sequence": "after DS: read_ds.py's readings and CAL2's pages; then the next round chooses the decode model form, freezes it and registers it with its gate before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M",
+  "future gate (owner, 2026-11-04)": "the new blind runs ONLY on GO, and GO needs both: (1) CAL2 passes under the post-DS model (the addendum-3 stop rule on CAL2's kept cells); (2) the published decode blind pages re-score under the post-DS model at a pooled rms under 4.0%, labelled a WEAK SANITY FLOOR: those pages were seen during the diagnosis, so this clause is never a test and never a certification. Both published trees first reproduce their committed scores (reproduce_d4.py, built and kept here)",
+  "the new blind's bars (owner, 2026-11-04, D4-1)": "rms 3% per model, worst cell 8%, |mean| 1.5% (the CAL bars, not tightened), to be registered with the model",
+  "standing verdicts": "the decode blind FAIL (2026-11-04) and the decode CAL2 GO under addendum 3 stand"
+ },
+ "rentals": {
+  "ds": {
+   "units_min": 49,
+   "boot_setup_min": 25,
+   "wall_min": 83,
+   "cost_usd": 3.17,
+   "rate": "gpu_1x_gh200 at $2.29/h",
+   "deadline_after_launch_min": 100,
+   "hard_cap_after_launch_min": 115,
+   "cost_at_hard_cap_usd": 4.39,
+   "rule": "units (prelude, calibrate and the CAL census included) x 1/0.84 (rentals 4 to 7) plus 25 min boot and setup; deadline launch + wall + 15 min, rounded to 5 min; the guardian's hard cap 15 min later",
+   "composition": "prelude 3 + calibrate 2 + DS census 6 + six wide counter units 7 + 7 + 7 + 6 + 6 + 5"
+  },
+  "operator power step": "as addendum 2 (d2common.py --power on the prelude's power-set.txt; terminate unless READ)",
+  "new blind": "not planned here: its plan, minutes and cost are registered with the model in the next round"
+ },
+ "seen": {
+  "what DS loads and times": {
+   "models": [
+    "granite-3.0-3b-a800m",
+    "jetmoe-8b",
+    "mixtral-8x7b",
+    "olmoe-1b-7b",
+    "phi-3.5-moe",
+    "qwen1.5-moe-a2.7b"
+   ],
+   "all_seen": true,
+   "new_blind_models_loaded": [],
+   "declared_E": [
+    8,
+    16,
+    32,
+    40,
+    60,
+    64
+   ],
+   "gemm_shapes_HI": [
+    [
+     1536,
+     512
+    ],
+    [
+     2048,
+     1024
+    ],
+    [
+     2048,
+     1408
+    ],
+    [
+     2048,
+     5632
+    ],
+    [
+     4096,
+     6400
+    ],
+    [
+     4096,
+     14336
+    ]
+   ],
+   "new_blind_shapes_measured": []
+  },
+  "the new blind models (COMPUTED)": {
+   "mixtral-8x22b": "NO DECODE PAGE",
+   "qwen2-57b-a14b": "NO DECODE PAGE",
+   "granite-3.0-1b-a400m": "NO DECODE PAGE"
+  },
+  "what would make a new blind model SEEN": "any DS cell of its model, its weights, or a GEMM of its (H, I) shape; DS has none (new_blind_models_loaded and new_blind_shapes_measured are empty), and this addendum writes no page of theirs",
+  "SEEN already": [
+   "the five earlier blind models' pages and the blind score (published 2026-11-04): SEEN, read by both diagnoses; DS uses four of them (JetMoE, Phi, Granite-3B, Qwen1.5) and the two CAL models",
+   "the CAL2 session, its census and its score: SEEN"
+  ],
+  "configs and generators read (COMPUTED, not pages)": {
+   "small-batch align iterations (most, main page)": {
+    "mixtral-8x22b": 8,
+    "qwen2-57b-a14b": 12,
+    "granite-3.0-1b-a400m": 24
+   },
+   "call class x": {
+    "silu_and_mul": {
+     "DS x range": [
+      512.0,
+      14336.0
+     ],
+     "new": {
+      "mixtral-8x22b": 16384.0,
+      "qwen2-57b-a14b": 2560.0,
+      "granite-3.0-1b-a400m": 512.0
+     }
+    },
+    "moe_sum": {
+     "DS x range": [
+      4096.0,
+      16384.0
+     ],
+     "new": {
+      "mixtral-8x22b": 12288.0,
+      "qwen2-57b-a14b": 28672.0,
+      "granite-3.0-1b-a400m": 8192.0
+     }
+    }
+   }
+  },
+  "earlier non-decode pages of the new blind models (unused by addendum 4)": {
+   "statement": "'unseen' in this addendum means no decode page of the model exists. Earlier non-decode GEMM pages of Qwen2-57B-A14B and Mixtral-8x22B are published and are not used by addendum 4: Qwen2-57B-A14B's settleS1 r3-counters kr and ar (2026-10-21) and cal3 stq instrumented pages (2026-10-27), both models' 2026-09-28 GH200 sessions, and every other session listed here (COMPUTED at b2fb3402 and frozen: a later publish changes nothing here); Granite-3.0-1B-A400M's are listed the same way. No DS reading, plan or check reads any of them",
+   "sessions (COMPUTED at b2fb3402, FROZEN)": {
+    "mixtral-8x22b": [
+     "2026-09-28-nvidia_gh200_480gb-8x22b-session",
+     "2026-10-21-nvidia_gh200_480gb-cal2-session"
+    ],
+    "qwen2-57b-a14b": [
+     "2026-08-22-standard-sweep",
+     "2026-08-26-nvidia_h200-full-three-way",
+     "2026-08-28-nvidia_h200-h200-fp8-refixed",
+     "2026-08-28-nvidia_h200-h200-fp8-three-kernel",
+     "2026-08-28-nvidia_h200-h200-v2lite",
+     "2026-08-28-nvidia_h200-h200-whole-layer",
+     "2026-08-28-nvidia_h200-ridge-resolution",
+     "2026-09-01-nvidia_h200-alpha-0558",
+     "2026-09-01-nvidia_h200-alpha-surface-s4",
+     "2026-09-01-nvidia_h200-cross-card-s3",
+     "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+     "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session",
+     "2026-10-01-nvidia_gh200_480gb-rental1-session",
+     "2026-10-06-nvidia_gh200_480gb-rental3-session",
+     "2026-10-07-nvidia_gh200_480gb-rental4-session",
+     "2026-10-09-nvidia_gh200_480gb-rental5-session",
+     "2026-10-20-nvidia_gh200_480gb-tileA-session",
+     "2026-10-21-nvidia_gh200_480gb-settleS1-session",
+     "2026-10-21-nvidia_gh200_480gb-tileA2-session",
+     "2026-10-27-nvidia_gh200_480gb-cal3-session"
+    ],
+    "granite-3.0-1b-a400m": [
+     "2026-10-01-nvidia_gh200_480gb-rental1-session",
+     "2026-10-02-nvidia_gh200_480gb-rental2-session",
+     "2026-10-06-nvidia_gh200_480gb-rental3-session"
+    ]
+   }
+  }
+ },
+ "unchanged": "the lock 1710 and G4 1705, the instruments, every registered page, the census rule, the tile source, the card constants, v4d and v4d' (byte-identical), every pin of the five earlier decode registrations, the drivers, vm_run.sh, docs/LAMBDA.md, and every registered verdict",
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+  "scripts/r3_decode.py": "f043e438d50287162bfb55644b7b1998cfffad8d50d50fcf1dad4afb189c1db8",
+  "scripts/decode_synth.py": "45fa76a8a1edfa72351f90505a6a93214138ac5c709165f73455b3032e33ffbd",
+  "scripts/r3_timing_model_v4d.py": "52a8f6fefcc93d3f0bc2d8efd45f774efe2833d6101c0a322fce8c14b7028c70",
+  "scripts/dram_counter_route_decode.py": "710186fe66e174e1e14a3ef7b2bda7956d5e9b0fee3088d530f3315f0cab366b",
+  "scripts/gh200_decode_session.sh": "a4a906a229c41153ae8a736919430da371a94c90ddf863f4adf37c2d2e52076d",
+  "scripts/scoring/decode/dcommon.py": "4cade228054581ac533aa799af9025cda6fa56e322e3e33f4f92ae3f2a65622c",
+  "scripts/scoring/decode/regdecode.py": "e39a7eccc52811933473da1c9e23b81e9aed7f24406b30c2d72d2f482bcd2e28",
+  "scripts/scoring/decode/finalise_decode.py": "78b8e7fae8603313c4098d2fd1fe7ed7110c3410103230d11b50f584271e8812",
+  "moe/instrumented/UPSTREAM_DECODE.json": "098f8999afd2f3b4457df5f2612b85f888971af4480eb82c703da0386bccec2a",
+  "scripts/r3_timing_model_v4L.py": "9a944af2e272035e1d8673e72faf1539fb90f1dbbda16e156a6387f2b7090d63",
+  "scripts/tile_census_a2.py": "1021a1ba5e8820172b62829537703718d8fc7d4488b143364eba51ac13a4cdad",
+  "scripts/gh200_tileA2_session.sh": "77adb07f8ae7d190c3da7c3dcb031e020c1eb4c2040fcfbcaf88ac40a0deed53",
+  "scripts/tileA2_gate.py": "566703b38372677019faf8cbbe62e50f7d5b4e8a857b10e236197289ddc3dbce",
+  "scripts/scoring/tileA/score_floor.py": "4dd8c3cb80c66521cd67eb678e3023965a2529432a75c03c17d87a6c01f82a02",
+  "scripts/scoring/tileA/score_bytes.py": "877b2b284fe4ed85e8d871a36abdcfc95ae934f220e70b756c3172a23f5bd8b2",
+  "scripts/scoring/tileA/score_census.py": "2f2cacefb299f92ace9f17e02809fe7d97e511fb6b018728819a6d2305e445e0",
+  "scripts/scoring/tileA/score_e1cal.py": "7971efc9017ae6e79d68ac42e50b0599bd96ff7feb73ce3f144025d7f21f0864",
+  "scripts/scoring/tileA/score_rep.py": "7e240d1de17e14a731728c890eb5b56c0cefb37d3ac05cbe58452bbc1e2bcb11",
+  "scripts/scoring/tileA/score_dead.py": "d96368ad89b1b81da6876da0ddc565fd3bfbf8bce3569190e4d63b69c7841321",
+  "scripts/scoring/tileA/score_tileB.py": "d7e4409283176e9709475eeb00eaf2399c83153d0896c64e4ad4b09215dd1259",
+  "scripts/scoring/tileA2/a2common.py": "d99eef413cddbae593d5f9115d8bc6db776c4ad4a7a6cb43c0eb7848517a3d9a",
+  "scripts/scoring/tileA2/census_a2.py": "063806f831cbb359ea7b6acbb02ffd64042e11178707062df0f7290856132cb6",
+  "scripts/scoring/tileA2/probe_a2.py": "e3c736c54a06a90f84192366aa1c0dcad6965228971fc1a02a680188ff6cdf51",
+  "scripts/scoring/tileA2/hist_a2.py": "18fc7eaa73e84076a3ee277cfe509876f9dbf80995a13190e1915ece9502b57d",
+  "scripts/scoring/tileA2/conv_offline.py": "413013699bc6fe1e87e99f3bd8fe4912c19c133332db3ea1ced511643453f058",
+  "scripts/scoring/tileA2/regtile_a2.py": "5a3e9cf68e10736dccad188c349b3494b60528f0c1fca70ad1242eda0a33b3f5",
+  "scripts/scoring/tileA2/register_a2.py": "87b2068279a982b080987d328b2da4f7b63ffd88256e39bab0d90a1d16ed176b",
+  "scripts/scoring/tileA2/finalise_a2.py": "c6b18a874bb133212ad7024bb47db02011f016a35f74340446558719bea0d2b2",
+  "scripts/scoring/tileA2/score_census_a2.py": "3218b2a04fb89c6b322afb142d1a90676435a758336a5256e998cfcbcd1c5c1c",
+  "scripts/scoring/tileA2/score_floor_a2.py": "c075802d9067177a73c506a475d772a67cdd03c5dec404854b27daf34e1c7347",
+  "scripts/scoring/tileA2/score_bytes_a2.py": "c9d8c0a6940b8963e72b3d52329e2e08416a4225ffa9c0656a75bd6910ff2dd9",
+  "scripts/scoring/tileA2/score_rep_a2.py": "65b09c83493a28b584df95cf883f786090682e3a099be0b7fa554795221150d5",
+  "scripts/scoring/tileA2/score_e1cal_a2.py": "ffcaa7734bfdeb85c00de1a58cbd05e5fdad5621d5eb61208569447f1846c852",
+  "scripts/scoring/tileA2/score_dead_a2.py": "c480ff65f13b87a2783c76bcd5f8624453b361cc8403bde4f807a5e3dee64736",
+  "scripts/scoring/tileA2/score_convl_a2.py": "72818c239d776680eb9ad80fa4c8fb123d2ff934a170cb5abe4f40fa4ab72fb8",
+  "scripts/scoring/tileA2/score_probe_a2.py": "682965ecf7d0ccc9d40a4d272b55e404264ce338ed1f13b99b3c9893ed5e78f1",
+  "scripts/scoring/tileA2/score_tileB2_a2.py": "8935239e0c16305a23690466370ed75a2e816b33bab4f4ea47f2522b4c37b7e8",
+  "scripts/scoring/tileA2/score_session_a2.py": "6de1caa7b178045d640ee4cdff17238518303878e518d18d693d84542698d129",
+  "scripts/scoring/tileA2/decode_gate_a2.py": "b38d7ce95fede441885cf3c30cd03c4bbc6c7d77dfc5e2f8ab22f055f1402a36",
+  "scripts/scoring/decode/score_cal.py": "8b8684c63e7d7b41ebcf1b17bb6c4d7e7b6ffb1fe023eba2008528d39135aa64",
+  "scripts/scoring/decode/score_blind.py": "54611aa819bfd9855460e18b45cd343d810685220b41cd4f70d07b7fc18163a3",
+  "scripts/scoring/decode/register_decode.py": "4a03e2e4242faac1b92ace84d0257239ecdc791676b2bbfc2e52c28d7af87a92",
+  "scripts/plans/rentalD-cal-2026-10.plan": "7dbe2e752fca013e522b163951702db52396752299a74a4506d7b97d821da3c2",
+  "scripts/scoring/tileA2/census.score.json": "9073b9732863fea94c51297c4fe52c6b27388b68cffe6def4ccb6c5e3698c9b9",
+  "scripts/scoring/tileA2/floor.score.json": "f313f46c6c34cab5d618545fb96034ee0383b8a71c91ca193620f5dd631e8689",
+  "scripts/scoring/tileA2/bytes.score.json": "f90eeebb98c0445e01c08277a1137ead3c67601e71aa5859ed886b2d9c6e2c13",
+  "scripts/scoring/tileA2/rep.score.json": "9c09c8b48640684f40ecd2bc6d87d72597c3789c022848694539e863d2db9733",
+  "scripts/scoring/tileA2/e1cal.score.json": "919f8c1157bee401670c49d2e5c79a0c39d7f9d976991f35e62f6d830bbd55a9",
+  "moe/spec.py": "58fb9b7fe2fdbd82867e0ab789cfc02bc03705c01722f9cfa0769c40bf6f87de",
+  "moe/bench/tile_resolve.py": "80578881e3f71fc09a42554190e7a9a8ff14ca0d3295f32dfff777791c139adc",
+  "docs/registered/2026-10-14-decodeC-cal-gh200.json": "405088749e2b0ba95b999d189704f476719a39396382a6eb7de759474f572047",
+  "docs/registered/2026-10-14-decodeC-cal-gh200.txt": "17ef03dbff4886a3ed70f5d89d75118b2a8e47a4dfa1dad8390ffa7c0fd2bd0e",
+  "docs/registered/2026-10-14-decodeB-blind-gh200.json": "f5241a5e7dc3a31189bba0863034802c91182b98c6a3ba50cc2a44064c93e570",
+  "docs/registered/2026-10-14-decodeB-blind-gh200.txt": "63364909784c7d3230626ed5c4ef3d4e717271e66ae4e2a632c5da4db4384869",
+  "docs/registered/2026-10-20-decode-tilesource-gh200.json": "3aa007c4b693d9da836fe7ea878872c9c54d64458e169374d4fe73fd02c845f1",
+  "docs/registered/2026-10-20-decode-tilesource-gh200.txt": "f6dfeb812f34c6134eb87f230b200d459a5c13a9408a19ee268d757931d5f783",
+  "scripts/scoring/decode/d2common.py": "16b1b1045ce938e48afb73e206cee8f27aa4ce283e866e348415c6daca5402a4",
+  "scripts/scoring/decode/score_cal_d2.py": "2f0ddb6688872c8d4624fd2c4ba1fd3ae366e431e7a24391671670cb1bcd7d18",
+  "scripts/scoring/decode/score_blind_d2.py": "3f90791987cc472f48d0033956810e5eaae6db086d1b91c6b0976a5ae2564f81",
+  "scripts/scoring/decode/finalise_decode_d2.py": "0b1de94cfa76b1e72975c9dc6d12a1315bdc31b6b29399ec44ba9d7ccb785f38",
+  "scripts/scoring/decode/register_decode_d2.py": "c9d4b8a3331a28fc469c606e0697ac6819d0b0e375c8e613a90abb59f5698f3a",
+  "scripts/plans/rentalD-cal-d2-2026-10.plan": "6bf17829408b4900d713bfbab048debc8f1b67beaa5ce6e7e04af75fe5154b7a",
+  "docs/registered/2026-10-28-decode-addendum2-gh200.json": "5d5cfed099a0104d91c3ecd834886ebf0ac391461ca7c6aee889176dc9bde75a",
+  "docs/registered/2026-10-28-decode-addendum2-gh200.txt": "06bf308f352820cf4cb7e9d4fc8b215febebdb814c5a236a9016336193580105",
+  "scripts/scoring/decode/cal.score.json": "1f58b326edc237be3d2470d1d7369febd84249f10bede309234c4d5b841431da",
+  "results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session/session/power-set.txt": "9ccb1c89f443e734f33ba3823fcedaec7fcd371a2b006c7658331c1769a6cb80",
+  "scripts/scoring/decode/cal.score.txt": "cad84db2b4c2996790ec35403e0d90201f6c0cde168a08c02fecdb44f08859b5",
+  "scripts/r3_timing_model_v4dp.py": "6deb24fd5801130f0a8e8501523a180bab5d1c4ebd4310aacaa435e1857c9c22",
+  "scripts/r3_decode3.py": "7f67892bef4944317ff70bd9ba569f86857ab3813e2c366e36a0fd1b5b932f61",
+  "scripts/dram_counter_route_decode3.py": "a5c949c212d983f5d775eccbe9c0a8ae1715ce3438b03238fefbc194e808c32d",
+  "scripts/gh200_decode3_session.sh": "4edf1d4d14c3aad6a847483d2c55421e7749bd6433e291b854eda8cd56ad495d",
+  "scripts/scoring/decode/d3common.py": "9f1d53b1050000e700e0b60394a7853862d43a5e0c558cb411e2980754964bc1",
+  "scripts/scoring/decode/score_cal_d3.py": "ad9c7c24648c0c57062411a5149a33bbc116affcedb7fa47d877c109ab88ecb2",
+  "scripts/scoring/decode/finalise_decode_d3.py": "3aaf70cede223342a6be5aa0a2301ff3b633befa1022617343fc6fb0bd2a72a5",
+  "scripts/scoring/decode/score_blind_d3.py": "984621a437a1523033c8f87143848ba072a3c17cd3d3e344285d0f84a7e491d0",
+  "scripts/scoring/decode/register_decode_d3.py": "9aaed9706597a8c02b4b5e54eb45477a8ebadfbc1d9dc109c3259f2945198fee",
+  "scripts/plans/rentalD-cal2-d3-2026-10.plan": "3d0f688a420b322c4e92e2a5def004d4cad88181b300f3941b9f4d8684f62c6e",
+  "docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-tiles.json": "c14ca45e1bee4f3fc6308be0692087e32159a99b677c78aeed101f734476ecf5",
+  "docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-tiles.json": "8a61471f27676e5108b76d933b6d1f6c0f8708c07cb07c899e9055662a897458",
+  "docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-wide.json": "97f8ef9ef92061591ebdc0401ed774db93e475b87d2965de747e940407d22b9a",
+  "docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-wide.json": "5d4e113582e712d45627cb1dd0b2ba22e320c8c1e338f273c55cd717e15191b5",
+  "docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json": "647dd3866983917ef8a9ecaa76356dcd6238441908c3fd191f6079e865d48f34",
+  "docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json": "d6f5257cf24d3d07376910afd0390ba176e04915c6be28771bb496133137ca29",
+  "docs/registered/2026-10-29-decode-addendum3-gh200.json": "87ed9a870ef6a242a376ce92fcff26b377e0f952f3ec299f750d15279f3fa07e",
+  "docs/registered/2026-10-29-decode-addendum3-gh200.txt": "fb3382e763047048f621c31013543cb2d6d3e5d0a53569580ff8c57e8d47f8c3",
+  "scripts/scoring/decode/cal2.score.json": "f71e547740141c5c0bb16342ad55a0eda20662ef51e4d633919ee4de14665754",
+  "scripts/scoring/decode/cal2.score.txt": "22d8c9bb8e4eabaf843353b3c05f8ae6a58752d12b289681c5b2dc07cfb46819",
+  "scripts/scoring/decode/decodeB.finalised.json": "0863cba725abe063a8cec568f5ae5e4e5ecf5ae9ead92566c3f235f7d6288cc7",
+  "scripts/scoring/decode/blind.score.json": "ed1be36c406f7d8c39f15522081289ea6f88242375401cfbe21f0ee1bb03e9c5",
+  "scripts/scoring/decode/blind.score.txt": "f722cb9bdc3433f3d1cb0e58276b50ca9d7c93bd39d57e04c0cbd6307524aa04",
+  "results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session/results/2026-11-03-nvidia_gh200_480gb-tile-census-mixtral-8x7b-dec/tile-census.json": "9404c8485a1f13f4776302ebd8cfd4dad6b9d52e7c2059fd3f96ffc782642bda",
+  "scripts/scoring/decode/d4common.py": "9941153628b96f58d5b3df2861ed13a11887d0af9deb75715c72f798e1a30bb2",
+  "scripts/scoring/decode/read_ds.py": "8fdbc68a166379d50afbcad3767c52c3c97c4ec58b7d6f2abf0c3943dedf30bd",
+  "scripts/scoring/decode/reproduce_d4.py": "718c19c14c21a9825481e73ebb11d3633a1b063394f136f6cd8caa0369fb49df",
+  "scripts/scoring/decode/register_decode_d4.py": "e97b79c5a4b6895caaf21b8445f4cf2be8b99585214b1e3d2a1f940119fe0452",
+  "scripts/plans/rentalDS-settle-d4-2026-11.plan": "fec3c67f4910ddb4219ea3d60ef9b3c0073938a160872cd0125f5202c0a1aee2",
+  "docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json": "29cacae04093c85d8da45309e896c5f364fe1a26939dc99401c5171adfe509c6",
+  "docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json": "c44a841fdca46b70fef05d04f59c7f8dff613531802dd34b3012c8c4d82037e3",
+  "docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json": "b8b8703316b19c67b765ae93c282eba42e0a0978a6549d748f50d17023db9318",
+  "docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json": "d96c433afc018771076cbf6068f82256f32ecb2605492d10fa2a3dbda74e4a83",
+  "docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json": "fc27d04465decc9fbb27fe1f006e5d82f77ba56697811b6dba2260f19041552f",
+  "docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json": "c3c4fc8aa35eb3b8a4e72e30e6397c35e2dafa78822e2cfef3e76b872f212c69"
+ }
+}

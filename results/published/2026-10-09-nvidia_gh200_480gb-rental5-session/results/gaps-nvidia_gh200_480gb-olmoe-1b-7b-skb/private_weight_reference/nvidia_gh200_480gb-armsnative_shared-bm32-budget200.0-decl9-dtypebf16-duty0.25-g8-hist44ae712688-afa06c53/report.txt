@@ -1,0 +1,31 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist44ae712688-afa06c53
+model       olmoe-1b-7b E=64 k=8  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json (sha256 44ae712688534abf...), page B, 9 cells x arms = 18 timed cells, token-row shuffle seed 20261007; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       174.87 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 651.8 TFLOP/s bf16 over 3727.6 GB/s (triad pattern); calibrated 2026-10-08 at d4d1767e
+experts     native declares E=64; shared declares E x n_decl = 576 at every cell
+            n_decl = 9 against n_max = 16 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 16 against the 16 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261008T233040Z-p2d-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-skb/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist44ae712688-afa06c53
+cells (n, label, arms, path, counts sha256):
+  n=2   DW               native,shared  block-scan   dbb9ee40935f7513
+  n=2   uniform          native,shared  block-scan   e0f6f9c8b4e72640
+  n=2   balanced         native,shared  block-scan   74234e98afe7498f
+  n=4   DW               native,shared  block-scan   47812379ffb4c389
+  n=4   uniform          native,shared  block-scan   23b7c3e32dbde7b8
+  n=4   balanced         native,shared  block-scan   74234e98afe7498f
+  n=16  DW               native,shared  block-scan   95f7273920907272
+  n=16  uniform          native,shared  block-scan   71773f1ff26beaa4
+  n=16  balanced         native,shared  block-scan   74234e98afe7498f
+
+HISTOGRAM GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS

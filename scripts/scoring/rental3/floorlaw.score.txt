@@ -1,0 +1,39 @@
+RENTAL 3 PART B (the floor law), 2026-10-05-rental3-floorlaw-gh200
+  B0: FALSIFIED
+  B1: HOLDS
+  B2: FAILS on 1
+  B3: RECORD
+  B4: RECORD
+  B5_printed: {'qwen2-57b-a14b-tp8 floor1005 lock1005 w1': 326.39000000001397, 'qwen2-57b-a14b-tp8 floor1005 lock1005 w2': 322.20999999996275, 'granite-3.0-1b-a400m floor1005 lock1005 w1': 311.195000000007, 'granite-3.0-1b-a400m floor1005 lock1005 w2': 305.65499999999884, 'mixtral-8x7b-tp4 floor1005 lock1005 w1': 327.089999999851, 'mixtral-8x7b-tp4 floor1005 lock1005 w2': 328.30000000004657, 'mixtral-8x7b-tp8 floor1005 lock1005 w1': 341.9099999999162, 'mixtral-8x7b-tp8 floor1005 lock1005 w2': 329.1899999999441, 'mixtral-8x7b-tp2 floor1005 lock1005 w1': 342.96500000031665, 'mixtral-8x7b-tp2 floor1005 lock1005 w2': 352.5600000000559}
+  B6: INCONCLUSIVE
+  B7: H_EST HOLDS
+  hypotheses: {'CLOCK': 'neither', 'CEIL': 'FALSIFIED', 'FLUID': 'FALSIFIED'}
+  verdict: INCONCLUSIVE
+  qwen2-57b-a14b-tp8 floor base w1: ACT.max +0.86+-0.03  DUR +0.51+-0.17  EL.avg +0.55+-0.05  X -0.04+-0.16  GAP -0.31+-0.07
+  qwen2-57b-a14b-tp8 floor base w2: ACT.max -0.16+-0.28  DUR +0.63+-0.58  EL.avg +0.18+-0.19  X +0.45+-0.56  GAP +0.34+-0.35
+  qwen2-57b-a14b-tp8 floor lock1710 w1: ACT.max +0.91+-0.03  DUR +0.62+-0.16  EL.avg +0.38+-0.09  X +0.24+-0.18  GAP -0.53+-0.07
+  qwen2-57b-a14b-tp8 floor lock1710 w2: ACT.max -0.04+-0.19  DUR -0.91+-1.32  EL.avg +0.34+-0.25  X -1.25+-1.48  GAP +0.38+-0.22
+  qwen2-57b-a14b-tp8 floor1005 lock1005 w1: ACT.max +0.90+-0.02  DUR +0.83+-0.04  EL.avg +0.83+-0.04  X +0.00+-0.00  GAP -0.08+-0.05
+  qwen2-57b-a14b-tp8 floor1005 lock1005 w2: ACT.max +0.09+-0.07  DUR +0.06+-0.10  EL.avg +0.06+-0.10  X +0.00+-0.00  GAP -0.03+-0.06
+  granite-3.0-1b-a400m floor base w1: ACT.max +0.75+-0.06  DUR +0.79+-0.32  EL.avg +0.49+-0.25  X +0.30+-0.21  GAP -0.26+-0.21
+  granite-3.0-1b-a400m floor base w2: ACT.max +0.23+-0.19  DUR -0.62+-0.32  EL.avg +0.03+-0.31  X -0.65+-0.18  GAP -0.20+-0.26
+  granite-3.0-1b-a400m floor lock1710 w1: ACT.max +0.78+-0.05  DUR +0.20+-0.36  EL.avg +0.46+-0.10  X -0.27+-0.28  GAP -0.31+-0.10
+  granite-3.0-1b-a400m floor lock1710 w2: ACT.max +0.38+-0.19  DUR +0.01+-0.36  EL.avg +0.12+-0.24  X -0.12+-0.19  GAP -0.25+-0.12
+  granite-3.0-1b-a400m floor1005 lock1005 w1: ACT.max +0.85+-0.05  DUR +0.89+-0.19  EL.avg +0.88+-0.19  X +0.00+-0.00  GAP +0.03+-0.20
+  granite-3.0-1b-a400m floor1005 lock1005 w2: ACT.max +0.42+-0.16  DUR +0.58+-0.26  EL.avg +0.58+-0.26  X +0.00+-0.01  GAP +0.16+-0.25
+  mixtral-8x7b-tp4 floor base w1: ACT.max +0.68+-0.16  DUR +0.10+-0.31  EL.avg +0.39+-0.06  X -0.29+-0.31  GAP -0.29+-0.13
+  mixtral-8x7b-tp4 floor base w2: ACT.max +0.77+-0.05  DUR +0.57+-0.13  EL.avg +0.64+-0.05  X -0.07+-0.15  GAP -0.13+-0.06
+  mixtral-8x7b-tp4 floor lock1710 w1: ACT.max +0.56+-0.29  DUR +0.08+-0.24  EL.avg +0.25+-0.10  X -0.18+-0.19  GAP -0.30+-0.29
+  mixtral-8x7b-tp4 floor lock1710 w2: ACT.max +0.76+-0.04  DUR +0.63+-0.14  EL.avg +0.42+-0.08  X +0.21+-0.10  GAP -0.34+-0.06
+  mixtral-8x7b-tp4 floorrep lock1710 w1: ACT.max +0.93+-0.01  DUR +0.59+-0.32  EL.avg +0.20+-0.12  X +0.39+-0.37  GAP -0.74+-0.12
+  mixtral-8x7b-tp4 floorrep lock1710 w2: ACT.max +0.78+-0.05  DUR +0.43+-0.17  EL.avg +0.31+-0.06  X +0.12+-0.18  GAP -0.47+-0.07
+  mixtral-8x7b-tp4 floor1005 lock1005 w1: ACT.max +0.87+-0.02  DUR +0.87+-0.02  EL.avg +0.87+-0.02  X +0.00+-0.00  GAP -0.00+-0.01
+  mixtral-8x7b-tp4 floor1005 lock1005 w2: ACT.max +0.83+-0.03  DUR +0.79+-0.03  EL.avg +0.78+-0.03  X +0.00+-0.00  GAP -0.04+-0.03
+  mixtral-8x7b-tp4 floor1410 lock1410 w1: ACT.max +0.84+-0.03  DUR +0.49+-0.14  EL.avg +0.51+-0.05  X -0.01+-0.16  GAP -0.34+-0.04
+  mixtral-8x7b-tp4 floor1410 lock1410 w2: ACT.max +0.78+-0.04  DUR +0.50+-0.14  EL.avg +0.55+-0.06  X -0.06+-0.14  GAP -0.23+-0.05
+  mixtral-8x7b-tp8 floor1005 lock1005 w1: ACT.max +0.90+-0.01  DUR +0.93+-0.02  EL.avg +0.93+-0.02  X +0.00+-0.00  GAP +0.03+-0.02
+  mixtral-8x7b-tp8 floor1005 lock1005 w2: ACT.max +0.69+-0.02  DUR +0.72+-0.11  EL.avg +0.72+-0.11  X -0.00+-0.00  GAP +0.03+-0.11
+  mixtral-8x7b-tp2 floor1005 lock1005 w1: ACT.max +0.78+-0.01  DUR +0.78+-0.05  EL.avg +0.78+-0.05  X +0.00+-0.00  GAP -0.00+-0.05
+  mixtral-8x7b-tp2 floor1005 lock1005 w2: ACT.max +0.96+-0.01  DUR +0.97+-0.03  EL.avg +0.96+-0.03  X +0.00+-0.00  GAP +0.00+-0.03
+  two views (ALL, CLEAN):
+    0 of 9 verdicts differ between ALL and CLEAN

@@ -1,0 +1,8 @@
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 1310e2, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [2, 3, 4, 6], 16 profiled launches at --clock-control none under an nvidia-smi lock of 1710 MHz; 42 metrics asked, dropped []
+RESULT: VALIDITY FL1 FAIL every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock: off the lock: ['w1 fitted 1619 MHz', 'w1 offset -2.2 us', 'n=2 w1 1622 M
+GATE FL1 VALIDITY FAIL   every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock
+              measured off the lock: ['w1 fitted 1619 MHz', 'w1 offset -2.2 us', 'n=2 w1 1622 MHz', 'n=3 w1 1616 MHz', 'n=4 w1 1619 MHz', 'n=6 w1 1619 MHz', 'w2 fitted 1657 MHz', 'n=2 w2 1645 MHz', 'n=3 w2 1666 MHz', 'n=4 w2 1660 MHz', 'n=6 w2 1655 MHz'] (fit: w1 1618.8 MHz + -2.2 us over 4 cells; w2 1656.8 MHz + -0.6 us over 4 cells)   gate each GEMM's duration = t0 + cycles / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, no cell over 3 steps off
+              a FAIL here invalidates: this file as a reading at 1710 MHz; its numbers stand only as readings at the clocks its cells name
+wrote /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json: '/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json' is outside repository at '/home/ubuntu/moe/repo')

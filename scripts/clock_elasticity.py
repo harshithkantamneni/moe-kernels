@@ -1,0 +1,4144 @@
+#!/usr/bin/env python
+"""How much of the per-M-tile cost is the CLOCK? -d log b / d log f, one kernel.
+
+    python scripts/clock_elasticity.py --dry-run     # the priced plan and the registered bands
+    python scripts/clock_elasticity.py --self-test   # the scorer and the estimator, off GPU
+    python scripts/clock_elasticity.py --card 'NVIDIA H200'    # the pod run
+    python scripts/clock_elasticity.py --lock-clocks 1980 1755 1530   # LOCK MODE, root only
+
+WHAT IS GATED. eta_b = -d log b / d log f, where b is the per-M-tile cost in
+ms = a(f) + b(f) n, read off the fixed-tread slopes of treads 2 and deeper
+(`per_tile_slope`, `CLAIM_MIN_TREAD`). Printed beside it and never gated: the
+same estimator over every tread, tread 1's departure from the line the claim
+fits, and the pooled per-call eta = -d log ms / d log f at fixed tread, which is
+what this arm gated before 2026-09-22 (session 4 read 0.74 on it). Every one of
+them is in report.json under its own key.
+
+WHY THIS ARM EXISTS. A 13-agent reading of the 2026-09-10 session concluded that
+alpha, as this study defines it, is NOT IDENTIFIED by this apparatus, and one of
+the three independent reasons is the clock. The card is power-capped at 689-695 W
+in every cell of that session, so the SM clock is an ENDOGENOUS RESPONSE to the
+tile and to the tread index rather than an input: 1462-1965 MHz across one grid.
+Sweeping the admissible clock elasticity moves pooled EXA alpha_b from 0.974 to
+0.897, which is 21x the quoted sd of 0.0037, and the 26.7-sigma monotone rise of
+alpha_b with BLOCK_M breaks at elasticity 0.5 and INVERTS at 1.0.
+
+NOTHING IN THE CORPUS MOVES THE CLOCK AT A BYTE-IDENTICAL KERNEL. Every clock
+difference on record is confounded with the thing that caused it: a different
+tile, a different tread, a different model. So the elasticity is a free
+parameter, and a free parameter with that much leverage is the reason no alpha
+in the study is quotable. This arm measures it.
+
+WHAT IS MEASURED. One pinned cell -- BLOCK_SIZE_M 32, BLOCK_SIZE_N 64,
+BLOCK_SIZE_K 64, GROUP_SIZE_M 16, num_warps 8, num_stages 4, mixtral-8x7b bf16 --
+run as a ladder of exactly-full tile stacks, at three or more SUSTAINED DUTY
+CYCLES (in LOCK MODE, below, at three or more LOCKED SM CLOCKS, one duty). The
+tensors are built ONCE and reused in every state, so "the same kernel over the
+same bytes" is true by construction and not by assertion, and the rows carry the
+tile they ran under so it is checked off the rows as well.
+
+WHY DUTY CYCLE AND NOT nvidia-smi -lgc. Setting a clock needs root and a rented
+pod refuses it; `nvidia-smi -lgc` on a RunPod container returns "Insufficient
+Permissions". Under a power cap the settled clock is a function of SUSTAINED
+BOARD POWER, and sustained board power is delivered GPU time per unit wall time.
+So a host-side idle gap after each burst of launches moves the clock at a kernel
+whose bytes and instructions never change. The gap is OUTSIDE every measured
+interval, and the FIRST call of every burst is discarded because it launches into
+a drained queue and carries launch latency the other calls do not.
+
+LOCK MODE, WHERE -lgc IS PERMITTED (--lock-clocks, 2026-09-25). On a VM where
+we are root the states are LOCKED SM CLOCKS instead: `nvidia-smi -lgc F,F`
+(through `sudo -n` when not root) before each state, `nvidia-smi -rgc` at exit
+on every path `ClockLock` can catch, every state at ONE duty (--lock-duty, 0.25)
+to keep board power low. In each measured cell, warm-up and timed bursts
+alike, every gap is sized from the burst it follows, so every lock achieves
+that duty in the rows the fit reads. The 10 s settle before a state is NOT:
+`_settle` sizes its gap from the one full-duty sizing pass, run before any lock,
+so at a lock where the call is slower than there it runs above the lock duty.
+It can go BELOW the full-duty clock, which duty mode cannot. The claim, the
+bands and every gate are unchanged, and the regressor is still the clock READ
+BACK per burst, never the lock: a row whose read-back clock is more than
+`timing.DRIFT_FRACTION` off its lock is excluded as `off_lock` and counted (V0,
+V4), and the page names every lock that did not hold and how many of the
+planned locks the fit read (`off_lock_lines`), so a lock the cap pulled down is
+caught and not fitted. THE TOP LOCK IS THE ONE AT RISK, and a low duty does not
+by itself protect it: on the Lambda GH200 a 1965 lock read ~1800-1830 MHz under
+its 700 W cap during R3's bursts at duty 0.25, while 1710 held exactly. So the
+locks come from a short hold test on the card, not from its maximum. A container
+that refuses -lgc is refused before anything is written, and so is a box whose
+-rgc did not release the probe lock.
+
+THE CLOCK IS READ WITH WORK IN FLIGHT, which is why this arm cannot use
+`timing.BackgroundClockSampler`: a free-running poller at 10% duty lands in an
+idle gap nine times in ten and reports the boost clock of an idle card. The
+reader is `timing.nvml_clock_reader`, the same one `scripts/thermal_acceptance.py`
+samples with, called once per burst after the last enqueue and BEFORE the
+synchronise -- thermal_acceptance's own method, reused rather than rewritten.
+
+WHAT IT CANNOT DO, IN DUTY MODE (lock mode can). It cannot make the card SLOWER
+than its full-duty clock at this kernel: full duty is already the most sustained
+pressure a byte-identical kernel can apply. So the swept range runs from the
+full-duty clock UP toward the card's boost ceiling, and it is widest at the
+shallow treads (the 2026-09-10 corpus has this cell at 1485 MHz at tread 1
+against 1815 at tread 8, on a part whose maximum is 1980). V1 refuses a run
+whose states did not separate, which is the honest outcome if the governor does
+not respond.
+
+WHAT IT WRITES, under `$MOE_RESULTS_DIR` or `/workspace/results` or `<repo>/results`:
+
+    <results>/clock_elasticity/<run-id>/cells.csv     one row per state x tread x repeat
+    <results>/clock_elasticity/<run-id>/report.txt    exactly what was printed
+    <results>/clock_elasticity/<run-id>/report.json   the fit, the gates, the provenance
+    <results>/clock_elasticity/<run-id>/CARD, DEVICE  the card's name and UUID, the
+                                                      resume guard (`device_guard`)
+
+NO RULER IS RESOLVED AND NONE IS NEEDED. An elasticity is a ratio of logs: it has
+no ridge in it, no bandwidth, no compute peak and no fitted level. The reference
+clock is resolved for the LEVEL RECORD only, and LEVEL -- on EITHER side -- never
+excludes a row here, exactly as the repository's rule has stood since 2026-09-09.
+DRIFT excludes, and so does a host-bound row, because a host-bound interval is an
+upper bound and an upper bound that moves with the clock would BE the finding.
+
+EXIT CODES are `moe.bench.exit_codes`. `--dry-run` measured nothing and scored no
+gate, so it exits REFUSED (2) and prints no RESULT line. There is deliberately no
+gate-softening flag in this file: `classify` over the gates is the exit code in
+every scoring mode, so a failed claim is CLAIM_FAIL whether or not anyone
+remembered a flag. `--min-clock-ratio` is not one either, and it took a rule to
+keep it from becoming one: it may TIGHTEN V1's threshold and `registered_clock_ratio`
+REFUSES a value below the design's own requirement, because the flag is out of the
+run id and a looser threshold would re-score the cells already on disk into the
+same directory and overwrite the page that said INVALID. LOCK MODE adds two codes
+that are NOT in that table: 128 + the signal (143 for SIGTERM, 129 for SIGHUP)
+when `ClockLock` caught a kill and reset the clock before exiting, which it says
+on stderr first ("SIGTERM caught: ..."), because a shell reports 143 for an
+uncaught SIGTERM as well. A Ctrl-C still ends in KeyboardInterrupt, 130 to a
+shell, as in duty mode, after the same line and the same reset. No driver runs
+lock mode, so no ledger reads them yet. A run whose own reset FAILED after
+measuring exits ERROR (4) whatever its verdict, so a chain stops before it
+measures anything else on a card left locked; the page keeps the verdict.
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import csv
+import json
+import math
+import os
+import random
+import re
+import signal
+import statistics
+import subprocess
+import sys
+import time
+import traceback
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE))
+
+import block_m_crossing_sweep as SWEEP  # noqa: E402
+
+from moe.baselines import _framework_config as FC  # noqa: E402
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
+from moe.bench import timing as T  # noqa: E402
+from moe.spec import DTYPE_BYTES, MODEL_CONFIGS  # noqa: E402
+
+# --------------------------------------------------------------------------
+# What ran, named. NOT `timing.TIMING_BASIS`: that basis is a back-to-back
+# queue-deep loop with a background clock poller, and this one is neither.
+# Naming it TIMING_BASIS would claim an instrument this arm never used, which is
+# the confusion `dram_counter_route` keeps four separate instrument strings to
+# avoid.
+# --------------------------------------------------------------------------
+INSTRUMENT = (
+    "scripts/clock_elasticity.py: bursts of N back-to-back fused_experts calls "
+    "under one pinned tile, each call L2-flushed and bracketed by its own "
+    "pre-primed event pair, the FIRST call of every burst discarded as a "
+    "drained-queue launch, a host-side idle gap after each burst setting the "
+    "sustained duty cycle, and the SM clock, board power and memory clock read "
+    "through NVML with the burst still in flight; NOT timing.TIMING_BASIS")
+
+#: What LOCK MODE adds to that instrument, on its rows, page and provenance.
+LOCK_INSTRUMENT = (
+    INSTRUMENT + "; LOCK MODE: the SM clock locked per state with nvidia-smi "
+    "-lgc F,F and read back per burst, one duty in every state, each measured "
+    "burst's gap sized from that burst")
+
+#: LOCK MODE's one duty, every state, chosen to keep board power off the cap so
+#: the LOCK sets the clock: session 4's H200 held 1965 MHz at 0.25 with no
+#: drifting cell, and at 0.5 its clock still tracked board power. EXPECTED, NOT
+#: GUARANTEED, and the top lock is where it fails first: on the Lambda GH200
+#: (2026-09-25) a 1965 lock read ~1800-1830 MHz during R3's bursts at 0.25, SW
+#: power cap, while 1710 held. A lock the card does not hold is excluded
+#: (`off_lock`) and named on the page (`off_lock_lines`), never fitted.
+DEFAULT_LOCK_DUTY = 0.25
+
+#: HOW `time_duty` SIZES THE IDLE GAP AFTER A BURST, one of two, named by the
+#: caller. GAP_FROM_SIZING, this arm's own and the default: one gap for the
+#: cell, `calls_per_burst x per_call_ms x (1/duty - 1)`, with `per_call_ms`
+#: the caller's reading of the call before the cell. The gap is then only as
+#: right as that reading: where the call runs k times faster inside a burst
+#: than it did there, the achieved duty is 1 / (1 + k (1/duty - 1)), and this
+#: arm's regressor is the measured clock, never the duty, so the achieved
+#: duty is a record here (`duty_seen`) and not a quantity the fit needs.
+#: GAP_FROM_BURST, which private_weight_reference asks for (its DESIGN
+#: DECISION 15, 2026-09-23): after each burst, warm-up bursts included, the
+#: host sleeps until that burst's wall clock, from its first launch to the
+#: sleep, reaches the burst's own measured kernel time over `duty`, so the
+#: achieved duty (`duty_achieved`, measured the same way) is `duty` up to the
+#: sleep's overshoot, whatever the call costs. That arm compares two ARMS at
+#: one duty, and session 5 found its sizing read left them at achieved duties
+#: 2.5-6.9% of the requested one apart.
+GAP_FROM_SIZING = "sizing"
+GAP_FROM_BURST = "burst"
+GAP_BASES = (GAP_FROM_SIZING, GAP_FROM_BURST)
+
+#: The card label a run that measures NOTHING carries. `provenance.run_id`
+#: refuses an id without a card, and --dry-run and --self-test have none.
+NO_CARD = "no-card-nothing-measured"
+
+# --------------------------------------------------------------------------
+# The pinned cell. ONE tile for the whole arm, on purpose: the independent
+# variable is the clock, and a second thing that moves is a second explanation.
+# --------------------------------------------------------------------------
+
+#: BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps and num_stages are `SWEEP.FIXED`'s,
+#: taken from there rather than retyped so this arm's tile and the ladder arms'
+#: tile cannot drift apart. GROUP_SIZE_M is 16 by DEFAULT and NOT `FIXED`'s 1:
+#: 16 is the swizzle the bn_decomposition arm ran and the swizzle every
+#: published alpha this arm exists to qualify was fitted at. Since 2026-09-22
+#: `--group-m` moves it: the private-weight ratio arm read alpha 0.955/0.978 at
+#: G=1 and 0.748 at G=16 on the same card, and the elasticity that says which
+#: of those is a traffic quantity is the elasticity AT THAT ORDER, so the arm
+#: runs once per geometry the ratio table quotes (`pinned_for`).
+PINNED = dict(SWEEP.FIXED, BLOCK_SIZE_M=32, GROUP_SIZE_M=16)
+
+
+def pinned_for(group_m: int) -> dict:
+    """The tile THIS RUN pins: `PINNED` with GROUP_SIZE_M from --group-m."""
+    return dict(PINNED, GROUP_SIZE_M=int(group_m))
+
+DEFAULT_MODEL = "mixtral-8x7b"
+DEFAULT_DTYPE = "bf16"
+
+# --------------------------------------------------------------------------
+# The design. Every constant here is an experimental-design DECISION, printed
+# on the plan page before the run and listed in the arm's report so it can be
+# overruled; none of them is a calibration.
+# --------------------------------------------------------------------------
+
+#: Sustained GPU-busy fractions, one state each. Four rather than the three the
+#: design needs, so a state that fails to separate still leaves a fit.
+#:
+#: 1.00 IS THE ANCHOR AND IS NOT QUITE THE LADDER ARMS' CADENCE, which is worth
+#: saying plainly. It is the highest sustained pressure this instrument can
+#: apply -- no host sleep at all -- and the corpus's ladders run the same
+#: kernel back to back, so the anchor sits at or very near their operating
+#: point. It is not byte-identical to them: `timing._timed_trials`
+#: synchronises ONCE PER TRIAL and this loop synchronises once per burst, so
+#: the anchor drains the queue more often. That difference is deliberate and it
+#: is what makes the four states comparable: EVERY state, the anchor included,
+#: launches each burst into a drained queue and discards that burst's lead
+#: call, so the only thing that differs between states is the length of the
+#: host sleep.
+DUTY_LEVELS = (1.00, 0.50, 0.25, 0.10)
+
+#: Treads on the ladder, exactly-full tile stacks `r = n * BLOCK_M`.
+DEFAULT_TREADS = 8
+
+#: Independent passes over the whole design. The interval on the elasticity is a
+#: bootstrap over these, so this is the sample size that sets the resolution;
+#: `mde_lines` prints the arithmetic that chose it.
+DEFAULT_REPEATS = 13
+
+#: Target GPU milliseconds inside one burst. Sets how many calls a burst holds,
+#: hence how much of the burst the discarded lead call costs, and how finely the
+#: within-burst steadiness gate (V5) can look. 40 ms puts at least 8 calls in a
+#: burst at every tread of this ladder and keeps the lead call under 12% of them.
+DEFAULT_BURST_MS = 40.0
+
+#: Calls per burst, floor and ceiling. The floor is what V5 needs: it reads the
+#: first and last QUARTER of a burst's KEPT calls, and the kept calls are
+#: `got[1:]` because the lead call of every burst is discarded. So the floor
+#: that buys a two-sample quarter is NINE launched calls, not eight: at eight,
+#: seven are kept and `7 // 4` is one, which is a sample and not a median.
+#: Eight is still the number here, and it is the number V5 tolerates rather
+#: than the number it wants: the booked ladder's deepest tread lands on nine by
+#: one call, and a run that lands on the floor gets a one-sample quarter and a
+#: V5 that is weaker there than the docstring used to claim.
+MIN_CALLS_PER_BURST = 8
+MAX_CALLS_PER_BURST = 512
+
+#: Kernel milliseconds per trial and trials per cell, the shared instrument's own
+#: `--cell-budget-ms` and `--trials` defaults, kept identical so a row here and a
+#: row from the ladder arms hold the same number of samples.
+DEFAULT_TARGET_MS = 200.0
+DEFAULT_TRIALS = 3
+
+#: Milliseconds of delivered GPU load before a cell is timed, run AT THE STATE'S
+#: OWN DUTY CYCLE and followed by the same two-consecutive-reads settle rule
+#: `timing.warm_until` applies. 200 ms at duty 0.10 is 2 s of wall, which is the
+#: per-tread part of holding an operating point.
+DEFAULT_WARM_MS = 200.0
+
+#: Seconds of the state's cadence run before the state's first cell, to move the
+#: board's power average onto the new duty. The per-tread warm above handles the
+#: fine adjustment; this handles the coarse one, and it is SECONDS rather than
+#: milliseconds because a thermal transition is not a power-average transition.
+DEFAULT_SETTLE_SECONDS = 10.0
+
+#: Bootstrap draws for the interval. Re-analysis of one set of cells, so it is
+#: OUT of the run id for the same reason --ridge and --alpha are.
+DEFAULT_DRAWS = 2000
+
+#: Depth a state must reach among KEPT rows before the fit will read it.
+MIN_TREADS_PER_STATE = 4
+MIN_REPEATS_PER_STATE = 3
+#: States the fit needs. Two states give a slope with zero degrees of freedom and
+#: no way to see curvature; the brief's own floor is three. IN LOCK MODE V3 NEEDS
+#: EVERY PLANNED LOCK (owner, 2026-09-25): a ladder the card cut short is not the
+#: design that was planned, even where three locks are left.
+MIN_STATES = 3
+
+#: One step of the SM clock grid a lock sits on (15 MHz on the H100, H200 and
+#: GH200). A lock whose KEPT rows read back more than this off it at a tread is
+#: named on the page as held only loosely (owner, 2026-09-25): the rule the hold
+#: test in the run plan and the H100's locked R3 driver both use for a slip.
+LOCK_STEP_MHZ = 15
+
+#: Share of rows that may be dropped for DRIFT or for being host-bound before the
+#: kept set stops describing the run that was paid for. One in five: above that,
+#: what is left is a subsample chosen by the card's own behaviour.
+EXCLUSION_CEILING = 0.20
+
+#: THE SHALLOWEST TREAD THE CLAIM'S LINE READS, registered by the owner on
+#: 2026-09-22 before the run and not chosen by the fit. The claim assumes every
+#: tread it reads lies on ms = a(f) + b(f) n, and session 4's one-tile call did
+#: not: its fixed-tread sensitivity was 0.13 ms against the 0.62 ms the line
+#: through treads 2-8 extrapolates to at n = 1, its level 0.75 ms against the
+#: line's 0.63, and a per-call reading of 0.17 beside 1.04-1.11 at every deeper
+#: tread is a point that law reaches only with an intercept elasticity far below
+#: zero, which is not physics. Read over every tread, that one point moved the
+#: claim from 1.11 to 1.21 and failed V7 on the cells that motivated the claim
+#: (tests/fixtures/2026-09-21-nvidia_h200-session4-clock_elasticity-g16). The
+#: all-tread reading and tread 1's departure are printed beside the claim and
+#: stored in report.json; neither is gated.
+CLAIM_MIN_TREAD = 2
+
+# --------------------------------------------------------------------------
+# THE REGISTERED BANDS. Written here, printed by --dry-run before the run, and
+# NOT chosen after the fact. They come from the session-3 analysis: below 0.25
+# the raw readings stand and pooled EXA alpha_b is near 0.97 with the BLOCK_M
+# ladder monotone; above 0.40 the ladder is non-monotone, the pooled value is
+# near 0.93, and C3's DIRECTION is retracted while its inequality survives.
+#
+# THE MIDDLE BAND IS THE ONE THE ANALYSIS DID NOT GIVE, and it is registered
+# anyway. Two consequences and a gap between them is three outcomes, and an arm
+# that landed in the gap with only two registered readings would have to invent
+# the third after seeing its own number.
+# --------------------------------------------------------------------------
+BAND_LOW = 0.25
+BAND_HIGH = 0.40
+
+BANDS = (
+    ("RAW-STANDS", None, BAND_LOW,
+     "the raw readings stand: pooled EXA alpha_b is near 0.974 and the "
+     "26.7-sigma monotone rise of alpha_b with BLOCK_M survives. The clock is "
+     "not what is wrong with alpha; FORM and PHYSICS still are."),
+    ("UNREGISTERED-GAP", BAND_LOW, BAND_HIGH,
+     "NEITHER registered consequence is licensed. The analysis that produced "
+     "the two readings below and above swept the elasticity past this band "
+     "without stopping in it, so there is no pooled alpha_b to quote here and "
+     "the honest report is the interval and the refusal to read it further."),
+    ("CLOCK-CARRIES", BAND_HIGH, None,
+     "the BLOCK_M ladder is NON-MONOTONE, pooled EXA alpha_b falls to about "
+     "0.93, and C3's DIRECTION is RETRACTED while C3's inequality survives. "
+     "Every alpha in the study is then a blend of traffic and clock and none "
+     "of them may be quoted as traffic."),
+)
+
+#: The half-width the design is sized to reach: half the width of the
+#: unregistered gap. An interval wider than the gap cannot be placed inside it,
+#: so a design that cannot reach this cannot distinguish the three worlds.
+RESOLUTION_TARGET = (BAND_HIGH - BAND_LOW) / 2.0
+
+#: THE PHYSICALLY ADMISSIBLE RANGE, and why it needs a gate rather than a
+#: sentence. The gated eta is the share of the per-M-tile cost that moves with
+#: the SM clock: 0 is a tile whose cost is pure traffic, 1 is a tile whose cost
+#: is pure issue rate. BELOW 0 that cost ROSE as the clock rose at a
+#: byte-identical kernel, and ABOVE 1 it fell faster than the clock rose; both
+#: are apparatus faults and neither is a reading. `band_of`'s outer bands are
+#: deliberately OPEN at their far edges -- RAW-STANDS has no lower edge -- so
+#: without this gate a negative interval lands inside the pre-registered PASS
+#: and the page prints "the clock is not what is wrong with alpha" over a run
+#: whose clock channel is broken. The failure is not hypothetical for THIS
+#: instrument: one NVML sample per burst, taken a few ms after a 360 ms idle
+#: gap at duty 0.10, reads a ramp transient, and a sampled clock systematically
+#: low in the low-duty states and right at the anchor produces exactly eta < 0.
+#:
+#: THE MARGIN IS THE DESIGN'S OWN HALF-WIDTH, not a typed slack: an interval
+#: that pokes out of [0, 1] by less than the resolution the design was sized
+#: for is noise against the edge, and one that sits a whole half-width outside
+#: is not.
+ADMISSIBLE_LO = 0.0
+ADMISSIBLE_HI = 1.0
+ADMISSIBLE_MARGIN = RESOLUTION_TARGET
+
+# --------------------------------------------------------------------------
+# The one corpus fact this file carries, and it PRICES the run rather than
+# scoring it.
+# --------------------------------------------------------------------------
+
+#: Per-tread median milliseconds of the cell this arm pins, measured by the
+#: 2026-09-10 session's bn_decomposition arm at BLOCK_M=32, BLOCK_N=64,
+#: GROUP_SIZE_M=16, mixtral-8x7b bf16, 17 repeats per tread, from
+#: results/published/2026-09-10-nvidia_h200-gaps-session/results/bn_decomposition/
+#: nvidia_h200-bm32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50-k64-
+#: modelmixtral_8x7b-n32_64-b59b409f/cells.csv
+#:
+#: USED ONLY TO PRICE THE RUN. It sizes the burst, the iteration count and the
+#: wall clock on the plan page so an operator buys pod time against a figure
+#: derived the way the runner derives it, and its SHAPE (intercept against
+#: slope) weights the claim's resolution line in `mde_lines` through
+#: `per_tile_se_factor`. No gate reads it, no fit reads it, and
+#: `tests/test_clock_elasticity.py` recomputes it from that committed file so it
+#: cannot drift away from what was actually measured.
+CORPUS_LADDER_MS = (0.7738, 1.3252, 1.8911, 2.4154, 3.0127, 3.5662, 4.1618,
+                    4.6153)
+
+#: Median across-repeat relative spread of those same 17-repeat treads, which is
+#: the sd of log ms one cell of this design carries. Same file, same provenance,
+#: same "prices only" rule: it is the input to the MDE arithmetic that CHOOSES
+#: the clock-separation threshold, and the threshold is COMPUTED from it rather
+#: than typed, so a revision of this number moves the gate with it.
+CORPUS_REPEAT_SPREAD = 0.01071
+
+#: The median's efficiency penalty against the mean for a normal sample,
+#: sqrt(pi/2). The per-cell figure is a MEDIAN across repeats, so its standard
+#: error is this much worse than the mean's and the MDE says so rather than
+#: pretending the collapse was free.
+MEDIAN_SE_PENALTY = math.sqrt(math.pi / 2.0)
+
+#: Seconds charged for the weight build, the activations and the first compile.
+#: An ALLOWANCE and it says so: mixtral-8x7b bf16 is 2.82 GB of expert weights
+#: built once and reused by every tread, and Triton picks a kernel on the first
+#: call under the pin; neither has been timed here.
+ALLOCATION_SECONDS = 60.0
+
+
+# --------------------------------------------------------------------------
+# Registered predictions. Printed before anything is measured, never rewritten.
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Prediction:
+    """One registered prediction: what it says, and what a FAIL would mean."""
+
+    number: int
+    claim: str
+    numbers: str
+    fail: str
+
+    def render(self) -> list[str]:
+        return [f"P{self.number}  {self.claim}",
+                f"      predicts  {self.numbers}",
+                f"      a FAIL    {self.fail}"]
+
+
+PREDICTIONS = (
+    Prediction(
+        1, "the duty cycle moves the clock at a byte-identical kernel",
+        "every tread's under-load SM clock spans at least the ratio the design "
+        "arithmetic below requires, across the duty states, with the same "
+        "tensors, the same pinned tile and the same tread count in every state",
+        "V1 FAILS and the arm is INVALID. Three states at one clock measure "
+        "nothing, and the honest reading is that this container's governor does "
+        "not respond to duty at this kernel -- not that the elasticity is zero."),
+    Prediction(
+        2, "the measured PER-M-TILE cost is BELOW 0.25 in elasticity: most of "
+           "what one more tile adds at this cell is traffic, not issue rate",
+        f"the 95% interval on -d log b / d log f, b the ladder slope, read "
+        f"over treads {CLAIM_MIN_TREAD} and deeper, lies wholly below "
+        f"{BAND_LOW}, "
+        "which is the band in which the study's raw readings stand and pooled "
+        "EXA alpha_b is near 0.974 with the BLOCK_M ladder monotone",
+        f"a FAIL is a RESULT and not a retry. Above {BAND_HIGH} the BLOCK_M "
+        "ladder is non-monotone, pooled alpha_b falls to about 0.93 and C3's "
+        "DIRECTION is retracted; between the two the analysis registered no "
+        "reading at all and the page says so instead of inventing one."),
+    Prediction(
+        3, "and the design resolves which of the three registered worlds it is in",
+        f"the 95% interval lies wholly inside ONE of the three bands, which "
+        f"needs a half-width under {RESOLUTION_TARGET:.3f}",
+        "C1 FAILS. The apparatus worked and the answer is 'not resolved': the "
+        "states separated too little or the repeats were too few, and NO "
+        "registered consequence may be quoted off this page."),
+)
+
+
+# --------------------------------------------------------------------------
+# Gates. A number against a threshold, PASS or FAIL, and what a FAIL costs.
+# --------------------------------------------------------------------------
+
+PASS, FAIL, UNKNOWN = "PASS", "FAIL", "UNKNOWN"
+VALIDITY = "VALIDITY"
+CLAIM = "CLAIM"
+
+
+@dataclass
+class Gate:
+    kind: str
+    number: str
+    claim: str
+    verdict: str
+    measured: str
+    threshold: str
+    #: What a non-PASS here voids, printed only when it is not a PASS.
+    invalidates: str = ""
+    lines: list[str] = field(default_factory=list)
+
+    @property
+    def token(self) -> str:
+        """The gate's identifier as ONE whitespace-free token, for `RESULT:`.
+
+        `V1` and `C1` rather than `1` twice: a file with both a VALIDITY 1 and a
+        CLAIM 1 would otherwise print two gates the driver cannot tell apart. A
+        number that already begins with a letter is its own token, which is what
+        keeps the self-test's S gates from printing as `VS1` and, more to the
+        point, from colliding with a measuring run's `V1` in one log.
+        """
+        return (self.number if self.number[:1].isalpha()
+                else f"{self.kind[0]}{self.number}")
+
+    def result_line(self) -> str:
+        return exit_codes.result_line(
+            exit_codes.VALIDITY if self.kind == VALIDITY else exit_codes.CLAIM,
+            self.token, self.verdict,
+            f"{self.claim} | measured {self.measured} | gate {self.threshold}")
+
+    def scored(self) -> tuple[str, str, str]:
+        return (exit_codes.VALIDITY if self.kind == VALIDITY else exit_codes.CLAIM,
+                self.token, self.verdict)
+
+    def render(self) -> list[str]:
+        out = [self.result_line(),
+               f"{self.kind} {self.number}  {self.verdict:8s} {self.claim}",
+               f"{'':>11}measured {self.measured}",
+               f"{'':>11}gate     {self.threshold}"]
+        if self.verdict != PASS and self.invalidates:
+            out.append(f"{'':>11}a non-PASS here voids {self.invalidates}")
+        out += [f"{'':>11}{text}" for text in self.lines]
+        return out
+
+
+# --------------------------------------------------------------------------
+# One measured cell. Pure data: this is what the CSV holds and what every
+# analysis below reads, so the self-test plants these and nothing else.
+# --------------------------------------------------------------------------
+
+@dataclass
+class Row:
+    """One (state, tread, repeat) measurement: a state is a duty, or in lock
+    mode a lock (`row_state`).
+
+    The tile fields are on EVERY row rather than in a header: V2 reads the tile
+    off the rows, and a tile recorded once per file cannot witness that all four
+    states ran the same one.
+    """
+
+    duty_requested: float
+    duty_achieved: float
+    state_index: int
+    repeat: int
+    order_index: int
+    model: str
+    dtype: str
+    block_m: int
+    block_n: int
+    block_k: int
+    group_m: int
+    num_warps: int
+    num_stages: int
+    tiles: int
+    rows_per_expert: int
+    tokens: int
+    calls_per_burst: int
+    bursts: int
+    trials: int
+    ms_p50: float
+    ms_min: float
+    ms_stdev: float
+    samples: int
+    burst_ms: float
+    gap_ms: float
+    head_ms: float | None
+    tail_ms: float | None
+    within_burst_ok: bool | None
+    sm_clock_load_mhz: float | None
+    sm_clock_start_mhz: float | None
+    sm_clock_end_mhz: float | None
+    clock_samples_mhz: str
+    clock_samples: int
+    clock_source: str
+    #: BOTH halves of the LEVEL verdict travel together. A failed LEVEL without
+    #: its side reads as LOW to any consumer that assumes one, which is how the
+    #: repository came to drop the boosted treads of a whole session.
+    clock_level_ok: bool | None
+    clock_level_side: str
+    clock_drift_ok: bool | None
+    clock_drift_direction: str
+    reference_clock_mhz: float | None
+    power_w: float | None
+    mem_clock_mhz: float | None
+    host_bound: bool | None
+    host_enqueue_ms: float | None
+    host_backlog_iters: float | None
+    warmup_ms: float
+    l2_flush: bool
+    status: str = "ok"
+    detail: str = ""
+    instrument: str = INSTRUMENT
+    #: LOCK MODE's lock for this row's state, MHz; None in duty mode. The
+    #: read-back is `sm_clock_load_mhz`, and `exclusion` compares the two.
+    clock_lock_mhz: float | None = None
+
+
+# --------------------------------------------------------------------------
+# The arithmetic. Pure: no torch, no GPU, no clock. Everything below is what
+# `--self-test` drives on planted rows.
+# --------------------------------------------------------------------------
+
+DROP_DRIFT = "drift"
+DROP_HOST = "host_bound"
+DROP_STATUS = "status"
+DROP_NO_CLOCK = "no_clock"
+DROP_NO_TIME = "no_time"
+DROP_OFF_LOCK = "off_lock"
+
+
+def exclusion(row: Row) -> str:
+    """Why this row is not in the fit, or "" when it is.
+
+    DRIFT EXCLUDES AND LEVEL DOES NOT, either side of it. That is the
+    repository's rule since 2026-09-09 and it is exactly right here: a drifting
+    cell was not measured at one operating point, so its median clock is a blend
+    of two and the pair (ms, f) it contributes is a pair of averages over
+    different worlds. A LEVEL failure means this tile sits away from the
+    calibration GEMM's operating point under the same power cap, which is a
+    RECORD about the tile -- and at 10% duty a LEVEL HIGH row is the whole point
+    of the experiment, so a level filter here would drop precisely the states
+    that carry the signal. `clock_level_side` is recorded and counted; it is
+    never a reason.
+
+    HOST-BOUND EXCLUDES, and that is this arm's own addition to the rule. A
+    host-bound interval holds host enqueue time, so it bounds the kernel from
+    above rather than measuring it, and a bound that moves with the clock is
+    indistinguishable from the elasticity being measured.
+
+    OFF-LOCK EXCLUDES in lock mode (`off_lock`): a read-back more than
+    `timing.DRIFT_FRACTION` of the lock away from it is a state the lock did not
+    set. The power cap is what pulls a lock down, and not only at full duty: on
+    the Lambda GH200 (2026-09-25, 700 W shared with the Grace CPU) a 1965 MHz
+    lock read back ~1800-1830 MHz during R3's bursts at duty 0.25, clock event
+    reason 0x4 (SW power cap), while 1710 held exactly.
+    """
+    if row.status != "ok":
+        return DROP_STATUS
+    if row.ms_p50 <= 0:
+        return DROP_NO_TIME
+    if row.clock_drift_ok is False:
+        return DROP_DRIFT
+    if row.host_bound:
+        return DROP_HOST
+    if not row.sm_clock_load_mhz or row.sm_clock_load_mhz <= 0:
+        return DROP_NO_CLOCK
+    if off_lock(row):
+        return DROP_OFF_LOCK
+    return ""
+
+
+def off_lock(row: Row) -> bool:
+    """A lock-mode row whose clock READ BACK sits more than
+    `timing.DRIFT_FRACTION` of its lock away from it. The ONE test: `exclusion`
+    drops on it and `off_lock_lines` names the locks it caught, whatever other
+    reason also dropped a row, so the page and the fit cannot disagree on it."""
+    return bool(row.clock_lock_mhz and row.sm_clock_load_mhz
+                and abs(row.sm_clock_load_mhz - row.clock_lock_mhz)
+                > T.DRIFT_FRACTION * row.clock_lock_mhz)
+
+
+def kept_rows(rows) -> list[Row]:
+    return [r for r in rows if exclusion(r) == ""]
+
+
+def level_counts(rows) -> dict[str, int]:
+    """How many kept rows sat HIGH, LOW and level. A RECORD, printed, not scored."""
+    out = {T.LEVEL_HIGH: 0, T.LEVEL_LOW: 0, "level": 0, "undetermined": 0}
+    for r in rows:
+        if r.clock_level_ok is None:
+            out["undetermined"] += 1
+        elif r.clock_level_ok:
+            out["level"] += 1
+        elif r.clock_level_side in (T.LEVEL_HIGH, T.LEVEL_LOW):
+            out[r.clock_level_side] += 1
+        else:
+            out["undetermined"] += 1
+    return out
+
+
+def _duty_key(value: float) -> str:
+    """A duty as a stable dictionary key. Floats read back off a CSV do not
+    compare equal to the literals that wrote them often enough to rely on."""
+    return f"{float(value):.4f}"
+
+
+def states_of(args) -> list[tuple[float, int | None]]:
+    """The run's states in order, (duty, lock MHz or None): THE ONE PLACE the
+    two modes differ in what a state is. Lock mode is every lock at one duty."""
+    locks = getattr(args, "lock_clocks", None) or []
+    if locks:
+        return [(float(args.lock_duty), int(f)) for f in locks]
+    return [(float(d), None) for d in args.duty]
+
+
+def instrument_of(args) -> str:
+    return LOCK_INSTRUMENT if getattr(args, "lock_clocks", None) else INSTRUMENT
+
+
+def state_key(duty: float, lock: int | float | None = None) -> str:
+    """A state as a dictionary key: its lock in lock mode, else its duty."""
+    return f"{float(lock):.0f}MHz" if lock else _duty_key(duty)
+
+
+def row_state(row: Row) -> str:
+    return state_key(row.duty_requested, row.clock_lock_mhz)
+
+
+def state_label(key: str, *, as_key: bool = False) -> str:
+    """"duty 0.25" or "lock 1980MHz", for a page, from a `state_key`.
+
+    `as_key` spells a duty as its key, "duty 0.2500", which is V3's spelling
+    on every duty page since 2026-09-10. A DUTY PAGE READS BYTE FOR BYTE AS IT
+    DID BEFORE LOCK MODE (second review, 2026-09-25): the draft had moved V1's
+    claim, V3's text and the console lines of every duty run, and nothing
+    measured had changed to earn that."""
+    if key.endswith("MHz"):
+        return f"lock {key}"
+    return f"duty {key}" if as_key else f"duty {float(key):g}"
+
+
+def console_state(duty: float, lock: int | None = None) -> tuple[str, str]:
+    """`run_arm`'s two spellings of a state: its state lines ("duty=0.25",
+    "lock 1980 MHz") and its per-cell lines ("duty 0.25", "lock 1980"). The
+    duty ones are the console's since 2026-09-10, kept so a duty log reads as
+    before."""
+    if lock:
+        return f"lock {int(lock)} MHz", f"lock {int(lock):4d}"
+    return f"duty={duty:g}", f"duty {duty:4.2f}"
+
+
+def row_label(row: Row) -> str:
+    """One row's state for a page: "lock 1980MHz", or its duty exactly as
+    requested, "duty 0.25", the spelling V5 and the console always used."""
+    return (f"lock {row.clock_lock_mhz:.0f}MHz" if row.clock_lock_mhz
+            else f"duty {row.duty_requested:g}")
+
+
+def collapse(rows, repeats=None) -> dict[tuple[int, str], tuple[float, float, int]]:
+    """Per (tread, state) median ms and median under-load clock, the state
+    keyed by `row_state`: its duty, or in lock mode its lock.
+
+    `repeats` is a MULTISET of repeat indices. Passed the run's own repeats it is
+    the point estimate; passed a draw with replacement it is one bootstrap
+    replicate, and everything downstream -- the per-tread slopes, the pooled
+    slope, the band the interval falls in -- is recomputed on that draw. That is
+    `bn_decomposition.collapse`'s contract, in this arm's shape.
+    """
+    by: dict[tuple[int, str], dict[int, list[tuple[float, float]]]] = {}
+    for r in kept_rows(rows):
+        cell = by.setdefault((r.tiles, row_state(r)), {})
+        cell.setdefault(r.repeat, []).append((r.ms_p50, float(r.sm_clock_load_mhz)))
+    out = {}
+    for key, per_repeat in by.items():
+        want = sorted(per_repeat) if repeats is None else list(repeats)
+        drawn = [pair for rep in want for pair in per_repeat.get(rep, [])]
+        if not drawn:
+            continue
+        out[key] = (statistics.median(p[0] for p in drawn),
+                    statistics.median(p[1] for p in drawn),
+                    len(drawn))
+    return out
+
+
+#: THE SIGN CONVENTION, and it is a constant so it is applied ONCE.
+#:
+#: `d log ms / d log f` is NEGATIVE: a faster clock is a shorter call, and a
+#: kernel whose time is entirely issue-rate-limited has slope -1. The study's
+#: registered bands are POSITIVE numbers (0.25, 0.40) and the session-3 analysis
+#: sweeps "the admissible clock elasticity" from 0 upward, so the quantity those
+#: bands are about is the MAGNITUDE, and it is taken of every elasticity this
+#: arm reports:
+#:
+#:     eta_b = - d log b / d log f    the per-M-tile cost, treads >= CLAIM_MIN_TREAD
+#:     eta   = - d log ms / d log f   the per-call time at fixed tread, pooled
+#:
+#: 0 = pure traffic, 1 = pure issue rate, for both. Every gate that reads the
+#: fit reads the claim, `Elasticity.value` and its interval, which is eta_b
+#: over treads 2 and deeper; `Elasticity.slope` carries its signed
+#: counterpart, and the per-call eta is `Elasticity.fixed_tread`, printed and
+#: never gated. Signed and unsigned are both on the page and in report.json,
+#: because a conclusion that flips with a sign is exactly the kind this study
+#: has already had to retract once.
+ETA_SIGN = -1.0
+
+
+def within_tread_slope(cells) -> tuple[float | None, dict[int, float], float, int]:
+    """Pooled SIGNED d log ms / d log f AT FIXED TREAD, and the per-tread slopes.
+
+    Signed: negative for a kernel whose time falls as the clock rises. `fit`
+    turns it into `eta` through `ETA_SIGN`, in one place.
+
+    A tread is one kernel over one set of bytes, so centring log ms and log f
+    within a tread removes everything that differs BETWEEN treads -- the work,
+    the footprint, the tile count -- and leaves only what the duty state moved.
+    That is what "at a fixed kernel" means, and it is why this, and not a
+    regression over the pooled cloud, is the estimator.
+
+    Returns (pooled slope, {tread: its own slope}, the pooled Sxx, the number of
+    (tread, state) cells that entered). `None` when no tread has two states.
+    """
+    by_tread: dict[int, list[tuple[float, float]]] = {}
+    for (tread, _duty), (ms, mhz, _n) in cells.items():
+        if ms > 0 and mhz > 0:
+            by_tread.setdefault(tread, []).append((math.log(mhz), math.log(ms)))
+    sxy = sxx = 0.0
+    used = 0
+    per_tread: dict[int, float] = {}
+    for tread, points in sorted(by_tread.items()):
+        if len(points) < 2:
+            continue
+        xbar = statistics.fmean(p[0] for p in points)
+        ybar = statistics.fmean(p[1] for p in points)
+        t_xx = sum((x - xbar) ** 2 for x, _ in points)
+        t_xy = sum((x - xbar) * (y - ybar) for x, y in points)
+        if t_xx <= 0:
+            continue
+        per_tread[tread] = t_xy / t_xx
+        sxy += t_xy
+        sxx += t_xx
+        used += len(points)
+    if sxx <= 0:
+        return None, per_tread, 0.0, used
+    return sxy / sxx, per_tread, sxx, used
+
+
+def _line_slope(xs, ys) -> float | None:
+    """Centred least-squares slope of ys on xs; None when xs has no spread."""
+    if len(xs) < 2:
+        return None
+    xbar = statistics.fmean(xs)
+    ybar = statistics.fmean(ys)
+    sxx = sum((x - xbar) ** 2 for x in xs)
+    if sxx <= 0:
+        return None
+    return sum((x - xbar) * (y - ybar) for x, y in zip(xs, ys, strict=True)) / sxx
+
+
+def _line_at(xs, ys, x: float) -> float | None:
+    """The least-squares line of ys on xs, evaluated at x; None without spread."""
+    slope = _line_slope(xs, ys)
+    if slope is None:
+        return None
+    return statistics.fmean(ys) + slope * (x - statistics.fmean(xs))
+
+
+def tread_levels(cells, *, min_tread: int) -> dict[int, tuple[float, float]]:
+    """{tread: (level ms, SIGNED sensitivity d ms / d log f)} for every tread at
+    or above `min_tread` that carries a fixed-tread slope.
+
+    The level is the geometric mean of the tread's per-state medians, and the
+    sensitivity is that level times the tread's own fixed-tread slope s_n =
+    d log ms_n / d log f. THE ONE PLACE the two are formed, so the claim, the
+    all-tread reading and tread 1's departure are read off the same points.
+    """
+    _pooled, per_tread, _sxx, _used = within_tread_slope(cells)
+    logs: dict[int, list[float]] = {}
+    for (tread, _duty), (ms, mhz, _n) in cells.items():
+        if ms > 0 and mhz > 0 and tread in per_tread and tread >= min_tread:
+            logs.setdefault(tread, []).append(math.log(ms))
+    out = {}
+    for tread in sorted(logs):
+        level = math.exp(statistics.fmean(logs[tread]))
+        out[tread] = (level, per_tread[tread] * level)
+    return out
+
+
+def per_tile_slope(cells, *, min_tread: int) -> tuple[float | None, int]:
+    """SIGNED d log b / d log f of the per-M-tile cost b = d ms / d n, built from
+    the fixed-tread slopes and nothing else. THE CLAIM at `min_tread` =
+    `CLAIM_MIN_TREAD`; the all-tread reading beside it at 1.
+
+    At tread n the fixed-tread slope s_n = d log ms_n / d log f times the tread's
+    own level ms_n is d ms_n / d log f. Under ms = a(f) + b(f) n that
+    sensitivity is a' + b' n, so its rise per tread is b' = d b / d log f, and
+    b' / b is the elasticity of the per-M-tile cost. NO CLOCK IS EVER ASSIGNED
+    TO A STATE: every contrast is taken inside one tread, at one kernel over one
+    set of bytes, which is the estimator's own principle. The intercept's
+    elasticity, whatever it is, cancels: it is the same number at every tread
+    and a line through the sensitivities has no use for it.
+
+    THAT CANCELLATION HOLDS ONLY FOR TREADS ON THE LAW, and it is why
+    `min_tread` is keyword-only: every caller says which treads it reads. A
+    tread off ms = a(f) + b(f) n enters the line as a point the law cannot
+    place, and the one-tile call is the end of the line with the most leverage
+    on its slope. On the 2026-09-21 cells it was off the law and moved the
+    reading from 1.11 to 1.21 (`CLAIM_MIN_TREAD` has the numbers).
+
+    Why this and not the pooled fixed-tread reading. The pooled reading is an
+    Sxx-weighted blend of every tread's per-call elasticity, intercept
+    included; on the 2026-09-21 cells the one-tile call read 0.17, every
+    deeper tread 1.04-1.11, and the blend 0.74. The ratio arm's correction
+    and the model's traffic term are about the per-tile cost, not the call.
+
+    Returns (signed elasticity, treads used); None when fewer than two treads
+    carry a fixed-tread slope or the ladder has no positive slope.
+    """
+    points = tread_levels(cells, min_tread=min_tread)
+    treads = sorted(points)
+    if len(treads) < 2:
+        return None, len(treads)
+    b = _line_slope(treads, [points[t][0] for t in treads])
+    db = _line_slope(treads, [points[t][1] for t in treads])
+    if b is None or b <= 0 or db is None:
+        return None, len(treads)
+    return db / b, len(treads)
+
+
+def tread_one_departure(cells, *, min_tread: int
+                        ) -> tuple[float, float, float, float] | None:
+    """Tread 1 against the line the claim fits, extrapolated to n = 1.
+
+    Returns (tread 1's SIGNED sensitivity, the sensitivity line's value at
+    n = 1, tread 1's level, the level line's value at n = 1), both lines fitted
+    over treads >= `min_tread`, all in ms. A RECORD and never a gate: tread 1
+    far from both lines is tread 1 off ms = a(f) + b(f) n, which is what the
+    claim's tread set is registered against, and the page prints it so the
+    reader sees how far off it was. None when tread 1 carries no fixed-tread
+    slope or fewer than two treads from `min_tread` do.
+    """
+    one = tread_levels(cells, min_tread=1).get(1)
+    points = tread_levels(cells, min_tread=max(2, min_tread))
+    treads = sorted(points)
+    if one is None or len(treads) < 2:
+        return None
+    level_line = _line_at(treads, [points[t][0] for t in treads], 1.0)
+    sens_line = _line_at(treads, [points[t][1] for t in treads], 1.0)
+    if level_line is None or sens_line is None:
+        return None
+    return one[1], sens_line, one[0], level_line
+
+
+def ladder_slope_elasticity(cells) -> tuple[float | None, int]:
+    """THE COMPANION READING: how the per-M-tile cost itself responds to the clock.
+
+    Fit `ms = a + b n` over the treads of each state, then regress log b on the
+    state's mean log clock. It is a COMPANION and not the claim, for a stated
+    reason: the clock is not constant across the treads of one state (the
+    2026-09-10 corpus has this cell at 1485 MHz at tread 1 and 1815 at tread 8),
+    so the "clock of a slope" is a summary and the elasticity of a summary is not
+    the elasticity of a kernel. The claim is the fixed-tread quantity above.
+    """
+    by_state: dict[str, list[tuple[int, float, float]]] = {}
+    for (tread, duty), (ms, mhz, _n) in cells.items():
+        if ms > 0 and mhz > 0:
+            by_state.setdefault(duty, []).append((tread, ms, mhz))
+    points = []
+    for _duty, rows in by_state.items():
+        if len(rows) < 2:
+            continue
+        nbar = statistics.fmean(r[0] for r in rows)
+        mbar = statistics.fmean(r[1] for r in rows)
+        nxx = sum((r[0] - nbar) ** 2 for r in rows)
+        if nxx <= 0:
+            continue
+        slope = sum((r[0] - nbar) * (r[1] - mbar) for r in rows) / nxx
+        if slope <= 0:
+            continue
+        points.append((statistics.fmean(math.log(r[2]) for r in rows),
+                       math.log(slope)))
+    if len(points) < 2:
+        return None, len(points)
+    xbar = statistics.fmean(p[0] for p in points)
+    ybar = statistics.fmean(p[1] for p in points)
+    xx = sum((x - xbar) ** 2 for x, _ in points)
+    if xx <= 0:
+        return None, len(points)
+    return sum((x - xbar) * (y - ybar) for x, y in points) / xx, len(points)
+
+
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return float("nan")
+    ordered = sorted(values)
+    pos = (len(ordered) - 1) * q
+    lo = math.floor(pos)
+    hi = math.ceil(pos)
+    if lo == hi:
+        return ordered[int(pos)]
+    return ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
+
+
+@dataclass(frozen=True)
+class Elasticity:
+    """The fit, its interval, and everything a reader needs to check it.
+
+    THE CLAIM: `value` is ETA of the PER-M-TILE cost over treads
+    `claim_min_tread` and deeper, the positive magnitude the registered bands
+    are about, `-d log b / d log f` (`per_tile_slope`); `slope` is its signed
+    counterpart; `lo` and `hi` are its bootstrap interval, over the same treads;
+    `per_tile_treads` counts the treads its line read.
+
+    PRINTED BESIDE IT, NEVER GATED: `per_tile_all_treads` (with `_lo`, `_hi`
+    from the same draws) is the same estimator over every tread, tread 1
+    included; `tread1_*` is tread 1 against the claim's two lines extrapolated
+    to n = 1, as -d ms / d log f and as a level, in ms; `fixed_tread` (with
+    `_lo`, `_hi`) is eta of the per-CALL time at fixed tread, pooled, and
+    `per_tread` is that reading tread by tread.
+
+    THREE SHAPES ARE ON DISK, and a report.json says which it is by its keys.
+    Carrying `claim_min_tread`: this one. Carrying `per_tile_from2` and no
+    `claim_min_tread` (8d4eb78 to 12ec932, 2026-09-22): `value` is the per-tile
+    reading over EVERY tread and `per_tile_from2` the one over treads 2 and
+    deeper. Carrying neither (session 4 and earlier): `value` is the pooled
+    per-call eta, what this file now calls `fixed_tread`. `value`, `lo` and
+    `hi` are present in all three, which is all the chain's helper reads.
+    """
+
+    value: float | None
+    slope: float | None
+    lo: float | None
+    hi: float | None
+    per_tread: dict[int, float]
+    sxx: float
+    cells: int
+    states: int
+    treads: int
+    repeats: int
+    draws: int
+    resampled: int
+    ladder_slope: float | None
+    ladder_states: int
+    fixed_tread: float | None = None
+    fixed_tread_lo: float | None = None
+    fixed_tread_hi: float | None = None
+    per_tile_treads: int = 0
+    claim_min_tread: int = CLAIM_MIN_TREAD
+    per_tile_all_treads: float | None = None
+    per_tile_all_treads_lo: float | None = None
+    per_tile_all_treads_hi: float | None = None
+    tread1_sensitivity_ms: float | None = None
+    tread1_sensitivity_on_line_ms: float | None = None
+    tread1_level_ms: float | None = None
+    tread1_level_on_line_ms: float | None = None
+
+    @property
+    def half_width(self) -> float | None:
+        if self.lo is None or self.hi is None:
+            return None
+        return (self.hi - self.lo) / 2.0
+
+
+def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
+    """The point estimate and a bootstrap interval over REPEATS.
+
+    The resample is over whole repeats, not over rows: a repeat is one pass
+    through the whole design at one point in the pod's thermal history, and rows
+    inside a repeat share whatever the card was doing. Resampling rows would
+    treat 13 correlated passes as hundreds of independent draws and report an
+    interval a factor of several too narrow, which is precisely the
+    understatement the session-3 reading found in the published sd of 0.0037.
+
+    THE INTERVAL IS THE CLAIM'S OWN: every draw re-fits the claim over the same
+    treads, `CLAIM_MIN_TREAD` and deeper, that the point estimate reads. The
+    all-tread and per-call readings get their intervals from the same draws and
+    are printed beside it.
+    """
+    keep = kept_rows(rows)
+    repeats = sorted({r.repeat for r in keep})
+    cells = collapse(keep)
+    slope, per_tread, sxx, used = within_tread_slope(cells)
+    ladder, ladder_states = ladder_slope_elasticity(cells)
+    tile, tile_treads = per_tile_slope(cells, min_tread=CLAIM_MIN_TREAD)
+    every, _every_treads = per_tile_slope(cells, min_tread=1)
+    off = tread_one_departure(cells, min_tread=CLAIM_MIN_TREAD)
+    # COUNTED OFF THE CELLS THAT ENTERED THE SLOPE, not off the labels present
+    # somewhere in the file. A tread that lost every state but one contributes
+    # nothing to Sxx, and the report line that read "24 (8 treads x 4 states)"
+    # over 24 cells was arithmetic nobody could reproduce.
+    fitted = set(per_tread)
+    states = len({d for t, d in cells if t in fitted})
+    treads = len(fitted)
+    lo = hi = fixed_lo = fixed_hi = every_lo = every_hi = None
+    drawn = 0
+    if (slope is not None or tile is not None) and draws > 0 and len(repeats) >= 2:
+        rng = random.Random(seed)
+        values: list[float] = []
+        totals: list[float] = []
+        everywhere: list[float] = []
+        for _ in range(draws):
+            sample = [rng.choice(repeats) for _ in repeats]
+            drawn_cells = collapse(keep, sample)
+            got, _pt, _xx, _n = within_tread_slope(drawn_cells)
+            if got is not None:
+                totals.append(ETA_SIGN * got)
+            got_tile, _t = per_tile_slope(drawn_cells, min_tread=CLAIM_MIN_TREAD)
+            if got_tile is not None:
+                values.append(ETA_SIGN * got_tile)
+            got_every, _t = per_tile_slope(drawn_cells, min_tread=1)
+            if got_every is not None:
+                everywhere.append(ETA_SIGN * got_every)
+        if values:
+            lo = _percentile(values, 0.025)
+            hi = _percentile(values, 0.975)
+            drawn = len(values)
+        if totals:
+            fixed_lo = _percentile(totals, 0.025)
+            fixed_hi = _percentile(totals, 0.975)
+        if everywhere:
+            every_lo = _percentile(everywhere, 0.025)
+            every_hi = _percentile(everywhere, 0.975)
+    return Elasticity(value=None if tile is None else ETA_SIGN * tile,
+                      slope=tile, lo=lo, hi=hi,
+                      per_tread={t: ETA_SIGN * v for t, v in per_tread.items()},
+                      sxx=sxx, cells=used, states=states, treads=treads,
+                      repeats=len(repeats), draws=draws, resampled=drawn,
+                      ladder_slope=None if ladder is None else ETA_SIGN * ladder,
+                      ladder_states=ladder_states,
+                      fixed_tread=None if slope is None else ETA_SIGN * slope,
+                      fixed_tread_lo=fixed_lo, fixed_tread_hi=fixed_hi,
+                      per_tile_treads=tile_treads,
+                      claim_min_tread=CLAIM_MIN_TREAD,
+                      per_tile_all_treads=(None if every is None
+                                           else ETA_SIGN * every),
+                      per_tile_all_treads_lo=every_lo,
+                      per_tile_all_treads_hi=every_hi,
+                      tread1_sensitivity_ms=(None if off is None
+                                             else ETA_SIGN * off[0]),
+                      tread1_sensitivity_on_line_ms=(None if off is None
+                                                     else ETA_SIGN * off[1]),
+                      tread1_level_ms=None if off is None else off[2],
+                      tread1_level_on_line_ms=None if off is None else off[3])
+
+
+def band_of(lo: float | None, hi: float | None) -> tuple[str, str] | None:
+    """The registered band that WHOLLY contains [lo, hi], or None.
+
+    Wholly, and that is the whole content of C1: an interval that crosses a
+    boundary is consistent with two worlds whose consequences contradict each
+    other, and picking the nearer one is how a pre-registration becomes a
+    post-registration.
+    """
+    if lo is None or hi is None:
+        return None
+    for name, edge_lo, edge_hi, consequence in BANDS:
+        if (edge_lo is None or lo >= edge_lo) and (edge_hi is None or hi <= edge_hi):
+            return name, consequence
+    return None
+
+
+def clock_ratio_by_tread(cells) -> dict[int, float]:
+    """Max/min under-load clock across the states, tread by tread."""
+    by: dict[int, list[float]] = {}
+    for (tread, _duty), (_ms, mhz, _n) in cells.items():
+        if mhz > 0:
+            by.setdefault(tread, []).append(mhz)
+    return {t: max(v) / min(v) for t, v in by.items() if len(v) >= 2 and min(v) > 0}
+
+
+def required_clock_ratio(*, repeats: int, treads: int, states: int,
+                         spread: float = CORPUS_REPEAT_SPREAD,
+                         target: float = RESOLUTION_TARGET,
+                         se_factor: float = 1.0) -> float:
+    """The clock separation this design needs, COMPUTED and never typed.
+
+    The arithmetic, which `mde_lines` prints in full:
+
+        sigma_cell = MEDIAN_SE_PENALTY * spread / sqrt(repeats)
+        se(eps)    = sigma_cell / (sqrt(treads * states) * sd of log f)
+        half-width = 2 se(eps) <= target
+
+    which needs `sd of log f >= 2 sigma_cell / (sqrt(treads*states) * target)`.
+    For `states` points spread evenly in log f over a range `L`, the sd is
+    `L * sqrt((states+1) / (12 (states-1)))`, so the required max/min ratio is
+    `exp(L)`. Nothing here is a clock: it is a RATIO of two clocks on one card,
+    which is why the same number governs an H200 and an A100 without being told
+    which is attached.
+
+    THAT se(eps) IS THE POOLED PER-CALL ESTIMATOR'S, and at the default
+    `se_factor` of 1 this is V1's threshold. `se_factor` scales it to another
+    estimator's standard error at the same design: `per_tile_se_factor` is the
+    gated claim's, and the plan page prints the span the claim needs beside
+    V1's without moving V1.
+    """
+    if (repeats < 1 or treads < 1 or states < 2 or target <= 0 or spread <= 0
+            or se_factor <= 0):
+        return float("inf")
+    sigma_cell = MEDIAN_SE_PENALTY * spread / math.sqrt(repeats)
+    sd_needed = 2.0 * sigma_cell * se_factor / (math.sqrt(treads * states) * target)
+    shape = math.sqrt((states + 1) / (12.0 * (states - 1)))
+    return math.exp(sd_needed / shape)
+
+
+def per_tile_se_factor(treads: int, *, min_tread: int) -> float:
+    """se of the per-M-tile claim over the pooled per-call se, at one design.
+
+    Each tread's fixed-tread slope s_n holds 1/treads of the pooled slope's
+    Sxx, so se(s_n) = sqrt(treads) se(pooled). The claim is b'/b, b' the
+    least-squares slope of s_n L_n over treads `min_tread`..`treads` and b
+    that of the levels L_n, so se(b') = se(s_n) sqrt(sum w_n^2 L_n^2) with
+    w_n = (n - nbar) / sum (n - nbar)^2, and the factor is
+    sqrt(treads) sqrt(sum w_n^2 L_n^2) / b. Only the ladder's SHAPE enters it,
+    a against b, so it is priced off `corpus_call_ms` as the burst is. Left out:
+    the levels' own noise and the draw-to-draw coupling of the treads, which
+    is why S4 scores the estimator itself over the planted design. inf when
+    fewer than two treads remain or the ladder does not rise.
+    """
+    ns = list(range(max(1, min_tread), treads + 1))
+    if len(ns) < 2:
+        return float("inf")
+    levels = [corpus_call_ms(n) for n in ns]
+    b = _line_slope(ns, levels)
+    if b is None or b <= 0:
+        return float("inf")
+    nbar = statistics.fmean(ns)
+    snn = sum((n - nbar) ** 2 for n in ns)
+    spread = math.sqrt(sum(((n - nbar) / snn * level) ** 2
+                           for n, level in zip(ns, levels, strict=True)))
+    return math.sqrt(treads) * spread / b
+
+
+def loosening_refusal(args) -> str:
+    """The refusal text when `--min-clock-ratio` would LOOSEN V1, else "".
+
+    A separate function and not an inline test because the rule is about a
+    FLAG and belongs with the other flag refusals, which run before a plan is
+    built and cost nothing.
+    """
+    asked = getattr(args, "min_clock_ratio", None)
+    if not asked:
+        return ""
+    need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
+                                states=len(states_of(args)))
+    rounded = math.ceil(need * 100.0) / 100.0
+    if float(asked) >= rounded:
+        return ""
+    return (f"REFUSED before any GPU time. --min-clock-ratio "
+            f"{float(asked):.4f} is BELOW this design's own requirement "
+            f"{rounded:.4f}. The flag may TIGHTEN V1 and may not loosen it: it "
+            f"is deliberately out of the run id, so a looser threshold would "
+            f"re-score the cells already on disk into the SAME directory and "
+            f"overwrite the report that said INVALID -- an INVALID turned into "
+            f"a DONE for the price of the settles, with nothing re-measured. A "
+            f"design that needs a lower threshold lowers the REQUIREMENT, by "
+            f"running fewer treads or more repeats.")
+
+
+def lock_refusal(args) -> str:
+    """The refusal text for a LOCK MODE design that cannot exist, else "".
+    Decided from the flags alone, before a plan is built, like the duty ones."""
+    locks = list(getattr(args, "lock_clocks", None) or [])
+    if not locks:
+        return ""
+    why = ""
+    if len(locks) < MIN_STATES:
+        why = (f"{len(locks)} locked clocks is below the {MIN_STATES} this design "
+               "needs")
+    elif len(set(locks)) != len(locks) or min(locks) <= 0:
+        why = f"--lock-clocks {locks} repeats a clock or names one <= 0"
+    elif not 0.0 < args.lock_duty <= 1.0:
+        why = f"--lock-duty {args.lock_duty} is outside (0, 1]"
+    elif [float(d) for d in args.duty] != list(DUTY_LEVELS):
+        why = ("--duty and --lock-clocks name two state axes; a lock run's one "
+               "duty is --lock-duty")
+    elif max(locks) / min(locks) < registered_clock_ratio(args)[0]:
+        why = (f"the lock span {max(locks) / min(locks):.4f}x is below V1's "
+               f"{registered_clock_ratio(args)[0]:.3f}x, so V1 could not pass")
+    return f"REFUSED before any GPU time. {why}." if why else ""
+
+
+def registered_clock_ratio(args) -> tuple[float, str]:
+    """The V1 threshold and where it came from.
+
+    `--min-clock-ratio` may TIGHTEN it and may not loosen it, and that
+    asymmetry is what keeps the file's claim to have no gate-softening flag
+    true. The flag is deliberately out of the run id, so a looser value would
+    re-score the cells already on disk into the same directory and overwrite
+    `report.txt` in place: an INVALID turned into a DONE for the price of the
+    settles, with nothing on the page that had not been rewritten. A tighter
+    value cannot do that, and a design that genuinely needs a lower threshold
+    lowers it the honest way, by running fewer treads or more repeats -- both
+    of which move the computed requirement with them.
+    """
+    need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
+                                states=len(states_of(args)))
+    rounded = math.ceil(need * 100.0) / 100.0
+    asked = getattr(args, "min_clock_ratio", None)
+    if asked and float(asked) >= rounded:
+        return float(asked), ("--min-clock-ratio, the operator's assertion, "
+                              f"tighter than the design's own {rounded:.4f}")
+    # A LOOSER VALUE NEVER REACHES HERE: `loosening_refusal` refuses it in
+    # `_main` before any plan is built, beside the other design refusals. This
+    # branch is what makes the rule true if a caller skips that check.
+    return rounded, (f"the design's own requirement {need:.4f}, rounded up to "
+                     f"the next hundredth, from {args.repeats} repeats x "
+                     f"{args.treads} treads x {len(states_of(args))} states against a "
+                     f"{CORPUS_REPEAT_SPREAD:.5f} across-repeat spread")
+
+
+# --------------------------------------------------------------------------
+# The gates.
+# --------------------------------------------------------------------------
+
+def gate_v0_non_vacuity(rows, keep) -> Gate:
+    """Did anything get measured at all.
+
+    FIRST, for the reason every model file in this repository puts one first:
+    every gate below can be satisfied by having no input. An empty run separates
+    no states, contradicts no tile and drifts nowhere.
+    """
+    ok = bool(keep)
+    drops = {}
+    for r in rows:
+        why = exclusion(r)
+        if why:
+            drops[why] = drops.get(why, 0) + 1
+    detail = ", ".join(f"{k} {v}" for k, v in sorted(drops.items())) or "none"
+    return Gate(
+        VALIDITY, "0", "the run produced rows the fit can read",
+        PASS if ok else FAIL,
+        f"{len(keep)} kept of {len(rows)} rows (dropped: {detail})",
+        ">= 1 kept row",
+        "every gate below, which would otherwise report a clean run from a "
+        "directory nobody wrote to")
+
+
+def gate_v1_separation(cells, threshold: float, source: str, *,
+                       locked: bool = False) -> Gate:
+    """Did the states actually SEPARATE in clock.
+
+    THE GATE THE BRIEF NAMES: three states at one clock measure nothing. It is
+    per tread because the regression is per tread: a tread whose clock never
+    moved contributes zero to Sxx and the pooled slope simply ignores it, so an
+    arm that let one through would quietly fit a design smaller than the one it
+    booked. The threshold is COMPUTED by `required_clock_ratio` from this run's
+    own repeats, treads and states, so a shallower run is held to a wider
+    separation rather than to the same number.
+    """
+    ratios = clock_ratio_by_tread(cells)
+    # EVERY TREAD THE RUN KEPT ROWS FOR, not every tread that happens to carry
+    # two clocks. `clock_ratio_by_tread` can only speak for treads with two
+    # surviving states, so a tread that lost three of its four states used to
+    # DROP OUT of a gate whose own title says "at every tread" -- 78 drifted
+    # rows, under the 20% ceiling V4 allows, silently took two of eight booked
+    # treads out of the design and V1 still said every one had separated.
+    present = sorted({t for t, _ in cells})
+    silent = [t for t in present if t not in ratios]
+    # By mode, so a duty page keeps the words it has always printed.
+    claim = (f"the {'locked' if locked else 'duty'} states separated in clock "
+             "at every tread")
+    if not ratios:
+        return Gate(VALIDITY, "1", claim,
+                    FAIL, "no tread has two states with a usable clock",
+                    f"every one of the {len(present)} kept treads spans "
+                    f">= {threshold:.3f}x",
+                    "the elasticity: with no clock separation there is no slope")
+    worst_tread = min(ratios, key=lambda t: ratios[t])
+    worst = ratios[worst_tread]
+    ok = worst >= threshold and not silent
+    return Gate(
+        VALIDITY, "1", claim,
+        PASS if ok else FAIL,
+        f"narrowest tread {worst_tread} spans {worst:.4f}x "
+        f"(widest {max(ratios.values()):.4f}x over {len(ratios)} of "
+        f"{len(present)} kept treads)"
+        + (f"; treads with fewer than two states and so NO separation at all: "
+           f"{silent}" if silent else ""),
+        f">= {threshold:.3f}x at every one of the {len(present)} kept treads, "
+        f"from {source}",
+        "the elasticity and both claims: a slope fitted across states that sat "
+        "at one clock is a slope over nothing, and a tread that lost its states "
+        "is a tread the pooled slope never saw",
+        ["per tread: " + ", ".join(f"n{t}={v:.4f}x"
+                                    for t, v in sorted(ratios.items()))])
+
+
+def gate_v2_one_kernel(keep) -> Gate:
+    """Was it the SAME kernel in every state, read off the rows.
+
+    Read off the rows and not asserted, which is the brief's own instruction --
+    and off the rows means off what `get_config()` reported INSIDE the pin, not
+    off `PINNED`. Written the other way this gate compared the module constant
+    with six copies of itself and could not fail on a single live run however
+    the override went; `observed_tile` is where the difference now lives, and
+    `forcing_tile_config` refuses before any cell is timed when a forced key
+    comes back changed. What is left for this gate is the failure neither of
+    those catches: two runs resumed into one directory, and a burst shape that
+    moved between them. `calls_per_burst` is in the comparison because it is
+    the loop shape: the same tile launched in bursts of 52 and of 9 carries a
+    different share of one drained-queue lead call, and the lead call is
+    discarded per burst rather than per run.
+    """
+    tiles = {(r.model, r.dtype, r.block_m, r.block_n, r.block_k, r.group_m,
+              r.num_warps, r.num_stages) for r in keep}
+    per_tread: dict[int, set[int]] = {}
+    for r in keep:
+        per_tread.setdefault(r.tiles, set()).add(r.calls_per_burst)
+    mixed = sorted(t for t, v in per_tread.items() if len(v) > 1)
+    ok = len(tiles) == 1 and not mixed
+    return Gate(
+        VALIDITY, "2", "one tile, one model, one dtype and one burst shape per tread",
+        PASS if ok else FAIL,
+        f"{len(tiles)} distinct tile tuples over {len(keep)} kept rows; "
+        + (f"treads with more than one burst shape: {mixed}" if mixed
+           else "one burst shape per tread"),
+        "exactly 1 tile tuple and 1 burst shape per tread",
+        "the whole arm: a slope across states that ran different kernels is a "
+        "comparison of kernels, not of clocks",
+        [f"tile: {sorted(tiles)[0]}"] if tiles else [])
+
+
+def gate_v3_depth(keep, planned, threshold_treads: int, threshold_repeats: int,
+                  min_states: int) -> Gate:
+    """Enough treads and enough repeats, in EVERY state.
+
+    Per state rather than in total: a design that measured one state deeply and
+    the others once has the same row count and no second point to take a slope
+    between.
+
+    `planned` is `states_of(args)`, (duty, lock) pairs. A PLANNED STATE WITH NO
+    KEPT ROW IS NAMED (2026-09-25): listing only the states that kept rows, a
+    lock the power cap pulled off in every row simply vanished from this line,
+    and "2 of 3" was all that was left of a two-point ladder.
+    """
+    per_state: dict[str, tuple[set[int], set[int]]] = {}
+    for r in keep:
+        treads, reps = per_state.setdefault(row_state(r), (set(), set()))
+        treads.add(r.tiles)
+        reps.add(r.repeat)
+    good = {d: v for d, v in per_state.items()
+            if len(v[0]) >= threshold_treads and len(v[1]) >= threshold_repeats}
+    ok = len(good) >= min_states
+    detail = "; ".join(f"{state_label(d, as_key=True)}: {len(v[0])} treads x "
+                       f"{len(v[1])} repeats"
+                       for d, v in sorted(per_state.items())) or "no state"
+    empty = [state_label(k, as_key=True)
+             for k in (state_key(d, lock) for d, lock in planned)
+             if k not in per_state]
+    if empty:
+        detail += f"; planned and with NO kept row: {', '.join(empty)}"
+    return Gate(
+        VALIDITY, "3", "every state the fit reads is deep enough to be a state",
+        PASS if ok else FAIL,
+        f"{len(good)} of {len(planned)} planned states are deep enough ({detail})",
+        f">= {min_states} states with >= {threshold_treads} treads and "
+        f">= {threshold_repeats} repeats each",
+        "the interval: a bootstrap over two repeats has three distinct draws, "
+        "{a,a} {a,b} {b,b}, and an interval read off three is a decoration")
+
+
+def gate_v4_exclusions(rows, keep, ceiling: float) -> Gate:
+    """Were the exclusions a trim or the measurement.
+
+    DRIFT and host-bound are the two reasons `exclusion` gives (off-lock is a
+    third in lock mode), and above a ceiling what is left is not the run that
+    was paid for but a subsample the card chose: a lock the cap pulled down in
+    a quarter of the rows fails here. LEVEL is NOT in this count on either
+    side, and the line below prints the LEVEL sides so a reader can see that
+    they were kept.
+    """
+    total = len(rows)
+    drops = {DROP_DRIFT: 0, DROP_HOST: 0, DROP_OFF_LOCK: 0}
+    other = 0
+    for r in rows:
+        why = exclusion(r)
+        if why in drops:
+            drops[why] += 1
+        elif why:
+            other += 1
+    excluded = sum(drops.values()) + other
+    share = excluded / total if total else 1.0
+    ok = total > 0 and share <= ceiling
+    sides = level_counts(keep)
+    locked = any(r.clock_lock_mhz for r in rows)
+    return Gate(
+        VALIDITY, "4", "the excluded rows are a trim and not the measurement",
+        PASS if ok else FAIL,
+        f"{excluded} of {total} rows excluded ({100 * share:.1f}%): "
+        f"drift {drops[DROP_DRIFT]}, host-bound {drops[DROP_HOST]}, "
+        + (f"off-lock {drops[DROP_OFF_LOCK]}, " if locked else "")
+        + f"other {other}",
+        f"<= {100 * ceiling:.0f}% of all rows",
+        "the fit: past this the kept set is a sample the card selected",
+        [f"LEVEL among the KEPT rows, recorded and never a reason to exclude: "
+         f"{sides[T.LEVEL_HIGH]} HIGH, {sides[T.LEVEL_LOW]} LOW, "
+         f"{sides['level']} level, {sides['undetermined']} undetermined"])
+
+
+#: How many kept rows V5 lets move more than `timing.DRIFT_FRACTION` inside a
+#: burst: one, not zero, and the H200 pages of sessions 5 and 6 are why.
+#: Ordinary noise never comes near the line. Over the 1382 kept rows of the five
+#: full pages V5 passed, the largest first-to-last-quarter move was 0.022 and
+#: none reached 0.025. What did cross was rarer and of another kind: on two
+#: pages (session 5 G=16, session 6 G=2) one duty-0.25 cell ran slow at the END
+#: of its bursts in a third to a half of its repeats, and one repeat crossed 0.05. On
+#: the ten rows of those two cells that moved more than 0.03, the median call,
+#: the time the fit reads, was within 0.06% of the cell's median over all its
+#: repeats. Two crossing rows in the 1942 kept rows of the seven full session-5
+#: and session-6 pages is about 0.3 per page, so a
+#: budget of zero voids a sound page about one time in four, one about one time
+#: in thirty and two about one time in three hundred. One is the cautious
+#: choice: those two events are the whole estimate of the rate, and it is the
+#: most a page has shown. The planted `sagging-burst` world plants three.
+V5_ROW_BUDGET = 1
+
+#: The share of `fit`'s repeat-bootstrap draws in which a cell's crossing rows
+#: may be half or more of what the cell drew. The interval's edges sit on 2.5%
+#: tails, so rows that carry a draw's median more often than a fifth of that can
+#: set an edge. Over 13 repeats one crossing row stays under it in a cell that
+#: kept 9 or more (0.44%) and not in one that kept 7 (2.5%) or 5 (11%). The two
+#: pages that motivated `V5_ROW_BUDGET` crossed in cells that kept 12 and 13.
+V5_CARRY_CEILING = 0.005
+
+
+def _v5_carry_share(moved: int, n: int, repeats: int) -> float:
+    """P, over `fit`'s resample (`repeats` draws with replacement from the run's
+    repeats), that `moved` crossing rows are half or more of the rows a cell
+    drew, the cell holding `n` kept rows at distinct repeats. Exact: km draws
+    land on the moved rows, kc on the cell's other rows, the rest elsewhere."""
+    if not moved or repeats <= 0:
+        return 0.0
+    p_m, p_c = moved / repeats, (n - moved) / repeats
+    p_o = max(0.0, 1.0 - p_m - p_c)
+    return sum(math.comb(repeats, km) * math.comb(repeats - km, kc)
+               * p_m ** km * p_c ** kc * p_o ** (repeats - km - kc)
+               for km in range(1, repeats + 1)
+               for kc in range(0, min(km, repeats - km) + 1))
+
+
+def gate_v5_within_burst(keep, *, locked: bool = False) -> Gate:
+    """Was the clock steady INSIDE a burst, not only across the run.
+
+    The DRIFT verdict compares the first and last clock sample of a cell, and
+    those samples are one per burst. A card that boosts at the start of every
+    40 ms burst and sags by its end passes DRIFT on every burst and still
+    delivers a per-call time that is an average over two operating points. This
+    reads the burst itself: the median of the first quarter of a burst's kept
+    calls against the median of the last quarter, against `timing.DRIFT_FRACTION`
+    -- the repository's own rule, applied to the one pair this instrument adds.
+
+    WHAT FAILS IT is a count and a share, never one row on its own. The fit
+    reads each (duty, tread) cell as the MEDIAN of its repeats, and its interval
+    as the same median over repeats drawn with replacement. Moved rows carry the
+    point estimate when they are half or more of the cell's kept repeats, and
+    an interval edge when they are half or more of what the cell drew in more
+    than `V5_CARRY_CEILING` of the draws (`_v5_carry_share`), which one row does
+    in a cell that DRIFT thinned to a few repeats. Either way the cell fails V5
+    however few rows it holds. Anywhere else, up to `V5_ROW_BUDGET` rows may
+    cross; the constants' notes say why.
+    """
+    scored = [r for r in keep if r.within_burst_ok is not None]
+    bad = [r for r in scored if r.within_burst_ok is False]
+    if not scored:
+        return Gate(VALIDITY, "5", "the clock held inside each burst", UNKNOWN,
+                    "no row carried enough calls per burst to take two quarters",
+                    f"first and last quarter within {T.DRIFT_FRACTION:.2f}",
+                    "the per-call time, which would be an average over two "
+                    "operating points inside one burst")
+    cells: dict[tuple[str, int], list[int]] = {}
+    for r in scored:
+        seen = cells.setdefault((row_state(r), r.tiles), [0, 0])
+        seen[0] += 1
+        seen[1] += int(r.within_burst_ok is False)
+    repeats = len({r.repeat for r in keep})
+    carried = sorted((d, t, moved, n, _v5_carry_share(moved, n, repeats))
+                     for (d, t), (n, moved) in cells.items()
+                     if moved and (2 * moved >= n or _v5_carry_share(
+                         moved, n, repeats) > V5_CARRY_CEILING))
+    ok = len(bad) <= V5_ROW_BUDGET and not carried
+    worst = ""
+    if bad:
+        pick = max(bad, key=lambda r: abs((r.tail_ms or 0) - (r.head_ms or 0)))
+        worst = (f"worst: {row_label(pick)} tread {pick.tiles}, "
+                 f"{pick.head_ms:.4f} -> {pick.tail_ms:.4f} ms")
+    lines = [worst] if worst else []
+    lines += [f"{state_label(d)} tread {t}: {moved} of its {n} kept repeats "
+              f"moved, and they carry the cell's median in {share:.2%} of the "
+              f"interval's draws (at most {V5_CARRY_CEILING:.1%})"
+              for d, t, moved, n, share in carried]
+    return Gate(
+        VALIDITY, "5", "the clock held inside each burst",
+        PASS if ok else FAIL,
+        f"{len(bad)} of {len(scored)} kept rows moved more than "
+        f"{T.DRIFT_FRACTION:.2f} from first quarter to last"
+        + (f"; {len(carried)} cell(s) where they can carry the median"
+           if carried else ""),
+        f"at most {V5_ROW_BUDGET} row{'s' if V5_ROW_BUDGET != 1 else ''} at "
+        f"{T.DRIFT_FRACTION:.2f}, the repository's DRIFT fraction, and in no "
+        f"{'lock' if locked else 'duty'}-and-tread cell enough of them to carry "
+        "its median, at the point "
+        f"estimate or in more than {V5_CARRY_CEILING:.1%} of the interval's draws",
+        "the per-call time: inside one burst it would be an average over two "
+        "operating points, and the average moves with "
+        + ("how hard the cap pulls on each lock" if locked else "the duty cycle"),
+        lines)
+
+
+def gate_v6_memory_clock(keep) -> Gate:
+    """Did the MEMORY clock stay put while the SM clock moved.
+
+    THE CONFOUND THIS ARM WOULD OTHERWISE CARRY. Every slope this arm fits,
+    `d log ms_n / d log f_sm` at each tread and the per-M-tile claim built from
+    them, is the SM clock's elasticity only if nothing else moved with it. HBM
+    on this part is not DVFS'd the way the SM domain is, so the expectation is
+    a flat line, and that expectation is worth one gate rather than one
+    sentence: if the memory clock moved with the duty cycle, the measured slope
+    is a blend of issue rate and bandwidth and the whole arm is answering a
+    different question.
+
+    UNKNOWN when nothing carried a reading. On the live path that cannot happen
+    where the SM clock read -- both come from the same NVML handle in the same
+    call -- and this branch exists for the planted worlds and for a future
+    reader swapped in here that does not report it.
+    """
+    seen = sorted({int(r.mem_clock_mhz) for r in keep
+                   if r.mem_clock_mhz and r.mem_clock_mhz > 0})
+    if not seen:
+        return Gate(VALIDITY, "6", "the memory clock did not move with the SM clock",
+                    UNKNOWN, "no kept row carried a memory clock",
+                    "one memory clock across every state",
+                    "the reading: an SM-clock elasticity measured while the "
+                    "memory clock moved is not an SM-clock elasticity")
+    span = max(seen) - min(seen)
+    ok = span <= T.CLOCK_STEP_MHZ
+    return Gate(
+        VALIDITY, "6", "the memory clock did not move with the SM clock",
+        PASS if ok else FAIL,
+        f"{len(seen)} distinct values, {min(seen)}-{max(seen)} MHz "
+        f"(span {span} MHz)",
+        f"span <= {T.CLOCK_STEP_MHZ:.0f} MHz, one NVML grid step",
+        "the reading: the slope would be a blend of issue rate and bandwidth")
+
+
+def gate_v7_admissible(est: Elasticity) -> Gate:
+    """Is the measured elasticity a number this experiment can produce.
+
+    VALIDITY and not a claim, because an interval outside [0, 1] says the clock
+    channel is wrong and not that the card is unusual. It is scored on the
+    INTERVAL and not on the point estimate: a point a hair below zero with an
+    interval straddling it is a small elasticity measured with noise, which is
+    a reading, while an interval lying WHOLLY below -ADMISSIBLE_MARGIN is the
+    instrument telling the truth about itself.
+
+    UNKNOWN when there is no interval; V0 and V3 are what catch that case.
+    """
+    lo_edge = ADMISSIBLE_LO - ADMISSIBLE_MARGIN
+    hi_edge = ADMISSIBLE_HI + ADMISSIBLE_MARGIN
+    want = (f"the interval intersects [{lo_edge:.3f}, {hi_edge:.3f}], "
+            f"which is [0, 1] widened by the design's own half-width "
+            f"{ADMISSIBLE_MARGIN:.3f}")
+    costs = ("both claims and the whole page: eta below 0 is a per-M-tile "
+             "cost that ROSE as the clock rose at a byte-identical kernel, and "
+             "eta above 1 is one that fell faster than the clock rose. Neither "
+             "is a reading, and RAW-STANDS is open below 0 so the first of "
+             "them would otherwise score as the pre-registered PASS")
+    if est.lo is None or est.hi is None:
+        return Gate(VALIDITY, "7", "the elasticity is physically admissible",
+                    UNKNOWN, "no interval: the fit produced no slope",
+                    want, costs)
+    ok = est.hi >= lo_edge and est.lo <= hi_edge
+    lines = []
+    if not ok:
+        lines.append(
+            "BELOW 0: the measured per-M-tile cost rose as the clock rose. "
+            "Suspect the clock READ before the clock: this instrument takes "
+            "one NVML sample per burst, and a sample that lands in the ramp "
+            "after the idle gap is low in the low-duty states and right at the "
+            "anchor, which is this sign exactly."
+            if est.hi < lo_edge else
+            "ABOVE 1: the measured per-M-tile cost fell by more than the clock "
+            "rose. Something other than the SM clock moved between the states; "
+            "V6 is the memory clock and this is everything else.")
+    return Gate(
+        VALIDITY, "7", "the elasticity is physically admissible",
+        PASS if ok else FAIL,
+        f"[{est.lo:.4f}, {est.hi:.4f}] against [{lo_edge:.3f}, {hi_edge:.3f}]",
+        want, costs, lines)
+
+
+def gate_c1_resolved(est: Elasticity) -> Gate:
+    """Does the interval sit WHOLLY inside one registered band.
+
+    A FAIL here is a RESULT about the DESIGN and not about the card: the
+    apparatus worked, the states separated, and the answer is that this many
+    repeats at this much separation cannot tell the three registered worlds
+    apart. It is deliberately scored before C2, because C2's word means nothing
+    until this one passes.
+    """
+    band = band_of(est.lo, est.hi)
+    hw = est.half_width
+    return Gate(
+        CLAIM, "1", "the interval falls wholly inside ONE registered band",
+        PASS if band else FAIL,
+        (f"[{est.lo:.4f}, {est.hi:.4f}], half-width {hw:.4f}, "
+         f"{'in ' + band[0] if band else 'straddling a registered boundary'}"
+         if est.lo is not None else "no interval: the fit produced no slope"),
+        f"wholly inside one of {[b[0] for b in BANDS]} "
+        f"(edges {BAND_LOW}, {BAND_HIGH}); half-width under "
+        f"{RESOLUTION_TARGET:.3f} is the design's own target",
+        "both registered consequences: an interval across a boundary is "
+        "consistent with two worlds whose readings contradict each other",
+        [f"the band it fell in says: {band[1]}"] if band else
+        ["NO registered consequence may be read off this page. Widen the duty "
+         "range or add repeats; do not pick the nearer edge."])
+
+
+def gate_c2_registered_reading(est: Elasticity) -> Gate:
+    """THE PRE-REGISTERED CLAIM: the elasticity is below the RAW-STANDS edge.
+
+    Registered in P2 before the run. A FAIL is a finding, not a retry: it says
+    the clock carries enough of the per-M-tile cost over treads 2 and deeper
+    that the study's C3 direction is in question, and the page prints the
+    registered consequence of whichever band the interval actually landed in
+    rather than a sentence written afterwards. Tread 1 is not in the claim (on
+    the 2026-09-21 card its call sat off the law), so neither verdict is a
+    statement about the whole per-call time.
+    """
+    band = band_of(est.lo, est.hi)
+    ok = band is not None and band[0] == BANDS[0][0]
+    lines = []
+    if band and not ok:
+        lines.append(f"the registered consequence of {band[0]}: {band[1]}")
+    elif not band:
+        lines.append("the interval straddles a boundary (C1), so this FAIL is "
+                     "'not shown' and not 'shown false'.")
+    return Gate(
+        CLAIM, "2", f"eta of the per-M-tile cost, -d log b / d log f over treads "
+        f"{CLAIM_MIN_TREAD} and deeper, is below {BAND_LOW} at this cell",
+        PASS if ok else FAIL,
+        (f"{est.value:.4f} [{est.lo:.4f}, {est.hi:.4f}]"
+         if est.value is not None and est.lo is not None
+         else f"{est.value if est.value is not None else 'no fit'}"),
+        f"the whole 95% interval below {BAND_LOW}",
+        "nothing: a FAIL here is the arm's result and the study's reading of "
+        "every alpha changes with it",
+        lines)
+
+
+def gates_for(rows, args, threshold: float, source: str,
+              est: Elasticity) -> list[Gate]:
+    """Every gate this run scores, in the order they are read.
+
+    Flat and unconditional. A gate that vanishes when it cannot run reads as a
+    page with fewer gates rather than as a page with an untested claim; the ones
+    that cannot decide carry UNKNOWN, which counts against them.
+    """
+    keep = kept_rows(rows)
+    cells = collapse(keep)
+    locked = bool(getattr(args, "lock_clocks", None))
+    return [
+        gate_v0_non_vacuity(rows, keep),
+        gate_v1_separation(cells, threshold, source, locked=locked),
+        gate_v2_one_kernel(keep),
+        gate_v3_depth(keep, states_of(args), MIN_TREADS_PER_STATE,
+                      MIN_REPEATS_PER_STATE,
+                      len(states_of(args)) if locked else MIN_STATES),
+        gate_v4_exclusions(rows, keep, EXCLUSION_CEILING),
+        gate_v5_within_burst(keep, locked=locked),
+        gate_v6_memory_clock(keep),
+        gate_v7_admissible(est),
+        gate_c1_resolved(est),
+        gate_c2_registered_reading(est),
+    ]
+
+
+# --------------------------------------------------------------------------
+# The plan: the cost, the design arithmetic, and the registered bands.
+# --------------------------------------------------------------------------
+
+def corpus_call_ms(tread: int) -> float:
+    """Modelled per-call ms at a tread, for PRICING only.
+
+    Inside the corpus ladder it is the measured median; past it, the OLS line
+    through those eight points, so a `--treads` above 8 is priced by the same
+    rule rather than dropping off the end of a tuple.
+    """
+    if 1 <= tread <= len(CORPUS_LADDER_MS):
+        return CORPUS_LADDER_MS[tread - 1]
+    xs = list(range(1, len(CORPUS_LADDER_MS) + 1))
+    xbar = statistics.fmean(xs)
+    ybar = statistics.fmean(CORPUS_LADDER_MS)
+    xx = sum((x - xbar) ** 2 for x in xs)
+    b = sum((x - xbar) * (y - ybar) for x, y in zip(xs, CORPUS_LADDER_MS,
+                                                    strict=True)) / xx
+    return max(1e-3, ybar + b * (tread - xbar))
+
+
+def burst_shape(per_call_ms: float, burst_ms: float, target_ms: float
+                ) -> tuple[int, int, int]:
+    """(calls per burst, bursts per trial, kept calls per trial).
+
+    THE ONE PLACE THIS IS DECIDED, called by the plan and by the runner alike, so
+    the wall clock an operator books is computed from the same rule the pod
+    executes. The kept-call target is `timing.iters_for`'s, so a cell here holds
+    the same number of samples a cell of the ladder arms holds.
+    """
+    calls = max(MIN_CALLS_PER_BURST,
+                min(MAX_CALLS_PER_BURST,
+                    int(round(burst_ms / max(per_call_ms, 1e-4)))))
+    wanted = T.iters_for(per_call_ms, target_ms)
+    bursts = max(1, math.ceil(wanted / max(1, calls - 1)))
+    return calls, bursts, bursts * (calls - 1)
+
+
+def estimated_seconds(args) -> tuple[float, list[str]]:
+    """Wall seconds, itemised. A single number nobody can decompose is a number
+    nobody can check before spending it."""
+    per_repeat_kernel_ms = 0.0
+    for tread in range(1, args.treads + 1):
+        ms = corpus_call_ms(tread)
+        calls, bursts, _kept = burst_shape(ms, args.burst_ms, args.target_ms)
+        per_repeat_kernel_ms += args.warm_ms + args.trials * bursts * calls * ms
+    duties = [d for d, _lock in states_of(args)]
+    inflation = sum(1.0 / d for d in duties)
+    settles = len(duties) * args.settle_seconds
+    per_repeat = settles + per_repeat_kernel_ms * inflation / 1000.0
+    total = args.repeats * per_repeat + ALLOCATION_SECONDS
+    lines = [
+        f"  kernel per state per repeat   {per_repeat_kernel_ms / 1000.0:7.2f} s "
+        f"over {args.treads} treads ({args.warm_ms:.0f} ms warm + "
+        f"{args.trials} x ~{args.target_ms:.0f} ms each)",
+        f"  duty inflation                {inflation:7.2f}x "
+        f"= sum of 1/duty over {', '.join(f'{d:g}' for d in duties)}",
+        f"  settles per repeat            {settles:7.2f} s "
+        f"= {len(duties)} states x {args.settle_seconds:.0f} s",
+        f"  per repeat                    {per_repeat:7.2f} s",
+        f"  x {args.repeats} repeats                 "
+        f"{args.repeats * per_repeat:7.2f} s",
+        f"  + weight build and first compile {ALLOCATION_SECONDS:5.0f} s "
+        "(an ALLOWANCE: 2.82 GB of mixtral expert weights built once and reused "
+        "by every tread, and Triton's first choice under the pin, neither timed here)",
+    ]
+    return total, lines
+
+
+def mde_lines(args) -> list[str]:
+    """What this design can resolve, and the separation it therefore demands.
+
+    Printed on the plan page and not in the post-mortem: a resolution discovered
+    after the run is a description of the run.
+
+    V1'S THRESHOLD IS SIZED FOR THE POOLED PER-CALL ESTIMATOR, and the page says
+    so: the gated claim's interval is `per_tile_se_factor` times wider at the
+    same span, so this prints the claim's predicted half-width at V1's
+    threshold for the design actually requested, and the span the claim needs
+    to reach the target. V1 itself is unchanged.
+    """
+    states = len(states_of(args))
+    sigma_cell = MEDIAN_SE_PENALTY * CORPUS_REPEAT_SPREAD / math.sqrt(args.repeats)
+    need, source = registered_clock_ratio(args)
+    shape = math.sqrt((states + 1) / (12.0 * (states - 1))) if states > 1 else 0.0
+    sd_at_need = math.log(need) * shape
+    se = (sigma_cell / (math.sqrt(args.treads * states) * sd_at_need)
+          if sd_at_need > 0 else float("inf"))
+    factor = per_tile_se_factor(args.treads, min_tread=CLAIM_MIN_TREAD)
+    claim_need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
+                                      states=states, se_factor=factor)
+    if math.isfinite(factor):
+        claim = [
+            f"  fits one slope per tread and its interval is {factor:.2f}x "
+            f"wider at this design ({args.repeats} repeats x {args.treads} "
+            f"treads x {states} states):",
+            f"  the claim at exactly V1's span     half-width "
+            f"~{2 * se * factor:.4f}",
+            f"  the claim reaches the target at    a span of {claim_need:.4f}x "
+            "at every tread",
+            "  A run that passes V1 below that span can still straddle a "
+            "registered edge (C1 FAIL); S4 scores the estimator itself over "
+            "the planted design.",
+        ]
+    else:
+        claim = [f"  cannot be formed at all: it needs two treads from tread "
+                 f"{CLAIM_MIN_TREAD}, and --treads {args.treads} gives it "
+                 f"{max(0, args.treads - CLAIM_MIN_TREAD + 1)}."]
+    return [
+        "RESOLUTION, computed from the design and not from the result.",
+        f"  across-repeat spread of one cell   {CORPUS_REPEAT_SPREAD:.5f} of log ms, "
+        "the median over the 8 treads of the 2026-09-10 bn_decomposition ladder "
+        "at this exact tile, 17 repeats each",
+        f"  x median penalty sqrt(pi/2)        {MEDIAN_SE_PENALTY:.4f}",
+        f"  / sqrt({args.repeats} repeats)                    -> sigma per cell "
+        f"{sigma_cell:.5f}",
+        f"  design                             {args.treads} treads x {states} "
+        f"states = {args.treads * states} cells, slope Sxx = sum of "
+        "(log f - tread mean)^2",
+        f"  target half-width                  {RESOLUTION_TARGET:.4f}, half the "
+        f"width of the unregistered gap [{BAND_LOW}, {BAND_HIGH}]",
+        f"  so the states must span            {need:.4f}x in clock at every "
+        f"tread ({source})",
+        f"  at exactly that span the interval  half-width ~{2 * se:.4f}, of the "
+        "POOLED PER-CALL estimator",
+        "  V1'S THRESHOLD IS SIZED FOR THAT ESTIMATOR AND NOT FOR THE GATED ONE. "
+        f"The claim, over treads {CLAIM_MIN_TREAD}..{args.treads},",
+        *claim,
+        "  THE THRESHOLD IS A RATIO OF TWO CLOCKS ON ONE CARD, never a clock. "
+        "The same arithmetic gates an A100 without being told which part is "
+        "attached, and a shallower run is held to a WIDER separation rather "
+        "than to the same number.",
+    ]
+
+
+def prediction_lines(args) -> list[str]:
+    out = ["PREDICTIONS, registered before the run and printed before any "
+           "measurement", ""]
+    for pred in PREDICTIONS:
+        out += [f"  {line}" for line in pred.render()] + [""]
+    out.append("THE THREE REGISTERED BANDS, and the reading each licenses:")
+    for name, lo, hi, consequence in BANDS:
+        edge = (f"< {hi:.2f}" if lo is None else
+                f"> {lo:.2f}" if hi is None else f"{lo:.2f} to {hi:.2f}")
+        out.append(f"  {name:<18} {edge:<14} {consequence}")
+    out += [
+        "",
+        "  NOT A READOUT. Nothing above was measured. The arm decides which band "
+        "it is in by",
+        "  where its 95% interval falls, and it may decide none of them (C1 "
+        "FAIL), which is",
+        "  a result about the design and not a licence to read the nearer edge.",
+    ]
+    if getattr(args, "lock_clocks", None):
+        out += ["", "  LOCK MODE: P1's states are LOCKED SM clocks, not duty "
+                "cycles, and V1 scores it on the clock READ BACK exactly as in "
+                "duty mode. P2, P3 and the bands are unchanged: the same eta.",
+                "  A P1 FAIL in lock mode is not a governor that ignores duty: the "
+                "locks did not hold (the page",
+                "  names each one the card pulled off) or did not separate."]
+    return out
+
+
+def plan_lines(args, run_id: str, out_dir: Path, card: str,
+               paths: dict) -> list[str]:
+    threshold, source = registered_clock_ratio(args)
+    cfg = MODEL_CONFIGS[args.model]
+    treads = [n * PINNED["BLOCK_SIZE_M"] for n in range(1, args.treads + 1)]
+    quantum = SWEEP.rows_quantum(cfg)
+    out = [
+        f"experiment  clock_elasticity / {run_id}",
+        f"card        {card}"
+        + ("   (no CUDA device: this is a plan or a replay)"
+           if card == NO_CARD else ""),
+        f"model       {args.model} {args.dtype}: E={cfg.num_experts} "
+        f"k={cfg.top_k} H={cfg.hidden_size} F={cfg.intermediate_size}, "
+        f"rows per expert must be a multiple of {quantum}",
+        "pinned      " + ", ".join(f"{k}={v}" for k, v in sorted(pinned_for(args.group_m).items())),
+        "session     " + (args.session_tag or "(none: a bare run, keyed on its "
+                                              "arguments and card alone)"),
+        f"ladder      {args.treads} exactly-full tile stacks, rows per expert "
+        f"{treads[0]}..{treads[-1]}, tokens "
+        f"{SWEEP.tokens_for_rows(cfg, treads[0])}.."
+        f"{SWEEP.tokens_for_rows(cfg, treads[-1])}",
+        (f"states      SM clock LOCKED at "
+         f"{', '.join(str(f) for f in args.lock_clocks)} MHz, every state at duty "
+         f"{args.lock_duty:g} (each measured burst's gap sized from that burst, "
+         "the settle's from the full-duty sizing pass), "
+         if args.lock_clocks else
+         f"states      duty {', '.join(f'{d:g}' for d in args.duty)}, ")
+        + f"{args.settle_seconds:.0f} s of the state's own cadence before its "
+        "first cell",
+        f"repeats     {args.repeats}, state order reversed on alternate repeats "
+        "so a thermal trend does not line up with the state axis",
+        f"burst       target {args.burst_ms:.0f} ms of GPU per burst, at least "
+        f"{MIN_CALLS_PER_BURST} calls, the FIRST call of every burst discarded",
+        f"instrument  {instrument_of(args)}",
+        f"WRITES TO   {out_dir}",
+    ]
+    if args.lock_clocks:
+        out += [
+            "locks       `sudo -n nvidia-smi -lgc F,F` before each state (no sudo "
+            "when root), `nvidia-smi -rgc` at exit, on an exception and on "
+            "SIGTERM/SIGHUP/SIGINT (a signal the launcher ignored, nohup's "
+            "SIGHUP, stays ignored); before anything is written "
+            "every lock is checked against `nvidia-smi -q -d SUPPORTED_CLOCKS` "
+            "and one -lgc is probed and must be released by -rgc, and a refusal "
+            "is REFUSED with its text",
+            f"            the lock span ASKED is "
+            f"{max(args.lock_clocks) / min(args.lock_clocks):.4f}x against V1's "
+            f"{threshold:.3f}x; V1 scores the clock READ BACK per burst, so a lock "
+            "the card does not hold narrows it: a row more than "
+            f"{T.DRIFT_FRACTION:.0%} off its lock is EXCLUDED (off_lock), "
+            "counted in V0 and V4, and the page names the lock",
+        ]
+    for label, path in paths.items():
+        out.append(f"  {label:<12}{path}   {git_visibility(path)}")
+    out += [
+        "",
+        "NO RULER IS RESOLVED. An elasticity is a ratio of logs: no ridge, no "
+        "bandwidth, no",
+        "compute peak, no fitted level. The reference clock is resolved on the "
+        "pod for the",
+        "LEVEL RECORD only, and LEVEL excludes nothing here on either side; "
+        "DRIFT and",
+        # A LOCK PAGE HAS A THIRD EXCLUSION, and this line said "the two" on
+        # it until the second review (2026-09-25) after V4's text had moved.
+        ("host-bound are the two exclusions and V4 holds them to "
+         f"{100 * EXCLUSION_CEILING:.0f}% of all rows." if not args.lock_clocks else
+         "host-bound are exclusions, and in lock mode so is off-lock (a read-back "
+         f"more than {T.DRIFT_FRACTION:.0%} off"),
+        *([f"its lock); V4 holds the three to {100 * EXCLUSION_CEILING:.0f}% of all "
+           "rows."] if args.lock_clocks else []),
+        "",
+        "THE BURST TABLE, computed by the same `burst_shape` the pod calls:",
+        "  tread   modelled ms   calls/burst   bursts/trial   kept calls/trial",
+    ]
+    for tread in range(1, args.treads + 1):
+        ms = corpus_call_ms(tread)
+        calls, bursts, kept = burst_shape(ms, args.burst_ms, args.target_ms)
+        out.append(f"  {tread:5d}   {ms:11.4f}   {calls:11d}   {bursts:12d}   "
+                   f"{kept:16d}")
+    out.append("  the modelled ms PRICE this run and score nothing; they are "
+               "the 2026-09-10")
+    out.append("  bn_decomposition medians at this exact tile, named in the "
+               "source.")
+    out += ["", f"V1 THRESHOLD {threshold:.3f}x, from {source}"]
+    return out
+
+
+# --------------------------------------------------------------------------
+# The measurement. Everything below this line touches a GPU or is injected.
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class DutyTiming:
+    """One cell measured at one duty cycle. `time_duty`'s whole return."""
+
+    ms_p50: float
+    ms_p90: float
+    ms_min: float
+    ms_std: float
+    samples: int
+    dropped_leads: int
+    bursts: int
+    trials: int
+    calls_per_burst: int
+    burst_ms: float
+    #: The idle gap after a burst, ms: under GAP_FROM_SIZING the one gap the
+    #: cell used, under GAP_FROM_BURST the median of the per-burst gaps.
+    gap_ms: float
+    duty_requested: float
+    #: Measured GPU-busy fraction: the sum of the event intervals over the wall
+    #: clock of the trials. A LOWER BOUND on the true busy fraction and not an
+    #: equality: the L2 flush is GPU work that sits outside every interval by
+    #: construction, and the last burst of a trial is followed by a gap the
+    #: wall clock counts. A RECORD, printed beside the requested figure; the
+    #: regressor is the measured CLOCK, never the duty.
+    duty_achieved: float
+    head_ms: float | None
+    tail_ms: float | None
+    within_burst_ok: bool | None
+    warmup_ms: float
+    warmup_calls: int
+    flush_mb: int
+    l2_flush: bool
+    sm_clock_load_mhz: float | None
+    sm_clock_start_mhz: float | None
+    sm_clock_end_mhz: float | None
+    clock_samples_mhz: tuple[float, ...]
+    clock_source: str
+    clock_level_ok: bool | None
+    clock_level_side: str
+    clock_drift_ok: bool | None
+    clock_drift_direction: str
+    reference_clock_mhz: float | None
+    power_w: float | None
+    mem_clock_mhz: float | None
+    host_bound: bool | None
+    host_enqueue_ms: float | None
+    host_backlog_iters: float | None
+    clock_note: str
+    instrument: str = INSTRUMENT
+    #: How the gaps were sized: GAP_FROM_SIZING or GAP_FROM_BURST.
+    gap_basis: str = GAP_FROM_SIZING
+
+
+def _quarter_medians(intervals: list[float]) -> tuple[float | None, float | None]:
+    """Medians of the first and last quarter of one burst's KEPT calls."""
+    n = len(intervals)
+    if n < 4:
+        return None, None
+    q = max(1, n // 4)
+    return statistics.median(intervals[:q]), statistics.median(intervals[-q:])
+
+
+def _gap_after_burst(basis: str, *, duty: float, fixed_gap_s: float,
+                     busy_ms: float, burst_wall_s: float) -> float:
+    """The idle gap, seconds, after ONE burst, under `basis` (GAP_BASES):
+    the cell's fixed gap under GAP_FROM_SIZING; under GAP_FROM_BURST what
+    brings the burst's wall clock `burst_wall_s`, its first launch to now,
+    up to its own measured kernel time `busy_ms` over `duty`, never below
+    zero. THE ONE PLACE a gap is sized, for the warm-up and the trials both."""
+    if basis == GAP_FROM_BURST:
+        return max(0.0, busy_ms / 1000.0 / max(duty, 1e-6) - burst_wall_s)
+    return fixed_gap_s
+
+
+def _warm_at_duty(fn, *, warm_ms: float, calls: int, gap_s: float, events,
+                  flush, clock_read, sleep, duty: float = 1.0,
+                  gap_basis: str = GAP_FROM_SIZING
+                  ) -> tuple[float, int, list[float]]:
+    """Deliver `warm_ms` of GPU load AT THE STATE'S OWN CADENCE, then settle.
+
+    `timing.warm_until` is the right function for a back-to-back loop and the
+    wrong one here for the reason the whole arm exists: it runs bursts with no
+    gap, so warming with it would hold the card at duty 1.0 and hand the trials
+    a clock that belongs to a state nobody is measuring. The rule it applies is
+    kept exactly -- deliver the load, then wait for two consecutive under-load
+    reads to agree within one `CLOCK_STEP_MHZ`, capped at
+    `SETTLE_CAP_MULTIPLE` times the warm budget -- and only the cadence changes.
+    THE CADENCE IS THE TRIALS' OWN, gap sizing included: each warm-up burst's
+    gap comes from `_gap_after_burst` under the trials' `gap_basis`, so a
+    burst-sized cell is not warmed at the sizing read's duty.
+    """
+    pairs = events(calls)
+    delivered = 0.0
+    made = 0
+    reads: list[float] = []
+    cap = warm_ms * T.SETTLE_CAP_MULTIPLE
+    settled = False
+    while delivered < warm_ms or (not settled and delivered < cap):
+        t0 = time.perf_counter()
+        for i in range(calls):
+            if flush is not None:
+                flush()
+            pairs.starts[i].record()
+            fn()
+            pairs.ends[i].record()
+        state = clock_read() if clock_read is not None else None
+        pairs.synchronize()
+        got = pairs.elapsed(calls)
+        delivered += sum(got)
+        made += calls
+        if state is not None and state.sm_clock_mhz > 0:
+            reads.append(float(state.sm_clock_mhz))
+            if (delivered >= warm_ms and len(reads) >= 2
+                    and abs(reads[-1] - reads[-2]) <= T.CLOCK_STEP_MHZ):
+                settled = True
+        elif delivered >= warm_ms:
+            settled = True
+        gap = _gap_after_burst(gap_basis, duty=duty, fixed_gap_s=gap_s,
+                               busy_ms=sum(got),
+                               burst_wall_s=time.perf_counter() - t0)
+        if gap > 0:
+            sleep(gap)
+    return delivered, made, reads
+
+
+def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
+              trials: int, warm_ms: float, l2_flush: bool,
+              per_call_ms: float, reference_clock_mhz: float | None,
+              clock_read=None, mem_read=None, events=None, flusher=None,
+              sleep=time.sleep, gap_basis: str = GAP_FROM_SIZING) -> DutyTiming:
+    """Time `fn` at a sustained duty cycle, sampling the clock in flight.
+
+    The loop, per trial: `bursts` bursts; per burst, `calls_per_burst` calls
+    enqueued back to back, each preceded by the L2 flush and bracketed by its own
+    pre-primed event pair; then ONE NVML read while the burst is still queued;
+    then one synchronise; then a host-side sleep of the gap, sized under
+    `gap_basis` (GAP_BASES): from `per_call_ms` once for the cell
+    (GAP_FROM_SIZING, this arm's default and every state it runs), or from
+    each burst's own measured kernel time (GAP_FROM_BURST, which
+    private_weight_reference asks for so its arms achieve one duty). The
+    FIRST call of every burst is discarded from the samples: it launched into
+    a queue the previous gap had drained, so its interval carries launch
+    latency the others do not, and that latency would otherwise enter the
+    elasticity as a constant offset that does not cancel in a log slope.
+
+    THE GAP IS THE INDEPENDENT VARIABLE AND IT IS OUTSIDE EVERY INTERVAL. It sets
+    sustained board power, sustained board power sets the settled clock under the
+    cap, and the kernel's bytes and instructions never change.
+
+    EVERY STATE DRAINS THE QUEUE THE SAME WAY, the anchor at duty 1.0 included:
+    the synchronise is per burst, not per trial, so every burst in every state
+    starts on an idle GPU and loses exactly one lead call. That symmetry is why
+    the discard does not have to be modelled -- it is the same in every state --
+    and it is the reason this loop synchronises more often than
+    `timing._timed_trials` does.
+
+    OFF-GPU it refuses with `timing.TimingRefused` unless `events`, `clock_read`
+    and (when flushing) `flusher` are all injected, on `time_kernel`'s own terms
+    and for its own reason: an instrument that invents numbers when its device is
+    missing is worse than one that stops.
+    """
+    if trials < 1 or bursts < 1 or calls_per_burst < 2:
+        raise T.TimingRefused(
+            f"trials={trials} bursts={bursts} calls_per_burst={calls_per_burst}: "
+            "a burst needs at least two calls (one is discarded as the "
+            "drained-queue lead) and a cell needs at least one of each")
+    if gap_basis not in GAP_BASES:
+        raise T.TimingRefused(
+            f"gap_basis={gap_basis!r} is not one of {GAP_BASES}: a gap sized by "
+            "a rule this timer does not know would set a duty nobody asked for")
+    import torch
+
+    on_gpu = torch.cuda.is_available()
+    missing = [name for name, given in (("events", events),
+                                        ("clock_read", clock_read),
+                                        ("flusher", flusher if l2_flush else True))
+               if given is None]
+    if missing and not on_gpu:
+        raise T.TimingRefused(
+            "no CUDA device, and no fake injected for " + ", ".join(missing)
+            + "; time_duty measures a GPU or runs against injected fakes, it "
+            "does not invent numbers")
+    if events is None:
+        events = T._EventPairs
+    if l2_flush and flusher is None:
+        flusher = T.L2Flusher(T.flush_mb_for_device())
+    if clock_read is None:
+        clock_read = T.nvml_clock_reader(torch.cuda.current_device())
+    flush = flusher.flush if l2_flush else None
+    flush_mb = int(flusher.megabytes) if l2_flush else 0
+
+    # GAP_FROM_SIZING's one gap for the cell. Under GAP_FROM_BURST it sizes
+    # nothing: `_gap_after_burst` takes each burst's own.
+    burst_gpu_ms = calls_per_burst * max(per_call_ms, 1e-4)
+    gap_ms = burst_gpu_ms * (1.0 / max(duty, 1e-6) - 1.0)
+    gap_s = max(0.0, gap_ms / 1000.0)
+
+    delivered, warm_calls, _reads = _warm_at_duty(
+        fn, warm_ms=warm_ms, calls=calls_per_burst, gap_s=gap_s, events=events,
+        flush=flush, clock_read=clock_read, sleep=sleep, duty=duty,
+        gap_basis=gap_basis)
+
+    pairs = events(calls_per_burst)
+    samples: list[float] = []
+    heads: list[float] = []
+    tails: list[float] = []
+    walls: list[T.TrialWall] = []
+    clocks: list[float] = []
+    powers: list[float] = []
+    mems: list[float] = []
+    sources: set[str] = set()
+    leads = 0
+    busy_ms = 0.0
+    wall_s = 0.0
+    gaps_s: list[float] = []
+    for _trial in range(trials):
+        t_start = time.perf_counter()
+        for _burst in range(bursts):
+            t0 = time.perf_counter()
+            for i in range(calls_per_burst):
+                if flush is not None:
+                    flush()
+                pairs.starts[i].record()
+                fn()
+                pairs.ends[i].record()
+            t1 = time.perf_counter()
+            state = clock_read()
+            if mem_read is not None:
+                mem = mem_read()
+                if mem:
+                    mems.append(float(mem))
+            pairs.synchronize()
+            t2 = time.perf_counter()
+            got = pairs.elapsed(calls_per_burst)
+            burst_busy_ms = sum(got)
+            busy_ms += burst_busy_ms
+            leads += 1
+            kept = got[1:]
+            samples.extend(kept)
+            head, tail = _quarter_medians(kept)
+            if head is not None:
+                heads.append(head)
+                tails.append(tail)
+            walls.append(T.TrialWall(enqueue_s=t1 - t0, wall_s=t2 - t0))
+            sources.add(state.source)
+            if state.sm_clock_mhz > 0:
+                clocks.append(float(state.sm_clock_mhz))
+            if getattr(state, "power_w", 0.0) > 0:
+                powers.append(float(state.power_w))
+            # Sized LAST, from the burst's wall clock up to this line, so the
+            # host's own work after the synchronise is counted as the burst's
+            # and not added to the gap on top of it.
+            gap = _gap_after_burst(gap_basis, duty=duty, fixed_gap_s=gap_s,
+                                   busy_ms=burst_busy_ms,
+                                   burst_wall_s=time.perf_counter() - t0)
+            gaps_s.append(gap)
+            if gap > 0:
+                sleep(gap)
+        wall_s += time.perf_counter() - t_start
+
+    notes: list[str] = []
+    load = start = end = None
+    if len(clocks) >= T.CLOCK_SAMPLE_FLOOR:
+        load = float(statistics.median(clocks))
+        if reference_clock_mhz is None:
+            notes.append("no reference clock given, level not determinable")
+    elif clocks:
+        notes.append(f"{len(clocks)} usable clock sample(s) over {leads} bursts "
+                     f"is below the floor of {T.CLOCK_SAMPLE_FLOOR} a median is "
+                     "taken from; this cell carries no under-load clock and the "
+                     "fit cannot read it")
+    else:
+        notes.append(f"no usable SM clock sample over {leads} bursts; the fit "
+                     "cannot read this cell")
+    if len(clocks) >= 2:
+        start, end = clocks[0], clocks[-1]
+    level_ok, drift_ok = T.clock_flags(load, start, end, reference_clock_mhz)
+    side = T.level_side(load, reference_clock_mhz) or ""
+    direction = T.drift_direction(clocks) if drift_ok is False else ""
+    if side:
+        notes.append(
+            f"LEVEL {side.upper()} (recorded, never an exclusion here): loaded "
+            f"clock {load:.0f} MHz against the {reference_clock_mhz:.0f} MHz "
+            "reference. At a duty cycle below 1.0 a HIGH reading is the "
+            "experiment working, not a cell to drop.")
+    if direction:
+        notes.append(f"DRIFT failed, {direction}: {start:.0f} -> {end:.0f} MHz "
+                     f"over {len(clocks)} bursts; this cell is EXCLUDED")
+    host_bound, host_ms, backlog, host_note = T.host_bound_verdict(
+        walls, calls_per_burst)
+    if host_note:
+        notes.append(host_note)
+
+    head_ms = statistics.median(heads) if heads else None
+    tail_ms = statistics.median(tails) if tails else None
+    within_ok = None
+    if head_ms and tail_ms and head_ms > 0:
+        within_ok = abs(tail_ms - head_ms) / head_ms <= T.DRIFT_FRACTION
+    p50, p90, lo, std = T._stats(samples) if samples else (0.0, 0.0, 0.0, 0.0)
+    return DutyTiming(
+        ms_p50=p50, ms_p90=p90, ms_min=lo, ms_std=std, samples=len(samples),
+        dropped_leads=leads, bursts=bursts * trials, trials=trials,
+        calls_per_burst=calls_per_burst,
+        burst_ms=busy_ms / leads if leads else 0.0,
+        gap_ms=(gap_ms if gap_basis == GAP_FROM_SIZING or not gaps_s
+                else 1000.0 * statistics.median(gaps_s)),
+        duty_requested=duty,
+        duty_achieved=(busy_ms / 1000.0 / wall_s) if wall_s > 0 else 0.0,
+        head_ms=head_ms, tail_ms=tail_ms, within_burst_ok=within_ok,
+        warmup_ms=delivered, warmup_calls=warm_calls, flush_mb=flush_mb,
+        l2_flush=l2_flush, sm_clock_load_mhz=load, sm_clock_start_mhz=start,
+        sm_clock_end_mhz=end, clock_samples_mhz=tuple(clocks),
+        clock_source=(sorted(sources)[0] if sources else T.CLOCK_SOURCE_NONE),
+        clock_level_ok=level_ok, clock_level_side=side, clock_drift_ok=drift_ok,
+        clock_drift_direction=direction,
+        reference_clock_mhz=reference_clock_mhz,
+        power_w=float(statistics.median(powers)) if powers else None,
+        mem_clock_mhz=float(statistics.median(mems)) if mems else None,
+        host_bound=host_bound, host_enqueue_ms=host_ms,
+        host_backlog_iters=backlog, clock_note="; ".join(notes),
+        gap_basis=gap_basis)
+
+
+class LockRefused(RuntimeError):
+    """`nvidia-smi -lgc` refused or failed, the command and its own output
+    verbatim in the message. `preflight` turns it into a REFUSED (2) before
+    anything is written; raised later, from `run_arm`, the lock broke in use
+    and `main` exits ERROR (4), and a resume keeps the cells already on disk."""
+
+
+class ClockLock:
+    """`nvidia-smi -lgc F,F` per state and `nvidia-smi -rgc`: the ONE place
+    either is run.
+
+    ENTERED, it turns SIGTERM and SIGHUP into SystemExit(128 + the signal) and
+    SIGINT into the KeyboardInterrupt Ctrl-C always raised, so its exit, which
+    ALWAYS runs -rgc, runs on a kill as well as on a return or an exception. A
+    signal ALREADY IGNORED when it is entered stays ignored: `nohup` starts a
+    process with SIGHUP ignored, and replacing that ended a plain `nohup ... &`
+    lock run when its SSH connection dropped (review, 2026-09-25).
+
+    THE FIRST KILL WINS (second review, 2026-09-25). The handler's FIRST act is
+    `_quiet`, which ignores all three, so a second kill (a double Ctrl-C, or the
+    hangup plus bash re-sending SIGHUP to its jobs) can interrupt neither the
+    unwinding to the reset nor the reset. And the reset is the `finally` of
+    `__exit__`'s own prologue, which is `_quiet` again: a kill landing INSIDE
+    that prologue on a clean exit raised there, skipped -rgc and printed no
+    warning, because the warning follows a failed -rgc only. While -rgc runs all
+    three are ignored and the -rgc child inherits the ignore across exec, so a
+    Ctrl-C cannot have subprocess.run kill it. What no handler can catch leaves
+    the card locked: SIGKILL, and a native crash (a segfault or a CUDA abort
+    inside Triton or the driver). The operator's line after the run,
+    `sudo -n nvidia-smi -rgc`, is the reset for those. `self.held` is the lock
+    still on the card, None once a reset succeeded, and `_main` reads it after
+    BOTH `with` blocks. `sudo -n` only when not root, so a root container gets
+    the driver's own answer (a RunPod container: "Insufficient Permissions").
+    No `-i`: every GPU on the box.
+    """
+
+    SIGNALS = ("SIGTERM", "SIGHUP", "SIGINT")
+
+    def __init__(self, run=None, euid=None) -> None:
+        self._run = run or subprocess.run
+        self.prefix = [] if (os.geteuid() if euid is None else euid) == 0 else ["sudo", "-n"]
+        self.log: list[dict] = []
+        self.held: int | None = None
+        #: The handlers `__enter__` replaced, and the ones `_quiet` replaced,
+        #: all put back by `__exit__`. Where both hold a signal `__enter__`'s
+        #: wins, because `_quiet`'s is this lock's own `_on_signal`.
+        self._saved: dict = {}
+        self._quieted: dict = {}
+
+    def _call(self, argv: list[str], *, root: bool = True) -> tuple[int, str]:
+        cmd = [*(self.prefix if root else []), "nvidia-smi", *argv]
+        try:
+            done = self._run(cmd, capture_output=True, text=True, timeout=60)
+            rc, text = done.returncode, ((done.stdout or "") + (done.stderr or "")).strip()
+        except (OSError, subprocess.SubprocessError) as exc:
+            rc, text = -1, f"{type(exc).__name__}: {exc}"
+        self.log.append({"command": " ".join(cmd), "rc": rc, "output": text[-400:]})
+        return rc, text
+
+    def lock(self, mhz: int) -> None:
+        rc, text = self._call(["-lgc", f"{int(mhz)},{int(mhz)}"])
+        if rc != 0:
+            raise LockRefused(f"`{self.log[-1]['command']}` exited {rc}: "
+                              f"{text or 'no output'}")
+        self.held = int(mhz)
+
+    def preflight(self, locks) -> str:
+        """"" when every lock is a supported graphics clock and -lgc is
+        permitted here, else why not, with nvidia-smi's own words."""
+        rc, text = self._call(["-q", "-d", "SUPPORTED_CLOCKS"], root=False)
+        supported = sorted({int(m) for m in re.findall(r"Graphics\s*:\s*(\d+)\s*MHz", text)})
+        if rc != 0 or not supported:
+            return (f"`nvidia-smi -q -d SUPPORTED_CLOCKS` exited {rc} and listed "
+                    f"{len(supported)} graphics clocks: {text[-300:] or 'no output'}")
+        off = [f for f in locks if int(f) not in supported]
+        if off:
+            return (f"--lock-clocks {off} are not supported graphics clocks here "
+                    f"({len(supported)} of them, {supported[0]}..{supported[-1]} MHz); "
+                    "the driver would round the lock and the rows would name a "
+                    "clock that never ran")
+        try:
+            self.lock(max(locks))
+        except LockRefused as exc:
+            return str(exc.args[0])
+        return ""
+
+    def _signals(self):
+        return [s for s in (getattr(signal, n, None) for n in self.SIGNALS) if s]
+
+    def __enter__(self) -> ClockLock:
+        for sig in self._signals():
+            old = signal.getsignal(sig)
+            # IGNORED STAYS IGNORED: nohup's SIGHUP is the launcher's decision
+            # that a dropped terminal must not end the run, not this file's. A
+            # handler installed from C reads None and is left alone, because
+            # it could not be put back.
+            if old in (None, signal.SIG_IGN):
+                continue
+            with contextlib.suppress(ValueError):   # not the main thread
+                signal.signal(sig, self._on_signal)
+                self._saved[sig] = old
+        return self
+
+    def _quiet(self) -> None:
+        """Ignore SIGTERM, SIGHUP and SIGINT until `__exit__` puts back what
+        this replaced. Idempotent, and safe to re-enter: a kill that lands in
+        here runs `_on_signal`, whose own `_quiet` finishes the job."""
+        for sig in self._signals():
+            if sig in self._quieted:
+                continue
+            old = signal.getsignal(sig)
+            if old in (None, signal.SIG_IGN):
+                continue
+            with contextlib.suppress(ValueError):   # not the main thread
+                signal.signal(sig, signal.SIG_IGN)
+                self._quieted.setdefault(sig, old)
+
+    def _on_signal(self, signum, _frame):
+        self._quiet()
+        # SAID BEFORE THE EXIT, because the exit status cannot say it: a shell
+        # reports 143 for a process SIGTERM killed with no handler at all, so
+        # only this line tells the kill test on the VM that the reset was reached.
+        print(f"{signal.Signals(signum).name} caught: resetting the SM clock, "
+              f"then exiting {128 + signum}", file=sys.stderr, flush=True)
+        if signum == signal.SIGINT:
+            raise KeyboardInterrupt
+        raise SystemExit(128 + signum)
+
+    def _reset(self) -> None:
+        held = self.held
+        rc, text = self._call(["-rgc"])
+        if rc != 0 and held is not None:
+            print(f"WARNING: the SM clock is STILL LOCKED at {held} MHz: "
+                  f"`{self.log[-1]['command']}` exited {rc}: {text}. Reset it "
+                  "by hand: sudo nvidia-smi -rgc", file=sys.stderr)
+        elif rc == 0:
+            self.held = None
+            if held is not None:
+                print(f"SM clock reset: `{self.log[-1]['command']}` exited 0, "
+                      f"the {held} MHz lock is released", flush=True)
+
+    def __exit__(self, *exc) -> bool:
+        # NOTHING MAY ABORT THE RESET, and nothing may SKIP it: the prologue
+        # that ignores the three signals is a `try` whose `finally` is the
+        # reset, so a kill landing in the prologue raises there and still
+        # resets, with all three ignored by then (its handler ran `_quiet`).
+        try:
+            try:
+                self._quiet()
+            finally:
+                self._reset()
+        finally:
+            for sig, old in {**self._quieted, **self._saved}.items():
+                with contextlib.suppress(ValueError):   # not the main thread
+                    signal.signal(sig, old)
+            self._saved.clear()
+            self._quieted.clear()
+        return False
+
+
+class _MemClockReader:
+    """NVML's memory clock, or 0.0 forever if it cannot be read.
+
+    Initialised ONCE, like `thermal_acceptance._ReasonReader` and for the same
+    reason: a reader that cannot answer must not spend the whole run raising.
+    Separate from `timing.nvml_clock_reader` because that reader's `ClockState`
+    is a shared record three other arms write rows from, and widening it for one
+    arm's control is a change at every one of their call sites.
+    """
+
+    def __init__(self, index: int = 0) -> None:
+        self._get = None
+        self._handle = None
+        self._pynvml = None
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            self._pynvml = pynvml
+            self._handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+            self._get = pynvml.nvmlDeviceGetClockInfo
+            self._which = pynvml.NVML_CLOCK_MEM
+        except Exception:                               # noqa: BLE001
+            # Broad for `ClockState.sample`'s reasons: a missing pynvml is a
+            # ModuleNotFoundError and a restricted container raises NVML's own
+            # family. Neither may stop the run; the memory clock is a control
+            # and V6 reads UNKNOWN when nothing carried one.
+            self._handle = None
+
+    def __call__(self) -> float:
+        if self._handle is None or self._get is None:
+            return 0.0
+        try:
+            return float(self._get(self._handle, self._which))
+        except Exception:                               # noqa: BLE001
+            return 0.0
+
+    def close(self) -> None:
+        try:
+            if self._handle is not None:
+                self._pynvml.nvmlShutdown()
+        except Exception:                               # noqa: BLE001
+            pass
+
+
+def build_ladder(cfg, args, treads):
+    """One set of tensors for the whole arm, built once and reused everywhere.
+
+    THE REASON THIS IS NOT A PER-CELL BUILD. "The same kernel over the same
+    bytes in every state" is the arm's central control, and built once it is
+    true by construction rather than by a comparison of shapes afterwards.
+    `make_inputs` caches weights on (model, dtype, seed, device, scale), so the
+    2.82 GB expert set is drawn once and every tread's activations point at it;
+    the activations themselves are 8 MB at the deepest tread.
+    """
+    from vllm.model_executor.layers.fused_moe.activation import MoEActivation
+
+    from moe.baselines._framework_config import vllm_call_kwargs
+    from moe.reference.torch_ref import make_inputs
+    from moe.spec import BenchSpec, RoutingSpec
+
+    built = {}
+    for tread in treads:
+        rows = tread * PINNED["BLOCK_SIZE_M"]
+        tokens = SWEEP.tokens_for_rows(cfg, rows)
+        spec = BenchSpec(cfg, num_tokens=tokens, dtype=args.dtype,
+                         routing=RoutingSpec("uniform", 0.0), seed=args.seed)
+        x, weights = make_inputs(spec, device="cuda")
+        ids = SWEEP.balanced_ids(cfg, tokens, "cuda")
+        import torch
+        w = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
+                       device="cuda")
+        kw = vllm_call_kwargs(spec)
+        kw["activation"] = MoEActivation(kw["activation"])
+        built[tread] = (rows, tokens, x, weights, ids, w, kw)
+    return built
+
+
+def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None,
+            locker: ClockLock | None = None) -> list[Row]:
+    """The metered part. Appends every row as it lands, so aborting keeps it.
+    In lock mode `locker` locks each state's clock; the CALLER holds it open
+    and so owns the reset."""
+    import torch
+    from vllm.model_executor.layers.fused_moe import fused_experts
+
+    cache_root.mkdir(parents=True, exist_ok=True)
+    os.environ["TRITON_CACHE_DIR"] = str(cache_root)
+    # THE PIN IS VERIFIED, NOT ASSUMED, at every one of the three sites that
+    # enters it. `SWEEP.find_override()` gives the hook and nothing more:
+    # entering a context and assuming it took is how MOE_FORCE_TILE came to be
+    # set for a whole session with nothing reading it, and this arm's whole
+    # reason for pinning GROUP_SIZE_M=16 is that it is the swizzle the published
+    # alpha was fitted at. A silently unhonoured override leaves every page
+    # saying G=16 over a kernel that ran vLLM's own choice.
+    # `forcing_tile_config` asks `get_config()` back after entering and raises
+    # `ForceTileNotHonoured` when the answer is not what was asked, and it is
+    # this repository's own guard: its docstring names the case of an arm that
+    # runs ONE setting and so cannot prove the pin by counting Triton artefacts
+    # the way `block_m_crossing_sweep` gate 0 does. This arm runs one setting.
+    print(f"override hook: {FC.bindings_of('override_config')[0].__name__}"
+          ".override_config, verified through get_config() at every entry")
+    print(f"triton cache:  {cache_root} (fresh for this run)")
+
+    reference_clock, clock_source = SWEEP.reference_clock_mhz()
+    print("reference clock: "
+          + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
+             else f"NOT RESOLVED ({clock_source}); every row's LEVEL verdict "
+                  "will be None, which excludes nothing here because LEVEL "
+                  "never excludes anything here"))
+
+    T.require_cuda()
+    treads = list(range(1, args.treads + 1))
+
+    # WHAT IS ALREADY ON DISK. A resumed 40-minute arm that re-measured every
+    # cell would double every row in the file and the medians would be taken
+    # over two thermal histories with no column saying so.
+    done = read_rows(csv_path)
+    have = {(r.repeat, row_state(r), r.tiles)
+            for r in done if r.status == "ok"}
+    if have:
+        print(f"resuming: {len(have)} cells already on disk in {csv_path}")
+
+    built = build_ladder(cfg, args, treads)
+    read = T.nvml_clock_reader(torch.cuda.current_device())
+    mem_read = _MemClockReader(torch.cuda.current_device())
+    flusher = T.L2Flusher(T.flush_mb_for_device())
+
+    # THE BURST SHAPE IS SIZED ONCE, FOR THE WHOLE ARM, AT FULL DUTY. Sized per
+    # state it would be a second thing that moves with the clock: a faster clock
+    # is a shorter call, a shorter call is more calls per burst, and more calls
+    # per burst is a smaller share of one discarded lead. V2 reads the shape off
+    # the rows precisely because it must be the same in every state.
+    shape: dict[int, tuple[int, int, float]] = {}
+    observed: dict | None = None
+    print("\nsizing the burst at full duty, once, for every tread:")
+    for tread in treads:
+        _rows, tokens, x, weights, ids, w, kw = built[tread]
+        call = SWEEP._make_call(fused_experts, x, weights, w, ids, kw)
+        with FC.forcing_tile_config(pinned_for(args.group_m)):
+            # WHAT vLLM SAYS IT WILL HAND THE KERNEL, read back INSIDE the
+            # context and carried onto every row. Until this line the tile
+            # columns were copies of `PINNED`, so V2 "read off the rows" was
+            # reading back what the module constant asserted and could not fail
+            # on a live run however the pin went.
+            if observed is None:
+                observed = dict(FC.vllm_forced_config() or {})
+            call()
+            torch.cuda.synchronize()
+            warm = T.warm_until(call, args.warm_ms, T._EventPairs,
+                                flush=flusher.flush, clock_read=read)
+        calls, bursts, kept = burst_shape(warm.per_call_ms, args.burst_ms,
+                                          args.target_ms)
+        # A RESUMED TREAD ADOPTS THE SHAPE ALREADY ON ITS ROWS. Re-sized from a
+        # fresh warm the second process could land one call either side of the
+        # rounding and V2 would then FAIL the whole arm for two burst shapes at
+        # one tread -- correctly, because the discarded lead would be a
+        # different share of two halves of one file. The recorded shape is the
+        # run's, so the resume reads it back rather than re-deriving it.
+        prior = {r.calls_per_burst for r in done
+                 if r.tiles == tread and r.status == "ok" and r.calls_per_burst}
+        adopted = ""
+        if len(prior) == 1 and prior != {calls}:
+            calls = prior.pop()
+            bursts = max(1, math.ceil(
+                T.iters_for(warm.per_call_ms, args.target_ms) / max(1, calls - 1)))
+            kept = bursts * (calls - 1)
+            adopted = "  [adopted from the rows already on disk]"
+        shape[tread] = (calls, bursts, warm.per_call_ms)
+        print(f"  tread {tread:2d}  T={tokens:5d}  {warm.per_call_ms:8.4f} ms/call "
+              f"-> {calls:3d} calls x {bursts} bursts = {kept} kept calls/trial"
+              + adopted)
+
+    rows: list[Row] = []
+    order = states_of(args)
+    try:
+        for repeat in range(args.repeats):
+            states = order if repeat % 2 == 0 else list(reversed(order))
+            for index, (duty, lock) in enumerate(states):
+                key = state_key(duty, lock)
+                said, cell = console_state(duty, lock)
+                # THE SETTLE IS A COST OF MEASURING, so a state with nothing
+                # left to measure does not pay it. Outside this test, a resume
+                # of a COMPLETE run still ran every settle -- 13 repeats x 4
+                # states x 10 s = 520 s of cadence -- to produce no new row.
+                todo = [t for t in treads if (repeat, key, t) not in have]
+                if not todo:
+                    print(f"\nrepeat {repeat} state {said}: already on disk, "
+                          "no settle and no cells")
+                    continue
+                if locker is not None:
+                    locker.lock(lock)
+                calls, bursts, per_call = shape[treads[len(treads) // 2]]
+                mid = built[treads[len(treads) // 2]]
+                settle_call = SWEEP._make_call(fused_experts, mid[2], mid[3],
+                                               mid[5], mid[4], mid[6])
+                print(f"\nrepeat {repeat} state {said}: settling "
+                      f"{args.settle_seconds:.0f} s at this cadence")
+                with FC.forcing_tile_config(pinned_for(args.group_m)):
+                    _settle(settle_call, duty=duty, calls=calls,
+                            per_call_ms=per_call, seconds=args.settle_seconds,
+                            flusher=flusher)
+                for tread in treads:
+                    if (repeat, key, tread) in have:
+                        continue
+                    rows_per_expert, tokens, x, weights, ids, w, kw = built[tread]
+                    calls, bursts, per_call = shape[tread]
+                    call = SWEEP._make_call(fused_experts, x, weights, w, ids, kw)
+                    try:
+                        with FC.forcing_tile_config(pinned_for(args.group_m)):
+                            t = time_duty(
+                                call, duty=duty, calls_per_burst=calls,
+                                bursts=bursts, trials=args.trials,
+                                warm_ms=args.warm_ms,
+                                l2_flush=not args.no_l2_flush,
+                                per_call_ms=per_call,
+                                reference_clock_mhz=reference_clock,
+                                clock_read=read, mem_read=mem_read,
+                                flusher=flusher,
+                                gap_basis=GAP_FROM_BURST if lock else GAP_FROM_SIZING)
+                        row = _row_from(t, args, duty, index, repeat, tread,
+                                        rows_per_expert, tokens, observed, lock=lock)
+                    except T.TimingRefused:
+                        # THE INSTRUMENT'S OWN REFUSAL IS NOT ONE CELL'S ERROR.
+                        # Filed as a failed row, the arm would walk the whole
+                        # design writing zeroes and exit through the gates as
+                        # though it had measured.
+                        raise
+                    except Exception as exc:            # noqa: BLE001
+                        row = _failed_row(args, duty, index, repeat, tread,
+                                          rows_per_expert, tokens,
+                                          f"{type(exc).__name__}: {exc}",
+                                          observed, lock=lock)
+                        print(f"  FAILED {said} tread={tread}: {row.detail}")
+                    rows.append(row)
+                    append_row(csv_path, row, prov)
+                    print(f"  {cell} tread {tread:2d} "
+                          f"{row.ms_p50:9.4f} ms  "
+                          f"clock {row.sm_clock_load_mhz or 0:7.1f} MHz  "
+                          f"power {row.power_w or 0:6.1f} W  "
+                          f"duty_seen {row.duty_achieved:5.3f}"
+                          + (f"  [{exclusion(row)}]" if exclusion(row) else ""))
+    finally:
+        mem_read.close()
+    # THE ROWS THE FIT READS ARE THE FILE'S, not this process's. A resume that
+    # scored only the cells it happened to measure would report a design four
+    # states wide as one, and V3 would refuse an arm that is in fact complete.
+    return read_rows(csv_path) if have else rows
+
+
+def _settle(fn, *, duty: float, calls: int, per_call_ms: float, seconds: float,
+            flusher) -> None:
+    """Run the state's cadence for `seconds` of wall, to move the power average.
+
+    No clock is read and nothing is recorded: this is the coarse transition
+    between two states, and the fine one is `_warm_at_duty` inside each cell,
+    which does settle on the clock. Kept separate because the two have different
+    time constants -- a board power average moves in tens of milliseconds and a
+    die temperature in tens of seconds -- and a single loop tuned for one of them
+    is wrong for the other.
+    """
+    import torch
+
+    gap_s = max(0.0, (calls * per_call_ms / 1000.0) * (1.0 / max(duty, 1e-6) - 1.0))
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        for _ in range(calls):
+            flusher.flush()
+            fn()
+        torch.cuda.synchronize()
+        if gap_s > 0:
+            time.sleep(gap_s)
+
+
+def observed_tile(observed: dict | None, pinned: dict | None = None) -> dict:
+    """The tile the ROWS carry: what `get_config()` reported, key by key.
+
+    THE ONE PLACE the row's tile columns are decided, so the difference between
+    "what this file asked for" and "what vLLM said it would run" exists at one
+    call site and not six. `PINNED` fills a key `get_config()` did not report,
+    and that is a fallback and not an equality: the fallback is reachable only
+    off the live path, because `forcing_tile_config` refuses to yield at all
+    when a forced key comes back changed or missing.
+    """
+    seen = dict(observed or {})
+    return {k: seen.get(k, v) for k, v in (pinned or PINNED).items()}
+
+
+def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
+              rows_per_expert, tokens, observed: dict | None = None,
+              lock: int | None = None) -> Row:
+    """One row. `state_index` is the state's own place in `states_of` and
+    `order_index` is where it fell in THIS repeat, which are different numbers
+    on the reversed repeats and are both worth keeping: the first identifies the
+    state, the second is what a reader checks a thermal trend against.
+
+    `observed` is what `get_config()` reported inside the pin, so V2 reads a
+    kernel's tile back off the rows rather than reading back `PINNED`."""
+    tile = observed_tile(observed, pinned_for(args.group_m))
+    return Row(
+        duty_requested=duty, duty_achieved=t.duty_achieved,
+        state_index=states_of(args).index((float(duty), lock)),
+        repeat=repeat, order_index=index, model=args.model, dtype=args.dtype,
+        block_m=tile["BLOCK_SIZE_M"], block_n=tile["BLOCK_SIZE_N"],
+        block_k=tile["BLOCK_SIZE_K"], group_m=tile["GROUP_SIZE_M"],
+        num_warps=tile["num_warps"], num_stages=tile["num_stages"],
+        tiles=tread, rows_per_expert=rows_per_expert, tokens=tokens,
+        calls_per_burst=t.calls_per_burst, bursts=t.bursts, trials=t.trials,
+        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std, samples=t.samples,
+        burst_ms=t.burst_ms, gap_ms=t.gap_ms, head_ms=t.head_ms,
+        tail_ms=t.tail_ms, within_burst_ok=t.within_burst_ok,
+        sm_clock_load_mhz=t.sm_clock_load_mhz,
+        sm_clock_start_mhz=t.sm_clock_start_mhz,
+        sm_clock_end_mhz=t.sm_clock_end_mhz,
+        clock_samples_mhz=" ".join(f"{c:.0f}" for c in t.clock_samples_mhz),
+        clock_samples=len(t.clock_samples_mhz), clock_source=t.clock_source,
+        clock_level_ok=t.clock_level_ok, clock_level_side=t.clock_level_side,
+        clock_drift_ok=t.clock_drift_ok,
+        clock_drift_direction=t.clock_drift_direction,
+        reference_clock_mhz=t.reference_clock_mhz, power_w=t.power_w,
+        mem_clock_mhz=t.mem_clock_mhz, host_bound=t.host_bound,
+        host_enqueue_ms=t.host_enqueue_ms,
+        host_backlog_iters=t.host_backlog_iters, warmup_ms=t.warmup_ms,
+        l2_flush=t.l2_flush, status="ok", detail=t.clock_note,
+        instrument=instrument_of(args), clock_lock_mhz=lock)
+
+
+def _failed_row(args, duty, index, repeat, tread, rows_per_expert, tokens,
+                detail: str, observed: dict | None = None,
+                lock: int | None = None) -> Row:
+    tile = observed_tile(observed, pinned_for(args.group_m))
+    return Row(
+        duty_requested=duty, duty_achieved=0.0,
+        state_index=states_of(args).index((float(duty), lock)), repeat=repeat,
+        order_index=index, model=args.model, dtype=args.dtype,
+        block_m=tile["BLOCK_SIZE_M"], block_n=tile["BLOCK_SIZE_N"],
+        block_k=tile["BLOCK_SIZE_K"], group_m=tile["GROUP_SIZE_M"],
+        num_warps=tile["num_warps"], num_stages=tile["num_stages"],
+        tiles=tread, rows_per_expert=rows_per_expert, tokens=tokens,
+        calls_per_burst=0, bursts=0, trials=args.trials, ms_p50=0.0, ms_min=0.0,
+        ms_stdev=0.0, samples=0, burst_ms=0.0, gap_ms=0.0, head_ms=None,
+        tail_ms=None, within_burst_ok=None, sm_clock_load_mhz=None,
+        sm_clock_start_mhz=None, sm_clock_end_mhz=None, clock_samples_mhz="",
+        clock_samples=0, clock_source=T.CLOCK_SOURCE_NONE, clock_level_ok=None,
+        clock_level_side="", clock_drift_ok=None, clock_drift_direction="",
+        reference_clock_mhz=None, power_w=None, mem_clock_mhz=None,
+        host_bound=None, host_enqueue_ms=None, host_backlog_iters=None,
+        warmup_ms=0.0, l2_flush=not args.no_l2_flush, status="failed",
+        detail=detail, instrument=instrument_of(args), clock_lock_mhz=lock)
+
+
+# --------------------------------------------------------------------------
+# Persistence. A module-level appender and NOT a `Store`: the Store tripwire in
+# tests/test_shell_gates.py pins the set of Store classes to three, and a fourth
+# would go red in another slice's file. The header check it exists to install is
+# implemented here all the same, because the defect is the missing check and not
+# the missing class name.
+# --------------------------------------------------------------------------
+
+ROW_FIELDS = list(Row.__dataclass_fields__)
+
+
+class SchemaCollision(SystemExit):
+    """A cells.csv on disk whose header is not the one these rows are written to.
+
+    A `SystemExit` carrying REFUSED, so an uncaught one exits 2 and not the 1
+    that means CLAIM_FAIL. `DictWriter` writes the fieldnames it was given and
+    never looks at the file, so a wider row appended under a narrower header
+    shifts every field past the first difference: `clock_drift_ok` would then be
+    read out of `clock_level_side`, and a FAILED drift -- the one verdict in this
+    file that excludes a row -- would come back None, which every gate keeps.
+    """
+
+    code = exit_codes.REFUSED
+
+
+def append_row(path: Path, row: Row, prov=None) -> None:
+    """Append one row, flushed, after checking the header already on disk."""
+    fields = list(ROW_FIELDS)
+    if prov is not None:
+        fields += list(SWEEP.PROVENANCE_COLUMNS)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fresh = not path.exists() or path.stat().st_size == 0
+    if not fresh:
+        with path.open(newline="") as fh:
+            on_disk = next(csv.reader(fh), [])
+        if on_disk and on_disk != fields:
+            added = [c for c in fields if c not in on_disk]
+            gone = [c for c in on_disk if c not in fields]
+            raise SchemaCollision(
+                f"{path} already holds a header this run would not write.\n"
+                f"  columns this run adds:   {added or 'none'}\n"
+                f"  columns on disk and not here: {gone or 'none'}\n"
+                "Appending under it would shift every field past the first "
+                "difference. Use a fresh --out or --run-id.")
+    payload = asdict(row)
+    if prov is not None:
+        payload.update(prov.as_columns())
+    with path.open("a", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
+        if fresh:
+            writer.writeheader()
+        writer.writerow(payload)
+        fh.flush()
+
+
+_OPT_FLOAT = {"head_ms", "tail_ms", "sm_clock_load_mhz", "sm_clock_start_mhz",
+              "sm_clock_end_mhz", "reference_clock_mhz", "power_w",
+              "mem_clock_mhz", "host_enqueue_ms", "host_backlog_iters",
+              "clock_lock_mhz"}
+_OPT_BOOL = {"within_burst_ok", "clock_level_ok", "clock_drift_ok", "host_bound"}
+
+
+def _opt_float(text: str) -> float | None:
+    return float(text) if text not in ("", "None") else None
+
+
+def _opt_bool(text: str) -> bool | None:
+    if text in ("", "None"):
+        return None
+    return text.lower() in ("true", "1")
+
+
+def read_rows(path: Path) -> list[Row]:
+    """Read rows BY HEADER NAME, so a file written by an older column set comes
+    back with those fields absent rather than defaulted to 0 or False."""
+    if not path.exists():
+        return []
+    out = []
+    with path.open(newline="") as fh:
+        for raw in csv.DictReader(fh):
+            kwargs = {}
+            for name, spec in Row.__dataclass_fields__.items():
+                if name not in raw:
+                    continue
+                text = raw[name]
+                if name in _OPT_FLOAT:
+                    kwargs[name] = _opt_float(text)
+                elif name in _OPT_BOOL:
+                    kwargs[name] = _opt_bool(text)
+                elif spec.type in ("int",):
+                    kwargs[name] = int(float(text or 0))
+                elif spec.type in ("float",):
+                    kwargs[name] = float(text or 0.0)
+                elif spec.type in ("bool",):
+                    kwargs[name] = str(text).lower() in ("true", "1")
+                else:
+                    kwargs[name] = text
+            out.append(Row(**kwargs))
+    return out
+
+
+# --------------------------------------------------------------------------
+# The self-test: planted worlds whose answer is known.
+# --------------------------------------------------------------------------
+
+#: The clock a planted world's duty states sit at, MHz. NOT a calibration and
+#: not this repository's H200: a set of four numbers spanning 1.30x, chosen so
+#: the planted design clears its own V1 threshold, so that every world below
+#: fails for the reason it was planted to fail for and not for a separation the
+#: planter forgot to give it.
+PLANTED_STATE_MHZ = (1500.0, 1650.0, 1800.0, 1950.0)
+PLANTED_REFERENCE_MHZ = 1650.0
+PLANTED_MEM_MHZ = 2619.0
+
+
+def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
+               treads: int = DEFAULT_TREADS, repeats: int = DEFAULT_REPEATS,
+               a_ms: float = 0.1936, b_ms: float = 0.5559,
+               eps_a: float | None = None, off_law=None,
+               jitter: float = 0.0, seed: int = 7,
+               block_m_at=None, drift_at=(), host_at=(),
+               level_at=None, mem_at=None, burst_moves_at=(),
+               calls_per_burst: int = 24, locks=None) -> list[Row]:
+    """Rows from a stated law: `ms(n, f) = a (f_ref / f) ** eps_a + b n (f_ref / f) ** eps`,
+    `eps_a` defaulting to `eps` (one elasticity for the whole call). An
+    intercept with its own `eps_a` is still ON the law: every tread's
+    sensitivity lies on a' + b' n and the claim's line returns `eps`.
+
+    `off_law` plants treads OFF it, {tread: e}: that tread's whole call is the
+    law's time at `f_ref` scaled by `(f_ref / f) ** e`, so it reads a per-call
+    elasticity of exactly `e` whatever the other treads do. That is the
+    2026-09-21 card's tread 1, 0.17 beside 1.04-1.11 deeper, which no `eps_a`
+    reproduces: at the planted a and b an intercept that pulled tread 1 down to
+    0.17 would pull tread 2 far below 1.
+
+    THE LAW IS THE ONLY SOURCE OF TIME IN THESE ROWS, which is what makes the
+    self-test a recovery test rather than a smoke test: the estimator either
+    returns `eps` or it does not, and `SELF_TEST_WORLDS` registers which.
+
+    `drift_at`, `host_at` and `level_at` plant the three verdicts separately, on
+    purpose: LEVEL on either side must be KEPT and DRIFT must be EXCLUDED, and a
+    planter that only ever put them on the same row could not tell a counter that
+    filters on LEVEL from one that filters on DRIFT.
+
+    `locks` plants LOCK MODE: state i carries lock `locks[i]` and reads back
+    `mhz[i]`, so a `mhz` below its lock is a lock the card could not hold.
+    """
+    rng = random.Random(seed)
+    level_at = level_at or {}
+    block_m_at = block_m_at or {}
+    off_law = off_law or {}
+    out = []
+    for repeat in range(repeats):
+        for index, duty in enumerate(duties):
+            f = mhz[index % len(mhz)]
+            for tread in range(1, treads + 1):
+                scale_b = (PLANTED_REFERENCE_MHZ / f) ** eps
+                scale_a = (PLANTED_REFERENCE_MHZ / f) ** (eps if eps_a is None else eps_a)
+                base = a_ms * scale_a + b_ms * tread * scale_b
+                if tread in off_law:
+                    base = ((a_ms + b_ms * tread)
+                            * (PLANTED_REFERENCE_MHZ / f) ** off_law[tread])
+                ms = base * (1.0 + rng.gauss(0.0, jitter) if jitter else 1.0)
+                key = (index, tread, repeat)
+                drift = (key in drift_at)
+                samples = [f] * 6 if not drift else [f, f, f * 0.80]
+                side = level_at.get(key, T.level_side(f, PLANTED_REFERENCE_MHZ) or "")
+                level_ok = T.clock_flags(f, samples[0], samples[-1],
+                                         PLANTED_REFERENCE_MHZ)[0]
+                head = ms
+                tail = ms * (1.20 if key in burst_moves_at else 1.0)
+                out.append(Row(
+                    duty_requested=duty, duty_achieved=duty, state_index=index,
+                    repeat=repeat, order_index=index, model=DEFAULT_MODEL,
+                    dtype=DEFAULT_DTYPE,
+                    block_m=block_m_at.get(key, PINNED["BLOCK_SIZE_M"]),
+                    block_n=PINNED["BLOCK_SIZE_N"],
+                    block_k=PINNED["BLOCK_SIZE_K"],
+                    group_m=PINNED["GROUP_SIZE_M"],
+                    num_warps=PINNED["num_warps"],
+                    num_stages=PINNED["num_stages"], tiles=tread,
+                    rows_per_expert=tread * PINNED["BLOCK_SIZE_M"],
+                    tokens=tread * PINNED["BLOCK_SIZE_M"] * 4,
+                    calls_per_burst=calls_per_burst, bursts=18,
+                    trials=DEFAULT_TRIALS, ms_p50=ms, ms_min=ms * 0.99,
+                    ms_stdev=ms * 0.005, samples=300, burst_ms=40.0,
+                    gap_ms=40.0 * (1.0 / duty - 1.0), head_ms=head,
+                    tail_ms=tail,
+                    within_burst_ok=abs(tail - head) / head <= T.DRIFT_FRACTION,
+                    sm_clock_load_mhz=f, sm_clock_start_mhz=samples[0],
+                    sm_clock_end_mhz=samples[-1],
+                    clock_samples_mhz=" ".join(f"{c:.0f}" for c in samples),
+                    clock_samples=len(samples),
+                    clock_source=T.CLOCK_SOURCE_NVML, clock_level_ok=level_ok,
+                    clock_level_side=side,
+                    clock_drift_ok=not drift,
+                    clock_drift_direction=(T.DRIFT_DOWN if drift else ""),
+                    reference_clock_mhz=PLANTED_REFERENCE_MHZ, power_w=690.0,
+                    mem_clock_mhz=(mem_at.get(key, PLANTED_MEM_MHZ)
+                                   if mem_at else PLANTED_MEM_MHZ),
+                    host_bound=(key in host_at), host_enqueue_ms=0.5,
+                    host_backlog_iters=40.0, warmup_ms=200.0, l2_flush=True,
+                    clock_lock_mhz=locks[index % len(locks)] if locks else None))
+    return out
+
+
+@dataclass(frozen=True)
+class PlantedWorld:
+    """One world, its registered verdicts, and the elasticity it must recover."""
+
+    name: str
+    why: str
+    rows: list[Row]
+    expect: dict[str, str]
+    #: The planted elasticity, or None where the world is not about recovery.
+    recovers: float | None = None
+    tolerance: float = 0.05
+
+
+def _thin_cell_sag_rows() -> list[Row]:
+    """The `thin-cell-sag` world's rows: DRIFT keeps 5 of duty 1.0 tread 8's 13
+    repeats, and one of the five sagged 20% inside its bursts and reads 5% slow."""
+    rows = plant_rows(eps=0.05, jitter=0.004,
+                      drift_at={(0, 8, r) for r in range(5, DEFAULT_REPEATS)},
+                      burst_moves_at={(0, 8, 0)})
+    for r in rows:
+        if (r.state_index, r.tiles, r.repeat) == (0, 8, 0):
+            r.ms_p50 *= 1.05
+    return rows
+
+
+def self_test_worlds(args) -> list[PlantedWorld]:
+    """Every planted world. EIGHT of the thirteen are REFUSALS: a scorer that has
+    only ever seen a clean design has never been shown to refuse one.
+
+    The count is not carried in prose anywhere else IN THIS FILE, and that
+    sentence stood here while `--self-test`'s own argparse help said eleven and
+    six: a fix that went to one of the three places a count was typed. `self_test`
+    prints `len()` of this list and counts the refusals off the `why` strings,
+    because two hand-maintained counts of one set is how this file's own
+    docstring came to say nine where there were eleven. THE THIRD PLACE IS NOT
+    IN THIS FILE: `arm_offgpu_gates elasticity-m32-n64-g16` in
+    scripts/h200_gaps_session.sh advertises both counts to the operator before
+    the pod is rented, and tests/test_h200_gaps_session.py re-derives them from
+    this list rather than trusting that line."""
+    duties = list(DUTY_LEVELS)
+    n_states = len(duties)
+    return [
+        PlantedWorld(
+            "traffic", "elasticity 0.05: the measured time is nearly all "
+            "traffic. RAW-STANDS, so C2 PASSES and the study's raw readings "
+            "hold.",
+            plant_rows(eps=0.05, jitter=0.004),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, 0.05),
+        PlantedWorld(
+            "clock-carries", "elasticity 0.60: past the upper edge. C2 FAILS, "
+            "and that FAIL is the finding -- C3's DIRECTION is retracted. THE "
+            "WORLD THAT MAKES C2'S FAIL BRANCH REACHABLE.",
+            plant_rows(eps=0.60, jitter=0.004),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": FAIL}, 0.60),
+        PlantedWorld(
+            "unregistered-gap", "elasticity 0.32: inside the gap the analysis "
+            "never stopped in. C1 PASSES -- the design resolved WHICH world -- "
+            "and C2 FAILS with 'no registered consequence' rather than a "
+            "sentence written afterwards.",
+            plant_rows(eps=0.32, jitter=0.004),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": FAIL}, 0.32),
+        PlantedWorld(
+            "straddling", "elasticity 0.25 at ten times the noise: the interval "
+            "crosses the lower edge. C1 FAILS, which is a result about the "
+            "DESIGN -- and C2's FAIL then reads 'not shown', not 'shown false'. "
+            "THE WORLD THAT MAKES C1'S FAIL BRANCH REACHABLE.",
+            plant_rows(eps=0.25, jitter=0.04, seed=11),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": FAIL, "C2": FAIL}, None),
+        PlantedWorld(
+            "one-clock", "A REFUSAL: four duty states that all settled at the "
+            "same clock. The elasticity is undefined and V1 says so; without "
+            "this gate the arm would report a slope over nothing.",
+            plant_rows(eps=0.20, mhz=(1650.0,) * n_states),
+            # V7 is UNKNOWN and not PASS here, and that is the gate working:
+            # with every state at one clock there is no slope and so no
+            # interval, and a gate that answered PASS over no interval would be
+            # reporting its prior.
+            {"V0": PASS, "V1": FAIL, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": UNKNOWN, "C1": FAIL, "C2": FAIL},
+            None),
+        PlantedWorld(
+            "two-tiles", "A REFUSAL: one row ran a different BLOCK_M. V2 reads "
+            "the tile off the rows and fails; a slope across states that ran "
+            "different kernels compares kernels, not clocks.",
+            plant_rows(eps=0.05, jitter=0.004, block_m_at={(0, 1, 0): 64}),
+            {"V0": PASS, "V1": PASS, "V2": FAIL, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, 0.05),
+        PlantedWorld(
+            "thin", "A REFUSAL: two repeats and three treads. V3 fails on "
+            "depth; the bootstrap over two repeats has three distinct draws and "
+            "an interval from it is a decoration.",
+            plant_rows(eps=0.05, treads=3, repeats=2),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": FAIL, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
+        PlantedWorld(
+            "drifting", "A REFUSAL: a third of the rows drifted. V4 fails; what "
+            "is left is a subsample the card chose. The DRIFT rows are the ones "
+            "excluded, and the LEVEL rows beside them are NOT.",
+            plant_rows(eps=0.05, jitter=0.004,
+                       drift_at={(i, t, r) for i in range(n_states)
+                                 for t in range(1, DEFAULT_TREADS + 1)
+                                 for r in range(DEFAULT_REPEATS)
+                                 if (t + r) % 3 == 0}),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": FAIL,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
+        PlantedWorld(
+            "sagging-burst", "A REFUSAL: the clock held BETWEEN bursts and sagged "
+            "20% INSIDE them. Every DRIFT verdict passes and the per-call time "
+            "is still an average over two operating points; V5 is the only gate "
+            "that can see it.",
+            plant_rows(eps=0.05, jitter=0.004,
+                       burst_moves_at={(0, 1, 0), (1, 2, 1), (2, 3, 2)}),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": FAIL, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
+        PlantedWorld(
+            "thin-cell-sag", "A REFUSAL: one row sagged inside its bursts in a "
+            "cell DRIFT thinned to 5 of 13 repeats. One crossing row is inside "
+            "V5_ROW_BUDGET and is not half the cell, but it is half or more of "
+            "what the cell draws in 11% of the interval's bootstrap draws, so it "
+            "can set an interval edge while the point estimate stands. THE WORLD "
+            "THAT MAKES V5's bootstrap share clause reachable: every other V5 "
+            "refusal fails on the row count or the point-estimate share.",
+            _thin_cell_sag_rows(),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": FAIL, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
+        PlantedWorld(
+            "memory-clock-moved", "A REFUSAL: the HBM clock tracked the duty "
+            "cycle. V6 fails; a slope fitted across states whose memory clock "
+            "moved is a blend of issue rate and bandwidth and is not this arm's "
+            "quantity.",
+            plant_rows(eps=0.05, jitter=0.004,
+                       mem_at={(i, t, r): PLANTED_MEM_MHZ + 200.0 * i
+                               for i in range(n_states)
+                               for t in range(1, DEFAULT_TREADS + 1)
+                               for r in range(DEFAULT_REPEATS)}),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": FAIL, "V7": PASS, "C1": PASS, "C2": PASS}, None),
+        PlantedWorld(
+            "level-both-sides", "NOT a refusal, and that is the point. One row "
+            "planted LEVEL HIGH, one LEVEL LOW and one DRIFTING, in one state. "
+            "Both LEVEL rows are KEPT and the DRIFT row is EXCLUDED; a scorer "
+            "that filtered on LEVEL would drop the boosted rows, which at a duty "
+            "cycle below 1.0 are the experiment.",
+            plant_rows(eps=0.05, jitter=0.004,
+                       level_at={(0, 1, 0): T.LEVEL_HIGH, (0, 2, 0): T.LEVEL_LOW},
+                       drift_at={(0, 3, 0)}),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, 0.05),
+        PlantedWorld(
+            "slower-at-speed", "A REFUSAL, and the one that was scored as the "
+            "pre-registered PASS until V7 existed: elasticity -0.35, a call "
+            "that got SLOWER as the clock rose at a byte-identical kernel. "
+            "RAW-STANDS is OPEN below zero, so C1 and C2 both read PASS and the "
+            "page would print 'the clock is not what is wrong with alpha' over "
+            "a run whose clock channel is broken. V7 is the only gate that can "
+            "see it. THE WORLD THAT MAKES V7'S FAIL BRANCH REACHABLE.",
+            plant_rows(eps=-0.35, jitter=0.004),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": FAIL, "C1": PASS, "C2": PASS},
+            -0.35),
+    ]
+
+
+def _self_test_args(args):
+    """The planted worlds are scored against the PLANTED design, not the CLI's.
+
+    `--repeats 3` on the command line must not move the V1 threshold the planted
+    worlds were registered against, or the registration would be a function of
+    how the self-test was invoked.
+    """
+    class _P:
+        pass
+    p = _P()
+    p.duty = list(DUTY_LEVELS)
+    p.treads = DEFAULT_TREADS
+    p.repeats = DEFAULT_REPEATS
+    p.min_clock_ratio = getattr(args, "min_clock_ratio", None)
+    return p
+
+
+def self_test(args) -> int:
+    """Plant every world, score it, and name the rows that disagree.
+
+    Five VALIDITY gates over the worlds, not one: an estimator that recovers a
+    planted number, a scorer that reproduces a planted verdict, a design that
+    resolves, and PROOF THAT EACH CLAIM GATE CAN FAIL are four different
+    statements, and one gate over all of them cannot say which broke.
+    """
+    worlds = self_test_worlds(args)
+    refusals = sum(1 for w in worlds if w.why.startswith("A REFUSAL"))
+    # COUNTED OFF THE LIST, never typed: the line that stood here said eleven
+    # and six while the docstring one function up said nine and four, and both
+    # were describing the same tuple.
+    print(f"SELF TEST. {len(worlds)} planted worlds; {refusals} of them are "
+          "refusals, because a scorer that\nhas only ever seen a clean design "
+          "has never been shown to refuse one.\n")
+    planted = _self_test_args(args)
+    threshold, source = registered_clock_ratio(planted)
+    verdicts_ok = True
+    recovered_ok = True
+    resolves_ok = True
+    seen_values: dict[str, float] = {}
+    claim_fails: dict[str, bool] = {"C1": False, "C2": False}
+    for world in worlds:
+        est = fit(world.rows, draws=args.draws, seed=args.seed)
+        gates = gates_for(world.rows, planted, threshold, source, est)
+        got = {g.token: g.verdict for g in gates}
+        print(f"  {world.name}: {world.why}")
+        print(f"    fit {est.value if est.value is None else round(est.value, 4)}"
+              f"  interval "
+              + (f"[{est.lo:.4f}, {est.hi:.4f}]" if est.lo is not None else "none"))
+        for token in sorted(world.expect):
+            good = got.get(token) == world.expect[token]
+            verdicts_ok = verdicts_ok and good
+            if not good:
+                print(f"    [FAIL] {token} expected {world.expect[token]} got "
+                      f"{got.get(token)}")
+        if all(got.get(k) == v for k, v in world.expect.items()):
+            print("    [PASS] every registered verdict reproduced")
+        for token in claim_fails:
+            if got.get(token) == FAIL:
+                claim_fails[token] = True
+        if world.recovers is not None:
+            if est.value is None or abs(est.value - world.recovers) > world.tolerance:
+                recovered_ok = False
+                print(f"    [FAIL] planted {world.recovers} not recovered "
+                      f"({est.value})")
+            else:
+                print(f"    [PASS] planted {world.recovers} recovered as "
+                      f"{est.value:.4f}")
+                seen_values[world.name] = est.value
+            if est.half_width is not None and est.half_width > RESOLUTION_TARGET:
+                resolves_ok = False
+        print()
+
+    distinct = len({round(v, 3) for v in seen_values.values()})
+    gates = [
+        Gate(VALIDITY, "S1", "the scorer reproduces every registered verdict in "
+             "every planted world",
+             PASS if verdicts_ok else FAIL, "every planted row above",
+             "all rows agree",
+             "everything this file computes: a scorer that cannot tell a "
+             "one-clock design from a separated one cannot gate a session"),
+        Gate(VALIDITY, "S2", "the estimator RECOVERS the planted elasticity",
+             PASS if recovered_ok else FAIL,
+             f"{len(seen_values)} worlds with a planted value",
+             "within the world's stated tolerance",
+             "the claim: an estimator never run against a known answer is an "
+             "assertion"),
+        Gate(VALIDITY, "S3", "and a different planted elasticity gives a "
+             "different answer",
+             PASS if distinct >= 2 else FAIL,
+             f"{distinct} distinct recovered values over "
+             f"{len(seen_values)} worlds",
+             ">= 2 distinct values",
+             "the claim: an estimator that returns one number in every world is "
+             "reporting its prior"),
+        Gate(VALIDITY, "S4", "the design RESOLVES: the interval is inside the "
+             "registered target on the recovery worlds",
+             PASS if resolves_ok else FAIL,
+             "every recovery world's half-width",
+             f"<= {RESOLUTION_TARGET:.3f}",
+             "C1, which would then fail on every real run for a reason the "
+             "planted worlds could have shown first"),
+        Gate(VALIDITY, "S5", "each CLAIM gate FAILS in at least one planted world",
+             PASS if all(claim_fails.values()) else FAIL,
+             "; ".join(f"{k} reached FAIL: {v}" for k, v in sorted(claim_fails.items())),
+             "both C1 and C2 reach FAIL somewhere",
+             "the claims: a gate no planted world can fail is satisfiable by a "
+             "gate that fails nowhere, which is not the same as one that passes"),
+    ]
+    for gate in gates:
+        for line in gate.render():
+            print(line)
+        print()
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
+
+
+# --------------------------------------------------------------------------
+# Plumbing.
+# --------------------------------------------------------------------------
+
+def git_check_ignore(path: Path) -> bool | None:
+    """Would git silently drop this path. True, False, or None for CANNOT ASK.
+
+    Run rather than reasoned about, and the third value is the point: `git
+    check-ignore` returns 128 for a path outside the work tree, which is the POD
+    DEFAULT, and reading that as "tracked" is how a gate came to print PASS on a
+    machine where it had not been able to ask.
+    """
+    try:
+        done = subprocess.run(["git", "check-ignore", "-q", str(path)],
+                              cwd=Path(__file__).resolve().parents[1],
+                              capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode in (0, 1):
+        return done.returncode == 0
+    return None
+
+
+def git_visibility(path: Path) -> str:
+    answer = git_check_ignore(path)
+    if answer is None:
+        return "git could not be asked (rc 128 is a path outside the work tree)"
+    return "IGNORED by git" if answer else "tracked"
+
+
+def resolve_card(args) -> str:
+    if getattr(args, "card", None):
+        return str(args.card)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(torch.cuda.current_device())
+            if name:
+                return str(name)
+    except Exception:                                   # noqa: BLE001
+        pass
+    return NO_CARD
+
+
+#: The prefix of the weaker identity recorded when a device is attached and its
+#: UUID cannot be read. `private_weight_reference.NO_UUID_PREFIX`'s spelling,
+#: so the two arms' DEVICE files read alike.
+NO_UUID_PREFIX = "no-uuid:"
+
+#: The file beside CARD that holds the UUID of the card the cells came from.
+DEVICE_FILE = "DEVICE"
+
+
+def device_identity() -> str:
+    """The attached GPU's UUID; `no-uuid:<name>` when a device is attached and
+    its UUID cannot be read; "" with no device at all.
+
+    MIRRORED FROM `private_weight_reference.device_identity`, not imported:
+    that module imports this one for `time_duty`, and the ratio arm's whole
+    module is not something the clock arm should load to read one property.
+    Read off the CURRENT device, as `resolve_card` names it, where the ratio
+    arm reads device 0; on a one-card pod they are the same card.
+    """
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return ""
+        index = torch.cuda.current_device()
+    except Exception:                                   # noqa: BLE001
+        return ""
+    try:
+        return str(torch.cuda.get_device_properties(index).uuid)
+    except Exception:                                   # noqa: BLE001
+        try:
+            name = torch.cuda.get_device_name(index)
+        except Exception:                               # noqa: BLE001
+            name = "unnamed"
+        return NO_UUID_PREFIX + str(name)
+
+
+def device_guard(out_dir: Path, identity: str) -> str:
+    """"" when the cells on disk were measured on THIS card (or none exist),
+    else why a resume here would pool two cards.
+
+    THE CARD STAMP NAMES A MODEL OF CARD, and every H200 reports "NVIDIA H200".
+    The run id is card slug + knobs + session tag, identical on any two H200
+    pods, and /workspace is shared between rentals, so a --resume on a
+    replacement pod lands in the first pod's directory, and the resume key
+    (repeat, duty, tread) lets the new card fill the holes in the old card's
+    ladder: one elasticity from two governors. The UUID names the card.
+
+    `private_weight_reference.device_guard`'s rule, kept identical so the two
+    arms of one chain refuse the same resumes. Writes DEVICE on first use. A
+    directory with cells.csv and no DEVICE file is REFUSED, and that is the
+    decision for a stamp written before 2026-09-22, which carries the card's
+    name and no UUID: the card those cells came from cannot be shown to be
+    this one. A directory with a CARD stamp and no cells has nothing to pool,
+    so it is stamped and measured. A `no-uuid:<name>` identity matches only
+    itself: on a torch with no UUID two pods of one card type CAN resume each
+    other, and the guard is then only as strong as the name.
+    """
+    marker = out_dir / DEVICE_FILE
+    has_cells = (out_dir / "cells.csv").exists()
+    recorded = marker.read_text().strip() if marker.exists() else None
+    fix = ("The chain passes --session-tag itself, so a new chain is a fresh "
+           "directory; by hand, use a fresh --session-tag, --run-id or --out.")
+    if recorded is None:
+        if has_cells:
+            return (f"{out_dir} holds cells.csv and no {DEVICE_FILE} file, so the "
+                    "card those cells came from is unknown (a CARD stamp names a "
+                    "model of card, which every H200 shares). Resuming would put "
+                    f"this card's cells into that ladder. {fix}")
+        if identity:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            marker.write_text(identity + "\n")
+        return ""
+    if not identity:
+        return (f"this card's UUID could not be read, and {out_dir} holds cells "
+                f"from {recorded}; a resume cannot be shown to be on the same "
+                f"card. {fix}")
+    if identity != recorded:
+        return (f"{out_dir} holds cells measured on {recorded} and this card is "
+                f"{identity}. An elasticity pooled over two cards' governors is "
+                f"not an elasticity. {fix}")
+    return ""
+
+
+def default_run_id(args) -> str:
+    """Card first, then every knob that changes what is MEASURED.
+
+    IN: the tile, the model, the dtype, the ladder depth, the duty list, the
+    repeats, and every timing knob (`--burst-ms`, `--target-ms`, `--trials`,
+    `--warm-ms`, `--settle-seconds`, the flush) because each of them changes the
+    milliseconds on the row.
+
+    OUT: `--draws`, `--seed-bootstrap` and `--min-clock-ratio`, which re-analyse
+    one set of cells, and `--out`, `--run-id`, `--dry-run`, `--self-test`. Two
+    analyses of one sweep belong in one directory.
+
+    LOCK MODE adds `lock` (the lock set) and keys `duty` on `--lock-duty`, so a
+    lock run and a duty run never share a directory, and a duty run's id is the
+    one it had before lock mode existed.
+    """
+    locks = [int(f) for f in (getattr(args, "lock_clocks", None) or [])]
+    return PV.run_id(
+        card=resolve_card(args),
+        model=args.model, dtype=args.dtype,
+        tile="_".join(f"{k}{v}" for k, v in sorted(pinned_for(args.group_m).items())),
+        treads=int(args.treads),
+        duty=[float(args.lock_duty)] if locks else [float(d) for d in args.duty],
+        repeats=int(args.repeats), burstms=float(args.burst_ms),
+        targetms=float(args.target_ms), trials=int(args.trials),
+        warmms=float(args.warm_ms), settle=float(args.settle_seconds),
+        l2flush=not bool(args.no_l2_flush), seed=int(args.seed),
+        # The session tag is in the key WHEN GIVEN, as the ratio arm's is, so
+        # a new session measures fresh and a resumed one resumes; a bare run's
+        # id is the id the same command produced before the knob existed.
+        **({"session": args.session_tag} if args.session_tag else {}),
+        **({"lock": locks} if locks else {}))
+
+
+def results_root() -> Path:
+    env = os.environ.get("MOE_RESULTS_DIR")
+    if env:
+        return Path(env)
+    workspace = Path(os.environ.get("WORKSPACE", "/workspace"))
+    if workspace.is_dir():
+        return workspace / "results"
+    return Path(__file__).resolve().parents[1] / "results"
+
+
+def off_lock_lines(rows, args) -> list[str]:
+    """LOCK MODE: every lock the card did not hold, BY NAME, and how many of
+    the planned locks the fit read. None in duty mode or when every lock held.
+
+    V0 and V4 COUNT the off-lock rows and V3 fails a lock ladder that lost
+    any planned lock, but a count is not a name. On a power-capped card
+    the top lock is the one at risk (the GH200's 1965 read ~1815 during R3's
+    bursts, 2026-09-25), and it can fail two ways that both need saying: at
+    every tread, which leaves the fit a ladder one lock short, or only at the
+    deep treads, where the call draws the most power, which can leave the page
+    VALID with those treads' slopes resting on the other locks.
+
+    EVERY ROW READ OFF ITS LOCK IS NAMED, SPLIT BY WHAT EXCLUDED IT (second
+    review, 2026-09-25). `exclusion` tests DRIFT and host-bound before off-lock,
+    and a cap pulling a lock down mid-burst is exactly what DRIFT flags, so on
+    the GH200's failure one lock's rows are dropped under two reasons. V0 and
+    V4 count each row once, under its first; the draft's line counted them all
+    as "excluded as off_lock" and put a second number on the page beside V4's.
+    """
+    locks = [int(f) for f in (getattr(args, "lock_clocks", None) or [])]
+    if not locks:
+        return []
+    every = sorted({r.tiles for r in rows})
+    kept_locks = {int(r.clock_lock_mhz) for r in kept_rows(rows) if r.clock_lock_mhz}
+    named = []
+    for lock in locks:
+        read = [r for r in rows if r.clock_lock_mhz and int(r.clock_lock_mhz) == lock
+                and r.sm_clock_load_mhz]
+        off = [r for r in read if off_lock(r)]
+        if not off:
+            continue
+        why: dict[str, int] = {}
+        for r in off:
+            why[exclusion(r)] = why.get(exclusion(r), 0) + 1
+        split = ", ".join(
+            [f"{why.pop(DROP_OFF_LOCK, 0)} excluded as {DROP_OFF_LOCK}"]
+            + [f"{n} already excluded as {k}" for k, n in sorted(why.items())])
+        mhz = statistics.median(r.sm_clock_load_mhz for r in off)
+        treads = sorted({r.tiles for r in off})
+        where = ("at every tread" if treads == every else
+                 f"at treads {', '.join(str(t) for t in treads)}")
+        named.append(
+            f"    lock {lock} MHz: {len(off)} of its {len(read)} rows read back "
+            f"more than {T.DRIFT_FRACTION:.0%} off it ({split}), median "
+            f"{mhz:.0f} MHz ({100 * abs(mhz - lock) / lock:.1f}% "
+            f"{'below' if mhz < lock else 'above'}), {where}")
+    if not named:
+        return []
+    return ["", "  LOCKS THE CARD DID NOT HOLD, those rows EXCLUDED and never fitted "
+            "(V0 and V4 count each once, under its first reason):", *named,
+            f"  THE FIT READ {len(kept_locks)} OF THE {len(locks)} PLANNED LOCKS. The "
+            "plan's lock span is the span ASKED for;",
+            "  the clock span per tread above and V1 are the span the fit saw, and "
+            "at a tread that lost",
+            "  a lock its slope rests on the others. The next run's locks come from "
+            "a short hold test",
+            "  per lock on this card at this duty."]
+
+
+def loose_lock_lines(rows, args) -> list[str]:
+    """LOCK MODE: every lock whose KEPT rows read back more than one
+    `LOCK_STEP_MHZ` step off it at some tread, by name, with those treads.
+    None in duty mode or when every lock held within a step.
+
+    Such rows are inside `timing.DRIFT_FRACTION`, so they are kept and fitted at
+    the clock read back, which does not bias the fit. But the page would call
+    the lock held, and on the Lambda H100 (2026-09-25) an 1800 MHz lock read
+    1770 at R3's G=2: 1.7% off, under the 5% rule, and not what "held" means to
+    the hold test that picks the locks. Each (lock, tread) cell is judged on its
+    median read-back over its kept rows, so one noisy NVML read names nothing.
+    """
+    locks = [int(f) for f in (getattr(args, "lock_clocks", None) or [])]
+    if not locks:
+        return []
+    keep = [r for r in kept_rows(rows) if r.clock_lock_mhz and r.sm_clock_load_mhz]
+    every = sorted({r.tiles for r in rows})
+    named = []
+    for lock in locks:
+        cells: dict[int, list[float]] = {}
+        for r in keep:
+            if int(r.clock_lock_mhz) == lock:
+                cells.setdefault(r.tiles, []).append(float(r.sm_clock_load_mhz))
+        loose = sorted(t for t, mhz in cells.items()
+                       if abs(statistics.median(mhz) - lock) > LOCK_STEP_MHZ)
+        if not loose:
+            continue
+        mhz = statistics.median(m for t in loose for m in cells[t])
+        where = ("at every tread" if loose == every else
+                 f"at treads {', '.join(str(t) for t in loose)}")
+        named.append(f"    lock {lock} MHz: median {mhz:.0f} MHz "
+                     f"({100 * abs(mhz - lock) / lock:.1f}% "
+                     f"{'below' if mhz < lock else 'above'}), {where}")
+    if not named:
+        return []
+    return ["", f"  LOCKS HELD ONLY LOOSELY, those rows KEPT and fitted at the clock "
+            f"read back (more than one {LOCK_STEP_MHZ} MHz step off the lock, "
+            f"within {T.DRIFT_FRACTION:.0%}):", *named]
+
+
+def left_locked_lines(locker) -> list[str]:
+    """The FIRST lines of report.txt, above the plan, when the run's OWN reset
+    failed, else none. The first lines of the file and not of the tail (second
+    review, 2026-09-25): under the ~80-line plan the warning sat where nobody
+    opening the page looks first."""
+    if locker is None or locker.held is None:
+        return []
+    last = locker.log[-1] if locker.log else {}
+    return [f"THE SM CLOCK WAS LEFT LOCKED at {locker.held} MHz after this run: "
+            f"`{last.get('command', 'nvidia-smi -rgc')}` exited {last.get('rc')}: "
+            f"{last.get('output') or 'no output'}.",
+            "  The cells on this page were measured under their locks and stand. "
+            "Anything run on this card",
+            "  next runs at that clock until it is reset by hand: sudo nvidia-smi -rgc",
+            f"  This run exits ERROR ({exit_codes.ERROR}), not its verdict's code, so "
+            "a chain stops here.",
+            ""]
+
+
+def report_lines(rows, est: Elasticity, args) -> list[str]:
+    keep = kept_rows(rows)
+    cells = collapse(keep)
+    sides = level_counts(keep)
+    locked = bool(getattr(args, "lock_clocks", None))
+    out = ["", "THE STATES, as measured"]
+    out.append("  lock MHz   rows   clock read back   median power   median duty seen"
+               "   read off lock" if locked else
+               "  duty   rows   median clock   median power   median duty seen")
+    for duty, lock in states_of(args):
+        key = state_key(duty, lock)
+        mine = [r for r in keep if row_state(r) == key]
+        head = f"  {lock:8d}" if locked else f"  {duty:4.2f}"
+        dropped = sum(1 for r in rows if row_state(r) == key and off_lock(r))
+        off = f"   {dropped:13d}" if locked else ""
+        if not mine:
+            out.append(f"{head}      0   (no kept row){off}")
+            continue
+        out.append(
+            f"{head}   {len(mine):4d}   "
+            f"{statistics.median(r.sm_clock_load_mhz for r in mine):9.1f} MHz   "
+            f"{statistics.median(r.power_w or 0.0 for r in mine):9.1f} W   "
+            f"{statistics.median(r.duty_achieved for r in mine):13.3f}{off}")
+    if locked:
+        out += [f"  read off lock: rows read back more than {T.DRIFT_FRACTION:.0%} "
+                "off their lock, WHATEVER excluded them;",
+                "  V0 and V4 count each excluded row once, under its first reason"]
+    ratios = clock_ratio_by_tread(cells)
+    if ratios:
+        out.append("  clock span per tread: "
+                   + ", ".join(f"n{t}={v:.4f}x" for t, v in sorted(ratios.items())))
+    out += off_lock_lines(rows, args)
+    out += loose_lock_lines(rows, args)
+    out += [
+        "",
+        f"  LEVEL among kept rows: {sides[T.LEVEL_HIGH]} HIGH, "
+        f"{sides[T.LEVEL_LOW]} LOW, {sides['level']} level, "
+        f"{sides['undetermined']} undetermined. NEITHER SIDE EXCLUDES ANYTHING "
+        "HERE.",
+        "",
+        f"THE FIT: eta of the per-M-tile cost, -d log b / d log f, over treads "
+        f"{est.claim_min_tread} and deeper, from the fixed-tread slopes",
+        "  eta, THE CLAIM                      "
+        + (f"{est.value:.4f} over {est.per_tile_treads} treads from tread "
+           f"{est.claim_min_tread}" if est.value is not None else "no slope"),
+        f"  95% interval over {est.repeats} repeats     "
+        + (f"[{est.lo:.4f}, {est.hi:.4f}]  half-width {est.half_width:.4f}"
+           if est.lo is not None else "none"),
+        f"  bootstrap draws                     {est.resampled} of {est.draws}",
+        f"  cells under the per-tread slopes    {est.cells} "
+        f"({est.treads} treads x {est.states} states)",
+        "",
+        "  PRINTED BESIDE IT, never gated: the same estimator over EVERY tread, "
+        "tread 1 included",
+        "  eta, per-M-tile, every tread        "
+        + (f"{est.per_tile_all_treads:.4f}" if est.per_tile_all_treads is not None
+           else "no slope")
+        + (f"  [{est.per_tile_all_treads_lo:.4f}, {est.per_tile_all_treads_hi:.4f}]"
+           if est.per_tile_all_treads_lo is not None else ""),
+        f"  tread 1 against the claim's lines through treads "
+        f"{est.claim_min_tread} and deeper, at n = 1:",
+        "    -d ms / d log f                   "
+        + (f"{est.tread1_sensitivity_ms:.4f} ms against "
+           f"{est.tread1_sensitivity_on_line_ms:.4f} ms on the line"
+           if est.tread1_sensitivity_ms is not None else "not determined"),
+        "    level                             "
+        + (f"{est.tread1_level_ms:.4f} ms against "
+           f"{est.tread1_level_on_line_ms:.4f} ms on the line"
+           if est.tread1_level_ms is not None else "not determined"),
+        "  Tread 1 off those lines is tread 1 off the additive law a(f) + b(f) n "
+        "that the claim's",
+        "  line assumes. The claim leaves it out by registration and not by fit, "
+        "so it moves the",
+        "  every-tread reading above and never the claim. WHAT MAKES THE ONE-TILE "
+        "CALL DIFFERENT IS",
+        "  NOT ESTABLISHED, and it is not the swizzle: on the 2026-09-21 cells at "
+        "G=16 tread 1 read",
+        "  0.17 per call and every deeper tread 1.04-1.11, while the launch "
+        "arithmetic of that ladder",
+        "  (mixtral, E=8, BLOCK_M=32), num_pid_m = cdiv(numel + E(BM-1), BM) = "
+        "8n+8, puts the real",
+        "  M-tiles in ONE group of 16 at both n=1 and n=2.",
+        "",
+        "  PRINTED BESIDE IT, not the claim: eta of the per-CALL time at fixed "
+        "tread, intercept included (what this arm gated until 2026-09-22)",
+        "  eta, fixed tread, pooled            "
+        + (f"{est.fixed_tread:.4f}" if est.fixed_tread is not None else "no slope")
+        + (f"  [{est.fixed_tread_lo:.4f}, {est.fixed_tread_hi:.4f}]"
+           if est.fixed_tread_lo is not None else ""),
+        "  per tread                           "
+        + ", ".join(f"n{t}={v:+.4f}" for t, v in sorted(est.per_tread.items())),
+        "  The pooled figure blends every tread's per-call reading, tread 1's "
+        "included, by its clock",
+        "  spread.",
+        "",
+        "  COMPANION: the elasticity of the ladder SLOPE with a clock assigned "
+        "to each state",
+        "  eta of the per-M-tile cost           "
+        + (f"{est.ladder_slope:.4f} over {est.ladder_states} states"
+           if est.ladder_slope is not None else "not determined"),
+        "  The clock is not constant across the treads of one state, so the "
+        "'clock of a slope'",
+        "  is a summary and this number is read as one. The claim above needs "
+        "no such clock.",
+        "  Fitted over EVERY tread, tread 1 included, which the claim leaves out "
+        "as off the law.",
+    ]
+    return out
+
+
+def report_tail(body: list[str], gates: list[Gate]) -> list[str]:
+    """Everything after the header: the states, the fit, the gates, the reading.
+
+    RETURNED AS LINES so stdout and report.txt are built from ONE list rather
+    than from a string sliced by the header's length. The sliced version worked
+    only while every header line happened to be one line, and a single embedded
+    newline anywhere in the plan would have silently shifted what the pod's
+    operator saw against what the artefact holds.
+    """
+    out = list(body) + ["", "=" * 78, "GATES"]
+    for gate in gates:
+        out += gate.render()
+        out.append("")
+    if any(g.kind == VALIDITY and g.verdict != PASS for g in gates):
+        out.append("READING IT. A VALIDITY gate did not pass. No number on this "
+                   "page may be quoted and no band is licensed; fix the "
+                   "apparatus and re-run.")
+    else:
+        failed = [g.token for g in gates if g.kind == CLAIM and g.verdict != PASS]
+        out.append(f"READING IT. Validity holds. Claim gates not passed: "
+                   f"{failed or 'none'}.")
+        if failed:
+            out.append("A failed CLAIM gate is a result, not a broken run. Read "
+                       "the C1 line for whether the design resolved the three "
+                       "registered worlds, and the C2 line for the registered "
+                       "consequence of the band it landed in.")
+        else:
+            out.append(f"The interval lies wholly below the RAW-STANDS edge: "
+                       f"at this cell the per-M-tile cost, over treads "
+                       f"{CLAIM_MIN_TREAD} and deeper, is traffic, not issue "
+                       f"rate, and the clock is not what is wrong with alpha. "
+                       f"Tread 1's call is not in this reading; its "
+                       f"departure from the claim's line is printed above.")
+    return out
+
+
+# --------------------------------------------------------------------------
+# CLI.
+# --------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the plan, the registered bands, the design "
+                         "arithmetic and the cost, then stop. Scores no gate, "
+                         f"so it exits {exit_codes.REFUSED} REFUSED; "
+                         "--self-test is the off-GPU mode that DOES score")
+    ap.add_argument("--self-test", action="store_true",
+                    help="score every planted world self_test_worlds() "
+                         "returns, refusals included, and check the scorer "
+                         "reproduces each registered verdict and the estimator "
+                         "recovers each planted elasticity. NO COUNT IS TYPED "
+                         "HERE, and that is the point: the run prints len() of "
+                         "that list and counts the refusals off the why "
+                         "strings. A count typed HERE is what went stale "
+                         "when a twelfth world was added, and it was the "
+                         "third copy of a number self_test_worlds() docstring "
+                         "already promised was carried nowhere else. Needs no "
+                         "GPU")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=sorted(MODEL_CONFIGS))
+    ap.add_argument("--dtype", default=DEFAULT_DTYPE,
+                    choices=sorted(DTYPE_BYTES),
+                    help="constrained here rather than discovered inside "
+                         "make_inputs: a dtype this repository does not know is "
+                         "an argparse 2 before the weights are drawn, not a "
+                         "traceback after 2.82 GB of them")
+    ap.add_argument("--group-m", type=int, default=PINNED["GROUP_SIZE_M"],
+                    help="GROUP_SIZE_M this run pins (the swizzle). 16 is the "
+                         "swizzle every published alpha was fitted at; the "
+                         "ratio arm's table needs the elasticity at EACH order "
+                         "it quotes, so this runs once per --group-m. In the "
+                         "run id through the tile")
+    ap.add_argument("--session-tag", default="",
+                    help="the driving session's name; in the run id when "
+                         "given, so a new session measures fresh")
+    ap.add_argument("--treads", type=int, default=DEFAULT_TREADS,
+                    help="exactly-full tile stacks on the ladder, r = n x "
+                         f"BLOCK_M at BLOCK_M={PINNED['BLOCK_SIZE_M']}")
+    ap.add_argument("--duty", type=float, nargs="+", default=list(DUTY_LEVELS),
+                    help="sustained GPU-busy fractions, one state each. 1.0 is "
+                         "no host sleep at all, the highest sustained "
+                         "pressure a byte-identical kernel can apply")
+    ap.add_argument("--lock-clocks", type=int, nargs="+", default=[],
+                    help="LOCK MODE: SM clocks in MHz, one state each, locked "
+                         "with nvidia-smi -lgc F,F (root or passwordless sudo; "
+                         "a rented container refuses it) and reset with -rgc "
+                         "at exit. Each must be in nvidia-smi -q -d "
+                         "SUPPORTED_CLOCKS, and the top one must be a clock "
+                         "the card HOLDS at --lock-duty (a short hold test "
+                         "first: a power-capped card pulls a high lock down, "
+                         "and those rows are excluded as off_lock). Replaces "
+                         "--duty as the state axis; in the run id")
+    ap.add_argument("--lock-duty", type=float, default=DEFAULT_LOCK_DUTY,
+                    help="LOCK MODE's one duty, every state, chosen to keep "
+                         "board power off the cap so the lock sets the clock "
+                         "(expected, not guaranteed; the page names a lock "
+                         "that did not hold). In the run id in lock mode only, "
+                         "the one mode it measures in")
+    ap.add_argument("--repeats", type=int, default=DEFAULT_REPEATS,
+                    help="passes over the whole design; the interval is a "
+                         "bootstrap over these")
+    ap.add_argument("--burst-ms", type=float, default=DEFAULT_BURST_MS,
+                    help="target GPU ms inside one burst, which sets the calls "
+                         "per burst and hence the cost of the discarded lead")
+    ap.add_argument("--target-ms", type=float, default=DEFAULT_TARGET_MS,
+                    help="kernel ms of kept calls per trial; timing.iters_for's "
+                         "budget, so a cell here holds what a ladder cell holds")
+    ap.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
+    ap.add_argument("--warm-ms", type=float, default=DEFAULT_WARM_MS,
+                    help="delivered GPU load before a cell is timed, run AT THE "
+                         "STATE'S OWN DUTY and settled on the clock")
+    ap.add_argument("--settle-seconds", type=float, default=DEFAULT_SETTLE_SECONDS,
+                    help="seconds of the state's cadence before its first cell")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="do not flush L2 before each call. Changes the "
+                         "milliseconds, so it is in the run id")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="routing and weight seed; in the run id")
+    ap.add_argument("--draws", type=int, default=DEFAULT_DRAWS,
+                    help="bootstrap draws. Re-analysis of one set of cells, so "
+                         "it is NOT in the run id")
+    ap.add_argument("--seed-bootstrap", type=int, default=0,
+                    help="seed for the bootstrap. Re-analysis, not in the run id")
+    ap.add_argument("--min-clock-ratio", type=float, default=None,
+                    help="override V1's threshold. Without it the threshold is "
+                         "COMPUTED from this run's repeats, treads and states")
+    ap.add_argument("--card", default=None,
+                    help="the card this run is about, as nvidia-smi spells it. "
+                         "Defaults to the live device; --dry-run and "
+                         f"--self-test touch no GPU and are labelled {NO_CARD!r}")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="overrides the results root entirely")
+    ap.add_argument("--run-id", default="")
+    return ap
+
+
+def _main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    args.seed_bootstrap = int(args.seed_bootstrap)
+    if args.self_test:
+        return self_test(args)
+
+    # THE DESIGN REFUSALS COME FIRST, BEFORE THE PLAN IS EVEN BUILT. They cost
+    # nothing, they are decided from the flags alone, and a plan page for a
+    # design that cannot exist is not a plan: `plan_lines` prints the token
+    # count of the shallowest tread, and `tokens_for_rows` RAISES when the
+    # routing cannot form one, so an illegal --model used to leave this file
+    # with a traceback and exit 4 where the honest answer is a refusal and 2.
+    if len(args.duty) < MIN_STATES:
+        print(f"REFUSED before any GPU time. {len(args.duty)} duty states is "
+              f"below the {MIN_STATES} this design needs: two states give a "
+              "slope with no degrees of freedom and no way to see curvature.")
+        return exit_codes.REFUSED
+    if len(set(args.duty)) != len(args.duty):
+        print("REFUSED before any GPU time. Two --duty values are the same, "
+              "so two 'states' are one state wearing two labels and V1 would "
+              "score a separation that is not there.")
+        return exit_codes.REFUSED
+    outside = [d for d in args.duty if not 0.0 < d <= 1.0]
+    if outside:
+        # AND NOT CLAMPED. `time_duty` takes max(0, gap), so a duty above 1
+        # would silently become duty 1 and the run would carry two states at one
+        # cadence under two labels -- which is the previous refusal wearing a
+        # disguise the ledger cannot see.
+        print(f"REFUSED before any GPU time. --duty {outside} is outside "
+              "(0, 1]. A duty is a fraction of wall time the GPU is busy; 1.0 "
+              "is no host sleep at all and is the most sustained pressure a "
+              "byte-identical kernel can apply.")
+        return exit_codes.REFUSED
+    loosened = loosening_refusal(args) or lock_refusal(args)
+    if loosened:
+        print(loosened)
+        return exit_codes.REFUSED
+    cfg = MODEL_CONFIGS[args.model]
+    quantum = SWEEP.rows_quantum(cfg)
+    bad = [n for n in range(1, args.treads + 1)
+           if (n * PINNED["BLOCK_SIZE_M"]) % quantum]
+    if bad:
+        print(f"REFUSED before any GPU time. {args.model} at E="
+              f"{cfg.num_experts} k={cfg.top_k} needs rows per expert to be a "
+              f"multiple of {quantum}, and treads {bad} are not. A nudged row "
+              "is not a full tile stack and this arm reads full stacks only.")
+        return exit_codes.REFUSED
+
+    card = resolve_card(args)
+    run_id = args.run_id or default_run_id(args)
+    out_dir = (args.out or results_root()) / "clock_elasticity" / run_id
+    paths = {"cells.csv": out_dir / "cells.csv",
+             "report.txt": out_dir / "report.txt",
+             "report.json": out_dir / "report.json"}
+
+    header = plan_lines(args, run_id, out_dir, card, paths) + ["", "=" * 78]
+    header += prediction_lines(args) + [""] + mde_lines(args) + ["", "=" * 78]
+    print("\n".join(header))
+
+    if args.dry_run:
+        total, items = estimated_seconds(args)
+        print(f"\nestimated wall time {total:.0f} s ({total / 60:.1f} min), "
+              "itemised:")
+        for line in items:
+            print(line)
+        print(f"  rows                          "
+              f"{args.repeats * len(states_of(args)) * args.treads} "
+              f"({args.repeats} repeats x {len(states_of(args))} states x "
+              f"{args.treads} treads)")
+        print("  EVERY TERM IS ON THE WALL CLOCK. This arm holds a cadence for "
+              "a stated number of")
+        print("  seconds per state and the gaps are the experiment, so there is "
+              "no kernel-time")
+        print("  figure to quote instead; the weight build and the first "
+              "compile are charged above.")
+        print("\n".join(["", "=" * 78,
+                         "REFUSED. Nothing was measured and nothing was written.",
+                         "  reason: --dry-run was given",
+                         "  No gate was scored, so no RESULT line was printed "
+                         "and none of the above",
+                         "  is a result. --self-test scores the planted worlds "
+                         "off GPU; the bare",
+                         "  command with --card measures this card.",
+                         "=" * 78]))
+        return exit_codes.REFUSED
+
+    if card == NO_CARD:
+        print("\nREFUSED. Nothing was measured.")
+        print("  This run would MEASURE and no card was named. The run id and "
+              "the output directory")
+        print("  are per-card, and an elasticity is a property of one piece of "
+              "silicon's governor.")
+        return exit_codes.REFUSED
+
+    # THE WHOLE STACK, NOT ONLY THE DEVICE. `build_ladder` imports vLLM; on a
+    # box with a card and no vLLM (session 4's base venv) the bare run got past
+    # this door, and the ImportError reached `main`'s catch-all as ERROR 4, the
+    # one code the driver RETRIES, with a traceback and no remedy (consistent
+    # with the pod log, which carries the exit-4 sentence and no more). Every
+    # sibling asks `missing_gpu_stack` first, and it names which half is absent.
+    missing = SWEEP.missing_gpu_stack()
+    if missing:
+        print("\nREFUSED. Nothing was measured.")
+        print("  " + missing)
+        return exit_codes.REFUSED
+    try:
+        T.require_cuda()
+    except Exception as exc:                            # noqa: BLE001
+        print(f"\nREFUSED. Nothing was measured: {exc}")
+        return exit_codes.REFUSED
+    try:
+        T.nvml_clock_reader()
+    except T.ClockSourceUnavailable as e:
+        print("\nREFUSED. Nothing was measured.")
+        print(f"  The under-load clock sampler could not be opened: {e}")
+        print("  This arm's independent variable IS the clock. Without a "
+              "reader there is no x")
+        print("  axis, and a run without one would buy a ladder nobody can "
+              "regress. Install")
+        print("  nvidia-ml-py in THIS interpreter and re-run.")
+        return exit_codes.REFUSED
+    # LOCK MODE'S DOOR, before anything is written: every lock a supported
+    # clock, and one -lgc actually taken and reset, so a container that refuses
+    # it is refused here in the driver's own words and not after the build.
+    locker = ClockLock() if args.lock_clocks else None
+    if locker is not None:
+        with locker:
+            refused = locker.preflight(args.lock_clocks)
+        if refused:
+            print("\nREFUSED. Nothing was measured.")
+            print(f"  The SM clock cannot be locked here: {refused}")
+            print("  Lock mode needs nvidia-smi -lgc, which a rented container "
+                  "refuses; run duty mode (no --lock-clocks) there.")
+            return exit_codes.REFUSED
+        # AND THE PROBE'S RESET IS CHECKED, not assumed (review, 2026-09-25).
+        # Unchecked, a -rgc that failed left the probe's lock on the card and
+        # the run went on: the burst sizing and the reference clock were read
+        # under a lock nobody chose, and the card stayed locked at the end.
+        if locker.held is not None:
+            last = locker.log[-1]
+            print("\nREFUSED. Nothing was measured.")
+            print(f"  `{last['command']}` did not release the probe lock at "
+                  f"{locker.held} MHz: it exited {last['rc']}: "
+                  f"{last['output'] or 'no output'}")
+            print("  The card is STILL LOCKED. Reset it by hand (sudo nvidia-smi "
+                  "-rgc) and find why the reset failed before a lock run.")
+            return exit_codes.REFUSED
+
+    prov = PV.provenance_block(instrument=instrument_of(args), warmup_ms=args.warm_ms,
+                               target_ms=args.target_ms)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # THE CARD FILE IS THE RESUME GUARD THE RUN ID CANNOT BE. The id is keyed on
+    # the card, so two cards cannot share a directory by accident -- but --out
+    # and --run-id are both operator-supplied and both bypass it, and an
+    # elasticity pooled over two pieces of silicon's governors is not an
+    # elasticity.
+    stamp = out_dir / "CARD"
+    if stamp.exists() and stamp.read_text().strip() != card:
+        print(f"REFUSED. {out_dir} already holds cells measured on "
+              f"{stamp.read_text().strip()!r} and this run is on {card!r}. An "
+              "elasticity pooled over two cards' governors is not an "
+              "elasticity; use a fresh --out or --run-id.")
+        return exit_codes.REFUSED
+    # AND THE NAME IS NOT THE CARD. Every H200 is 'NVIDIA H200', so the check
+    # above passes a replacement pod's card into the first pod's ladder; the
+    # UUID in DEVICE is what refuses it (`device_guard`).
+    identity = device_identity()
+    wrong_card = device_guard(out_dir, identity)
+    if wrong_card:
+        print(f"REFUSED. {wrong_card}")
+        return exit_codes.REFUSED
+    stamp.write_text(card + "\n")
+    # THE RESET IS THIS `with`'s EXIT: a return, an exception, SIGTERM, SIGHUP
+    # or Ctrl-C.
+    with locker if locker is not None else contextlib.nullcontext():
+        rows = run_arm(args, cfg, paths["cells.csv"], out_dir / "triton-cache",
+                       prov, locker=locker)
+    # THE SECOND CALL SITE OF THE PROBE'S RULE. The cells were measured under
+    # their locks and stand, so the verdict is not moved; but the card is left
+    # at the last lock, and whatever runs next on it measures under a lock
+    # nobody set for it, so the PAGE and report.json say so, not only stderr.
+    left_locked = locker.held if locker is not None else None
+
+    est = fit(rows, draws=args.draws, seed=args.seed_bootstrap)
+    threshold, source = registered_clock_ratio(args)
+    gates = gates_for(rows, args, threshold, source, est)
+    left = left_locked_lines(locker)
+    tail = report_tail(report_lines(rows, est, args), gates)
+    if left:
+        print("\n" + "\n".join(left[:-1]))
+    print("\n".join(tail))
+
+    (out_dir / "report.txt").write_text("\n".join(left + header + tail) + "\n")
+    payload = prov.stamp({
+        "run_id": run_id, "card": card, "device": identity,
+        "pinned": pinned_for(args.group_m),
+        "duty": [d for d, _lock in states_of(args)],
+        "clock_locks_mhz": list(args.lock_clocks) or None,
+        "clock_lock_log": locker.log if locker is not None else [],
+        "clock_left_locked_mhz": left_locked,
+        "predictions": [asdict(p) for p in PREDICTIONS],
+        "bands": [{"name": n, "lo": lo, "hi": hi, "consequence": c}
+                  for n, lo, hi, c in BANDS],
+        "v1_threshold": threshold, "v1_threshold_source": source,
+        "elasticity": asdict(est),
+        "gates": [asdict(g) for g in gates],
+        "rows": len(rows), "kept": len(kept_rows(rows)),
+    })
+    (out_dir / "report.json").write_text(json.dumps(payload, indent=2, default=str))
+    print(f"\ncells    {paths['cells.csv']}   {git_visibility(paths['cells.csv'])}")
+    print(f"report   {paths['report.txt']}")
+    print(f"json     {paths['report.json']}")
+
+    rc = exit_codes.classify(g.scored() for g in gates)
+    if left_locked is not None:
+        # A CARD LEFT LOCKED STOPS A CHAIN (owner, 2026-09-25). The verdict on
+        # the page stands; the exit code is what a driver reads, and anything
+        # it ran next on this card would measure under a lock nobody set.
+        print(f"verdict  {exit_codes.describe(rc)}")
+        print(f"exit     {exit_codes.describe(exit_codes.ERROR)}: the SM clock "
+              f"was left locked at {left_locked} MHz")
+        return exit_codes.ERROR
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
+
+
+def main(argv=None) -> int:
+    """AN UNPLANNED CRASH IS ERROR (4), which is the only retryable code.
+
+    Left to propagate, an unexpected exception exits the interpreter ONE, and
+    ONE is CLAIM_FAIL, which the shared table defines as a RESULT: the driver
+    would file a crashed arm as "the elasticity is above the registered edge"
+    and retract C3's direction over a run that never measured. `SystemExit`
+    passes through untouched, so `SchemaCollision` and the sweep's own refusals
+    keep their own codes.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as e:
+        # THE MESSAGE IS PRINTED HERE AND NOT LEFT TO THE INTERPRETER. A
+        # `SystemExit` subclass that sets a class-level `code` -- which is how
+        # this repository carries an exit code on a typed refusal -- SHADOWS the
+        # slot the interpreter would have printed the message from, so the
+        # remedy in the message would otherwise vanish and the operator would
+        # get a bare exit 2.
+        message = " ".join(str(a) for a in e.args if a)
+        if message:
+            print(message, file=sys.stderr)
+        return (exit_codes.REFUSED if isinstance(e.code, str)
+                else int(e.code or 0))
+    except Exception:                                   # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: clock_elasticity crashed before it could reach a verdict. "
+              "This is the apparatus failing, not a finding about the card, so "
+              f"it exits {exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}.",
+              file=sys.stderr)
+        return exit_codes.ERROR
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,36 @@
+date,session,board,commit,models,counter pages
+2026-09-25,2026-09-25-nvidia_gh200_480gb-session,board 1310e2,f49a213,mixtral-8x7b,5
+2026-09-27,2026-09-27-nvidia_gh200_480gb-session,board 9b6d01,161f9ec,mixtral-8x7b,13
+2026-09-28,2026-09-28-nvidia_gh200_480gb-8x22b-session,board 435984,f45358d,mixtral-8x22b,10
+2026-09-28,2026-09-28-nvidia_gh200_480gb-qwen2-57b-session,board 50e61f,684a9e9,qwen2-57b-a14b,10
+2026-09-29,2026-09-29-nvidia_gh200_480gb-jetmoe-session,board d67185,a1b6118,jetmoe-8b,10
+2026-09-29,2026-09-29-nvidia_gh200_480gb-olmoe-session,board d663f7,b87d547,olmoe-1b-7b,10
+2026-09-29,2026-09-29-nvidia_gh200_480gb-phi3.5-session,board d67185,a1b6118,phi-3.5-moe,10
+2026-09-29,2026-09-29-nvidia_gh200_480gb-qwen1.5-session,board d67185,a1b6118,qwen1.5-moe-a2.7b,10
+2026-09-30,2026-09-30-nvidia_gh200_480gb-granite-session,board 1310e2,a156392,granite-3.0-3b-a800m,10
+2026-09-30,2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session,board 594c0f,e6b1e20,jetmoe-8b,2
+2026-09-30,2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session,board 594c0f,e6b1e20,mixtral-8x7b,4
+2026-10-01,2026-10-01-nvidia_gh200_480gb-rental1-session,board 7269a7,436e41c,"mixtral-8x7b, mixtral-8x7b-tp2, mixtral-8x7b-tp4, mixtral-8x7b-tp8, olmoe-1b-7b, qwen2-57b-a14b",26
+2026-10-02,2026-10-02-nvidia_gh200_480gb-rental2-session,board 4da056,2bf6fe3,"mixtral-8x7b, mixtral-8x7b-tp2, mixtral-8x7b-tp4, mixtral-8x7b-tp8",22
+2026-10-06,2026-10-06-nvidia_gh200_480gb-rental3-session,board bb7a34,49f2198,"granite-3.0-1b-a400m, mixtral-8x7b-tp2, mixtral-8x7b-tp4, mixtral-8x7b-tp8, qwen2-57b-a14b-tp8",22
+2026-10-07,2026-10-07-nvidia_gh200_480gb-rental4-session,board bb7a34,85ef38c,olmoe-1b-7b,7
+2026-10-09,2026-10-09-nvidia_gh200_480gb-rental5-session,board 1cd741,d4d1767,"mixtral-8x7b, olmoe-1b-7b, qwen2-57b-a14b-tp8",4
+2026-10-13,2026-10-13-nvidia_gh200_480gb-rental6-session,board ff9942,650d295,"mixtral-8x7b-tp4, olmoe-1b-7b, phi-3.5-moe",4
+2026-10-14,2026-10-14-nvidia_gh200_480gb-rental7-session,board 02e86e,ae010ff,olmoe-1b-7b,1
+2026-10-20,2026-10-20-nvidia_gh200_480gb-tileA-session,board 03e9ec,c4914ba,"mixtral-8x7b, olmoe-1b-7b, qwen2-57b-a14b",10
+2026-10-21,2026-10-21-nvidia_gh200_480gb-cal2-session,board c3f52a,09b340c,"mixtral-8x22b, mixtral-8x7b, olmoe-1b-7b",4
+2026-10-21,2026-10-21-nvidia_gh200_480gb-settleS1-session,board 9da3c0,52ed2ca,"mixtral-8x7b, olmoe-1b-7b, qwen2-57b-a14b",12
+2026-10-21,2026-10-21-nvidia_gh200_480gb-tileA2-session,board fb8566,3629148,"mixtral-8x7b, olmoe-1b-7b, qwen2-57b-a14b",11
+2026-10-27,2026-10-27-nvidia_gh200_480gb-cal3-session,board 02e86e,e10fda1,"mixtral-8x7b, olmoe-1b-7b",2
+2026-10-27,2026-10-27-nvidia_gh200_480gb-cal4-session,board 183300,aa5e1b7,"mixtral-8x7b, mixtral-8x7b-tp2, olmoe-1b-7b",3
+2026-10-29,2026-10-29-nvidia_gh200_480gb-decodeCAL-session,board 183300,a398c6a,"mixtral-8x7b, olmoe-1b-7b",2
+2026-11-03,2026-11-03-nvidia_gh200_480gb-decodeCAL2-session,board ae5fc5,88768ae,"mixtral-8x7b, olmoe-1b-7b",7
+2026-11-04,2026-11-04-nvidia_gh200_480gb-decodeBlind-session,board ae5fc5,8236421,"deepseek-v2-lite, granite-3.0-3b-a800m, jetmoe-8b, phi-3.5-moe, qwen1.5-moe-a2.7b",0
+2026-11-04,2026-11-04-nvidia_gh200_480gb-decodeDS-session,board cce89f,5410ad0,"granite-3.0-3b-a800m, jetmoe-8b, mixtral-8x7b, olmoe-1b-7b, phi-3.5-moe, qwen1.5-moe-a2.7b",6
+2026-11-05,2026-11-05-nvidia_gh200_480gb-tileB3-session,board ebedab,a560807,"mixtral-8x7b, olmoe-1b-7b, phi-3.5-moe, qwen1.5-moe-a2.7b",8
+2026-11-06,2026-11-06-nvidia_gh200_480gb-pc-session,board c9f689,c9c92f1,"mixtral-8x7b, olmoe-1b-7b, phi-3.5-moe",6
+2026-11-10,2026-11-10-nvidia_gh200_480gb-pc2-session,board 588570,e7786f4,"deepseek-v2-lite, granite-3.0-3b-a800m, jetmoe-8b, mixtral-8x7b, phi-3.5-moe, qwen1.5-moe-a2.7b",0
+2026-11-12,2026-11-12-nvidia_gh200_480gb-rr-session,board 73996e,51d33d9,"mixtral-8x7b, phi-3.5-moe",2
+2026-11-18,2026-11-18-nvidia_gh200_480gb-v7b-session,board e165c7,e58c153,"granite-3.0-1b-a400m, mixtral-8x22b, qwen2-57b-a14b",0
+2026-11-18,2026-11-18-nvidia_gh200_480gb-v7m-session,board 1e520d,556029e,"map-a-e128k8-h2048i512, map-a-e16k4-h2048i512, map-a-e256k8-h2048i512, map-a-e32k8-h2048i512, map-a-e64k8-h2048i512, map-a-e8k2-h2048i512, map-b-e32k4-h1024i384, map-b-e32k4-h1536i512, map-b-e32k4-h2048i768, map-b-e32k4-h2560i1152, map-b-e32k4-h3072i1536, map-b-e32k4-h4096i1536, map-c-e256k8-h4096i1024, map-c-e256k8-h7168i384",0
+2026-11-18,2026-11-18-nvidia_gh200_480gb-v7p-session,board 8d8469,8c9e29a,"mixtral-8x7b, olmoe-1b-7b",2

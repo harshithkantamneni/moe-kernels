@@ -1,0 +1,416 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      2,
+      "PT"
+    ],
+    [
+      "shared",
+      2,
+      "PT"
+    ],
+    [
+      "native",
+      2,
+      "PW"
+    ],
+    [
+      "shared",
+      2,
+      "PW"
+    ],
+    [
+      "native",
+      2,
+      "PT2"
+    ],
+    [
+      "shared",
+      2,
+      "PT2"
+    ],
+    [
+      "native",
+      2,
+      "PW2"
+    ],
+    [
+      "shared",
+      2,
+      "PW2"
+    ],
+    [
+      "native",
+      2,
+      "uniform"
+    ],
+    [
+      "shared",
+      2,
+      "uniform"
+    ],
+    [
+      "native",
+      2,
+      "balanced"
+    ],
+    [
+      "shared",
+      2,
+      "balanced"
+    ]
+  ],
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 48,
+  "launch_count": 72,
+  "tokens": {
+    "2": 1024
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/2/PT": "6ced367bd09680e8754a880caa18ea750d92989a2a39aa2f9a4a2db9158ae286",
+    "shared/2/PT": "a1b16cfb939fe61cc688ea66a6a0f9dbd52be2b4d24909fce363413b6b901de3",
+    "native/2/PW": "5ddcf1bbe54195b654dc7e461c246301472d3dd429a8bd2a4216c73f8a793318",
+    "shared/2/PW": "2ae8f679e2ed41d725aefc9fe9dd01804dd940fe37a1421f52e7dda538cc183b",
+    "native/2/PT2": "8a82c3b7d48b12aa41377ec9dcf06d6ca37a56c4673240ad648523b07c40f9ea",
+    "shared/2/PT2": "948d145d7d1df08f009353dc612613382a3975bae431e1250492521011d9e92e",
+    "native/2/PW2": "bb7d8345fecfbffe06660dd2cba4e7739bcdc0da06a6e0d209a7dc82e1177672",
+    "shared/2/PW2": "5b1a939a10b61e60e27237921f907c9d828953caeb6dff954cf0f15e84b912a4",
+    "native/2/uniform": "e672dae909b5265cba8c9fa1df46ef27f9ab9cdfdd9d3c665ea204e0d700a7cc",
+    "shared/2/uniform": "c1e25b5832b5935ee3d2ed7238b733d21c2d68686250f4b70839ebc48898583e",
+    "native/2/balanced": "c2519307679a38f7118681c76aabb5d2ece77767ebf9badc654bf792cded5e24",
+    "shared/2/balanced": "84894f8b4575e731dfe12f26b41592c189da2d22c484e460bc39588ed1c33a50"
+  },
+  "sorted_ids_len": {
+    "native/2/PT": 3064,
+    "shared/2/PT": 11192,
+    "native/2/PW": 3064,
+    "shared/2/PW": 11192,
+    "native/2/PT2": 3064,
+    "shared/2/PT2": 11192,
+    "native/2/PW2": 3064,
+    "shared/2/PW2": 11192,
+    "native/2/uniform": 3064,
+    "shared/2/uniform": 11192,
+    "native/2/balanced": 3064,
+    "shared/2/balanced": 11192
+  },
+  "grids": {
+    "native/2/PT": {
+      "w1": 6144,
+      "w2": 1152
+    },
+    "shared/2/PT": {
+      "w1": 22528,
+      "w2": 4224
+    },
+    "native/2/PW": {
+      "w1": 6144,
+      "w2": 1152
+    },
+    "shared/2/PW": {
+      "w1": 22528,
+      "w2": 4224
+    },
+    "native/2/PT2": {
+      "w1": 6144,
+      "w2": 1152
+    },
+    "shared/2/PT2": {
+      "w1": 22528,
+      "w2": 4224
+    },
+    "native/2/PW2": {
+      "w1": 6144,
+      "w2": 1152
+    },
+    "shared/2/PW2": {
+      "w1": 22528,
+      "w2": 4224
+    },
+    "native/2/uniform": {
+      "w1": 6144,
+      "w2": 1152
+    },
+    "shared/2/uniform": {
+      "w1": 22528,
+      "w2": 4224
+    },
+    "native/2/balanced": {
+      "w1": 6144,
+      "w2": 1152
+    },
+    "shared/2/balanced": {
+      "w1": 22528,
+      "w2": 4224
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/native/g1/n2/PW",
+    "r3/native/g1/n2/PW",
+    "r3/native/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/native/g1/n2/PT2",
+    "r3/native/g1/n2/PT2",
+    "r3/native/g1/n2/PT2",
+    "r3/shared/g1/n2/PT2",
+    "r3/shared/g1/n2/PT2",
+    "r3/shared/g1/n2/PT2",
+    "r3/native/g1/n2/PW2",
+    "r3/native/g1/n2/PW2",
+    "r3/native/g1/n2/PW2",
+    "r3/shared/g1/n2/PW2",
+    "r3/shared/g1/n2/PW2",
+    "r3/shared/g1/n2/PW2",
+    "r3/native/g1/n2/uniform",
+    "r3/native/g1/n2/uniform",
+    "r3/native/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/native/g1/n2/balanced",
+    "r3/native/g1/n2/balanced",
+    "r3/native/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 3,
+    "BLOCK_SIZE_M": 128
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 4831838208,
+    "weight_bytes": 43486543872,
+    "activation_bytes": 251658240,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 44241518592,
+    "device_free_bytes": 100722999296,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 2
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "e2aeaef6-2633-c7cb-e7eb-696be58cc57d"
+  },
+  "histogram": {
+    "file_sha256": "b5d6e34a5afd4fc6ba906707758b199a2c5555a49290bf7512fd5a1749c924ad",
+    "page": "mixtral-8x22b-128g1",
+    "shuffle_seed": 20261440,
+    "cells": {
+      "native/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "0a59797323261f5d92e153ad1c8032e1a83b4a0034820d321abcdc2d3a3981ea",
+        "bincount": [
+          234,
+          233,
+          214,
+          372,
+          236,
+          260,
+          249,
+          250
+        ]
+      },
+      "shared/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "0a59797323261f5d92e153ad1c8032e1a83b4a0034820d321abcdc2d3a3981ea",
+        "bincount": [
+          234,
+          233,
+          214,
+          372,
+          236,
+          260,
+          249,
+          250
+        ]
+      },
+      "native/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "224b94ae664a7d1064a922b0f88b6a8dd6dd2d278b15f5dc97dd43bdf91ca143",
+        "bincount": [
+          138,
+          281,
+          184,
+          242,
+          275,
+          296,
+          55,
+          577
+        ]
+      },
+      "shared/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "224b94ae664a7d1064a922b0f88b6a8dd6dd2d278b15f5dc97dd43bdf91ca143",
+        "bincount": [
+          138,
+          281,
+          184,
+          242,
+          275,
+          296,
+          55,
+          577
+        ]
+      },
+      "native/2/PT2": {
+        "label": "PT2",
+        "n": 2,
+        "counts_sha256": "a7b998b345ef3c2c4f4c0673c96be77ece5bc430cac328cf5c40531f97f28b5b",
+        "bincount": [
+          313,
+          280,
+          265,
+          406,
+          166,
+          259,
+          195,
+          164
+        ]
+      },
+      "shared/2/PT2": {
+        "label": "PT2",
+        "n": 2,
+        "counts_sha256": "a7b998b345ef3c2c4f4c0673c96be77ece5bc430cac328cf5c40531f97f28b5b",
+        "bincount": [
+          313,
+          280,
+          265,
+          406,
+          166,
+          259,
+          195,
+          164
+        ]
+      },
+      "native/2/PW2": {
+        "label": "PW2",
+        "n": 2,
+        "counts_sha256": "8abfb2c4450fb2bf1876f2582ff8e4cfdb5968c76dca82e44a3b4b8c5a9cc763",
+        "bincount": [
+          196,
+          188,
+          126,
+          337,
+          348,
+          357,
+          108,
+          388
+        ]
+      },
+      "shared/2/PW2": {
+        "label": "PW2",
+        "n": 2,
+        "counts_sha256": "8abfb2c4450fb2bf1876f2582ff8e4cfdb5968c76dca82e44a3b4b8c5a9cc763",
+        "bincount": [
+          196,
+          188,
+          126,
+          337,
+          348,
+          357,
+          108,
+          388
+        ]
+      },
+      "native/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "shared/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "native/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "shared/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      }
+    }
+  }
+}

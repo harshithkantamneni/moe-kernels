@@ -1,0 +1,107 @@
+ALPHA SURFACE -- every fit found under results/published/2026-09-01-nvidia_h200-alpha-surface-s4
+
+alpha is the fraction of a weight re-read that MISSES L2. 1.0 means an
+extra M-tile costs a full re-read; 0.0 means L2 absorbs it entirely.
+A blank alpha means the fit was not identifiable at that BLOCK_M --
+fewer than 3 memory-bound treads -- not that it is zero.
+REF! is a DIFFERENT state and not a null: that arm's compute
+reference was refused on its level, so nothing in it could be
+classified at all. Those rows are WITHDRAWN, not uninformative.
+
+  model                 G   BN   BM  treads   alpha  corrected   upper  fit err
+  ------------------ ---- ---- ---- ------- ------- ---------- ------- --------
+  deepseek-v2-lite      1   64   32       7   0.618      0.596   0.945    0.42%
+  deepseek-v2-lite      1   64   64       0      --         --      --       --
+  deepseek-v2-lite      1   64  128       0      --         --      --       --
+  deepseek-v2-lite      1   64  256       0      --         --      --       --
+  deepseek-v2-lite     16   64   32       0      --         --      --       --
+  deepseek-v2-lite     16   64   64       0      --         --      --       --
+  deepseek-v2-lite     16   64  128       2      --         --      --       --
+  deepseek-v2-lite     16   64  256       0      --         --      --       --
+  mixtral-8x7b          1  256   32      33   0.909      0.900   1.228    1.56%
+  mixtral-8x7b          1  256   64      16   0.839      0.823   1.078    0.85%
+  mixtral-8x7b          1  256  128       0      --         --      --       --
+  mixtral-8x7b          1   64   32      33   1.016      1.007   1.327    1.33%
+  mixtral-8x7b          1   64   64      16   0.947      0.933   1.193    1.45%
+  mixtral-8x7b          1   64  128       0      --         --      --       --
+  mixtral-8x7b          1   64  256       0      --         --      --       --
+  mixtral-8x7b         16   64   32      33   0.629      0.622   0.880    1.02%
+  mixtral-8x7b         16   64   64      16   0.659      0.646   0.919    1.63%
+  mixtral-8x7b         16   64  128       0      --         --      --       --
+  mixtral-8x7b         16   64  256       0      --         --      --       --
+  mixtral-8x7b         64   64   32      33   0.646      0.639   0.715    0.83%
+  mixtral-8x7b         64   64   64      16   0.745      0.731   0.826    1.57%
+  mixtral-8x7b         64   64  128       1      --         --      --       --
+  mixtral-8x7b         64   64  256       0      --         --      --       --
+  mixtral-8x7b          8   64   32      33   0.718      0.710   1.057    0.94%
+  mixtral-8x7b          8   64   64      16   0.699      0.685   0.993    2.17%
+  mixtral-8x7b          8   64  128       0      --         --      --       --
+  mixtral-8x7b          8   64  256       0      --         --      --       --
+  qwen2-57b-a14b        1  256   32       0      --         --      --       --
+  qwen2-57b-a14b        1  256   64       0      --         --      --       --
+  qwen2-57b-a14b        1  256  128       0      --         --      --       --
+  qwen2-57b-a14b        1   64   32      33   0.721      0.706   0.935    0.57%
+  qwen2-57b-a14b        1   64   64      16   0.713      0.687   0.906    0.48%
+  qwen2-57b-a14b        1   64  128       0      --         --      --       --
+  qwen2-57b-a14b        1   64  256       0      --         --      --       --
+  qwen2-57b-a14b       16   64   32      33   0.699      0.685   1.022    0.89%
+  qwen2-57b-a14b       16   64   64      16   0.691      0.664   0.976    1.10%
+  qwen2-57b-a14b       16   64  128       0      --         --      --       --
+  qwen2-57b-a14b       16   64  256       0      --         --      --       --
+  qwen2-57b-a14b       64   64   32      33   0.668      0.654   1.205    0.62%
+  qwen2-57b-a14b       64   64   64       0      --         --      --       --
+  qwen2-57b-a14b       64   64  128       0      --         --      --       --
+  qwen2-57b-a14b       64   64  256       0      --         --      --       --
+  qwen2-57b-a14b        8   64   32      33   0.766      0.751   1.001    1.07%
+  qwen2-57b-a14b        8   64   64      16   0.741      0.714   0.940    1.30%
+  qwen2-57b-a14b        8   64  128       1      --         --      --       --
+  qwen2-57b-a14b        8   64  256       0      --         --      --       --
+
+18 identifiable fit(s) of 46 block sizes swept.
+46 cell(s) come from reports with NO level check recorded, so their reference was never tested for level. Absence of a withdrawal above is not evidence of a sound reference in those; re-run the analysis over their cells.csv to find out.
+
+alpha against GROUP_SIZE_M, the swizzle width:
+  MDE 0.046 alpha over 3 matched cells (paired, 90% two-sided, 80% power,
+  z-sum 2.4865, ASSUMED sd of one alpha 0.0229 so sd of a paired difference 0.0323).
+  ASSUMED, and it is an upper bound: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet].
+  A paired median below this is an unmeasured change, not a small one.
+  3 cell(s) of (model, bn, bm) hold every level
+  1                    n=3   median alpha 0.947   corrected 0.933
+  8                    n=3   median alpha 0.718   corrected 0.710
+  16                   n=3   median alpha 0.659   corrected 0.646
+  64                   n=3   median alpha 0.668   corrected 0.654
+  paired change 1 -> 64: median -0.203   (every cell moves the same way: yes)
+
+alpha against model, i.e. per-expert footprint:
+  MDE: only 1 matched cell(s); a paired MDE needs two, so no
+  paired change here is comparable with anything.
+  1 cell(s) of (g, bn, bm) hold every level
+  deepseek-v2-lite     n=1   median alpha 0.618   corrected 0.596
+  mixtral-8x7b         n=1   median alpha 1.016   corrected 1.007
+  qwen2-57b-a14b       n=1   median alpha 0.721   corrected 0.706
+  paired change deepseek-v2-lite -> qwen2-57b-a14b: median +0.102   (every cell moves the same way: yes)
+
+alpha against BLOCK_SIZE_N, the activation-confound control:
+  MDE 0.057 alpha over 2 matched cells (paired, 90% two-sided, 80% power,
+  z-sum 2.4865, ASSUMED sd of one alpha 0.0229 so sd of a paired difference 0.0323).
+  ASSUMED, and it is an upper bound: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet].
+  A paired median below this is an unmeasured change, not a small one.
+  2 cell(s) of (model, g, bm) hold every level
+  64                   n=2   median alpha 0.982   corrected 0.970
+  256                  n=2   median alpha 0.874   corrected 0.862
+  paired change 64 -> 256: median -0.107   (every cell moves the same way: yes)
+
+READ IT AGAINST THE THREE CANDIDATES:
+  alpha = 0.100 (this repo, retracted): 0 of 18 fits within 0.05
+  alpha = 0.330 (TEMPO arXiv:2608.13057): 0 of 18 fits within 0.05
+  alpha = 0.558 (the 2026-09-01 pooled refit): 0 of 18 fits within 0.05
+  NOTE 2026-09-03: the line above is requalified (results/published/ANCHOR_RESCORE.txt
+  W3, W4): "within 0.05" of a fitted point is a property of an unidentified
+  anchor, not of the data, so the 0-of-18 count may not be quoted as evidence
+  against 0.558. Read against the anchor bracket per fit in ANCHOR_RESCORE.json,
+  0 of the 17 fits the anchor rescored in this arm have a bracket containing
+  0.558. No alpha in this study may be quoted as a number (W4). The generator,
+  scripts/alpha_surface.py, still prints the unqualified count (defect reported
+  2026-09-03), so a regenerated file would print it again.
+
+A pooled scalar cannot describe this surface if the levers move it.

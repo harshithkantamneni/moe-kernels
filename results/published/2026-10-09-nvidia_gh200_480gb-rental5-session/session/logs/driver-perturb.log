@@ -1,0 +1,36 @@
+== 2026-10-09T01:01:57Z step perturb: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2)
+INSTRUMENTED KERNEL (perturb): 11 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u14-stf-v1       stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none
+  u14-stf-v2       stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u14-stf-v3       stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u15-stt8x22-v1   stamps mixtral-8x22b          BK 64 s4 cells 1 spec stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none
+  u15-stt8x22-v2   stamps mixtral-8x22b          BK 64 s4 cells 1 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u16-stt-v1       stamps mixtral-8x7b           BK 64 s4 cells 2 spec stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none
+  u16-stt-v2       stamps mixtral-8x7b           BK 64 s4 cells 2 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u17-std4-v2      stamps olmoe-1b-7b            BK 64 s4 cells 4 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u17-std4-v3      stamps olmoe-1b-7b            BK 64 s4 cells 4 spec stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u18-std2-v2      stamps olmoe-1b-7b            BK 64 s8 cells 4 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u18-std2-v3      stamps olmoe-1b-7b            BK 64 s8 cells 4 spec stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  gate (decision 2): median |plain/copy - 1| <= 1%, worst <= 2%, identical occupancy; 8 bursts of 10 calls each way
+  u14-stf-v1: FAIL median |r - 1| 2.35% > 1%; worst |r - 1| 3.03% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u14-stf-v2: FAIL median |r - 1| 2.19% > 1%; worst |r - 1| 3.00% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u14-stf-v3: FAIL median |r - 1| 2.22% > 1%; worst |r - 1| 2.75% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u15-stt8x22-v1: FAIL median |r - 1| 6.57% > 1%; worst |r - 1| 12.42% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u15-stt8x22-v2: FAIL median |r - 1| 5.99% > 1%; worst |r - 1| 11.84% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u16-stt-v1: FAIL median |r - 1| 2.26% > 1%; worst |r - 1| 14.66% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u16-stt-v2: FAIL median |r - 1| 2.18% > 1%; worst |r - 1| 14.34% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u17-std4-v2: FAIL median |r - 1| 2.36% > 1%; worst |r - 1| 3.61% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u17-std4-v3: FAIL median |r - 1| 2.27% > 1%; worst |r - 1| 3.33% > 2%; config [32, 64, 64, 8, 4, 8, True, 1]: plain {'regs': 55, 'shared': 36864, 'ctas_per_sm': 4} != copy {'regs': 48, 'shared': 36864, 'ctas_per_sm': 5}
+  u18-std2-v2: FAIL median |r - 1| 3.16% > 1%; worst |r - 1| 6.55% > 2%
+  u18-std2-v3: FAIL median |r - 1| 2.85% > 1%; worst |r - 1| 5.95% > 2%
+2026-10-09T01:02:54Z perturb: GATE_u14_stf_v1=FAIL median=0.023455721481475178 worst=0.030302693433679972
+2026-10-09T01:02:54Z perturb: GATE_u14_stf_v2=FAIL median=0.021923597076392465 worst=0.030034442087795266
+2026-10-09T01:02:54Z perturb: GATE_u14_stf_v3=FAIL median=0.022159685228739956 worst=0.027497043377756936
+2026-10-09T01:02:54Z perturb: GATE_u15_stt8x22_v1=FAIL median=0.06567638733695008 worst=0.12424969369873884
+2026-10-09T01:02:54Z perturb: GATE_u15_stt8x22_v2=FAIL median=0.05992717783182 worst=0.11837524056792836
+2026-10-09T01:02:54Z perturb: GATE_u16_stt_v1=FAIL median=0.022566774903966857 worst=0.1465770185257086
+2026-10-09T01:02:54Z perturb: GATE_u16_stt_v2=FAIL median=0.021803105066178663 worst=0.14340270535960464
+2026-10-09T01:02:54Z perturb: GATE_u17_std4_v2=FAIL median=0.02360151841263597 worst=0.03613547538853634
+2026-10-09T01:02:54Z perturb: GATE_u17_std4_v3=FAIL median=0.02272429360245809 worst=0.03330586098107313
+2026-10-09T01:02:54Z perturb: GATE_u18_std2_v2=FAIL median=0.03160487234080306 worst=0.0655406145346471
+2026-10-09T01:02:54Z perturb: GATE_u18_std2_v3=FAIL median=0.028467156414251182 worst=0.05946833184827793

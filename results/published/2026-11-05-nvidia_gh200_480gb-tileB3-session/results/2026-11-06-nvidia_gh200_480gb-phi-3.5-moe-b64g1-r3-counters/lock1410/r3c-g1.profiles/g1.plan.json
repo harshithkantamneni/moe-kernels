@@ -1,0 +1,234 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "model": "phi-3.5-moe",
+  "dtype": "bf16",
+  "block_m": 64,
+  "block_n": 128,
+  "num_stages": 3,
+  "group_m": 1,
+  "treads": [
+    1
+  ],
+  "arms": [
+    "native",
+    "shared"
+  ],
+  "cells": [
+    [
+      "native",
+      1,
+      "PT"
+    ],
+    [
+      "shared",
+      1,
+      "PT"
+    ],
+    [
+      "native",
+      1,
+      "PW"
+    ],
+    [
+      "shared",
+      1,
+      "PW"
+    ],
+    [
+      "native",
+      1,
+      "PT2"
+    ],
+    [
+      "shared",
+      1,
+      "PT2"
+    ],
+    [
+      "native",
+      1,
+      "PW2"
+    ],
+    [
+      "shared",
+      1,
+      "PW2"
+    ],
+    [
+      "native",
+      1,
+      "uniform"
+    ],
+    [
+      "shared",
+      1,
+      "uniform"
+    ],
+    [
+      "native",
+      1,
+      "balanced"
+    ],
+    [
+      "shared",
+      1,
+      "balanced"
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "the ladder's id count 1024..9216 does not cross 1024: one kernel throughout",
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b64g1-r3-counters/lock1410/r3c-g1.profiles/g1.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b64g1-r3-counters/lock1410/r3c-g1.profiles/g1.triton-cache",
+  "histogram": {
+    "schema": "moe-kernels/histogram-page/1",
+    "file_sha256": "a43063a80d87b61b99820fa3046da34d13dc7cfec0682f8168059b741d75bd99",
+    "page": "phi-3.5-moe-64g1",
+    "shuffle_seed": 20261420,
+    "cells": [
+      {
+        "label": "PT",
+        "n": 1,
+        "counts": [
+          37,
+          65,
+          70,
+          73,
+          61,
+          73,
+          65,
+          57,
+          48,
+          47,
+          83,
+          61,
+          88,
+          84,
+          41,
+          71
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 1,
+        "counts": [
+          60,
+          45,
+          66,
+          70,
+          90,
+          80,
+          79,
+          76,
+          60,
+          42,
+          42,
+          31,
+          43,
+          65,
+          90,
+          85
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT2",
+        "n": 1,
+        "counts": [
+          94,
+          76,
+          48,
+          58,
+          60,
+          73,
+          44,
+          77,
+          70,
+          51,
+          72,
+          34,
+          89,
+          71,
+          57,
+          50
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW2",
+        "n": 1,
+        "counts": [
+          78,
+          69,
+          83,
+          32,
+          73,
+          58,
+          74,
+          105,
+          85,
+          37,
+          95,
+          26,
+          56,
+          94,
+          13,
+          46
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 1,
+        "counts": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 1,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+2026-09-28T03:48:39Z locked_r3 start: tag gh200-20260928T015120Z-deep, locks [1710], G [4, 2], R3 args --model mixtral-8x22b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --treads 9, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference
+2026-09-28T03:48:39Z card: NVIDIA GH200 480GB, GPU-483421b9-3c9c-5666-dad3-150c82978288, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-09-28T03:48:39Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-09-28T03:48:39Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-09-28T03:48:39Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 147.58 W, 700.00 W
+2026-09-28T03:48:39Z G=4 start at lock 1710: pid 32483, tag gh200-20260928T015120Z-deep-lock1710, log r3-g4-lock1710.log
+2026-09-28T03:48:49Z G=4 at lock 1710: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x22-b25bb67b
+2026-09-28T03:56:51Z G=4 slipped at lock 1710: R3 exit 1 CLAIM_FAIL, cells=123 worst=1680.0 MHz, 492 s, dir nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x22-b25bb67b; a timed cell read 1680 MHz, more than 15 MHz under the 1710 MHz lock
+2026-09-28T03:56:51Z lock 1710 MHz did not hold at G=4; no lower lock on the ladder
+2026-09-28T03:56:51Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-09-28T03:56:51Z read back after the reset: 1830 MHz, 1980 MHz, 0x0000000000000000, 140.27 W, 700.00 W
+2026-09-28T03:56:51Z locked_r3 end: exit 1, 1 CLAIM_FAIL: measured; VALIDITY passed; a CLAIM gate did not (a result, not a retry)

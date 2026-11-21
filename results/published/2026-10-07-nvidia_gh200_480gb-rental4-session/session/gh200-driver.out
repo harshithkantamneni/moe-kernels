@@ -1,0 +1,106 @@
+2026-10-06T22:46:59Z setup_vm.sh start: commit 85ef38cddc0f76f03f9b0d0cf17bae2e121e7c3d from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-07T05:25:24Z
+2026-10-06T22:48:59Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 6a13b96 to run-gh200-rental4-20261006t2245: setup_vm.sh: READY
+2026-10-06T22:49:00Z driver start: commit 85ef38cddc0f76f03f9b0d0cf17bae2e121e7c3d, steps of the plan scripts/plans/rental4-2026-10.plan, deadline 2026-10-07T05:25:24Z (388 min of work left)
+2026-10-06T22:49:00Z plan: /home/ubuntu/moe/repo/scripts/plans/rental4-2026-10.plan (sha256 01a4cc6f49f8bde14da67b12ce98cf5e269f4f3c0f03ec97c77a2eee405a1d16), 25 units
+2026-10-06T22:49:00Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/25 -] (estimate 3 min, cap 15 min, 388 min left)
+2026-10-06T22:49:01Z prelude END: exit 0 after 0 min [unit 1/25 -]
+2026-10-06T22:49:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4f50735 to run-gh200-rental4-20261006t2245: prelude (unit 1/25 -): exit 0 (0 min)
+2026-10-06T22:49:02Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/25 mixtral-8x7b r4] (estimate 2 min, cap 30 min, 388 min left)
+2026-10-06T22:49:27Z calibrate END: exit 0 after 0 min [unit 2/25 mixtral-8x7b r4]
+2026-10-06T22:49:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b7be655 to run-gh200-rental4-20261006t2245: calibrate (unit 2/25 mixtral-8x7b r4): exit 0 (0 min)
+2026-10-06T22:49:29Z rulers START: rulers at the 1710 lock: torch read2d / copy / add / matmul bf16 8192^3, the device's L2 size [unit 3/25 - r4] (estimate 3 min, cap 10 min, 387 min left)
+2026-10-06T22:49:39Z rulers END: exit 0 after 0 min [unit 3/25 - r4]
+2026-10-06T22:49:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 26749ac to run-gh200-rental4-20261006t2245: rulers (unit 3/25 - r4): exit 0 (0 min)
+2026-10-06T22:49:40Z gpubench START: THIRD-PARTY RRZE-HPC/gpu-benches (GPL-3.0) at the 1710 lock: latency, stream, l2-cache; fetched into $MOE_HOME/ext, never the repo [unit 4/25 - r4] (estimate 8 min, cap 20 min, 387 min left)
+2026-10-06T22:59:29Z gpubench END: exit 0 after 10 min [unit 4/25 - r4]
+2026-10-06T22:59:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a818c20 to run-gh200-rental4-20261006t2245: gpubench (unit 4/25 - r4): exit 0 (10 min)
+2026-10-06T22:59:30Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9] (estimate 16 min, cap 45 min, 377 min left)
+2026-10-06T23:15:39Z timed END: exit 0 after 16 min [unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9]
+2026-10-06T23:15:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed f3b24ea to run-gh200-rental4-20261006t2245: timed (unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9): exit 0 (16 min)
+2026-10-06T23:15:41Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15] (estimate 17 min, cap 45 min, 361 min left)
+2026-10-06T23:31:50Z timed END: exit 0 after 16 min [unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15]
+2026-10-06T23:31:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 18d94f0 to run-gh200-rental4-20261006t2245: timed (unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15): exit 0 (16 min)
+2026-10-06T23:31:52Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 7/25 - pt] (estimate 10 min, cap 25 min, 345 min left)
+2026-10-06T23:32:44Z perturb END: exit 1 after 1 min [unit 7/25 - pt]
+2026-10-06T23:32:45Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 84ceb53 to run-gh200-rental4-20261006t2245: perturb (unit 7/25 - pt): exit 1 (1 min)
+2026-10-06T23:32:48Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 6 arms native, BK 64 s4; runs only on a PASS gate [unit 8/25 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-stamps=cta] (estimate 6 min, cap 15 min, 344 min left)
+2026-10-06T23:32:48Z stamps END: exit 2 after 0 min [unit 8/25 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-stamps=cta]
+2026-10-06T23:32:49Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 2278a5a to run-gh200-rental4-20261006t2245: stamps (unit 8/25 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-stamps=cta): exit 2 (0 min)
+2026-10-06T23:32:51Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 64 s4; runs only on a PASS gate [unit 9/25 olmoe-1b-7b stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:32:51Z stamps END: exit 2 after 0 min [unit 9/25 olmoe-1b-7b stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64]
+2026-10-06T23:32:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 63cda07 to run-gh200-rental4-20261006t2245: stamps (unit 9/25 olmoe-1b-7b stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64): exit 2 (0 min)
+2026-10-06T23:32:54Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 32 s4; runs only on a PASS gate [unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4] (estimate 3 min, cap 8 min, 344 min left)
+2026-10-06T23:32:54Z stamps END: exit 2 after 0 min [unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4]
+2026-10-06T23:32:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9454d0f to run-gh200-rental4-20261006t2245: stamps (unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4): exit 2 (0 min)
+2026-10-06T23:32:57Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 128 s4; runs only on a PASS gate [unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128] (estimate 3 min, cap 8 min, 344 min left)
+2026-10-06T23:32:57Z stamps END: exit 2 after 0 min [unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128]
+2026-10-06T23:32:58Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed adc268c to run-gh200-rental4-20261006t2245: stamps (unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128): exit 2 (0 min)
+2026-10-06T23:33:00Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 64 s8; runs only on a PASS gate [unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:00Z stamps END: exit 2 after 0 min [unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8]
+2026-10-06T23:33:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4499109 to run-gh200-rental4-20261006t2245: stamps (unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8): exit 2 (0 min)
+2026-10-06T23:33:03Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=112), G=8 treads 1 arms native private, BK 64 s4; runs only on a PASS gate [unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112] (estimate 3 min, cap 10 min, 344 min left)
+2026-10-06T23:33:03Z stamps END: exit 2 after 0 min [unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112]
+2026-10-06T23:33:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 618e9c8 to run-gh200-rental4-20261006t2245: stamps (unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112): exit 2 (0 min)
+2026-10-06T23:33:06Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=112), G=8 treads 1 2 arms native, BK 64 s4; runs only on a PASS gate [unit 14/25 mixtral-8x7b sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:06Z stamps END: exit 2 after 0 min [unit 14/25 mixtral-8x7b sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112]
+2026-10-06T23:33:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9e323a5 to run-gh200-rental4-20261006t2245: stamps (unit 14/25 mixtral-8x7b sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112): exit 2 (0 min)
+2026-10-06T23:33:09Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 arms native shared, BK 64 s4; runs only on a PASS gate [unit 15/25 olmoe-1b-7b stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:09Z stamps END: exit 2 after 0 min [unit 15/25 olmoe-1b-7b stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta]
+2026-10-06T23:33:10Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c3ec050 to run-gh200-rental4-20261006t2245: stamps (unit 15/25 olmoe-1b-7b stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta): exit 2 (0 min)
+2026-10-06T23:33:12Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 arms native shared, BK 64 s8; runs only on a PASS gate [unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8] (estimate 2 min, cap 8 min, 344 min left)
+2026-10-06T23:33:12Z stamps END: exit 2 after 0 min [unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8]
+2026-10-06T23:33:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9676741 to run-gh200-rental4-20261006t2245: stamps (unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8): exit 2 (0 min)
+2026-10-06T23:33:15Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64] (estimate 4 min, cap 20 min, 344 min left)
+2026-10-06T23:36:02Z bytes END: exit 0 after 3 min [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64]
+2026-10-06T23:36:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 6a4eb5f to run-gh200-rental4-20261006t2245: bytes (unit 17/25 olmoe-1b-7b k64s4 byte-groups=64): exit 0 (3 min)
+2026-10-06T23:36:06Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 32 [unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4] (estimate 4 min, cap 20 min, 341 min left)
+2026-10-06T23:38:38Z bytes END: exit 0 after 3 min [unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4]
+2026-10-06T23:38:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 0310e15 to run-gh200-rental4-20261006t2245: bytes (unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (3 min)
+2026-10-06T23:38:41Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --block-k 128 [unit 19/25 olmoe-1b-7b k128s4 byte-groups=64 block-k=128] (estimate 4 min, cap 20 min, 338 min left)
+2026-10-06T23:41:13Z bytes END: exit 0 after 3 min [unit 19/25 olmoe-1b-7b k128s4 byte-groups=64 block-k=128]
+2026-10-06T23:41:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d80daf0 to run-gh200-rental4-20261006t2245: bytes (unit 19/25 olmoe-1b-7b k128s4 byte-groups=64 block-k=128): exit 0 (3 min)
+2026-10-06T23:41:17Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 6 [unit 20/25 olmoe-1b-7b k64s6 byte-groups=64 num-stages=6] (estimate 4 min, cap 20 min, 336 min left)
+2026-10-06T23:43:49Z bytes END: exit 0 after 3 min [unit 20/25 olmoe-1b-7b k64s6 byte-groups=64 num-stages=6]
+2026-10-06T23:43:49Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 34fc821 to run-gh200-rental4-20261006t2245: bytes (unit 20/25 olmoe-1b-7b k64s6 byte-groups=64 num-stages=6): exit 0 (3 min)
+2026-10-06T23:43:52Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 2 [unit 21/25 olmoe-1b-7b k64s2 byte-groups=64 num-stages=2] (estimate 4 min, cap 20 min, 333 min left)
+2026-10-06T23:46:24Z bytes END: exit 0 after 3 min [unit 21/25 olmoe-1b-7b k64s2 byte-groups=64 num-stages=2]
+2026-10-06T23:46:25Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 7617907 to run-gh200-rental4-20261006t2245: bytes (unit 21/25 olmoe-1b-7b k64s2 byte-groups=64 num-stages=2): exit 0 (3 min)
+2026-10-06T23:46:28Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 [unit 22/25 olmoe-1b-7b k64s3 byte-groups=64 num-stages=3] (estimate 4 min, cap 20 min, 330 min left)
+2026-10-06T23:49:00Z bytes END: exit 0 after 3 min [unit 22/25 olmoe-1b-7b k64s3 byte-groups=64 num-stages=3]
+2026-10-06T23:49:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 8c67ae0 to run-gh200-rental4-20261006t2245: bytes (unit 22/25 olmoe-1b-7b k64s3 byte-groups=64 num-stages=3): exit 0 (3 min)
+2026-10-06T23:49:04Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 8 [unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8] (estimate 4 min, cap 20 min, 328 min left)
+2026-10-06T23:51:36Z bytes END: exit 0 after 3 min [unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8]
+2026-10-06T23:51:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c2eb38f to run-gh200-rental4-20261006t2245: bytes (unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8): exit 0 (3 min)
+2026-10-06T23:51:40Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9] (estimate 16 min, cap 45 min, 325 min left)
+2026-10-07T00:07:49Z timed END: exit 0 after 16 min [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9]
+2026-10-07T00:07:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c3fa1d1 to run-gh200-rental4-20261006t2245: timed (unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9): exit 0 (16 min)
+2026-10-07T00:07:58Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15] (estimate 16 min, cap 45 min, 309 min left)
+2026-10-07T00:24:06Z timed END: exit 0 after 16 min [unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15]
+2026-10-07T00:24:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 5124235 to run-gh200-rental4-20261006t2245: timed (unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15): exit 0 (16 min)
+2026-10-07T00:24:10Z driver end: exit 3

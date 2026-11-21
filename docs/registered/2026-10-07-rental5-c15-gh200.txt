@@ -1,0 +1,41 @@
+REGISTERED 2026-10-07, before any rental-5 page: rental 5, 2026-10-07-rental5-c15-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r5 DESIGN.md 2.6 (the SHARED c15 lever) with design-r5-review (c15 kept; the c15 skew cells are BLIND-CALMODEL)
+tool: scorer scripts/scoring/rental5/score_c15.py
+
+predicted median Delta (us): {'D': 23.68896, 'M': 31.736064, 'FIXED': 0.0}  sigma_noise 1.286503 us
+
+pages:
+  c15: olmoe-1b-7b timed label sk15: SHARED at 15 copies on PT PW DW uniform, NATIVE uniform, n 2 and 4 (docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json)
+  c9: the skew pages ska (PT, PW, uniform) and skb (DW) of olmoe-1b-7b at 9 copies
+  declaration_check: each page's recorded experts_declared for SHARED must be 64 x its label's copies (15 or 9), else NOT SCORED
+why: at fixed n the SHARED dead term and the live (NATIVE-path) term are collinear on the c9 skew cells (design-r5 work/collin_skew.txt: r -0.999); with the c15 cells r is about -0.08
+statistic:
+  Delta: Delta(h, n) = [S - N](c15) - [S - N](c9), N the NATIVE uniform cell of each page, us; the alignment growth A_n (SHARED - NATIVE align_probe, c15 minus c9, rental 4's) subtracted when both pages carry an align_probe, else raw Delta, labelled
+  median: the median over the 8 cells (PT PW DW uniform x n 2, 4)
+  two_regressor: [S - N] = a + d N_dead + b live over the c9 and c15 cells, printed with its VIF
+predicted_median_us:
+  D: 23.68896
+  M: 31.736064
+  FIXED: 0.0
+noise:
+  sigma_noise_us: 1.286503
+  basis: the sd of the median of the 8 Deltas by simulation (c15_sigma: 40000 draws, seed 20261007), every cell at 0.18% of T = the median predicted S(c15) 0.6500 ms, with ONE NATIVE uniform cell per (page, n) shared by the four histograms (build-r5-review F4: the Deltas are correlated)
+  independent_formula_us: 1.034211
+  independent_formula: 1.25 x 2 x 0.18% x T / sqrt 8 (the design's, which treats the 8 Deltas as independent): printed only
+  review_check: build-r5-review's own simulation read 1.292 us and D against M 6.2 sigma; this registration's seeded simulation reads the value above
+z: (Delta_meas - Delta_pred) / sigma_noise
+rules:
+  D: FAILS if |z_D| > 3; else HOLDS
+  M: EXCLUDED if |z_M| > 3
+  FIXED: EXCLUDED if Delta > 3 sigma_noise
+  SKEW-DEAD: D predicts the dead increment is the same at every h (it depends on numel and the declaration only); SKEW-DEAD is shown when |median_h Delta(h in PT PW DW) - Delta(uniform)| > 3 sigma_noise
+  separation: D against M 6.3 sigma, D against FIXED 18.4 sigma
+  printed: every Delta(h, n), raw and alignment-corrected, both noise values (0.18% and 0.10%)
+labels: BLIND-CALMODEL: the c15 skew cells have no page; A2's uniform c15 page (rental 4) is SEEN, so D's level is SEEN-confirmed there and only the skew invariance is blind
+secondary: calibration and gamma: NOT APPLICABLE (one statistic over 8 cells; fewer than 3 predicted values are distinct)
+missing: the c15 page or either c9 page missing: NOT SCORED (drop-group c15 holds sk15; the c9 pages are ska / skb of sko, never dropped)
+seen_data:
+  - d, kappa CAL-counters; the fit CAL
+  - A2's uniform c15 page SEEN
+  - sigma_page SEEN

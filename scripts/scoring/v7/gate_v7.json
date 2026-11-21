@@ -1,0 +1,182 @@
+{
+ "what": "model v7's gate (one GO / NO-GO per regime, each independent)",
+ "registration": "2026-11-17-v7-gate-gh200",
+ "switches": {
+  "RR": true,
+  "D6FIX": true
+ },
+ "go_rule": "one GO / NO-GO per regime (R3, PREFILL, DECODE), each regime's GO independent of the others; a regime may go to ONE blind only on its own GO, the blind (models, cells, bars) registered separately before any blind page; no bar may be changed after this file is public; the gate (gate_v7.py) runs only after this file is public, on v7 with every switch on (RR, D6FIX), and its first reading on the published pages is the reading",
+ "freeze": {
+  "verdict": "HOLDS",
+  "files": 148
+ },
+ "r3": {
+  "G-R3": {
+   "compared": 300,
+   "unequal_registered": 0,
+   "unequal_pricer": 0,
+   "verdict": "PASSES"
+  },
+  "verdict": "GO",
+  "why": [],
+  "ablation (DESCRIPTIVE)": {}
+ },
+ "prefill": {
+  "verdict": "NO-GO",
+  "why": [
+   "REFUSED: ModuleNotFoundError: No module named 'refit4'"
+  ]
+ },
+ "decode": {
+  "CAL": {
+   "verdict": "GO",
+   "E1_CAL_IN_SAMPLE": {
+    "cells": 91,
+    "rms": 0.016032,
+    "worst": -0.053955,
+    "mean": -0.001724
+   },
+   "bars": {
+    "rms_max": 0.03,
+    "max_abs": 0.08,
+    "mean_max": 0.015
+   }
+  },
+  "RE-SCORE": {
+   "verdict": "PASSES",
+   "pooled": {
+    "cells": 220,
+    "rms": 0.031928,
+    "worst": 0.155788,
+    "mean": 0.008612
+   },
+   "rms_max": 0.04,
+   "cells_committed": 220
+  },
+  "verdict": "GO",
+  "why": [],
+  "detail": {
+   "cal_why": [],
+   "rho": "fixed",
+   "constants": {
+    "T0_GR_ms": -0.001867147154960224,
+    "s_naive_GR_ms": -0.0021375435249685803,
+    "s_block_GR_ms": -0.0007223242955973449
+   },
+   "fix": {
+    "rho": "scaled",
+    "T0_GR_ms": -0.001867147154960224,
+    "s_naive_GR_ms": 0.009550916583607093,
+    "s_block_GR_ms": -0.0007223242955973451
+   },
+   "per_model": {
+    "phi-3.5-moe": {
+     "cells": 42,
+     "rms": 0.028537,
+     "worst": 0.050779,
+     "mean": 0.019461
+    },
+    "qwen1.5-moe-a2.7b": {
+     "cells": 52,
+     "rms": 0.019198,
+     "worst": 0.050997,
+     "mean": 0.00201
+    },
+    "jetmoe-8b": {
+     "cells": 41,
+     "rms": 0.022773,
+     "worst": -0.067537,
+     "mean": -0.000227
+    },
+    "deepseek-v2-lite": {
+     "cells": 43,
+     "rms": 0.011684,
+     "worst": -0.038526,
+     "mean": 0.001959
+    },
+    "granite-3.0-3b-a800m": {
+     "cells": 42,
+     "rms": 0.058506,
+     "worst": 0.155788,
+     "mean": 0.021375
+    }
+   }
+  },
+  "ablation (DESCRIPTIVE)": {
+   "off (v6d)": {
+    "CAL": {
+     "verdict": "GO",
+     "E1_CAL_IN_SAMPLE": {
+      "cells": 91,
+      "rms": 0.01814,
+      "worst": 0.059746,
+      "mean": -0.000304
+     },
+     "bars": {
+      "rms_max": 0.03,
+      "max_abs": 0.08,
+      "mean_max": 0.015
+     }
+    },
+    "RE-SCORE": {
+     "verdict": "FAILS",
+     "pooled": {
+      "cells": 220,
+      "rms": 0.045169,
+      "worst": -0.314679,
+      "mean": 0.004067
+     },
+     "rms_max": 0.04,
+     "cells_committed": 220
+    },
+    "verdict": "NO-GO",
+    "why": [
+     "RE-SCORE: pooled rms 4.52%, not under 4.0%"
+    ],
+    "detail": {
+     "cal_why": [],
+     "rho": "fixed",
+     "constants": {
+      "T0_GR_ms": -0.001867147154960224,
+      "s_naive_GR_ms": -0.0021375435249685803,
+      "s_block_GR_ms": -0.0007223242955973449
+     },
+     "fix": null,
+     "per_model": {
+      "phi-3.5-moe": {
+       "cells": 42,
+       "rms": 0.031755,
+       "worst": -0.08374,
+       "mean": 0.017291
+      },
+      "qwen1.5-moe-a2.7b": {
+       "cells": 52,
+       "rms": 0.066963,
+       "worst": -0.314679,
+       "mean": -0.014062
+      },
+      "jetmoe-8b": {
+       "cells": 41,
+       "rms": 0.022773,
+       "worst": -0.067537,
+       "mean": -0.000227
+      },
+      "deepseek-v2-lite": {
+       "cells": 43,
+       "rms": 0.013892,
+       "worst": -0.038526,
+       "mean": 0.000262
+      },
+      "granite-3.0-3b-a800m": {
+       "cells": 42,
+       "rms": 0.058506,
+       "worst": 0.155788,
+       "mean": 0.021375
+      }
+     }
+    }
+   }
+  }
+ },
+ "registration_sha256": "6336a5c91679c24a0777bced6e7deb379c59e6f342c4b41ae4fcb90ae8ae5af1"
+}

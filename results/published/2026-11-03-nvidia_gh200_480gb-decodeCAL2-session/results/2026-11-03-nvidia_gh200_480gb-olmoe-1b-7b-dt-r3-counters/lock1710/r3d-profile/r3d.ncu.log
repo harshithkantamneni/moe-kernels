@@ -1,0 +1,66 @@
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 53418 (/home/ubuntu/.local/share/uv/python/cpython-3.12.16-linux-aarch64-gnu/bin/python3.12)
+WARNING 11-03 23:20:45 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1024,device_name=NVIDIA_GH200_480GB.json
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 4 passes
+counter child: 6 cells, 0 refused, manifest /home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-olmoe-1b-7b-dt-r3-counters/lock1710/r3d-profile/r3d.manifest.json
+==PROF== Disconnected from process 53418
+==PROF== Report: /home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-olmoe-1b-7b-dt-r3-counters/lock1710/r3d-profile/r3d.ncu-rep

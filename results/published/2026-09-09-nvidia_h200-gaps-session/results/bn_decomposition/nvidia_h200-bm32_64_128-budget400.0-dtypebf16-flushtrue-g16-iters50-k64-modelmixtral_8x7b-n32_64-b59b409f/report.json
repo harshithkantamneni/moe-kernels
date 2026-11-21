@@ -1,0 +1,385 @@
+{
+  "ridge": 152.8120650229884,
+  "bandwidth_gbps": 4374.549151491332,
+  "ceiling_tflops": 668.4838893839521,
+  "ceiling_source": "measured on NVIDIA H200 (measured)",
+  "pinned": {
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 16,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "block_ns": [
+    32,
+    64,
+    128
+  ],
+  "subjects": [
+    32,
+    64,
+    128
+  ],
+  "reference_block_m": 256,
+  "arms": [
+    {
+      "block_n": 32,
+      "block_m": null,
+      "slope_per_tile": null,
+      "overhead_ms": 0.0,
+      "implied_tflops": null,
+      "ceiling_tflops": 668.4838893839521,
+      "fraction": null,
+      "refusals": [
+        "BLOCK_M=256's compute branch scaled to BLOCK_M=256 is 4.559 of one full weight read. A memory branch cannot exceed one full re-read per tile (alpha <= 1), so no tread at any block size in this sweep could stand above this line: every 'not identifiable' below would be a property of the reference and not a measurement"
+      ],
+      "note": "BLOCK_M=256 ladder is proportional to 2.0% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads",
+      "basis": "OWN",
+      "import_note": ""
+    },
+    {
+      "block_n": 64,
+      "block_m": null,
+      "slope_per_tile": null,
+      "overhead_ms": 0.0,
+      "implied_tflops": null,
+      "ceiling_tflops": 668.4838893839521,
+      "fraction": null,
+      "refusals": [
+        "BLOCK_M=256's compute branch scaled to BLOCK_M=256 is 3.068 of one full weight read. A memory branch cannot exceed one full re-read per tile (alpha <= 1), so no tread at any block size in this sweep could stand above this line: every 'not identifiable' below would be a property of the reference and not a measurement"
+      ],
+      "note": "BLOCK_M=256 ladder is proportional to 3.1% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads",
+      "basis": "OWN",
+      "import_note": ""
+    },
+    {
+      "block_n": 128,
+      "block_m": null,
+      "slope_per_tile": null,
+      "overhead_ms": 0.0,
+      "implied_tflops": null,
+      "ceiling_tflops": 668.4838893839521,
+      "fraction": null,
+      "refusals": [
+        "BLOCK_M=256's compute branch scaled to BLOCK_M=256 is 2.339 of one full weight read. A memory branch cannot exceed one full re-read per tile (alpha <= 1), so no tread at any block size in this sweep could stand above this line: every 'not identifiable' below would be a property of the reference and not a measurement"
+      ],
+      "note": "BLOCK_M=256 ladder is proportional to 3.8% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads",
+      "basis": "OWN",
+      "import_note": ""
+    }
+  ],
+  "cells": [],
+  "cell_sigma": {},
+  "cell_survival": {},
+  "fits": {
+    "pooled_exact": {
+      "form": "EXA",
+      "block_m": null,
+      "alpha_b": null,
+      "alpha_a": null,
+      "delta": null,
+      "n_cells": 0,
+      "dof": -2,
+      "rms": null,
+      "residuals": [],
+      "labels": [],
+      "note": "0 usable cell(s) against 2 parameters: a fit that cannot leave a residual cannot test the model it fits, so nothing is reported rather than a number with no degrees of freedom behind it"
+    },
+    "pooled_linear": {
+      "form": "LIN",
+      "block_m": null,
+      "alpha_b": null,
+      "alpha_a": null,
+      "delta": null,
+      "n_cells": 0,
+      "dof": -2,
+      "rms": null,
+      "residuals": [],
+      "labels": [],
+      "note": "0 usable cell(s) against 2 parameters: a fit that cannot leave a residual cannot test the model it fits, so nothing is reported rather than a number with no degrees of freedom behind it"
+    },
+    "pooled_raw_delta_fitted": {
+      "form": "EXA3",
+      "block_m": null,
+      "alpha_b": null,
+      "alpha_a": null,
+      "delta": null,
+      "n_cells": 0,
+      "dof": -3,
+      "rms": null,
+      "residuals": [],
+      "labels": [],
+      "note": "0 usable cell(s) against 3 parameters: a fit that cannot leave a residual cannot test the model it fits, so nothing is reported rather than a number with no degrees of freedom behind it"
+    }
+  },
+  "chi2": null,
+  "chi2_note": "no fit with degrees of freedom to test",
+  "structure": {
+    "correlations": {
+      "(BM/BN)^2": null,
+      "N-tiles per M-tile": null,
+      "1/BN": null,
+      "BLOCK_M": null
+    },
+    "worst": "",
+    "value": null,
+    "read": false
+  },
+  "bootstrap": {
+    "draws": 1000,
+    "alpha_a_sd": null,
+    "alpha_b_sd": null,
+    "delta_sd": null,
+    "alpha_b_by_bm_sd": {},
+    "note": "1000 draws, repeats resampled with replacement, whole chain re-decided per draw (reference, refusals, membership, alpha)",
+    "scope": "within-process warm repeats, resampled with replacement; blind to anything that changes between processes",
+    "mde_alpha_a": null,
+    "mde_convention": "one-sample, two-sided 0.05, power 0.8",
+    "cross_arm_prior_sd": 0.022862534415054224,
+    "cross_arm_prior_sd_basis": "ASSUMED",
+    "cross_arm_prior_sd_source": "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet]"
+  },
+  "measured_spread": 0.0037155489799820408,
+  "measured_spread_source": "this run's own repeats, median over 3 arm(s)",
+  "clock_state": {
+    "timed": 204,
+    "level": 43,
+    "low": 0,
+    "high": 161,
+    "drift": 8,
+    "unknown": 0,
+    "excluded_shaped": 8,
+    "rule": "LOW or DRIFT excludes; HIGH is kept, its fixed-roof fraction is not comparable and roof_at_cell_clock is the number to read; this fit drops no tread for its clock"
+  },
+  "c2_power": {
+    "ran": true,
+    "group_m": 16,
+    "reps": 17,
+    "noise": 0.0037155489799820408,
+    "noise_source": "this run's own repeats, median over 3 arm(s)",
+    "draws": 200,
+    "truth_pass": true,
+    "missing_pass": false,
+    "truth_chi2": 0.17243083096401385,
+    "missing_chi2": 157.02983756186578,
+    "note": "",
+    "discriminates": true,
+    "reason": "the probe discriminates at this pinning (GROUP_SIZE_M=16, 17 reps, spread 0.37% from this run's own repeats, median over 3 arm(s), 200 draws: TRUTH PASSES, MISSING FAILS), so C2's verdict below is a verdict"
+  },
+  "alpha_a_band": [
+    0.1,
+    0.38
+  ],
+  "spreads": {
+    "32": 0.0037155489799820408,
+    "64": 0.0034087419702818703,
+    "128": 0.0037249037962398075
+  },
+  "inversions": [],
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "name": "V0 non-vacuity",
+      "prediction": "this report examined real work",
+      "rule": "every counted quantity is above zero",
+      "passed": false,
+      "observed": "arms on their OWN branch=0, bn arms with a reference=0, bootstrap draws=1000, timings read=204, treads fitted=0, usable alpha cells=0",
+      "invalidates": "every gate in this report: a check with no input reports no failures",
+      "lines": [
+        "nothing was counted for: arms on their OWN branch, bn arms with a reference, treads fitted, usable alpha cells"
+      ]
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V1 override took effect",
+      "prediction": "every (BN, BM) setting compiled its own kernel",
+      "rule": ">= 1 fresh Triton artefact per setting that ran cells",
+      "passed": true,
+      "observed": "n32/bm256:17, n64/bm256:16, n128/bm256:16",
+      "invalidates": "every number in this report: one kernel compared with itself gives alpha_a = 0 and a residual of pure noise, which is a PASS on C1's alternative and on C2",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V2 reference level",
+      "prediction": "each arm's compute reference runs at a plausible rate",
+      "rule": "implied TFLOP/s in [25%, 100%] of the attached card's calibrated peak, and the reference outranks every subject",
+      "passed": false,
+      "observed": "BN=32 no reference; BN=64 no reference; BN=128 no reference",
+      "invalidates": "every alpha in the arms that failed, and with them the points the decomposition is fitted through",
+      "lines": [
+        "BN=32: BLOCK_M=256's compute branch scaled to BLOCK_M=256 is 4.559 of one full weight read. A memory branch cannot exceed one full re-read per tile (alpha <= 1), so no tread at any block size in this sweep could stand above this line: every 'not identifiable' below would be a property of the reference and not a measurement",
+        "BN=64: BLOCK_M=256's compute branch scaled to BLOCK_M=256 is 3.068 of one full weight read. A memory branch cannot exceed one full re-read per tile (alpha <= 1), so no tread at any block size in this sweep could stand above this line: every 'not identifiable' below would be a property of the reference and not a measurement",
+        "BN=128: BLOCK_M=256's compute branch scaled to BLOCK_M=256 is 2.339 of one full weight read. A memory branch cannot exceed one full re-read per tile (alpha <= 1), so no tread at any block size in this sweep could stand above this line: every 'not identifiable' below would be a property of the reference and not a measurement",
+        "`compute_reference` tests PROPORTIONALITY and never LEVEL; a line 43.6x too steep is perfectly proportional and qualified at 0.2% mean error.",
+        "An arm on an IMPORTED branch is not a failure of this gate -- it passed the same level bar, on another arm's ladder -- but it is an ASSUMPTION, and V3's cross-BN spread is what stands behind it."
+      ]
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V3 references agree across BN",
+      "prediction": "the arms' compute references describe one machine",
+      "rule": "max/min implied TFLOP/s across BN <= 2.0x",
+      "passed": null,
+      "observed": "fewer than two arms produced a reference",
+      "invalidates": "the comparison BETWEEN arms, which is the entire experiment: alpha_a is a difference across BN and cannot survive the references moving 40x between them",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V4 ladders are readable",
+      "prediction": "quiet, monotone ladders and stable membership",
+      "rule": "across-repeat spread <= 2%, zero inversions beyond 2 sigma, every cell surviving >= 50% of bootstrap draws",
+      "passed": true,
+      "observed": "spread BN=32:0.372%, BN=64:0.341%, BN=128:0.372%; 0 inversion(s); 0 unstable cell(s)",
+      "invalidates": "the fitted slopes, which are what alpha is: OLS gives the last tread the most leverage, and a cell whose membership flips between draws has a sigma conditioned on surviving",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V5 identifiability",
+      "prediction": "at least 3 BN values survive with an alpha",
+      "rule": ">= 3 distinct BN, and > 3 cells in total so the pooled fit keeps a degree of freedom",
+      "passed": false,
+      "observed": "0 usable cell(s) over 0 BN value(s); ",
+      "invalidates": "C1, C2, C3 and C4 alike: with two BN points and two unknowns the fit is exact, the residual is identically zero, and the model cannot be tested at all",
+      "lines": [
+        "the primary BLOCK_M=128 carries 0 BN value(s). The parallel-branch tolerance is the predicted reason for a shortfall there and it is not a defect in the run: |B/C - 1| at 128 is predicted at 0.10 on the A100 against a tolerance of 0.15."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C6 estimator sharpness",
+      "prediction": "alpha_a's interval is tighter than the two-point reading it replaces",
+      "rule": "bootstrap sd(alpha_a) <= 0.025, inside the 0.043 sd of the sharpest two-point slope this three-point fit replaces. That sd is the DECLARED prior over the pair's ds and is PINNED there, so a measured cross-arm floor does not lower this bar and does not make the two-point reading sharper than it was registered at. NOT half the band width either: the band is 0.28 wide and half of it would be a looser bar than the reading being replaced",
+      "passed": null,
+      "observed": "no bootstrap spread",
+      "invalidates": "C1 ALONE, which reads UNKNOWN: an estimator whose interval is wider than the hypothesis it tests has not tested it, and a PASS would be an artefact of the band's width. alpha_b, C3 and C5 do not pass through this spread and stay quotable",
+      "lines": [
+        "1000 draws, repeats resampled with replacement, whole chain re-decided per draw (reference, refusals, membership, alpha)",
+        "the bar is read from BM=64 of mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json"
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C1 alpha_a",
+      "prediction": "alpha_a lands in [0.10, 0.38]",
+      "rule": "0.10 <= alpha_a <= 0.38 from the EXA fit",
+      "passed": null,
+      "observed": "not fitted",
+      "invalidates": "",
+      "lines": [
+        "alpha_a band [0.10, 0.38], derived from the ONLY pair of committed arms that differ in BLOCK_SIZE_N and nothing else:",
+        "  BM= 32  alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds 0.375  ->  alpha_a 0.286 +/- 0.086",
+        "  BM= 64  alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds 0.750  ->  alpha_a 0.146 +/- 0.043",
+        "  source: mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json",
+        "  every +/- above is the DECLARED prior 0.0229, times sqrt(2) for the difference of two arms, divided by that pair's ds. It is PINNED to the declared number and deliberately NOT re-read from a measured floor: a pre-registration that moves when new information arrives is not one, so this band and the C6 bar built on it stay where they were registered even after part (a) publishes. What a measured floor moves is what the run can RESOLVE, which is the MDE and the cross-arm floor printed beside every interval below.",
+        "  the band is 0.28 wide against input sds of 0.043-0.086, i.e. 3.2-6.5x the spread of the numbers that built it. A PASS inside it is weak evidence; a FAIL outside it is not. Narrowing it is what a three-point BN fit is for, which is this run.",
+        "A FAIL ABOVE the band with a clean residual would say both committed two-point slopes were biased low by the denominator the two-point form drops; a FAIL at or near zero says BN does not move alpha at all and there is no activation re-read to decompose. A PASS is weak: the two slopes above disagree by a factor of two and the band covers both, which is the width a three-point fit is here to narrow."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C2 model completeness",
+      "prediction": "the three terms are ALL of it: the residual is noise",
+      "rule": "chi2 = sum (r/sigma)^2 / dof <= 4.0, sigma from this run's own bootstrap, AND the same gate must FAIL on a planted missing-term world at this pinning",
+      "passed": null,
+      "observed": "not computable: no fit with degrees of freedom to test",
+      "invalidates": "",
+      "lines": [
+        "C2 power probe: the probe discriminates at this pinning (GROUP_SIZE_M=16, 17 reps, spread 0.37% from this run's own repeats, median over 3 arm(s), 200 draws: TRUTH PASSES, MISSING FAILS), so C2's verdict below is a verdict",
+        "structure: residual too small to have a shape; correlations reported and not read",
+        "A FAIL is a RESULT and the more interesting one: it says alpha_fitted is not the blend the study writes down, and the correlation above names the term to add. The candidate this run is built to see is alpha_b itself moving with BN, which the model forbids and which the published G=1 pair already hints at: the two BN values there imply alpha_b 0.92 and 0.81."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C3 alpha_b invariance",
+      "prediction": "alpha_b is the same at every BLOCK_M",
+      "rule": "|alpha_b(BM1) - alpha_b(BM2)| <= 3 sigma",
+      "passed": null,
+      "observed": "0 block size(s) produced an alpha_b",
+      "invalidates": "",
+      "lines": [
+        "Two BM values are needed for this to be a test at all; the usual reason for one is the parallel-branch tolerance taking BLOCK_M=128."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C5 alpha_b is a miss fraction",
+      "prediction": "0 <= alpha_b <= 1",
+      "rule": "within 3 bootstrap sigma of [0, 1]",
+      "passed": null,
+      "observed": "not fitted",
+      "invalidates": "",
+      "lines": []
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C4 alpha_b against TEMPO",
+      "prediction": "alpha_b corroborates TEMPO's b2/b of 0.311/0.319",
+      "rule": "within 15% of the nearer TEMPO value",
+      "passed": null,
+      "observed": "not fitted",
+      "invalidates": "",
+      "lines": [
+        "THIS RUN IS PINNED AT GROUP_SIZE_M=16 and alpha_b is a property of that swizzle, not of the kernel. The study's earlier 0.307, and its '2-4% from TEMPO', are WITHDRAWN: that number was ALPHA_BY_BLOCK_M solved through (LIN), a unit artefact of reading a B/(A+B) fit as if it divided by weight bytes alone, not a measurement of alpha_b; through (EXA) the same G=1 ladders read alpha_b near 0.92, which is what 'consecutive M-tiles of one expert are scheduled far apart and the L2 keeps nothing' should look like. It was also pooled over GROUP_SIZE_M 1, 8, 16 and 64, which swing alpha by 0.39. So a FAIL at G=1 does NOT refute TEMPO, and a PASS at any G is the first number in this study that may be compared with TEMPO at all. Re-run at --group-m 16 to compare like with like."
+      ]
+    }
+  ],
+  "result_lines": [
+    "RESULT: VALIDITY V0 FAIL this report examined real work | saw arms on their OWN branch=0, bn arms with a reference=0, bootstrap draws=1000, timings read=204, treads fitted=0, usable alpha cells=0 | gate every counted quantity is above zero",
+    "RESULT: VALIDITY V1 PASS every (BN, BM) setting compiled its own kernel | saw n32/bm256:17, n64/bm256:16, n128/bm256:16 | gate >= 1 fresh Triton artefact per setting that ran cells",
+    "RESULT: VALIDITY V2 FAIL each arm's compute reference runs at a plausible rate | saw BN=32 no reference; BN=64 no reference; BN=128 no reference | gate implied TFLOP/s in [25%, 100%] of the attached card's calibrated peak, and the reference outranks every subject",
+    "RESULT: VALIDITY V3 UNKNOWN the arms' compute references describe one machine | saw fewer than two arms produced a reference | gate max/min implied TFLOP/s across BN <= 2.0x",
+    "RESULT: VALIDITY V4 PASS quiet, monotone ladders and stable membership | saw spread BN=32:0.372%, BN=64:0.341%, BN=128:0.372%; 0 inversion(s); 0 unstable cell(s) | gate across-repeat spread <= 2%, zero inversions beyond 2 sigma, every cell surviving >= 50% of bootstrap draws",
+    "RESULT: VALIDITY V5 FAIL at least 3 BN values survive with an alpha | saw 0 usable cell(s) over 0 BN value(s); | gate >= 3 distinct BN, and > 3 cells in total so the pooled fit keeps a degree of freedom",
+    "RESULT: CLAIM C6 UNKNOWN alpha_a's interval is tighter than the two-point reading it replaces | saw no bootstrap spread | gate bootstrap sd(alpha_a) <= 0.025, inside the 0.043 sd of the sharpest two-point slope this three-point fit replaces. That sd is the DECLARED prior over the pair's ds and is PINNED there, so a measured cross-arm floor does not lower this bar and does not make the two-point reading sharper than it was registered at. NOT half the band width either: the band is 0.28 wide and half of it would be a looser bar than the reading being replaced",
+    "RESULT: CLAIM C1 UNKNOWN alpha_a lands in [0.10, 0.38] | saw not fitted | gate 0.10 <= alpha_a <= 0.38 from the EXA fit",
+    "RESULT: CLAIM C2 UNKNOWN the three terms are ALL of it: the residual is noise | saw not computable: no fit with degrees of freedom to test | gate chi2 = sum (r/sigma)^2 / dof <= 4.0, sigma from this run's own bootstrap, AND the same gate must FAIL on a planted missing-term world at this pinning",
+    "RESULT: CLAIM C3 UNKNOWN alpha_b is the same at every BLOCK_M | saw 0 block size(s) produced an alpha_b | gate |alpha_b(BM1) - alpha_b(BM2)| <= 3 sigma",
+    "RESULT: CLAIM C5 UNKNOWN 0 <= alpha_b <= 1 | saw not fitted | gate within 3 bootstrap sigma of [0, 1]",
+    "RESULT: CLAIM C4 UNKNOWN alpha_b corroborates TEMPO's b2/b of 0.311/0.319 | saw not fitted | gate within 15% of the nearer TEMPO value"
+  ],
+  "gpu": "NVIDIA H200",
+  "run_id": "nvidia_h200-bm32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50-k64-modelmixtral_8x7b-n32_64-b59b409f",
+  "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s (triad pattern); calibrated 2026-09-09 at 981a42f6",
+  "alpha_a_band_provenance": [
+    "alpha_a band [0.10, 0.38], derived from the ONLY pair of committed arms that differ in BLOCK_SIZE_N and nothing else:",
+    "  BM= 32  alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds 0.375  ->  alpha_a 0.286 +/- 0.086",
+    "  BM= 64  alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds 0.750  ->  alpha_a 0.146 +/- 0.043",
+    "  source: mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json",
+    "  every +/- above is the DECLARED prior 0.0229, times sqrt(2) for the difference of two arms, divided by that pair's ds. It is PINNED to the declared number and deliberately NOT re-read from a measured floor: a pre-registration that moves when new information arrives is not one, so this band and the C6 bar built on it stay where they were registered even after part (a) publishes. What a measured floor moves is what the run can RESOLVE, which is the MDE and the cross-arm floor printed beside every interval below.",
+    "  the band is 0.28 wide against input sds of 0.043-0.086, i.e. 3.2-6.5x the spread of the numbers that built it. A PASS inside it is weak evidence; a FAIL outside it is not. Narrowing it is what a three-point BN fit is for, which is this run."
+  ],
+  "git_sha": "981a42f6caeb8b634a6a2e62113cc622d75910bc",
+  "gpu_name": "NVIDIA H200",
+  "bandwidth_source": "this machine's calibration (NVIDIA H200 (measured))",
+  "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "981a42f6caeb8b634a6a2e62113cc622d75910bc",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-09T16:59:01+00:00",
+    "hostname": "238b79f71e94",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+    "ridge": 152.8120650229884,
+    "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s (triad pattern); calibrated 2026-09-09 at 981a42f6",
+    "bandwidth": 4374.549151491332,
+    "bandwidth_source": "this machine's calibration (NVIDIA H200 (measured))",
+    "warmup_ms": 300.0,
+    "iters": 77,
+    "target_ms": 400.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}

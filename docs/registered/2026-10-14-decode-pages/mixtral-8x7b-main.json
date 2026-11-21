@@ -1,0 +1,966 @@
+{
+ "schema": "moe-kernels/decode-page/1",
+ "model": "mixtral-8x7b",
+ "page": "mixtral-8x7b-main",
+ "shuffle_seed": 20261014,
+ "decl_copies": null,
+ "label": "SYNTHETIC (scripts/decode_synth.py); DW cells EXTRAPOLATED from rental 5's fitted shapes",
+ "cells": [
+  {
+   "label": "L-T1-A2",
+   "T": 1,
+   "counts": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "U-T1",
+   "T": 1,
+   "counts": [
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    1,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261017
+  },
+  {
+   "label": "L-T2-A2",
+   "T": 2,
+   "counts": [
+    0,
+    0,
+    2,
+    0,
+    0,
+    2,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T2-A3",
+   "T": 2,
+   "counts": [
+    0,
+    1,
+    2,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T2-A4",
+   "T": 2,
+   "counts": [
+    0,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "U-T2",
+   "T": 2,
+   "counts": [
+    0,
+    2,
+    0,
+    0,
+    1,
+    0,
+    1,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261018
+  },
+  {
+   "label": "L-T4-A2",
+   "T": 4,
+   "counts": [
+    0,
+    0,
+    4,
+    0,
+    0,
+    4,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T4-A4",
+   "T": 4,
+   "counts": [
+    0,
+    2,
+    2,
+    2,
+    0,
+    2,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T4-A6",
+   "T": 4,
+   "counts": [
+    1,
+    1,
+    2,
+    1,
+    0,
+    2,
+    0,
+    1
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T4-A8",
+   "T": 4,
+   "counts": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "MIN-T4",
+   "T": 4,
+   "counts": [
+    4,
+    4,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "MINCOVER",
+   "pair": "L-T4-A2"
+  },
+  {
+   "label": "U-T4",
+   "T": 4,
+   "counts": [
+    3,
+    1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261020
+  },
+  {
+   "label": "DW-T4",
+   "T": 4,
+   "counts": [
+    0,
+    1,
+    0,
+    1,
+    2,
+    0,
+    3,
+    1
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "TRACE-DW EXTRAPOLATED",
+   "seed": 20261017,
+   "coverage": 0.625,
+   "coverage_target": 0.625,
+   "matched": true,
+   "shape": "dirichlet 10.772 (fitted at B 256)"
+  },
+  {
+   "label": "L-T8-A2",
+   "T": 8,
+   "counts": [
+    0,
+    0,
+    8,
+    0,
+    0,
+    8,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T8-A4",
+   "T": 8,
+   "counts": [
+    0,
+    4,
+    4,
+    4,
+    0,
+    4,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T8-A6",
+   "T": 8,
+   "counts": [
+    2,
+    3,
+    3,
+    3,
+    0,
+    3,
+    0,
+    2
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T8-A8",
+   "T": 8,
+   "counts": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "U-T8",
+   "T": 8,
+   "counts": [
+    3,
+    1,
+    1,
+    2,
+    1,
+    1,
+    2,
+    5
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261024
+  },
+  {
+   "label": "US-T8",
+   "T": 8,
+   "counts": [
+    3,
+    1,
+    1,
+    2,
+    1,
+    1,
+    2,
+    5
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM-UNSHUFFLED",
+   "shuffle": false,
+   "pair": "U-T8"
+  },
+  {
+   "label": "DW-T8",
+   "T": 8,
+   "counts": [
+    4,
+    2,
+    1,
+    4,
+    2,
+    2,
+    1,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "TRACE-DW EXTRAPOLATED",
+   "seed": 20262019,
+   "coverage": 0.875,
+   "coverage_target": 0.875,
+   "matched": true,
+   "shape": "dirichlet 10.772 (fitted at B 256)"
+  },
+  {
+   "label": "L-T16-A2",
+   "T": 16,
+   "counts": [
+    0,
+    0,
+    16,
+    0,
+    0,
+    16,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T16-A4",
+   "T": 16,
+   "counts": [
+    0,
+    8,
+    8,
+    8,
+    0,
+    8,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T16-A6",
+   "T": 16,
+   "counts": [
+    5,
+    5,
+    6,
+    5,
+    0,
+    6,
+    0,
+    5
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T16-A8",
+   "T": 16,
+   "counts": [
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "MIN-T16",
+   "T": 16,
+   "counts": [
+    16,
+    16,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "MINCOVER",
+   "pair": "L-T16-A2"
+  },
+  {
+   "label": "U-T16",
+   "T": 16,
+   "counts": [
+    6,
+    3,
+    4,
+    7,
+    1,
+    3,
+    3,
+    5
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261032
+  },
+  {
+   "label": "DW-T16",
+   "T": 16,
+   "counts": [
+    2,
+    5,
+    5,
+    4,
+    4,
+    6,
+    4,
+    2
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "TRACE-DW EXTRAPOLATED",
+   "seed": 20263017,
+   "coverage": 1.0,
+   "coverage_target": 1.0,
+   "matched": true,
+   "shape": "dirichlet 10.772 (fitted at B 256)"
+  },
+  {
+   "label": "L-T32-A2",
+   "T": 32,
+   "counts": [
+    0,
+    0,
+    32,
+    0,
+    0,
+    32,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T32-A4",
+   "T": 32,
+   "counts": [
+    0,
+    16,
+    16,
+    16,
+    0,
+    16,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T32-A6",
+   "T": 32,
+   "counts": [
+    10,
+    11,
+    11,
+    11,
+    0,
+    11,
+    0,
+    10
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T32-A8",
+   "T": 32,
+   "counts": [
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "U-T32",
+   "T": 32,
+   "counts": [
+    4,
+    6,
+    12,
+    8,
+    11,
+    10,
+    7,
+    6
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261048
+  },
+  {
+   "label": "US-T32",
+   "T": 32,
+   "counts": [
+    4,
+    6,
+    12,
+    8,
+    11,
+    10,
+    7,
+    6
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM-UNSHUFFLED",
+   "shuffle": false,
+   "pair": "U-T32"
+  },
+  {
+   "label": "DW-T32",
+   "T": 32,
+   "counts": [
+    6,
+    4,
+    10,
+    2,
+    12,
+    12,
+    10,
+    8
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "TRACE-DW EXTRAPOLATED",
+   "seed": 20264017,
+   "coverage": 1.0,
+   "coverage_target": 1.0,
+   "matched": true,
+   "shape": "dirichlet 10.772 (fitted at B 256)"
+  },
+  {
+   "label": "L-T64-A2",
+   "T": 64,
+   "counts": [
+    0,
+    0,
+    64,
+    0,
+    0,
+    64,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T64-A4",
+   "T": 64,
+   "counts": [
+    0,
+    32,
+    32,
+    32,
+    0,
+    32,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T64-A6",
+   "T": 64,
+   "counts": [
+    21,
+    21,
+    22,
+    21,
+    0,
+    22,
+    0,
+    21
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T64-A8",
+   "T": 64,
+   "counts": [
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "MIN-T64",
+   "T": 64,
+   "counts": [
+    64,
+    64,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "MINCOVER",
+   "pair": "L-T64-A2"
+  },
+  {
+   "label": "U-T64",
+   "T": 64,
+   "counts": [
+    19,
+    16,
+    14,
+    14,
+    16,
+    20,
+    12,
+    17
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261080
+  },
+  {
+   "label": "L-T96-A2",
+   "T": 96,
+   "counts": [
+    0,
+    0,
+    96,
+    0,
+    0,
+    96,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T96-A4",
+   "T": 96,
+   "counts": [
+    0,
+    48,
+    48,
+    48,
+    0,
+    48,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T96-A6",
+   "T": 96,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    0,
+    32,
+    0,
+    32
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T96-A8",
+   "T": 96,
+   "counts": [
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "U-T96",
+   "T": 96,
+   "counts": [
+    20,
+    23,
+    30,
+    23,
+    20,
+    23,
+    29,
+    24
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261112
+  },
+  {
+   "label": "L-T128-A2",
+   "T": 128,
+   "counts": [
+    0,
+    0,
+    128,
+    0,
+    0,
+    128,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER-BOTTOM"
+  },
+  {
+   "label": "L-T128-A4",
+   "T": 128,
+   "counts": [
+    0,
+    64,
+    64,
+    64,
+    0,
+    64,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T128-A6",
+   "T": 128,
+   "counts": [
+    42,
+    43,
+    43,
+    43,
+    0,
+    43,
+    0,
+    42
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER"
+  },
+  {
+   "label": "L-T128-A8",
+   "T": 128,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED"
+  },
+  {
+   "label": "U-T128",
+   "T": 128,
+   "counts": [
+    32,
+    18,
+    28,
+    39,
+    33,
+    32,
+    35,
+    39
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM",
+   "seed": 20261144
+  },
+  {
+   "label": "US-T128",
+   "T": 128,
+   "counts": [
+    32,
+    18,
+    28,
+    39,
+    33,
+    32,
+    35,
+    39
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "UNIFORM-UNSHUFFLED",
+   "shuffle": false,
+   "pair": "U-T128"
+  }
+ ]
+}

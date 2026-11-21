@@ -1,0 +1,1 @@
+POWER PROOF: bf16 matmul 8192^3, batches of 20, for 90 s; out /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-powerproof-pp/gemm.json

@@ -1,0 +1,112 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      2
+    ],
+    [
+      "native",
+      3
+    ],
+    [
+      "native",
+      4
+    ],
+    [
+      "native",
+      6
+    ]
+  ],
+  "calls_per_cell": 2,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 16,
+  "launch_count": 16,
+  "tokens": {
+    "2": 512,
+    "3": 768,
+    "4": 1024,
+    "6": 1536
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 64,
+    "shared": 576,
+    "private": 576
+  },
+  "ids_sha256": {
+    "native/2": "734f54367330a0ac94cb7c3409e0c38fcc63729842c1dc042b65a9a34df8273e",
+    "native/3": "bffb048d77218c22dd9cf0c83595a94cb803f47b371ae91ebc3e4c51d9568409",
+    "native/4": "1e703d1d69c8d706a844c86a212dc3094bb64940156d2d8a99d7a0be50444ce8",
+    "native/6": "b35fa20855d73631f6216c751259845022dadb19e813b41f9d3e90404ff47b24"
+  },
+  "sorted_ids_len": {
+    "native/2": 6080,
+    "native/3": 8128,
+    "native/4": 10176,
+    "native/6": 14272
+  },
+  "grids": {
+    "native/2": {
+      "w1": 6080,
+      "w2": 6080
+    },
+    "native/3": {
+      "w1": 8128,
+      "w2": 8128
+    },
+    "native/4": {
+      "w1": 10176,
+      "w2": 10176
+    },
+    "native/6": {
+      "w1": 14272,
+      "w2": 14272
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g64/n2",
+    "r3/native/g64/n2",
+    "r3/native/g64/n3",
+    "r3/native/g64/n3",
+    "r3/native/g64/n4",
+    "r3/native/g64/n4",
+    "r3/native/g64/n6",
+    "r3/native/g64/n6"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 64,
+    "num_warps": 8,
+    "num_stages": 4,
+    "BLOCK_SIZE_M": 32
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 805306368,
+    "weight_bytes": 7247757312,
+    "activation_bytes": 138412032,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 7662993408,
+    "device_free_bytes": 100722212864,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 6
+  },
+  "versions": {
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "c7a16274-a4b9-bdf3-cd72-97f4866e4c63"
+  }
+}

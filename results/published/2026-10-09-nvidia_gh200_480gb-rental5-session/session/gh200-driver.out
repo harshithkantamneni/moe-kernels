@@ -1,0 +1,94 @@
+2026-10-08T23:28:54Z setup_vm.sh start: commit d4d1767e5b2460a15228bfd986c304aecf6526a1 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-09T06:06:58Z
+2026-10-08T23:30:39Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed f528f39 to run-gh200-rental5-20261008t2326: setup_vm.sh: READY
+2026-10-08T23:30:40Z driver start: commit d4d1767e5b2460a15228bfd986c304aecf6526a1, steps of the plan scripts/plans/rental5-2026-10.plan, deadline 2026-10-09T06:06:58Z (388 min of work left)
+2026-10-08T23:30:40Z plan: /home/ubuntu/moe/repo/scripts/plans/rental5-2026-10.plan (sha256 b23536c51ea889308f59cf634825f1a40fa7ccb07bbe37261f773f5a7437d9b5), 22 units
+2026-10-08T23:30:40Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/22 -] (estimate 3 min, cap 15 min, 388 min left)
+2026-10-08T23:30:40Z prelude END: exit 0 after 0 min [unit 1/22 -]
+2026-10-08T23:30:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4ca5114 to run-gh200-rental5-20261008t2326: prelude (unit 1/22 -): exit 0 (0 min)
+2026-10-08T23:30:42Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/22 mixtral-8x7b r5] (estimate 2 min, cap 30 min, 388 min left)
+2026-10-08T23:31:07Z calibrate END: exit 0 after 0 min [unit 2/22 mixtral-8x7b r5]
+2026-10-08T23:31:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9e5d8d2 to run-gh200-rental5-20261008t2326: calibrate (unit 2/22 mixtral-8x7b r5): exit 0 (0 min)
+2026-10-08T23:31:09Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/22 - rc instr-variants=v1,v2,v3] (estimate 3 min, cap 10 min, 387 min left)
+2026-10-08T23:31:36Z regcheck END: exit 1 after 0 min [unit 3/22 - rc instr-variants=v1,v2,v3]
+2026-10-08T23:31:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b19babe to run-gh200-rental5-20261008t2326: regcheck (unit 3/22 - rc instr-variants=v1,v2,v3): exit 1 (0 min)
+2026-10-08T23:31:40Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json, arms native,shared, 9 copies [unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 18 min, cap 45 min, 387 min left)
+2026-10-08T23:43:50Z timed END: exit 1 after 12 min [unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-08T23:43:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b63fe48 to run-gh200-rental5-20261008t2326: timed (unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 1 (12 min)
+2026-10-08T23:43:54Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json, arms native,shared, 9 copies [unit 5/22 mixtral-8x7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 11 min, cap 30 min, 375 min left)
+2026-10-08T23:53:23Z timed END: exit 1 after 9 min [unit 5/22 mixtral-8x7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-08T23:53:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1c1f7c4 to run-gh200-rental5-20261008t2326: timed (unit 5/22 mixtral-8x7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 1 (9 min)
+2026-10-08T23:53:26Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 8, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --histogram docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json --arms native,shared [unit 6/22 mixtral-8x7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json arms=native,shared byte-groups=8] (estimate 4 min, cap 20 min, 365 min left)
+2026-10-08T23:57:14Z bytes END: exit 0 after 4 min [unit 6/22 mixtral-8x7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json arms=native,shared byte-groups=8]
+2026-10-08T23:57:15Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed fcbad5c to run-gh200-rental5-20261008t2326: bytes (unit 6/22 mixtral-8x7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json arms=native,shared byte-groups=8): exit 0 (4 min)
+2026-10-08T23:57:18Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json, arms native,shared, 9 copies [unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 18 min, cap 45 min, 361 min left)
+2026-10-09T00:14:47Z timed END: exit 0 after 17 min [unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-09T00:14:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 3ce17ed to run-gh200-rental5-20261008t2326: timed (unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (17 min)
+2026-10-09T00:14:50Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json, arms native,shared, 9 copies [unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 11 min, cap 30 min, 344 min left)
+2026-10-09T00:25:29Z timed END: exit 0 after 11 min [unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-09T00:25:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 312448d to run-gh200-rental5-20261008t2326: timed (unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (11 min)
+2026-10-09T00:25:33Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 8, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --histogram docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json --arms native,shared [unit 9/22 olmoe-1b-7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json arms=native,shared byte-groups=8] (estimate 4 min, cap 20 min, 333 min left)
+2026-10-09T00:27:45Z bytes END: exit 0 after 2 min [unit 9/22 olmoe-1b-7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json arms=native,shared byte-groups=8]
+2026-10-09T00:27:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 44098fa to run-gh200-rental5-20261008t2326: bytes (unit 9/22 olmoe-1b-7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json arms=native,shared byte-groups=8): exit 0 (2 min)
+2026-10-09T00:27:49Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json, arms native,shared, 9 copies [unit 10/22 qwen1.5-moe-a2.7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 18 min, cap 45 min, 331 min left)
+2026-10-09T00:45:08Z timed END: exit 0 after 17 min [unit 10/22 qwen1.5-moe-a2.7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-09T00:45:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 7154239 to run-gh200-rental5-20261008t2326: timed (unit 10/22 qwen1.5-moe-a2.7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (17 min)
+2026-10-09T00:45:12Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json, arms native,shared, 9 copies [unit 11/22 qwen1.5-moe-a2.7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 11 min, cap 30 min, 313 min left)
+2026-10-09T00:55:41Z timed END: exit 0 after 10 min [unit 11/22 qwen1.5-moe-a2.7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-09T00:55:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed e700122 to run-gh200-rental5-20261008t2326: timed (unit 11/22 qwen1.5-moe-a2.7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (10 min)
+2026-10-09T00:55:45Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json, arms native,shared, 15 copies [unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8] (estimate 7 min, cap 25 min, 303 min left)
+2026-10-09T01:01:53Z timed END: exit 0 after 6 min [unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8]
+2026-10-09T01:01:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4826dd8 to run-gh200-rental5-20261008t2326: timed (unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8): exit 0 (6 min)
+2026-10-09T01:01:57Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 13/22 - pt instr-variants=v1,v2,v3] (estimate 12 min, cap 30 min, 297 min left)
+2026-10-09T01:02:54Z perturb END: exit 1 after 1 min [unit 13/22 - pt instr-variants=v1,v2,v3]
+2026-10-09T01:02:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ec787a8 to run-gh200-rental5-20261008t2326: perturb (unit 13/22 - pt instr-variants=v1,v2,v3): exit 1 (1 min)
+2026-10-09T01:02:59Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v1 v2 v3), G=8 treads 2 4 6 arms native, BK 64 s4; runs only on a PASS gate [unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3] (estimate 6 min, cap 15 min, 295 min left)
+2026-10-09T01:02:59Z stamps END: exit 2 after 0 min [unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3]
+2026-10-09T01:02:59Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 41a9253 to run-gh200-rental5-20261008t2326: stamps (unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3): exit 2 (0 min)
+2026-10-09T01:03:04Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v1 v2), G=8 treads 1 arms native, BK 64 s4; runs only on a PASS gate [unit 15/22 mixtral-8x22b stt8x22 stamp-groups=8 stamp-treads=1 stamp-arms=native instr-variants=v1,v2] (estimate 3 min, cap 10 min, 295 min left)
+2026-10-09T01:03:04Z stamps END: exit 2 after 0 min [unit 15/22 mixtral-8x22b stt8x22 stamp-groups=8 stamp-treads=1 stamp-arms=native instr-variants=v1,v2]
+2026-10-09T01:03:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ec82f46 to run-gh200-rental5-20261008t2326: stamps (unit 15/22 mixtral-8x22b stt8x22 stamp-groups=8 stamp-treads=1 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
+2026-10-09T01:03:08Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v1 v2), G=8 treads 1 2 arms native, BK 64 s4; runs only on a PASS gate [unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2] (estimate 2 min, cap 8 min, 295 min left)
+2026-10-09T01:03:08Z stamps END: exit 2 after 0 min [unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2]
+2026-10-09T01:03:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 6d8bfea to run-gh200-rental5-20261008t2326: stamps (unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
+2026-10-09T01:03:13Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v2 v3), G=8 treads 2 4 arms native shared, BK 64 s4; runs only on a PASS gate [unit 17/22 olmoe-1b-7b std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3] (estimate 3 min, cap 8 min, 295 min left)
+2026-10-09T01:03:13Z stamps END: exit 2 after 0 min [unit 17/22 olmoe-1b-7b std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3]
+2026-10-09T01:03:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9291ab4 to run-gh200-rental5-20261008t2326: stamps (unit 17/22 olmoe-1b-7b std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3): exit 2 (0 min)
+2026-10-09T01:03:18Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v2 v3), G=8 treads 2 4 arms native shared, BK 64 s8; runs only on a PASS gate [unit 18/22 olmoe-1b-7b std2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 num-stages=8] (estimate 2 min, cap 8 min, 295 min left)
+2026-10-09T01:03:18Z stamps END: exit 2 after 0 min [unit 18/22 olmoe-1b-7b std2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 num-stages=8]
+2026-10-09T01:03:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 06cdaa6 to run-gh200-rental5-20261008t2326: stamps (unit 18/22 olmoe-1b-7b std2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 num-stages=8): exit 2 (0 min)
+2026-10-09T01:03:23Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64] (estimate 3 min, cap 20 min, 295 min left)
+2026-10-09T01:05:36Z bytes END: exit 0 after 2 min [unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64]
+2026-10-09T01:05:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 2c5fcb6 to run-gh200-rental5-20261008t2326: bytes (unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64): exit 0 (2 min)
+2026-10-09T01:05:41Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 32 [unit 20/22 qwen2-57b-a14b-tp8 k32s4 byte-groups=64 block-k=32 num-stages=4] (estimate 3 min, cap 20 min, 293 min left)
+2026-10-09T01:07:40Z bytes END: exit 0 after 2 min [unit 20/22 qwen2-57b-a14b-tp8 k32s4 byte-groups=64 block-k=32 num-stages=4]
+2026-10-09T01:07:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ce11b79 to run-gh200-rental5-20261008t2326: bytes (unit 20/22 qwen2-57b-a14b-tp8 k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (2 min)
+2026-10-09T01:07:45Z timed START: 3c.3 timed R3 histogram page at 1710: G=64, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json, arms native, 9 copies; knobs --num-stages 4 [unit 21/22 olmoe-1b-7b bk64 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 num-stages=4] (estimate 4 min, cap 15 min, 291 min left)
+2026-10-09T01:13:13Z timed END: exit 0 after 5 min [unit 21/22 olmoe-1b-7b bk64 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 num-stages=4]
+2026-10-09T01:13:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 3258bdf to run-gh200-rental5-20261008t2326: timed (unit 21/22 olmoe-1b-7b bk64 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 num-stages=4): exit 0 (5 min)
+2026-10-09T01:13:19Z timed START: 3c.3 timed R3 histogram page at 1710: G=64, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json, arms native, 9 copies; knobs --num-stages 4 --block-k 128 [unit 22/22 olmoe-1b-7b bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4] (estimate 4 min, cap 15 min, 285 min left)
+2026-10-09T01:18:48Z timed END: exit 0 after 5 min [unit 22/22 olmoe-1b-7b bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4]
+2026-10-09T01:18:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a74ae89 to run-gh200-rental5-20261008t2326: timed (unit 22/22 olmoe-1b-7b bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4): exit 0 (5 min)
+2026-10-09T01:18:53Z driver end: exit 3

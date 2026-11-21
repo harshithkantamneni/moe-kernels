@@ -1,0 +1,116 @@
+{
+  "argv": [
+    "/usr/local/cuda-13.0/bin/ncu",
+    "--target-processes",
+    "all",
+    "--replay-mode",
+    "kernel",
+    "--cache-control",
+    "all",
+    "--clock-control",
+    "none",
+    "--nvtx",
+    "-k",
+    "regex:^fused_moe_kernel$",
+    "--kernel-name-base",
+    "function",
+    "--launch-skip",
+    "108",
+    "--launch-count",
+    "162",
+    "--metrics",
+    "dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_srcunit_tex_op_read.sum,launch__grid_size,gpu__time_duration.sum,lts__d_sectors_fill_device.sum,lts__t_sectors_op_read_lookup_miss.sum,lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum,lts__t_sector_op_read_hit_rate.pct,launch__occupancy_limit_blocks,launch__occupancy_limit_registers,launch__occupancy_limit_shared_mem,launch__occupancy_limit_warps,launch__registers_per_thread,launch__waves_per_multiprocessor,lts__t_sectors_srcunit_ltcfabric.sum,sm__cycles_elapsed.avg",
+    "--export",
+    "/home/ubuntu/moe/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.profiles/g1.ncu-rep",
+    "--force-overwrite",
+    "--",
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "/home/ubuntu/moe/repo/scripts/private_weight_reference.py",
+    "--counter-child",
+    "/home/ubuntu/moe/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.profiles/g1.plan.json"
+  ],
+  "binary": "/usr/local/cuda-13.0/bin/ncu",
+  "version": "Version 2025.3.1.0 (build 36398880) (public-release)",
+  "returncode": 0,
+  "metrics_asked": [
+    "dram__bytes_read.sum",
+    "dram__bytes_write.sum",
+    "lts__t_sectors_srcunit_tex_op_read.sum",
+    "launch__grid_size",
+    "gpu__time_duration.sum",
+    "lts__d_sectors_fill_device.sum",
+    "lts__t_sectors_op_read_lookup_miss.sum",
+    "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum",
+    "lts__t_sector_op_read_hit_rate.pct",
+    "launch__occupancy_limit_blocks",
+    "launch__occupancy_limit_registers",
+    "launch__occupancy_limit_shared_mem",
+    "launch__occupancy_limit_warps",
+    "launch__registers_per_thread",
+    "launch__waves_per_multiprocessor",
+    "lts__t_sectors_srcunit_ltcfabric.sum",
+    "sm__cycles_elapsed.avg"
+  ],
+  "metrics_dropped": [],
+  "clock_control": "none",
+  "lock_mhz": 1710.0,
+  "probe_clock_control": "none",
+  "smi_before": {
+    "utc": "2026-09-29T22:35:48Z",
+    "argv": [
+      "nvidia-smi",
+      "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+      "--format=csv,noheader,nounits"
+    ],
+    "returncode": 0,
+    "rows": [
+      {
+        "uuid": "GPU-2ffd21ff-af06-3b59-baff-81967dca4dec",
+        "clocks.sm": "1710",
+        "power.draw": "136.42",
+        "power.limit": "700.00",
+        "clocks_event_reasons.active": "0x0000000000000000",
+        "persistence_mode": "Enabled"
+      }
+    ],
+    "error": ""
+  },
+  "smi_after": {
+    "utc": "2026-09-29T22:37:32Z",
+    "argv": [
+      "nvidia-smi",
+      "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+      "--format=csv,noheader,nounits"
+    ],
+    "returncode": 0,
+    "rows": [
+      {
+        "uuid": "GPU-2ffd21ff-af06-3b59-baff-81967dca4dec",
+        "clocks.sm": "1710",
+        "power.draw": "133.63",
+        "power.limit": "700.00",
+        "clocks_event_reasons.active": "0x0000000000000000",
+        "persistence_mode": "Enabled"
+      }
+    ],
+    "error": ""
+  },
+  "card": {
+    "name": "NVIDIA GH200 480GB",
+    "slug": "nvidia_gh200_480gb",
+    "uuid": "2ffd21ff-af06-3b59-baff-81967dca4dec",
+    "sm_count": 132,
+    "l2_bytes": 62914560,
+    "capability": "9.0",
+    "memory_bytes": 101468602368,
+    "driver": "580.105.08",
+    "study_role": "the primary card"
+  },
+  "stack": {
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "commit": "a1b61186bd4b12224d54942af6065e30276d7f44"
+}

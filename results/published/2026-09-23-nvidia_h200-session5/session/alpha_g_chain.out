@@ -1,0 +1,170 @@
+alpha(G) chain  alpha_g-nvidia_h200-20260923T163248Z   (NEW)
+  card        nvidia_h200
+  nvidia-smi  NVIDIA H200, 580.159.04, 700.00 W
+  device      0ffa33b8-eeac-8768-2331-dc7e2f8d6490   (recorded in /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/DEVICE)
+  session     /workspace/session/alpha_g-nvidia_h200-20260923T163248Z
+  results     /workspace/results/gaps-nvidia_h200   (exported as MOE_RESULTS_DIR to every arm)
+  ledger      /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/CHAIN.tsv
+  ladder      G in {1 4 16 64}, seeds {0 1 2}, ratio arms at duty 0.25, elasticity states 1.0 0.7 0.5
+  r3 duty     0.25   (recorded in /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/R3_DUTY; a resume at another is refused)
+  interpreters base /workspace/venvs/base/bin/python / vllm /workspace/venvs/vllm/bin/python
+
+== preflight
+preflight-r1     DONE       rc=0     4s  log agrees: RESULT lines imply 0
+preflight-r3     DONE       rc=0     7s  log agrees: RESULT lines imply 0
+
+== preconditions (the driver's thermal, calibrate; pin_probe-n64-g1 for the record)
+preconditions    DONE       rc=0   226s  the driver's own ARMS.tsv carries each arm's second opinion
+
+== tests/test_gpu.py on this card, from the base venv (gated)
+gpu-tests        DONE       rc=0    55s  pytest exit 0: 37 passed, 1 skipped, 2 warnings in 49.58s
+
+== the alignment probe under the graph, on this card, from the vllm venv (gated)
+  probe-check: capped at 1800 s (3 x 120 s is under the 1800 s floor, over its documented allowance)
+probe-check      DONE       rc=0    25s  log agrees: RESULT lines imply 0
+
+== the re-read fraction, off the cap, seed 0 at every G (the pilot: r3-g1-s0)
+  r3-g1-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g1-s0         CLAIM_FAIL rc=1   725s  log agrees: RESULT lines imply 1
+    G=1 seed 0  ratio 0.9148 [0.9144, 0.9154]  CLAIM_FAIL (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)
+  r3-g4-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g4-s0         CLAIM_FAIL rc=1   704s  log agrees: RESULT lines imply 1
+    G=4 seed 0  ratio 0.7041 [0.7040, 0.7043]  CLAIM_FAIL (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)
+  r3-g16-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g16-s0        CLAIM_FAIL rc=1   710s  log agrees: RESULT lines imply 1
+    G=16 seed 0  ratio 0.6839 [0.6819, 0.6846]  CLAIM_FAIL (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)
+  r3-g64-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g64-s0        CLAIM_FAIL rc=1   704s  log agrees: RESULT lines imply 1
+    G=64 seed 0  ratio 0.6172 [0.6128, 0.6193]  CLAIM_FAIL (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)
+
+== clock elasticity per geometry (the regime word)
+  r1-g1: capped at 2628 s (3 x its plan's 876 s)
+r1-g1            INVALID    rc=3   870s  log agrees: RESULT lines imply 3
+  r1-g4: capped at 2628 s (3 x its plan's 876 s)
+alpha(G) chain  alpha_g-nvidia_h200-20260923T163248Z   (NAMED)
+  card        nvidia_h200
+  nvidia-smi  NVIDIA H200, 580.159.04, 700.00 W
+  device      0ffa33b8-eeac-8768-2331-dc7e2f8d6490   (recorded in /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/DEVICE)
+  session     /workspace/session/alpha_g-nvidia_h200-20260923T163248Z
+  results     /workspace/results/gaps-nvidia_h200   (exported as MOE_RESULTS_DIR to every arm)
+  ledger      /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/CHAIN.tsv
+  ladder      G in {1 4 16 64}, seeds {0 1 2}, ratio arms at duty 0.25, elasticity states 1.0 0.5 0.25
+  r3 duty     0.25   (recorded in /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/R3_DUTY; a resume at another is refused)
+  interpreters base /workspace/venvs/base/bin/python / vllm /workspace/venvs/vllm/bin/python
+
+== preflight
+
+== preconditions (the driver's thermal, calibrate; pin_probe-n64-g1 for the record)
+
+== tests/test_gpu.py on this card, from the base venv (gated)
+
+== the alignment probe under the graph, on this card, from the vllm venv (gated)
+
+== the re-read fraction, off the cap, seed 0 at every G (the pilot: r3-g1-s0)
+  r3-g1-s0 latched, skipped
+  r3-g4-s0 latched, skipped
+  r3-g16-s0 latched, skipped
+  r3-g64-s0 latched, skipped
+
+== clock elasticity per geometry (the regime word)
+  r1-g1: capped at 3372 s (3 x its plan's 1124 s)
+r1-g1            CLAIM_FAIL rc=1  1160s  log agrees: RESULT lines imply 1
+  r1-g4: capped at 3372 s (3 x its plan's 1124 s)
+r1-g4            CLAIM_FAIL rc=1  1139s  log agrees: RESULT lines imply 1
+  r1-g16: capped at 3372 s (3 x its plan's 1124 s)
+r1-g16           INVALID    rc=3  1148s  log agrees: RESULT lines imply 3
+  r1-g64: capped at 3372 s (3 x its plan's 1124 s)
+r1-g64           CLAIM_FAIL rc=1  1148s  log agrees: RESULT lines imply 1
+
+== the re-read fraction, the later seeds, scored with the earlier ones
+  r3-g1-s1: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g1-s1         CLAIM_FAIL rc=1   715s  log agrees: RESULT lines imply 1
+    G=1 seed 1  ratio 0.9148 [0.9147, 0.9151]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 0.3970 [0.3873, 0.4066] STRADDLES  (R1 page: CLAIM_FAIL)
+  r3-g4-s1: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g4-s1         CLAIM_FAIL rc=1   698s  log agrees: RESULT lines imply 1
+    G=4 seed 1  ratio 0.7040 [0.7033, 0.7088]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 1.1291 [1.0683, 1.2004] CLOCK-CARRIES  (R1 page: CLAIM_FAIL)
+  r3-g16-s1: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g16-s1        CLAIM_FAIL rc=1   696s  log agrees: RESULT lines imply 1
+    G=16 seed 1  ratio 0.6776 [0.6767, 0.6782]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 1.0605 [1.0316, 1.1989] withheld:INVALID  (R1 page: INVALID)
+  r3-g64-s1: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g64-s1        CLAIM_FAIL rc=1   692s  log agrees: RESULT lines imply 1
+    G=64 seed 1  ratio 0.6150 [0.6131, 0.6190]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 1.1220 [1.0373, 1.2124] CLOCK-CARRIES  (R1 page: CLAIM_FAIL)
+  r3-g1-s2: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g1-s2         CLAIM_FAIL rc=1   725s  log agrees: RESULT lines imply 1
+    G=1 seed 2  ratio 0.9154 [0.9149, 0.9156]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 0.3970 [0.3873, 0.4066] STRADDLES  (R1 page: CLAIM_FAIL)
+  r3-g4-s2: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g4-s2         CLAIM_FAIL rc=1   711s  log agrees: RESULT lines imply 1
+    G=4 seed 2  ratio 0.7087 [0.7040, 0.7090]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 1.1291 [1.0683, 1.2004] CLOCK-CARRIES  (R1 page: CLAIM_FAIL)
+  r3-g16-s2: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g16-s2        CLAIM_FAIL rc=1   704s  log agrees: RESULT lines imply 1
+    G=16 seed 2  ratio 0.6794 [0.6772, 0.6822]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 1.0605 [1.0316, 1.1989] withheld:INVALID  (R1 page: INVALID)
+  r3-g64-s2: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g64-s2        CLAIM_FAIL rc=1   707s  log agrees: RESULT lines imply 1
+    G=64 seed 2  ratio 0.6188 [0.6186, 0.6192]  CLAIM_FAIL (C1 envelope)  duty 0.25  eta 1.1220 [1.0373, 1.2124] CLOCK-CARRIES  (R1 page: CLAIM_FAIL)
+
+== the whole suite, uncapped, from the base venv (a record; gates nothing)
+suite            ERROR      rc=2  3478s  pytest exit 2: 10 failed, 2470 passed, 19 skipped, 4 warnings in 3471.97s (0:57:51)
+
+pairs     /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/PAIRS.tsv (12 row(s), rebuilt from the reports); per G, every seed read
+          together, in PAIRS-by-G.tsv; fixed coordinates in PAIRS-fixed.tsv; the legend
+          in PAIRS-README.txt
+ledger    /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/CHAIN.tsv
+read a pair on the laptop:  .venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --replicate-of RUN0/report.json
+  (PAIRS-by-G.tsv already reads every seed of a G together that way; PAIRS-README.txt is the legend)
+the ruler this session scored against is /workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml, TRACKED and dirty after
+  calibrate: commit it with the results. copy off before releasing the pod:
+    tar czf /workspace/exfil-alpha_g-nvidia_h200.tar.gz -C "/workspace/session" "alpha_g-nvidia_h200-20260923T163248Z" -C "/workspace/results" "gaps-nvidia_h200" -C "/workspace/moe-kernels" "moe/bench/hardware/measured_nvidia_h200.yaml" -C "/workspace/moe-kernels" "results/calibration/nvidia_h200-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-2ea5b191" -C "/workspace" "alpha_g_chain.out"
+alpha(G) chain  alpha_g-nvidia_h200-20260923T163248Z   (NAMED)
+  card        nvidia_h200
+  nvidia-smi  NVIDIA H200, 580.159.04, 700.00 W
+  device      0ffa33b8-eeac-8768-2331-dc7e2f8d6490   (recorded in /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/DEVICE)
+  session     /workspace/session/alpha_g-nvidia_h200-20260923T163248Z
+  results     /workspace/results/gaps-nvidia_h200   (exported as MOE_RESULTS_DIR to every arm)
+  ledger      /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/CHAIN.tsv
+  ladder      G in {1 4 16 64}, seeds {0 1 2}, ratio arms at duty 0.25, elasticity states 1.0 0.5 0.25
+  r3 duty     0.25   (recorded in /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/R3_DUTY; a resume at another is refused)
+  interpreters base /workspace/venvs/base/bin/python / vllm /workspace/venvs/vllm/bin/python
+
+== preflight
+
+== preconditions (the driver's thermal, calibrate; pin_probe-n64-g1 for the record)
+
+== tests/test_gpu.py on this card, from the base venv (gated)
+
+== the alignment probe under the graph, on this card, from the vllm venv (gated)
+
+== the re-read fraction, off the cap, seed 0 at every G (the pilot: r3-g1-s0)
+  r3-g1-s0 latched, skipped
+  r3-g4-s0 latched, skipped
+  r3-g16-s0 latched, skipped
+  r3-g64-s0 latched, skipped
+
+== clock elasticity per geometry (the regime word)
+  r1-g1 latched, skipped
+  r1-g4 latched, skipped
+  r1-g16: capped at 3372 s (3 x its plan's 1124 s)
+r1-g16           INVALID    rc=3  1142s  log agrees: RESULT lines imply 3
+  r1-g64 latched, skipped
+
+== the re-read fraction, the later seeds, scored with the earlier ones
+  r3-g1-s1 latched, skipped
+  r3-g4-s1 latched, skipped
+  r3-g16-s1 latched, skipped
+  r3-g64-s1 latched, skipped
+  r3-g1-s2 latched, skipped
+  r3-g4-s2 latched, skipped
+  r3-g16-s2 latched, skipped
+  r3-g64-s2 latched, skipped
+
+== the whole suite, uncapped, from the base venv (a record; gates nothing)
+suite            SKIPPED    END_SUITE=skip: the operator did not run the end suite this pass
+
+pairs     /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/PAIRS.tsv (12 row(s), rebuilt from the reports); per G, every seed read
+          together, in PAIRS-by-G.tsv; fixed coordinates in PAIRS-fixed.tsv; the legend
+          in PAIRS-README.txt
+ledger    /workspace/session/alpha_g-nvidia_h200-20260923T163248Z/CHAIN.tsv
+read a pair on the laptop:  .venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --replicate-of RUN0/report.json
+  (PAIRS-by-G.tsv already reads every seed of a G together that way; PAIRS-README.txt is the legend)
+the ruler this session scored against is /workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml, TRACKED and dirty after
+  calibrate: commit it with the results. copy off before releasing the pod:
+    tar czf /workspace/exfil-alpha_g-nvidia_h200.tar.gz -C "/workspace/session" "alpha_g-nvidia_h200-20260923T163248Z" -C "/workspace/results" "gaps-nvidia_h200" -C "/workspace/moe-kernels" "moe/bench/hardware/measured_nvidia_h200.yaml" -C "/workspace/moe-kernels" "results/calibration/nvidia_h200-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-2ea5b191" -C "/workspace" "alpha_g_chain.out"

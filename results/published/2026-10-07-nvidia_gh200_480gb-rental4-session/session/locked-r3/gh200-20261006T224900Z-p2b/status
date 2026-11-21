@@ -1,0 +1,12 @@
+2026-10-06T23:15:43Z locked_r3 start: tag gh200-20261006T224900Z-p2b, locks [1710], G [8], R3 args --model qwen2-57b-a14b-tp8 --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 15 --treads 9, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-c15/private_weight_reference
+2026-10-06T23:15:43Z card: NVIDIA GH200 480GB, GPU-00827a0f-81e7-0fe3-caef-3114182a12bc, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-10-06T23:15:43Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-10-06T23:15:44Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-10-06T23:15:44Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 126.15 W, 700.00 W
+2026-10-06T23:15:44Z G=8 start at lock 1710: pid 12416, tag gh200-20261006T224900Z-p2b-lock1710, log r3-g8-lock1710.log
+2026-10-06T23:15:54Z G=8 at lock 1710: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-7f595452
+2026-10-06T23:31:45Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-7f595452
+2026-10-06T23:31:45Z all G held at lock 1710 MHz
+2026-10-06T23:31:45Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-10-06T23:31:45Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 116.00 W, 700.00 W
+2026-10-06T23:31:45Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

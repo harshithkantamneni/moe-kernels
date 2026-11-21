@@ -1,0 +1,310 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-70a4632e
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=128, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 128, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 16, 'num_warps': 8, 'num_stages': 3}
+histogram   docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json (sha256 cf3da1b8b0224289...), page mixtral-8x7b-128g16, 12 cells x arms = 24 timed cells, token-row shuffle seed 20261410; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       176.36 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 657.1 TFLOP/s bf16 over 3725.9 GB/s (triad pattern); calibrated 2026-10-20 at c4914bac
+experts     native declares E=8; shared declares E x n_decl = 72 at every cell
+            n_decl = 9 against n_max = 8 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 8 against the 8 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261020T060059Z-p2b-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-e128g16/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-70a4632e
+slips       --slip-policy cell at the 1710 MHz lock: a repeat under 1695 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 3 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=3   PT               native,shared  block-scan   a06c1c1cb616cbea
+  n=3   PW               native,shared  block-scan   9db20ab747297095
+  n=3   uniform          native,shared  block-scan   b7459925cd8eac24
+  n=3   balanced         native,shared  block-scan   74234e98afe7498f
+  n=4   PT               native,shared  block-scan   9c6c395d07e3b26f
+  n=4   PW               native,shared  block-scan   321f459c245e7241
+  n=4   uniform          native,shared  block-scan   0f59bb201fff3f9f
+  n=4   balanced         native,shared  block-scan   74234e98afe7498f
+  n=8   PT               native,shared  block-scan   ab5a05c1a2bc58f1
+  n=8   PW               native,shared  block-scan   30c36c5623dbfa5f
+  n=8   uniform          native,shared  block-scan   ca1f45bac7054078
+  n=8   balanced         native,shared  block-scan   74234e98afe7498f
+  rep 0 PT             native   n=  3 T=   1536    2.1502 ms
+  rep 0 PT             shared   n=  3 T=   1536    2.1626 ms
+  LOCK SLIP rep 0 PT             native   n=  3 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 0 PT             shared   n=  3 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 0 PW             native   n=  3 T=   1536    2.3444 ms
+  rep 0 PW             shared   n=  3 T=   1536    2.3646 ms
+  rep 0 uniform        native   n=  3 T=   1536    1.9179 ms
+  rep 0 uniform        shared   n=  3 T=   1536    1.9283 ms
+  rep 0 balanced       native   n=  3 T=   1536    1.9125 ms
+  rep 0 balanced       shared   n=  3 T=   1536    1.9268 ms
+  LOCK SLIP rep 0 balanced       native   n=  3 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 0 balanced       shared   n=  3 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 0 PT             native   n=  4 T=   2048    2.7731 ms
+  rep 0 PT             shared   n=  4 T=   2048    2.7854 ms
+  rep 0 PW             native   n=  4 T=   2048    2.8235 ms
+  rep 0 PW             shared   n=  4 T=   2048    2.8371 ms
+  LOCK SLIP rep 0 PW             native   n=  4 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 0 uniform        native   n=  4 T=   2048    2.4818 ms
+  rep 0 uniform        shared   n=  4 T=   2048    2.5023 ms
+  rep 0 balanced       native   n=  4 T=   2048    2.4818 ms
+  rep 0 balanced       shared   n=  4 T=   2048    2.5015 ms
+  rep 0 PT             native   n=  8 T=   4096    5.2140 ms
+  rep 0 PT             shared   n=  8 T=   4096    5.2480 ms
+  rep 0 PW             native   n=  8 T=   4096    5.1554 ms
+  rep 0 PW             shared   n=  8 T=   4096    5.1852 ms
+  LOCK SLIP rep 0 PW             native   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 0 uniform        native   n=  8 T=   4096    4.8569 ms
+  rep 0 uniform        shared   n=  8 T=   4096    4.8893 ms
+  LOCK SLIP rep 0 uniform        native   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 0 uniform        shared   n=  8 1605.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 0 balanced       native   n=  8 T=   4096    4.8574 ms
+  rep 0 balanced       shared   n=  8 T=   4096    4.8941 ms
+  LOCK SLIP rep 0 balanced       native   n=  8 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 0 balanced       shared   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 1 balanced       shared   n=  8 T=   4096    4.8988 ms
+  rep 1 balanced       native   n=  8 T=   4096    4.8572 ms
+  LOCK SLIP rep 1 balanced       shared   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 1 balanced       native   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 1 uniform        shared   n=  8 T=   4096    4.8854 ms
+  rep 1 uniform        native   n=  8 T=   4096    4.8473 ms
+  rep 1 PW             shared   n=  8 T=   4096    5.1789 ms
+  rep 1 PW             native   n=  8 T=   4096    5.1531 ms
+  rep 1 PT             shared   n=  8 T=   4096    5.2452 ms
+  rep 1 PT             native   n=  8 T=   4096    5.2041 ms
+  rep 1 balanced       shared   n=  4 T=   2048    2.5038 ms
+  rep 1 balanced       native   n=  4 T=   2048    2.4839 ms
+  rep 1 uniform        shared   n=  4 T=   2048    2.5029 ms
+  rep 1 uniform        native   n=  4 T=   2048    2.4870 ms
+  rep 1 PW             shared   n=  4 T=   2048    2.8455 ms
+  rep 1 PW             native   n=  4 T=   2048    2.8199 ms
+  rep 1 PT             shared   n=  4 T=   2048    2.7886 ms
+  rep 1 PT             native   n=  4 T=   2048    2.7706 ms
+  LOCK SLIP rep 1 PT             shared   n=  4 1680.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 1 PT             native   n=  4 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 1 balanced       shared   n=  3 T=   1536    1.9252 ms
+  rep 1 balanced       native   n=  3 T=   1536    1.9095 ms
+  LOCK SLIP rep 1 balanced       shared   n=  3 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 1 uniform        shared   n=  3 T=   1536    1.9278 ms
+  rep 1 uniform        native   n=  3 T=   1536    1.9155 ms
+  rep 1 PW             shared   n=  3 T=   1536    2.3580 ms
+  rep 1 PW             native   n=  3 T=   1536    2.3422 ms
+  rep 1 PT             shared   n=  3 T=   1536    2.1541 ms
+  rep 1 PT             native   n=  3 T=   1536    2.1540 ms
+  LOCK SLIP rep 1 PT             native   n=  3 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 2 PT             native   n=  3 T=   1536    2.1532 ms
+  rep 2 PT             shared   n=  3 T=   1536    2.1567 ms
+  LOCK SLIP rep 2 PT             native   n=  3 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 2 PW             native   n=  3 T=   1536    2.3403 ms
+  rep 2 PW             shared   n=  3 T=   1536    2.3577 ms
+  rep 2 uniform        native   n=  3 T=   1536    1.9154 ms
+  rep 2 uniform        shared   n=  3 T=   1536    1.9274 ms
+  rep 2 balanced       native   n=  3 T=   1536    1.9081 ms
+  rep 2 balanced       shared   n=  3 T=   1536    1.9244 ms
+  rep 2 PT             native   n=  4 T=   2048    2.7686 ms
+  rep 2 PT             shared   n=  4 T=   2048    2.7895 ms
+  LOCK SLIP rep 2 PT             native   n=  4 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 2 PW             native   n=  4 T=   2048    2.8227 ms
+  rep 2 PW             shared   n=  4 T=   2048    2.8377 ms
+  rep 2 uniform        native   n=  4 T=   2048    2.4859 ms
+  rep 2 uniform        shared   n=  4 T=   2048    2.5038 ms
+  LOCK SLIP rep 2 uniform        shared   n=  4 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 2 balanced       native   n=  4 T=   2048    2.4855 ms
+  rep 2 balanced       shared   n=  4 T=   2048    2.5035 ms
+  rep 2 PT             native   n=  8 T=   4096    5.2168 ms
+  rep 2 PT             shared   n=  8 T=   4096    5.2452 ms
+  rep 2 PW             native   n=  8 T=   4096    5.1567 ms
+  rep 2 PW             shared   n=  8 T=   4096    5.1760 ms
+  rep 2 uniform        native   n=  8 T=   4096    4.8468 ms
+  rep 2 uniform        shared   n=  8 T=   4096    4.8931 ms
+  LOCK SLIP rep 2 uniform        native   n=  8 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 2 balanced       native   n=  8 T=   4096    4.8493 ms
+  rep 2 balanced       shared   n=  8 T=   4096    4.8923 ms
+  LOCK SLIP rep 2 balanced       native   n=  8 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 2 balanced       shared   n=  8 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 3 balanced       shared   n=  8 T=   4096    4.9073 ms
+  rep 3 balanced       native   n=  8 T=   4096    4.8513 ms
+  LOCK SLIP rep 3 balanced       shared   n=  8 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 3 uniform        shared   n=  8 T=   4096    4.9108 ms
+  rep 3 uniform        native   n=  8 T=   4096    4.8708 ms
+  rep 3 PW             shared   n=  8 T=   4096    5.1814 ms
+  rep 3 PW             native   n=  8 T=   4096    5.1563 ms
+  rep 3 PT             shared   n=  8 T=   4096    5.2414 ms
+  rep 3 PT             native   n=  8 T=   4096    5.2046 ms
+  rep 3 balanced       shared   n=  4 T=   2048    2.5042 ms
+  rep 3 balanced       native   n=  4 T=   2048    2.4849 ms
+  rep 3 uniform        shared   n=  4 T=   2048    2.5024 ms
+  rep 3 uniform        native   n=  4 T=   2048    2.4789 ms
+  rep 3 PW             shared   n=  4 T=   2048    2.8375 ms
+  rep 3 PW             native   n=  4 T=   2048    2.8242 ms
+  LOCK SLIP rep 3 PW             native   n=  4 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 3 PT             shared   n=  4 T=   2048    2.7910 ms
+  rep 3 PT             native   n=  4 T=   2048    2.7715 ms
+  LOCK SLIP rep 3 PT             native   n=  4 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 3 balanced       shared   n=  3 T=   1536    1.9258 ms
+  rep 3 balanced       native   n=  3 T=   1536    1.9121 ms
+  rep 3 uniform        shared   n=  3 T=   1536    1.9271 ms
+  rep 3 uniform        native   n=  3 T=   1536    1.9145 ms
+  LOCK SLIP rep 3 uniform        native   n=  3 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 3 PW             shared   n=  3 T=   1536    2.3599 ms
+  rep 3 PW             native   n=  3 T=   1536    2.3427 ms
+  LOCK SLIP rep 3 PW             native   n=  3 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 3 PT             shared   n=  3 T=   1536    2.1548 ms
+  rep 3 PT             native   n=  3 T=   1536    2.1508 ms
+  rep 4 PT             native   n=  3 T=   1536    2.1542 ms
+  rep 4 PT             shared   n=  3 T=   1536    2.1560 ms
+  rep 4 PW             native   n=  3 T=   1536    2.3392 ms
+  rep 4 PW             shared   n=  3 T=   1536    2.3607 ms
+  LOCK SLIP rep 4 PW             native   n=  3 1680.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 4 uniform        native   n=  3 T=   1536    1.9140 ms
+  rep 4 uniform        shared   n=  3 T=   1536    1.9263 ms
+  rep 4 balanced       native   n=  3 T=   1536    1.9084 ms
+  rep 4 balanced       shared   n=  3 T=   1536    1.9263 ms
+  rep 4 PT             native   n=  4 T=   2048    2.7707 ms
+  rep 4 PT             shared   n=  4 T=   2048    2.7907 ms
+  LOCK SLIP rep 4 PT             shared   n=  4 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 4 PW             native   n=  4 T=   2048    2.8201 ms
+  rep 4 PW             shared   n=  4 T=   2048    2.8431 ms
+  LOCK SLIP rep 4 PW             shared   n=  4 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 4 uniform        native   n=  4 T=   2048    2.4856 ms
+  rep 4 uniform        shared   n=  4 T=   2048    2.5049 ms
+  rep 4 balanced       native   n=  4 T=   2048    2.4866 ms
+  rep 4 balanced       shared   n=  4 T=   2048    2.5027 ms
+  rep 4 PT             native   n=  8 T=   4096    5.2099 ms
+  rep 4 PT             shared   n=  8 T=   4096    5.2384 ms
+  rep 4 PW             native   n=  8 T=   4096    5.1548 ms
+  rep 4 PW             shared   n=  8 T=   4096    5.1845 ms
+  rep 4 uniform        native   n=  8 T=   4096    4.8488 ms
+  rep 4 uniform        shared   n=  8 T=   4096    4.9092 ms
+  rep 4 balanced       native   n=  8 T=   4096    4.8545 ms
+  rep 4 balanced       shared   n=  8 T=   4096    4.9068 ms
+  LOCK SLIP rep 4 balanced       shared   n=  8 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 5 balanced       shared   n=  8 T=   4096    4.9132 ms
+  rep 5 balanced       native   n=  8 T=   4096    4.8528 ms
+  LOCK SLIP rep 5 balanced       shared   n=  8 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 5 balanced       native   n=  8 1680.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 5 uniform        shared   n=  8 T=   4096    4.9108 ms
+  rep 5 uniform        native   n=  8 T=   4096    4.8506 ms
+  LOCK SLIP rep 5 uniform        shared   n=  8 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 5 PW             shared   n=  8 T=   4096    5.1818 ms
+  rep 5 PW             native   n=  8 T=   4096    5.1506 ms
+  rep 5 PT             shared   n=  8 T=   4096    5.2418 ms
+  rep 5 PT             native   n=  8 T=   4096    5.2078 ms
+  rep 5 balanced       shared   n=  4 T=   2048    2.5054 ms
+  rep 5 balanced       native   n=  4 T=   2048    2.4804 ms
+  rep 5 uniform        shared   n=  4 T=   2048    2.5033 ms
+  rep 5 uniform        native   n=  4 T=   2048    2.4857 ms
+  rep 5 PW             shared   n=  4 T=   2048    2.8429 ms
+  rep 5 PW             native   n=  4 T=   2048    2.8188 ms
+  LOCK SLIP rep 5 PW             shared   n=  4 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 5 PW             native   n=  4 1680.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 5 PT             shared   n=  4 T=   2048    2.7885 ms
+  rep 5 PT             native   n=  4 T=   2048    2.7684 ms
+  rep 5 balanced       shared   n=  3 T=   1536    1.9251 ms
+  rep 5 balanced       native   n=  3 T=   1536    1.9103 ms
+  rep 5 uniform        shared   n=  3 T=   1536    1.9260 ms
+  rep 5 uniform        native   n=  3 T=   1536    1.9141 ms
+  LOCK SLIP rep 5 uniform        native   n=  3 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 5 PW             shared   n=  3 T=   1536    2.3603 ms
+  rep 5 PW             native   n=  3 T=   1536    2.3400 ms
+  rep 5 PT             shared   n=  3 T=   1536    2.1560 ms
+  rep 5 PT             native   n=  3 T=   1536    2.1523 ms
+  LOCK SLIP rep 5 PT             native   n=  3 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 6 PT             native   n=  3 T=   1536    2.1443 ms
+  rep 6 PT             shared   n=  3 T=   1536    2.1534 ms
+  rep 6 PW             native   n=  3 T=   1536    2.3422 ms
+  rep 6 PW             shared   n=  3 T=   1536    2.3604 ms
+  LOCK SLIP rep 6 PW             native   n=  3 1680.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 6 uniform        native   n=  3 T=   1536    1.9146 ms
+  rep 6 uniform        shared   n=  3 T=   1536    1.9298 ms
+  LOCK SLIP rep 6 uniform        native   n=  3 1605.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 6 uniform        shared   n=  3 1680.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 6 balanced       native   n=  3 T=   1536    1.9094 ms
+  rep 6 balanced       shared   n=  3 T=   1536    1.9258 ms
+  LOCK SLIP rep 6 balanced       native   n=  3 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 6 PT             native   n=  4 T=   2048    2.7689 ms
+  rep 6 PT             shared   n=  4 T=   2048    2.7888 ms
+  rep 6 PW             native   n=  4 T=   2048    2.8235 ms
+  rep 6 PW             shared   n=  4 T=   2048    2.8375 ms
+  rep 6 uniform        native   n=  4 T=   2048    2.4861 ms
+  rep 6 uniform        shared   n=  4 T=   2048    2.5019 ms
+  rep 6 balanced       native   n=  4 T=   2048    2.4820 ms
+  rep 6 balanced       shared   n=  4 T=   2048    2.5075 ms
+  LOCK SLIP rep 6 balanced       native   n=  4 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 6 PT             native   n=  8 T=   4096    5.2129 ms
+  rep 6 PT             shared   n=  8 T=   4096    5.2393 ms
+  rep 6 PW             native   n=  8 T=   4096    5.1521 ms
+  rep 6 PW             shared   n=  8 T=   4096    5.1767 ms
+  rep 6 uniform        native   n=  8 T=   4096    4.8530 ms
+  rep 6 uniform        shared   n=  8 T=   4096    4.8965 ms
+  LOCK SLIP rep 6 uniform        native   n=  8 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 6 uniform        shared   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 6 balanced       native   n=  8 T=   4096    4.8649 ms
+  rep 6 balanced       shared   n=  8 T=   4096    4.8874 ms
+  LOCK SLIP rep 6 balanced       native   n=  8 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 7 balanced       shared   n=  8 T=   4096    4.9084 ms
+  rep 7 balanced       native   n=  8 T=   4096    4.8534 ms
+  LOCK SLIP rep 7 balanced       shared   n=  8 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 7 balanced       native   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 7 uniform        shared   n=  8 T=   4096    4.8794 ms
+  rep 7 uniform        native   n=  8 T=   4096    4.8557 ms
+  LOCK SLIP rep 7 uniform        shared   n=  8 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 7 uniform        native   n=  8 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 7 PW             shared   n=  8 T=   4096    5.1855 ms
+  rep 7 PW             native   n=  8 T=   4096    5.1566 ms
+  rep 7 PT             shared   n=  8 T=   4096    5.2436 ms
+  rep 7 PT             native   n=  8 T=   4096    5.2102 ms
+  rep 7 balanced       shared   n=  4 T=   2048    2.5022 ms
+  rep 7 balanced       native   n=  4 T=   2048    2.4822 ms
+  rep 7 uniform        shared   n=  4 T=   2048    2.5053 ms
+  rep 7 uniform        native   n=  4 T=   2048    2.4841 ms
+  rep 7 PW             shared   n=  4 T=   2048    2.8435 ms
+  rep 7 PW             native   n=  4 T=   2048    2.8224 ms
+  LOCK SLIP rep 7 PW             shared   n=  4 1620.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 7 PT             shared   n=  4 T=   2048    2.7872 ms
+  rep 7 PT             native   n=  4 T=   2048    2.7699 ms
+  rep 7 balanced       shared   n=  3 T=   1536    1.9259 ms
+  rep 7 balanced       native   n=  3 T=   1536    1.9097 ms
+  rep 7 uniform        shared   n=  3 T=   1536    1.9280 ms
+  rep 7 uniform        native   n=  3 T=   1536    1.9155 ms
+  rep 7 PW             shared   n=  3 T=   1536    2.3610 ms
+  rep 7 PW             native   n=  3 T=   1536    2.3436 ms
+  LOCK SLIP rep 7 PW             native   n=  3 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 7 PT             shared   n=  3 T=   1536    2.1544 ms
+  rep 7 PT             native   n=  3 T=   1536    2.1532 ms
+  LOCK SLIP rep 7 PT             native   n=  3 1635.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 8 PT             native   n=  3 T=   1536    2.1503 ms
+  rep 8 PT             shared   n=  3 T=   1536    2.1552 ms
+  rep 8 PW             native   n=  3 T=   1536    2.3413 ms
+  rep 8 PW             shared   n=  3 T=   1536    2.3611 ms
+  rep 8 uniform        native   n=  3 T=   1536    1.9145 ms
+  rep 8 uniform        shared   n=  3 T=   1536    1.9271 ms
+  rep 8 balanced       native   n=  3 T=   1536    1.9109 ms
+  rep 8 balanced       shared   n=  3 T=   1536    1.9276 ms
+  rep 8 PT             native   n=  4 T=   2048    2.7701 ms
+  rep 8 PT             shared   n=  4 T=   2048    2.7896 ms
+  rep 8 PW             native   n=  4 T=   2048    2.8163 ms
+  rep 8 PW             shared   n=  4 T=   2048    2.8401 ms
+  LOCK SLIP rep 8 PW             shared   n=  4 1605.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 8 uniform        native   n=  4 T=   2048    2.4860 ms
+  rep 8 uniform        shared   n=  4 T=   2048    2.5037 ms
+  rep 8 balanced       native   n=  4 T=   2048    2.4828 ms
+  rep 8 balanced       shared   n=  4 T=   2048    2.5048 ms
+  rep 8 PT             native   n=  8 T=   4096    5.2093 ms
+  rep 8 PT             shared   n=  8 T=   4096    5.2379 ms
+  rep 8 PW             native   n=  8 T=   4096    5.1562 ms
+  rep 8 PW             shared   n=  8 T=   4096    5.1830 ms
+  rep 8 uniform        native   n=  8 T=   4096    4.8570 ms
+  rep 8 uniform        shared   n=  8 T=   4096    4.8920 ms
+  LOCK SLIP rep 8 uniform        native   n=  8 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  LOCK SLIP rep 8 uniform        shared   n=  8 1680.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 8 balanced       native   n=  8 T=   4096    4.8555 ms
+  rep 8 balanced       shared   n=  8 T=   4096    4.9082 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: FAIL
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-e128g16/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-70a4632e/report.json
+exit     3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable

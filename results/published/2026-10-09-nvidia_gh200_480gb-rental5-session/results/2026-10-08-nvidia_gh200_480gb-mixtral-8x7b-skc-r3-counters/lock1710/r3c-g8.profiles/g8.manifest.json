@@ -1,0 +1,533 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      2,
+      "PT"
+    ],
+    [
+      "shared",
+      2,
+      "PT"
+    ],
+    [
+      "native",
+      2,
+      "PW"
+    ],
+    [
+      "shared",
+      2,
+      "PW"
+    ],
+    [
+      "native",
+      2,
+      "uniform"
+    ],
+    [
+      "shared",
+      2,
+      "uniform"
+    ],
+    [
+      "native",
+      2,
+      "balanced"
+    ],
+    [
+      "shared",
+      2,
+      "balanced"
+    ],
+    [
+      "native",
+      8,
+      "PT"
+    ],
+    [
+      "shared",
+      8,
+      "PT"
+    ],
+    [
+      "native",
+      8,
+      "PW"
+    ],
+    [
+      "shared",
+      8,
+      "PW"
+    ],
+    [
+      "native",
+      8,
+      "uniform"
+    ],
+    [
+      "shared",
+      8,
+      "uniform"
+    ],
+    [
+      "native",
+      8,
+      "balanced"
+    ],
+    [
+      "shared",
+      8,
+      "balanced"
+    ]
+  ],
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 64,
+  "launch_count": 96,
+  "tokens": {
+    "2": 256,
+    "8": 1024
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/2/PT": "541a9b195462cccc8bae5dc81c7142ef92113439a3ca4f6db7b633d2530e5da2",
+    "shared/2/PT": "8d9c75495dacf75cac746560aeb1de2577b760c9b85d33b0a8ffa3b5fb3a7b23",
+    "native/2/PW": "f2e81597d753f55ceb8c80b1b33dbf78f2a36d696f19a1f4b146472ec0677d09",
+    "shared/2/PW": "a08cb833670d8e97e7c69b284fdf2315049323eb75f20592d43059dc8e710cae",
+    "native/2/uniform": "cdfe2153b064faaebbcb4444ff6eb65bb6351f486b928ed35b3263ad1e504390",
+    "shared/2/uniform": "151eb7b675944c4b56bc70c1ed405f01cc2b4ef7140e4486b79d09a8c1a6d8da",
+    "native/2/balanced": "f568310ce909c90b38da372699a031abb49db16fdd3a038a374b6b163d328195",
+    "shared/2/balanced": "1151114e040fdf2a186ceed7c48dcf75442d8b6e3026ec7a078b48ad202803ee",
+    "native/8/PT": "ea82a8ef865a15d99d725b527cc1a82046e2fbcab879665d003807fe0367219c",
+    "shared/8/PT": "9fb58d6d7345623d495ffccb9dfcb0b7371b889de866352419d451d8a56a8893",
+    "native/8/PW": "d981f3ceeb3f497cefdadbc8fedaecbc40d221626175d5623feb4cdc55cc5f4c",
+    "shared/8/PW": "0b8cc1c6ff1a855adcb250e878e46c95276391342b742d2ba466b0b76f5bfc5d",
+    "native/8/uniform": "606bbb8efdc887544c6aa11432ce4d359ad62b1934bff95ccbb52b00233a9801",
+    "shared/8/uniform": "af0c711173242382b6f7991605f18dd1c480516e516384c9e5abf70c892a1fc2",
+    "native/8/balanced": "c2519307679a38f7118681c76aabb5d2ece77767ebf9badc654bf792cded5e24",
+    "shared/8/balanced": "84894f8b4575e731dfe12f26b41592c189da2d22c484e460bc39588ed1c33a50"
+  },
+  "sorted_ids_len": {
+    "native/2/PT": 760,
+    "shared/2/PT": 2744,
+    "native/2/PW": 760,
+    "shared/2/PW": 2744,
+    "native/2/uniform": 760,
+    "shared/2/uniform": 2744,
+    "native/2/balanced": 760,
+    "shared/2/balanced": 2744,
+    "native/8/PT": 2296,
+    "shared/8/PT": 4280,
+    "native/8/PW": 2296,
+    "shared/8/PW": 4280,
+    "native/8/uniform": 2296,
+    "shared/8/uniform": 4280,
+    "native/8/balanced": 2296,
+    "shared/8/balanced": 4280
+  },
+  "grids": {
+    "native/2/PT": {
+      "w1": 10752,
+      "w2": 1536
+    },
+    "shared/2/PT": {
+      "w1": 38528,
+      "w2": 5504
+    },
+    "native/2/PW": {
+      "w1": 10752,
+      "w2": 1536
+    },
+    "shared/2/PW": {
+      "w1": 38528,
+      "w2": 5504
+    },
+    "native/2/uniform": {
+      "w1": 10752,
+      "w2": 1536
+    },
+    "shared/2/uniform": {
+      "w1": 38528,
+      "w2": 5504
+    },
+    "native/2/balanced": {
+      "w1": 10752,
+      "w2": 1536
+    },
+    "shared/2/balanced": {
+      "w1": 38528,
+      "w2": 5504
+    },
+    "native/8/PT": {
+      "w1": 32256,
+      "w2": 4608
+    },
+    "shared/8/PT": {
+      "w1": 60032,
+      "w2": 8576
+    },
+    "native/8/PW": {
+      "w1": 32256,
+      "w2": 4608
+    },
+    "shared/8/PW": {
+      "w1": 60032,
+      "w2": 8576
+    },
+    "native/8/uniform": {
+      "w1": 32256,
+      "w2": 4608
+    },
+    "shared/8/uniform": {
+      "w1": 60032,
+      "w2": 8576
+    },
+    "native/8/balanced": {
+      "w1": 32256,
+      "w2": 4608
+    },
+    "shared/8/balanced": {
+      "w1": 60032,
+      "w2": 8576
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g8/n2/PT",
+    "r3/native/g8/n2/PT",
+    "r3/native/g8/n2/PT",
+    "r3/shared/g8/n2/PT",
+    "r3/shared/g8/n2/PT",
+    "r3/shared/g8/n2/PT",
+    "r3/native/g8/n2/PW",
+    "r3/native/g8/n2/PW",
+    "r3/native/g8/n2/PW",
+    "r3/shared/g8/n2/PW",
+    "r3/shared/g8/n2/PW",
+    "r3/shared/g8/n2/PW",
+    "r3/native/g8/n2/uniform",
+    "r3/native/g8/n2/uniform",
+    "r3/native/g8/n2/uniform",
+    "r3/shared/g8/n2/uniform",
+    "r3/shared/g8/n2/uniform",
+    "r3/shared/g8/n2/uniform",
+    "r3/native/g8/n2/balanced",
+    "r3/native/g8/n2/balanced",
+    "r3/native/g8/n2/balanced",
+    "r3/shared/g8/n2/balanced",
+    "r3/shared/g8/n2/balanced",
+    "r3/shared/g8/n2/balanced",
+    "r3/native/g8/n8/PT",
+    "r3/native/g8/n8/PT",
+    "r3/native/g8/n8/PT",
+    "r3/shared/g8/n8/PT",
+    "r3/shared/g8/n8/PT",
+    "r3/shared/g8/n8/PT",
+    "r3/native/g8/n8/PW",
+    "r3/native/g8/n8/PW",
+    "r3/native/g8/n8/PW",
+    "r3/shared/g8/n8/PW",
+    "r3/shared/g8/n8/PW",
+    "r3/shared/g8/n8/PW",
+    "r3/native/g8/n8/uniform",
+    "r3/native/g8/n8/uniform",
+    "r3/native/g8/n8/uniform",
+    "r3/shared/g8/n8/uniform",
+    "r3/shared/g8/n8/uniform",
+    "r3/shared/g8/n8/uniform",
+    "r3/native/g8/n8/balanced",
+    "r3/native/g8/n8/balanced",
+    "r3/native/g8/n8/balanced",
+    "r3/shared/g8/n8/balanced",
+    "r3/shared/g8/n8/balanced",
+    "r3/shared/g8/n8/balanced"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 8,
+    "num_warps": 8,
+    "num_stages": 4,
+    "BLOCK_SIZE_M": 32
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 2818572288,
+    "weight_bytes": 25367150592,
+    "activation_bytes": 209715200,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 25996296192,
+    "device_free_bytes": 100720574464,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 8
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "11564448-b00b-c0d7-a72b-2fb5c11ec856"
+  },
+  "histogram": {
+    "file_sha256": "4123ee42da8695584b9ce4f153a324f7a3861a49999af9cbb084cfd32622ca6c",
+    "page": "C",
+    "shuffle_seed": 20261007,
+    "cells": {
+      "native/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02",
+        "bincount": [
+          71,
+          54,
+          33,
+          67,
+          68,
+          79,
+          54,
+          86
+        ]
+      },
+      "shared/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02",
+        "bincount": [
+          71,
+          54,
+          33,
+          67,
+          68,
+          79,
+          54,
+          86
+        ]
+      },
+      "native/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98",
+        "bincount": [
+          67,
+          97,
+          105,
+          53,
+          64,
+          22,
+          35,
+          69
+        ]
+      },
+      "shared/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98",
+        "bincount": [
+          67,
+          97,
+          105,
+          53,
+          64,
+          22,
+          35,
+          69
+        ]
+      },
+      "native/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "shared/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "native/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "shared/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "native/8/PT": {
+        "label": "PT",
+        "n": 8,
+        "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be",
+        "bincount": [
+          190,
+          305,
+          320,
+          224,
+          251,
+          240,
+          303,
+          215
+        ]
+      },
+      "shared/8/PT": {
+        "label": "PT",
+        "n": 8,
+        "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be",
+        "bincount": [
+          190,
+          305,
+          320,
+          224,
+          251,
+          240,
+          303,
+          215
+        ]
+      },
+      "native/8/PW": {
+        "label": "PW",
+        "n": 8,
+        "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3",
+        "bincount": [
+          376,
+          326,
+          310,
+          142,
+          146,
+          139,
+          299,
+          310
+        ]
+      },
+      "shared/8/PW": {
+        "label": "PW",
+        "n": 8,
+        "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3",
+        "bincount": [
+          376,
+          326,
+          310,
+          142,
+          146,
+          139,
+          299,
+          310
+        ]
+      },
+      "native/8/uniform": {
+        "label": "uniform",
+        "n": 8,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "shared/8/uniform": {
+        "label": "uniform",
+        "n": 8,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "native/8/balanced": {
+        "label": "balanced",
+        "n": 8,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "shared/8/balanced": {
+        "label": "balanced",
+        "n": 8,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      }
+    }
+  }
+}

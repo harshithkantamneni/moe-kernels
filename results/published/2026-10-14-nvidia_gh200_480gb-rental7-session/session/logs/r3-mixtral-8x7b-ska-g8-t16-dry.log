@@ -1,0 +1,34 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0ff9ed8eb0-247ad858
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json (sha256 0ff9ed8eb05fefb1...), page A, 12 cells x arms = 24 timed cells, token-row shuffle seed 20261020; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       173.02 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 644.6 TFLOP/s bf16 over 3725.6 GB/s (triad pattern); calibrated 2026-10-14 at ae010ffe
+experts     native declares E=8; shared declares E x n_decl = 72 at every cell
+            n_decl = 9 against n_max = 16 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 16 against the 16 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261014T004743Z-p2-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-ska/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0ff9ed8eb0-247ad858
+slips       --slip-policy cell at the 1710 MHz lock: a repeat under 1695 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 3 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=3   PT               native,shared  block-scan/small-batch 220c03aaea5ef16d
+  n=3   PW               native,shared  block-scan/small-batch d6c33a3b84f86171
+  n=3   uniform          native,shared  block-scan/small-batch 41ae04250782ed3e
+  n=3   balanced         native,shared  block-scan/small-batch 74234e98afe7498f
+  n=6   PT               native,shared  block-scan   ae5a35b1091b4ef6
+  n=6   PW               native,shared  block-scan   7fc809eee4a19103
+  n=6   uniform          native,shared  block-scan   0fe617e72fe38516
+  n=6   balanced         native,shared  block-scan   74234e98afe7498f
+  n=16  PT               native,shared  block-scan   209ce757a495de8d
+  n=16  PW               native,shared  block-scan   b3ebf94029ab9cdc
+  n=16  uniform          native,shared  block-scan   0f59bb201fff3f9f
+  n=16  balanced         native,shared  block-scan   74234e98afe7498f
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================

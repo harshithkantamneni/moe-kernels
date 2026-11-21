@@ -1,0 +1,315 @@
+{
+  "experiment": "tile_cap",
+  "cap_tile": 16,
+  "control_tile": 256,
+  "alpha": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "retracted_alpha": 0.1,
+  "ridge": 152.8120650229884,
+  "ridge_band": [
+    142.8112754272431,
+    155.4122703178822
+  ],
+  "dtype_bytes": 2,
+  "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s (triad pattern); calibrated 2026-09-09 at 981a42f6",
+  "ridge_band_source": "this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling",
+  "ridge_device": "NVIDIA H200 (measured)",
+  "card": "nvidia_h200",
+  "synthetic": false,
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "fixed": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "plateau_tflops": 363.9685370259328,
+  "model_roof_tflops": 668.4838893839521,
+  "fused_layer_roof_tflops": 310.84500856353776,
+  "fused_plateau_band": [
+    0.465,
+    0.756
+  ],
+  "lin_overstatement": [
+    1.0044642857142858,
+    1.25390625
+  ],
+  "timing_spread_median": 0.009892774315208835,
+  "memory_branch_margin": 0.029678322945626504,
+  "sm_count": 132,
+  "sm_source": "reported by the driver",
+  "planned_cells": 72,
+  "measured_cells": 72,
+  "depth_required": {
+    "tiles": 43,
+    "rows": 688,
+    "horizon_roof": {
+      "142.8112754272431": 29,
+      "155.4122703178822": 43
+    },
+    "horizon_disc": {
+      "142.8112754272431": 13,
+      "155.4122703178822": 13
+    },
+    "saturation_tiles": 17,
+    "binding": "the near-roof horizon at the worst end of the ridge band"
+  },
+  "depth_reached_tiles": 42,
+  "roof_fraction_gate": 0.85,
+  "cap_discriminator": 0.6173394590834982,
+  "alpha_measured": null,
+  "alpha_corrected": null,
+  "ai_cap_measured": null,
+  "peak_roof_fraction": {
+    "16": 0.10082776827929987,
+    "256": 0.5444686742732896
+  },
+  "compute_reference": "BLOCK_M=16 ladder is proportional to 0.7% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads",
+  "ladder": {
+    "16": {
+      "points": [
+        [
+          1,
+          0.7614399790763855
+        ],
+        [
+          2,
+          1.3583199977874756
+        ],
+        [
+          3,
+          2.039167881011963
+        ],
+        [
+          4,
+          2.7027840614318848
+        ],
+        [
+          5,
+          3.370368003845215
+        ],
+        [
+          6,
+          4.037600040435791
+        ],
+        [
+          8,
+          5.352640151977539
+        ],
+        [
+          10,
+          6.70684814453125
+        ],
+        [
+          12,
+          8.04537582397461
+        ],
+        [
+          14,
+          9.389135837554932
+        ],
+        [
+          16,
+          10.733887672424316
+        ],
+        [
+          18,
+          12.075712203979492
+        ],
+        [
+          20,
+          13.431872367858887
+        ],
+        [
+          22,
+          14.773263931274414
+        ],
+        [
+          24,
+          16.135231971740723
+        ],
+        [
+          26,
+          17.460944175720215
+        ],
+        [
+          28,
+          18.81692886352539
+        ],
+        [
+          30,
+          20.180255889892578
+        ],
+        [
+          32,
+          21.518287658691406
+        ],
+        [
+          34,
+          22.867488861083984
+        ],
+        [
+          36,
+          24.215152740478516
+        ],
+        [
+          38,
+          25.578975677490234
+        ],
+        [
+          40,
+          26.93667221069336
+        ],
+        [
+          42,
+          28.266799926757812
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "slope_memory": null,
+      "slope_compute": 0.672491566790359,
+      "crosses": null,
+      "basis": "split search: the compute reference was REFUSED at BLOCK_M=16 on its level, so this ladder is unidentifiable BECAUSE OF THE REFERENCE and not for want of treads; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line",
+      "mean_rel_err": 0.007181457239204038
+    },
+    "256": {
+      "points": [
+        [
+          1,
+          2.0213119983673096
+        ],
+        [
+          2,
+          3.964927911758423
+        ]
+      ],
+      "memory_points": 2,
+      "alpha": 0.9615615575235519,
+      "slope_memory": 1.9436159133911133,
+      "slope_compute": null,
+      "crosses": null,
+      "basis": "split search: the compute reference was REFUSED at BLOCK_M=16 on its level, so this ladder is unidentifiable BECAUSE OF THE REFERENCE and not for want of treads",
+      "mean_rel_err": 0.0
+    }
+  },
+  "gates": [
+    {
+      "tag": "V0",
+      "kind": "VALIDITY",
+      "claim": "override_config changed the kernel at every setting",
+      "verdict": "PASS",
+      "measured": "fresh Triton artefacts per setting: BM=16:17, BM=256:16",
+      "gate": ">= 1 per setting",
+      "consequence": "the two settings may have been one kernel, every difference below is a comparison of that kernel with itself, and nothing on this page is evidence"
+    },
+    {
+      "tag": "V1",
+      "kind": "VALIDITY",
+      "claim": "the run measured the grid it planned",
+      "verdict": "FAIL",
+      "measured": "72/72 cells, 24/2 aligned treads",
+      "gate": "all 72 cells and >= 3 aligned treads per tile",
+      "consequence": "the ladders below were fitted on a grid with holes in it, and no roof fraction, alpha or ratio on this page may be quoted"
+    },
+    {
+      "tag": "V2",
+      "kind": "VALIDITY",
+      "claim": "the control BLOCK_M=256 reached a compute roof in this grid",
+      "verdict": "FAIL",
+      "measured": "proportional to 0.7%, last tread +1.96%",
+      "gate": "through-origin fit within 5% and last tread within +/-2.97%",
+      "consequence": "the compute branch every tread at the cap tile is classified against is not one, so neither C1 nor C2 may be quoted. A REFUSAL from the level checks is the likeliest cause and it names itself in the note above; membership then falls back to a split search, which invents an alpha rather than declining to"
+    },
+    {
+      "tag": "V3",
+      "kind": "VALIDITY",
+      "claim": "the control BLOCK_M=256 reached the fused-layer roof",
+      "verdict": "PASS",
+      "measured": "peak 0.544 of the dense peak (364 TFLOP/s)",
+      "gate": "in [0.465, 1.050] of ridge x bandwidth, i.e. >= the fused-layer roof 311 TFLOP/s and <= the dense peak 668 widened by max(5%, 3 x the 0.99% per-cell spread)",
+      "consequence": "nothing in this sweep reached a roof a fused layer can reach, so C1 is a statement about the instrument rather than about the tile. THE WHOLE PAGE IS UNQUOTABLE, C2 INCLUDED: this is a VALIDITY gate and a VALIDITY gate that is not PASS exits INVALID under moe.bench.exit_codes, which means nothing in the report may be quoted. What is true of C2 is narrower and is not a licence: C2's NUMBER is arithmetically independent of the roof -- it fits a re-read fraction from the cap tile's own treads and never divides by ridge x bandwidth -- so re-running the CONTROL is enough to recover it and the cap tile's cells need not be re-measured. Until that control is re-run, C2 is not a result"
+    },
+    {
+      "tag": "V4",
+      "kind": "VALIDITY",
+      "claim": "the sweep reached the depth at which the retracted world would trip C1",
+      "verdict": "PASS",
+      "measured": "42 tiles",
+      "gate": ">= 13 tiles",
+      "consequence": "the sweep stopped before the competing hypothesis would have shown itself, so C1 rules nothing out and its PASS may not be quoted"
+    },
+    {
+      "tag": "C1",
+      "kind": "CLAIM",
+      "claim": "BLOCK_M=16 never gets near the compute roof, at any batch",
+      "verdict": "PASS",
+      "measured": "peak 0.101 of the roof",
+      "gate": "<= 0.617 (discriminating)",
+      "consequence": "BLOCK_M=16 DOES approach its compute roof, which retracts the structural ceiling this study put on a decode-tuned MoE kernel and is the publishable answer in the other direction"
+    },
+    {
+      "tag": "C2",
+      "kind": "CLAIM",
+      "claim": "the re-read fraction measured at BLOCK_M=16 puts its AI ceiling far below the ridge",
+      "verdict": "UNDECIDED",
+      "measured": "alpha from 0 memory-bound tread(s)",
+      "gate": "needs >= 3",
+      "consequence": "the mechanical half of the cap claim is unmeasured and only C1 carries it"
+    },
+    {
+      "tag": "C3",
+      "kind": "CLAIM",
+      "claim": "time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)",
+      "verdict": "PASS",
+      "measured": "ms(BM=16) / ms(BM=256) = 5.427x at 512 rows per expert",
+      "gate": ">= 1.50x",
+      "consequence": "time did NOT fall with the tile height in the multi-tile regime, so the extra weight re-reads a short tile pays are outweighed by padded arithmetic or lost occupancy, and the traffic reading of the cap is wrong"
+    },
+    {
+      "tag": "C4",
+      "kind": "CLAIM",
+      "claim": "time steps at T = n x BLOCK_M x E/k",
+      "verdict": "PASS",
+      "measured": "median step minus tread +36.14%",
+      "gate": ">= +15.47% (half the model's step) and > 3x noise (2.97%)",
+      "consequence": "the time steps do not land where the tile count changes, so whatever the ladders measured is not the tile quantum and the mechanism behind C1 and C2 is not the one claimed"
+    }
+  ],
+  "git_sha": "981a42f6caeb8b634a6a2e62113cc622d75910bc",
+  "gpu_name": "NVIDIA H200",
+  "bandwidth_source": "measured on this device: NVIDIA H200 (measured), 4374.5 GB/s (triad pattern)",
+  "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "981a42f6caeb8b634a6a2e62113cc622d75910bc",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-09T17:04:47+00:00",
+    "hostname": "238b79f71e94",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+    "ridge": 152.8120650229884,
+    "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s (triad pattern); calibrated 2026-09-09 at 981a42f6",
+    "bandwidth": 4374.549151491332,
+    "bandwidth_source": "measured on this device: NVIDIA H200 (measured), 4374.5 GB/s (triad pattern)",
+    "warmup_ms": 300.0,
+    "iters": 117,
+    "target_ms": 400.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}

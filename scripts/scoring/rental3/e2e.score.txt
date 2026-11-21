@@ -1,0 +1,19 @@
+RENTAL 3 PART E (end-to-end blind time, qwen2-57b-a14b-tp8), 2026-10-05-rental3-e2e-gh200
+  scope: a blind test of an UNSEEN SHAPE INSIDE THE 64-EXPERT, TOP-8 FAMILY on which every post-2026-09-28 term was chosen: the 64-expert analogue of the 8x22B test. It is NOT a test of transfer across expert counts (FINDINGS' rule: such a claim needs a model none of the terms has seen), and E1's label says so
+  E1 (predicted bytes): FALSIFIED resolved (resolution 0.31%, page and board) rms 3.50% max 6.08% over 31
+  E2: FALSIFIED
+  E3: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+  E3s: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+  E4: M HOLDS (F0 FALSIFIED)
+  E6: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: INCONCLUSIVE
+  E5 (printed): rms M 3.50%, M+Z 1.89%, sigma_rms 0.26%
+  deep pages (printed): FALSIFIED
+  two views (ALL, CLEAN):
+    page 2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g3.json: failed ['V5']; ALL counted, CLEAN excluded
+    page 2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g32.json: failed ['V5']; ALL counted, CLEAN excluded
+    page 2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g8.json: failed ['V5']; ALL counted, CLEAN excluded
+    page e2e/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g32-l2flushtrue-modelqwen2_57b_a14b-f037a06b: failed ['V5']; ALL counted, CLEAN counted
+    3 of 6 verdicts differ between ALL and CLEAN
+    E3 / verdict: ALL FALSIFIED | CLEAN NOT SCORED: no byte page -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    E3s / verdict: ALL FALSIFIED | CLEAN NOT SCORED: no byte page -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    E6 / verdict: ALL INCONCLUSIVE | CLEAN NOT SCORED: no SHARED / NATIVE byte cells -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: INCONCLUSIVE

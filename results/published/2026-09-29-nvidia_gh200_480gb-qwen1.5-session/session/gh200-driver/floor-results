@@ -1,0 +1,3 @@
+r3f-g64 exit 0
+r3f-g2 and r3f-g64-unlocked left out: no qwen1.5-moe-a2.7b prediction reads them
+r3f-g64-lock1710 exit 3

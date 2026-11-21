@@ -1,0 +1,827 @@
+{
+  "experiment": "r3_decode",
+  "kind": "decode-page",
+  "run_id": "nvidia_gh200_480gb-decode-mixtral-8x7b-GRR-mixtral-8x7b-label-620a8643",
+  "session_tag": "gh200-20261103T220721Z-decj-lock1710",
+  "card": "nvidia_gh200_480gb",
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "inst": "GRR",
+  "duty": 0.25,
+  "repeats": 9,
+  "group_m": 1,
+  "rotation": 1,
+  "calls_per_graph": 8,
+  "copies_allocated": 1,
+  "decl_copies": null,
+  "seed": 0,
+  "pinned": {
+    "tile": "vLLM default_config per T (GD5)",
+    "num_warps": null
+  },
+  "histogram": {
+    "schema": "moe-kernels/decode-page/1",
+    "file_sha256": "647dd3866983917ef8a9ecaa76356dcd6238441908c3fd191f6079e865d48f34",
+    "page": "mixtral-8x7b-label",
+    "shuffle_seed": 20261014,
+    "cells": [
+      {
+        "label": "S01-T4",
+        "n": 4,
+        "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LABEL-SET"
+      },
+      {
+        "label": "S25-T4",
+        "n": 4,
+        "counts_sha256": "482f365f32e10f4cd555430ea652f897e106a1625bb8c2c8fd6db70ec180a7ea",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LABEL-SET"
+      },
+      {
+        "label": "S46-T4",
+        "n": 4,
+        "counts_sha256": "1346a7501825456b6b84c4a88a317b556ac08470f1a8c9c9a5637eff325bea3a",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LABEL-SET"
+      },
+      {
+        "label": "S15-T4",
+        "n": 4,
+        "counts_sha256": "15092e377b2a0b02c16da3806bdb2de5a5ff673f622be8231c1c7addc4e97828",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LABEL-SET"
+      },
+      {
+        "label": "S37-T4",
+        "n": 4,
+        "counts_sha256": "a2c94f6d2847eba138bfe0900292102acd09999f6577f8bc437504db818289d5",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LABEL-SET"
+      },
+      {
+        "label": "S26-T4",
+        "n": 4,
+        "counts_sha256": "2c467b541233c0911bdae5c0af069994c71924af3066678cb5c84529fc2edd0d",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LABEL-SET"
+      }
+    ]
+  },
+  "histogram_gates": {
+    "G1_lock_thermal": {
+      "verdict": "PASS",
+      "clock_unread": [],
+      "drift": [],
+      "below_top_by_a_step": [],
+      "top_mhz": 1710.0,
+      "lock_slips": {
+        "slipped_repeats": 0,
+        "repeat_rows": 54,
+        "lost_cells": [],
+        "rule": "a lost cell (under --min-clean-repeats clean repeats) is listed, not a FAIL here: the rental-6 scorer's G1 takes the page's slipped-repeat share"
+      }
+    },
+    "G2_host_bound": {
+      "verdict": "PASS",
+      "excluded": [],
+      "rule": "a cell the timer called host-bound is excluded, not voided"
+    },
+    "G3_uniform_control": {
+      "verdict": "SCORED OFFLINE",
+      "rule": "the rental-5 scorer's TOST over the page pair"
+    },
+    "G4_worst_cell_clock": {
+      "verdict": "RECORDED",
+      "worst_mhz": 1710.0,
+      "rule": "the scorer holds the worst cell to the 1710 lock"
+    },
+    "G5_provenance": {
+      "verdict": "PASS",
+      "missing": []
+    },
+    "V_ALIGN": {
+      "verdict": "PASS",
+      "refused_cells": [],
+      "rule": "a readback mismatch (V-ALIGN or GD5) refuses the cell; the page stands"
+    },
+    "GD1_gpu_bound": {
+      "verdict": "PASS",
+      "excluded": [],
+      "rule": "GPU per replay >= 3 x host per replay; a cell failing it is excluded"
+    },
+    "GD4_graph_fidelity": {
+      "verdict": "PASS",
+      "failed": [],
+      "rule": "every captured call equals the eager output bit for bit; a failure voids the page"
+    }
+  },
+  "treads_table": [
+    {
+      "arm": "native",
+      "tiles": 4,
+      "histogram": "S01-T4",
+      "role": "LABEL-SET",
+      "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        4,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.21917399764060974,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.30643500031146687,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 32,
+        "padded_rows": 24,
+        "live_tiles": 2,
+        "sorted_len": 128,
+        "grid": [
+          3584,
+          512
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 8
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 4,
+        "numel": 8,
+        "declared": 8,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 2,
+        "L": 2,
+        "P": 24,
+        "multi_tile_experts": 0,
+        "sorted_len": 128,
+        "post_padded": 32,
+        "em": [
+          128,
+          128
+        ],
+        "npn": [
+          448,
+          64
+        ],
+        "grid": [
+          3584,
+          512
+        ],
+        "live_ctas": [
+          896,
+          128
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ]
+      },
+      "A": 2,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "8 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.753391981124878,
+        "host_ms": 0.010464,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 8,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "histogram": "S25-T4",
+      "role": "LABEL-SET",
+      "counts_sha256": "482f365f32e10f4cd555430ea652f897e106a1625bb8c2c8fd6db70ec180a7ea",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        0,
+        0,
+        4,
+        0,
+        0,
+        4,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.21961399912834167,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.3014275002897193,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 32,
+        "padded_rows": 24,
+        "live_tiles": 2,
+        "sorted_len": 128,
+        "grid": [
+          3584,
+          512
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 8
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 4,
+        "numel": 8,
+        "declared": 8,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 2,
+        "L": 2,
+        "P": 24,
+        "multi_tile_experts": 0,
+        "sorted_len": 128,
+        "post_padded": 32,
+        "em": [
+          128,
+          128
+        ],
+        "npn": [
+          448,
+          64
+        ],
+        "grid": [
+          3584,
+          512
+        ],
+        "live_ctas": [
+          896,
+          128
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ]
+      },
+      "A": 2,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "8 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.7569119930267334,
+        "host_ms": 0.0104965,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 8,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "histogram": "S46-T4",
+      "role": "LABEL-SET",
+      "counts_sha256": "1346a7501825456b6b84c4a88a317b556ac08470f1a8c9c9a5637eff325bea3a",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        4,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.22000200301408768,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.2940350000244507,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 32,
+        "padded_rows": 24,
+        "live_tiles": 2,
+        "sorted_len": 128,
+        "grid": [
+          3584,
+          512
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 8
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 4,
+        "numel": 8,
+        "declared": 8,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 2,
+        "L": 2,
+        "P": 24,
+        "multi_tile_experts": 0,
+        "sorted_len": 128,
+        "post_padded": 32,
+        "em": [
+          128,
+          128
+        ],
+        "npn": [
+          448,
+          64
+        ],
+        "grid": [
+          3584,
+          512
+        ],
+        "live_ctas": [
+          896,
+          128
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ]
+      },
+      "A": 2,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "8 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.7600160241127014,
+        "host_ms": 0.010544,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 8,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "histogram": "S15-T4",
+      "role": "LABEL-SET",
+      "counts_sha256": "15092e377b2a0b02c16da3806bdb2de5a5ff673f622be8231c1c7addc4e97828",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        0,
+        4,
+        0,
+        0,
+        0,
+        4,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.21989800035953522,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.29717100005655084,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 32,
+        "padded_rows": 24,
+        "live_tiles": 2,
+        "sorted_len": 128,
+        "grid": [
+          3584,
+          512
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 8
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 4,
+        "numel": 8,
+        "declared": 8,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 2,
+        "L": 2,
+        "P": 24,
+        "multi_tile_experts": 0,
+        "sorted_len": 128,
+        "post_padded": 32,
+        "em": [
+          128,
+          128
+        ],
+        "npn": [
+          448,
+          64
+        ],
+        "grid": [
+          3584,
+          512
+        ],
+        "live_ctas": [
+          896,
+          128
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ]
+      },
+      "A": 2,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "8 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.7591840028762817,
+        "host_ms": 0.010464,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 8,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "histogram": "S37-T4",
+      "role": "LABEL-SET",
+      "counts_sha256": "a2c94f6d2847eba138bfe0900292102acd09999f6577f8bc437504db818289d5",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        0,
+        0,
+        0,
+        4,
+        0,
+        0,
+        0,
+        4
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.21852999925613403,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.3067869997721573,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 32,
+        "padded_rows": 24,
+        "live_tiles": 2,
+        "sorted_len": 128,
+        "grid": [
+          3584,
+          512
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 8
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 4,
+        "numel": 8,
+        "declared": 8,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 2,
+        "L": 2,
+        "P": 24,
+        "multi_tile_experts": 0,
+        "sorted_len": 128,
+        "post_padded": 32,
+        "em": [
+          128,
+          128
+        ],
+        "npn": [
+          448,
+          64
+        ],
+        "grid": [
+          3584,
+          512
+        ],
+        "live_ctas": [
+          896,
+          128
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ]
+      },
+      "A": 2,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "8 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.7482399940490723,
+        "host_ms": 0.010624,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 8,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "histogram": "S26-T4",
+      "role": "LABEL-SET",
+      "counts_sha256": "2c467b541233c0911bdae5c0af069994c71924af3066678cb5c84529fc2edd0d",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        0,
+        0,
+        4,
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.21867600083351135,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.3180679996148683,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 32,
+        "padded_rows": 24,
+        "live_tiles": 2,
+        "sorted_len": 128,
+        "grid": [
+          3584,
+          512
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 8
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 4,
+        "numel": 8,
+        "declared": 8,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 2,
+        "L": 2,
+        "P": 24,
+        "multi_tile_experts": 0,
+        "sorted_len": 128,
+        "post_padded": 32,
+        "em": [
+          128,
+          128
+        ],
+        "npn": [
+          448,
+          64
+        ],
+        "grid": [
+          3584,
+          512
+        ],
+        "live_ctas": [
+          896,
+          128
+        ],
+        "dead_ctas": [
+          2688,
+          384
+        ]
+      },
+      "A": 2,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "8 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.7494080066680908,
+        "host_ms": 0.010624,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 8,
+      "align_path": "small-batch"
+    }
+  ],
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "tag": "G1_lock_thermal",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G2_host_bound",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G5_provenance",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "V_ALIGN",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "GD1_gpu_bound",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "GD4_graph_fidelity",
+      "verdict": "PASS"
+    }
+  ],
+  "upstream": {
+    "fused_moe.py": "d5955a3460746b66740b024f470aeca79bbebd10872c327f765f2d7fcb805f28",
+    "moe_align_block_size.py": "c3f7fc2087836f0160a32ab99ceb1d8f6e87c793679da34dd672e225cb7fa31b",
+    "moe_align_sum_kernels.cu": "72d1f17f7a5e3e3bdfce8ae8e62b97bd330c3d272973f3915b46e32984c6798d",
+    "utils.py": "09856c1e68a9069caaa5942e9e3d3effff847e8d213b877b7b5d8db981c30f64"
+  },
+  "versions": {
+    "python": "3.12.16",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "seconds": 98.1,
+  "slip_policy": "cell",
+  "lock_mhz": 1710,
+  "min_clean_repeats": 0,
+  "repeat_rows": 54,
+  "lock_slip_rows": 0,
+  "lost_cells": {},
+  "early_stop": null,
+  "d3": {
+    "pad_rows": 0,
+    "wrapper": "scripts/r3_decode3.py",
+    "registration": "2026-10-29-decode-addendum3-gh200"
+  }
+}

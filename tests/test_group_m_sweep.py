@@ -1,0 +1,924 @@
+"""The GROUP_SIZE_M sweep must be able to see an effect AND to miss its absence.
+
+A pod script that always prints PASS is worth nothing, so most of this file runs
+the whole report end to end against measurements generated from three STATED
+laws and checks that the verdict changes with the law:
+
+  monotone   alpha falls with the swizzle width          -> every gate passes
+  flat       alpha is a scalar                           -> P1 fails
+  order      alpha is a scalar and a per-setting level
+             shift of the real size is applied to BOTH
+             the multi-tile and the single-tile rungs    -> P1 and the control
+                                                            gate P4 both fail
+
+The rest pins the things that would let a wrong number look right: the defaults
+still being in the memory-bound multi-tile window, the fit being invariant to
+the bandwidth constant it is quoted against, a numpy bool not being able to hide
+a failed gate from the verdict, and the estimator being IMPORTED rather than
+re-implemented.
+
+`scripts/group_m_alpha_sweep.py` is loaded by path because `scripts/` is not a
+package, the same shape `tests/test_alpha_refit.py` needs.
+"""
+from __future__ import annotations
+
+import ast
+import importlib.util
+import json
+import math
+import random
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from moe.bench import exit_codes  # noqa: E402
+
+
+def _load(name: str, filename: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / filename)
+    module = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: `@dataclass` resolves annotations through
+    # `sys.modules[cls.__module__]` and fails inside the decorator otherwise.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+GM = _load("group_m_alpha_sweep", "group_m_alpha_sweep.py")
+AR = GM.load_alpha_refit()
+
+
+@pytest.fixture(scope="module")
+def default_plan():
+    """The plan the pod will actually run, built from the shipped defaults."""
+    return GM.build_plan(GM.parse_args([]))
+
+
+def run_report(argv, tmp_path, monkeypatch, capsys):
+    """`main` end to end, with output confined to a temp directory."""
+    monkeypatch.setenv("MOE_RESULTS_DIR", str(tmp_path))
+    code = GM.main(argv)
+    return code, capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# the gates can see an effect, and can miss its absence
+# --------------------------------------------------------------------------
+
+def test_the_monotone_law_passes_every_gate_and_the_verdict_says_so(
+        tmp_path, monkeypatch, capsys):
+    code, out = run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+    assert "VERDICT: PREDICTION HELD" in out
+    assert "[FAIL]" not in out
+    assert code == 0
+
+
+def test_a_scalar_alpha_fails_the_falling_alpha_gate(tmp_path, monkeypatch, capsys):
+    code, out = run_report(["--synthetic", "flat"], tmp_path, monkeypatch, capsys)
+    assert "VERDICT: PREDICTION REFUTED" in out
+    assert "[FAIL] P1" in out
+    assert code == 1
+
+
+def test_a_launch_order_artefact_fails_the_single_tile_control(
+        tmp_path, monkeypatch, capsys):
+    """The failure mode the whole control rung exists for.
+
+    Under `order` the time falls by 25% with GROUP_SIZE_M in BOTH rungs, which is
+    what an occupancy or wave-quantisation effect looks like. The fit sees
+    nothing (a per-setting level is absorbed by the intercept) and the control
+    sees everything, which is the pair of signatures that says "not a re-read".
+    """
+    code, out = run_report(["--synthetic", "order"], tmp_path, monkeypatch, capsys)
+    assert "[FAIL] P4" in out
+    assert "NOT a weight re-read" in out
+    assert code == 1
+
+
+def test_a_run_with_no_effect_anywhere_leaves_the_control_gate_untestable(
+        tmp_path, monkeypatch, capsys):
+    """P4 is a RATIO, so two noise floors must not divide into a verdict.
+
+    Under `flat` neither rung moves by more than a tenth of a percent. Calling
+    that "the effect is an artefact" would be a confident answer about an effect
+    that is not there.
+    """
+    _, out = run_report(["--synthetic", "flat"], tmp_path, monkeypatch, capsys)
+    assert "[NOT TESTABLE] P4" in out
+
+
+def test_a_synthetic_report_can_never_be_read_as_a_measurement(
+        tmp_path, monkeypatch, capsys):
+    _, out = run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+    assert "*** SYNTHETIC" in out
+    directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+    assert directory.name.endswith("-synthetic-monotone")
+    first = json.loads((directory / "cells.jsonl").read_text().splitlines()[0])
+    assert first["provenance"] == "synthetic"
+
+
+def test_replaying_synthetic_rows_still_announces_that_they_are_synthetic(
+        tmp_path, monkeypatch, capsys):
+    """`--replay` does not carry `--synthetic`, so provenance has to travel.
+
+    Without the check inside the report, a synthetic directory replayed a week
+    later prints a clean table with no banner at all and reads as a pod result.
+    """
+    run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+    directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+    _, out = run_report(["--replay", str(directory)], tmp_path, monkeypatch, capsys)
+    assert "*** SYNTHETIC" in out
+    assert "nothing here was measured on any hardware" in out
+
+
+# --------------------------------------------------------------------------
+# the verdict cannot disagree with the table above it
+# --------------------------------------------------------------------------
+
+def test_a_numpy_false_is_a_failed_gate_and_not_a_passing_one():
+    """The bug this pins: `numpy.bool_(False) is False` is False.
+
+    `fit_alpha` answers in numpy, so every comparison built from a fitted alpha
+    was a `numpy.bool_`. The gate printed "[FAIL]" and the `g.ok is False` scan
+    that decides the verdict skipped it, so one run of this script reported
+    PREDICTION HELD directly underneath a failed gate.
+    """
+    gate = GM.Gate("planted", np.bool_(False), "detail")
+    assert gate.ok is False
+    assert gate.label == "FAIL"
+    # INVALID (3): `planted` is not a preflight name, so `kind` reads VALIDITY,
+    # and a failed apparatus gate voids the page rather than refuting a
+    # prediction. `verdict` chose its own codes until 2026-09-02 and answered 1
+    # for any failed gate whatever its kind; it is `exit_codes.classify` over
+    # the same gate objects that printed the RESULT lines now. The numpy bool is
+    # still what this test is about: without `__post_init__`'s coercion the
+    # `g.ok is False` scan below still misses the gate, and the printed sentence
+    # would say PREDICTION HELD over a table with a FAIL in it.
+    assert GM.verdict(lambda *a: None, [gate]) == exit_codes.INVALID
+
+
+def test_a_gate_with_no_evidence_is_not_a_refutation():
+    """UNKNOWN counts against the gate and is still not CLAIM_FAIL.
+
+    A VALIDITY gate that could not decide leaves the apparatus's soundness
+    unshown, which is exactly as unquotable as a failure: INVALID (3). What it
+    is not is 1, "a pre-registered claim was refuted" -- nor the 4 this used to
+    answer, which is ERROR, "crashed; an exception nobody planned for", and
+    which the ledger reads as RETRY with a traceback to go and find.
+    """
+    assert GM.verdict(lambda *a: None,
+                      [GM.Gate("x", None, "no data")]) == exit_codes.INVALID
+
+
+# --------------------------------------------------------------------------
+# the estimator is imported, never re-implemented
+# --------------------------------------------------------------------------
+
+def test_this_script_defines_no_estimator_of_its_own():
+    """Two estimators that can disagree would make every alpha here unquotable.
+
+    Checked in the SOURCE rather than by calling, because the failure being
+    guarded against is a future edit adding a local fit "just for the control
+    arm", which would still pass every behavioural test in this file.
+    """
+    tree = ast.parse((ROOT / "scripts" / "group_m_alpha_sweep.py").read_text())
+    defined = {node.name for node in ast.walk(tree)
+               if isinstance(node, ast.FunctionDef)}
+    assert "fit_alpha" not in defined
+    assert "_within_group_ssr" not in defined
+    assert GM.load_alpha_refit().fit_alpha.__module__ == "alpha_refit"
+
+
+def test_a_missing_estimator_refuses_rather_than_falling_back(tmp_path):
+    with pytest.raises(GM.EstimatorMissing):
+        GM.load_alpha_refit(tmp_path / "there-is-no-such-script.py")
+
+
+def test_a_file_that_is_not_the_estimator_is_refused_by_name(tmp_path):
+    impostor = tmp_path / "alpha_refit.py"
+    impostor.write_text("def fit_alpha(rows):\n    return 0.42\n")
+    with pytest.raises(GM.EstimatorMissing):
+        GM.load_alpha_refit(impostor)
+
+
+def test_the_band_quantile_matches_the_estimators_own_percentile():
+    """`band` uses numpy and `alpha_refit.bootstrap_band` uses its own helper.
+
+    They must be the same convention, or two intervals in two reports about the
+    same parameter would mean different things.
+    """
+    ordered = sorted(random.Random(0).random() for _ in range(37))
+    for q in (0.05, 0.5, 0.95):
+        assert AR._percentile(ordered, q) == pytest.approx(
+            float(np.quantile(ordered, q)))
+
+
+# --------------------------------------------------------------------------
+# the arithmetic that decides what is being measured
+# --------------------------------------------------------------------------
+
+def test_the_tile_count_is_the_exact_ceiling_sum_and_not_a_reconstruction(
+        default_plan):
+    """The published pool cannot do this, which is half the reason for a run.
+
+    `crossing.m_tiles_for_row` divides total rows by a stored tile efficiency
+    and has to REFUSE once an expert spans several tiles at a block size the
+    schema does not store -- the exact regime this sweep lives in. Holding the
+    histogram makes the count exact.
+    """
+    for cell in default_plan.cells[:40]:
+        expected = sum(-(-c // cell.block_m) for c in cell.counts)
+        assert cell.m_tiles == pytest.approx(expected)
+
+
+def test_a_cell_is_a_single_tile_control_by_its_realisation_not_its_mean(
+        default_plan):
+    """A uniform draw at 8 mean rows per expert still puts 14 on one of them.
+
+    A rung classified by its mean would call a cell with a two-tile expert a
+    control, and the control is the only thing separating an L2 claim from a
+    launch-order one.
+    """
+    for cell in default_plan.cells:
+        assert cell.single_tile == (cell.max_rows <= cell.block_m)
+
+
+def test_the_activation_confound_is_bounded_by_block_m_over_block_n(default_plan):
+    """An extra M-tile costs one pass over the expert's weights (N*K) and one
+    activation re-read per N-tile (BLOCK_M*K each). Everything cancels but the
+    tile aspect ratio."""
+    assert GM.confound_bound(default_plan) == pytest.approx(
+        default_plan.block_m / default_plan.fixed_tile["BLOCK_SIZE_N"])
+    assert GM.confound_bound(default_plan) <= 0.25
+
+
+def test_the_span_costed_here_is_the_span_vllm_fused_experts_covers():
+    """`VLLM_COVERS` restates a tuple that cannot be imported without vLLM.
+
+    Read out of the baseline's source instead, so a change upstream in this repo
+    breaks the test rather than silently costing a different set of stages.
+    """
+    tree = ast.parse((ROOT / "moe" / "baselines" / "vllm_fused_moe.py").read_text())
+    covers = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "VllmFusedExperts":
+            for statement in node.body:
+                if (isinstance(statement, ast.Assign)
+                        and getattr(statement.targets[0], "id", "") == "covers"):
+                    covers = tuple(ast.literal_eval(statement.value))
+    assert covers is not None, "VllmFusedExperts.covers moved"
+    assert GM.VLLM_COVERS == covers
+
+
+# --------------------------------------------------------------------------
+# the fit itself
+# --------------------------------------------------------------------------
+
+def _planted(alpha: float, xs_by_tokens: dict, noise: float = 0.0, seed: int = 0):
+    rng = random.Random(seed)
+    out = []
+    for tokens, xs in xs_by_tokens.items():
+        level = rng.uniform(0.5, 2.0)
+        for index, x in enumerate(xs):
+            out.append(AR.Observation(
+                traffic_ratio=level * (1 + alpha * x) * math.exp(rng.gauss(0, noise)),
+                compulsory_bytes=1.0, per_expert_bytes=0.1,
+                active_experts=8.0, m_tiles=8.0 + x / 0.1, block_m=16, group_m=1,
+                tile_provenance="planted", model="mixtral-8x7b", dtype="bf16",
+                gpu="test", impl=GM.VLLM_IMPL, tokens=tokens,
+                routing=f"r{index}", l2_flush=False, cuda_graph=False,
+                tile_columns=()))
+    return out
+
+
+LADDER = {64: [0.3, 0.5, 0.8], 128: [1.4, 1.7, 2.0], 256: [3.3, 3.7, 4.1],
+          448: [6.4, 6.9, 7.4]}
+
+
+def test_the_band_brackets_an_alpha_that_was_planted_in_the_data():
+    rows = _planted(0.558, LADDER, noise=0.005, seed=3)
+    interval = GM.band(AR, rows, draws=200, seed=0)
+    assert interval is not None
+    assert interval[0] < 0.558 < interval[1]
+
+
+def test_the_band_resamples_routing_realisations_and_not_the_intercept_group():
+    """`alpha_refit.bootstrap_band` returns nothing here, and correctly so.
+
+    Its cluster is the intercept group because in the published pool the rows
+    inside one are replicates of a single thermal state. In this design they are
+    different routing realisations, so the unit has to move down a level or the
+    band is drawn over four clusters and means nothing.
+    """
+    rows = _planted(0.558, {512: [7.0, 7.5, 8.0, 8.5]}, noise=0.005, seed=1)
+    assert AR.bootstrap_band(rows, 50, 0) is None      # one intercept group
+    assert GM.band(AR, rows, draws=50, seed=0) is not None
+
+
+def test_the_fitted_alpha_does_not_depend_on_the_bandwidth_it_is_quoted_against():
+    """A constant on every ratio is an additive constant in logs, and the group
+    intercept absorbs it exactly. So a pod with no calibration on disk still
+    fits the same alpha; only the RATIO's printed level moves."""
+    cell = GM.build_cell("mixtral-8x7b", 448, "bf16", "zipf:1.0", 0, 16)
+    other = GM.build_cell("mixtral-8x7b", 448, "bf16", "hot:0.4", 1, 16)
+    third = GM.build_cell("mixtral-8x7b", 128, "bf16", "uniform", 0, 16)
+    fourth = GM.build_cell("mixtral-8x7b", 128, "bf16", "hot:0.4", 2, 16)
+    fits = []
+    for bandwidth in (4.8e12, 3.1e12):
+        rows = [GM.observation(AR, c, 5.0 + i, 1, "test", bandwidth, True)
+                for i, c in enumerate((cell, other, third, fourth))]
+        fits.append(AR.fit_alpha(rows))
+    assert fits[0] == pytest.approx(fits[1], abs=1e-9)
+
+
+def test_permuting_the_response_inside_a_group_collapses_the_fit():
+    rows = _planted(0.558, LADDER, noise=0.005, seed=5)
+    assert AR.fit_alpha(rows) > 0.4
+    assert abs(GM.placebo_alpha(AR, rows, seed=0)) <= GM.PLACEBO_MAX_ALPHA
+
+
+# --------------------------------------------------------------------------
+# the design, which is what the pod session is spent on
+# --------------------------------------------------------------------------
+
+def test_no_cell_in_the_shipped_plan_is_compute_bound(default_plan):
+    """The trap that would produce a clean, confident, wrong flat line.
+
+    Above the ridge the time is set by padded ARITHMETIC, which GROUP_SIZE_M
+    cannot move, so a compute-bound design reports alpha flat across the ladder
+    and looks exactly like a refutation of the mechanism.
+    """
+    # The H200's OWN band low end, off its committed calibration, not the
+    # withdrawn cross-machine 160.3 this test scored against until 2026-09-03.
+    limit = GM.MEMORY_BOUND_MARGIN * GM.resolve_ridge_band(GM.SYNTHETIC_CARD, "bf16").low
+    worst = max(c.arith_intensity for c in default_plan.cells)
+    assert worst <= limit, f"worst compulsory AI {worst:.1f} exceeds {limit:.1f}"
+
+
+def test_the_shipped_plan_has_both_a_multi_tile_rung_and_a_single_tile_control(
+        default_plan):
+    assert len(default_plan.multi) >= GM.MIN_DISCRIMINATING
+    assert len(default_plan.control) >= 3
+    assert max(c.tiles_per_expert for c in default_plan.multi) >= 4.0
+
+
+def test_the_predicted_floor_sits_inside_the_swept_ladder(default_plan):
+    """P3 is only a test if the knee is a setting the sweep visits."""
+    import statistics
+    knee = statistics.median([c.tiles_per_expert for c in default_plan.multi])
+    assert min(default_plan.group_m) < knee < max(default_plan.group_m)
+
+
+def test_every_preflight_gate_passes_on_the_shipped_defaults(default_plan):
+    ridge = GM.resolve_ridge_band(GM.SYNTHETIC_CARD, "bf16")
+    gates = GM.preflight(default_plan, ridge.low, ridge.card)
+    failed = [g.name for g in gates if g.ok is not True]
+    assert not failed, f"the shipped design fails its own preflight: {failed}"
+
+
+def test_a_compute_bound_design_is_refused_before_anything_is_spent(
+        tmp_path, monkeypatch, capsys):
+    # `--card` names whose ridge the plan is previewed against; with no card
+    # attached and none named the sweep refuses before the preflight.
+    code, out = run_report(["--tokens", "4096", "--seeds", "1",
+                            "--routings", "uniform", "--card", "NVIDIA H200"],
+                           tmp_path, monkeypatch, capsys)
+    assert "[FAIL] regime: every cell is memory bound" in out
+    assert "refused before spending anything" in out
+    # REFUSED (2), not CLAIM_FAIL (1). Nothing was spent, which is what the
+    # printed sentence says; 1 means "measured; VALIDITY passed; a
+    # pre-registered claim did not". The preflight gates print no RESULT line on
+    # this path -- they are scored in `_analyse`, on a page that HAS timings --
+    # so the log carries none at all, and that is the REFUSED shape.
+    assert code == exit_codes.REFUSED
+    assert exit_codes.parse_result_lines(out) == []
+
+
+def test_one_token_count_cannot_identify_alpha_and_the_ladder_can(default_plan):
+    """Why the batch is a ladder even though the brief said fixed batch.
+
+    One token count is one intercept, so its LEVEL is absorbed exactly and only
+    the curvature of log(1 + alpha x) is left. One rung supplies almost none of
+    it.
+    """
+    top = max(default_plan.tokens)
+    one_rung = GM.Plan(**{**default_plan.__dict__, "tokens": (top,),
+                          "cells": tuple(c for c in default_plan.multi
+                                         if c.tokens == top)})
+    ladder = GM.power_band(AR, default_plan, 0.558, GM.POWER_NOISE, 200, 0)
+    single = GM.power_band(AR, one_rung, 0.558, GM.POWER_NOISE, 200, 0)
+    assert ladder is not None and single is not None
+    assert (ladder[1] - ladder[0]) <= GM.PUBLISHED_GROUP_M_EFFECT
+    assert (single[1] - single[0]) > 4 * (ladder[1] - ladder[0])
+
+
+# --------------------------------------------------------------------------
+# surviving a pod: resume, abort, and a message when there is no GPU
+# --------------------------------------------------------------------------
+
+def test_a_run_without_a_gpu_says_so_and_is_refused_not_invalid(
+        tmp_path, monkeypatch, capsys):
+    """REFUSED (2), not INVALID (3).
+
+    3 tells the driver "measured, then a VALIDITY gate failed: there is a
+    directory of cells that must not be scored, and do NOT retry this arm".
+    Nothing was measured, there is no directory, and the arm is free to retry on
+    a box that has a GPU. The two codes are treated oppositely, which is why
+    they are two codes.
+
+    FORCED, not inherited from the host: on the pod (session 4) this line
+    reached the `_save` footer with no CANNOT RUN HERE in its stdout, i.e. a
+    `--run` from inside pytest went past the door. The sibling in
+    OFF_GPU_MODES plants the same seam.
+    """
+    def _no_gpu(*a, **kw):
+        raise GM.CannotRunHere("no CUDA device; --run needs the pod")
+    monkeypatch.setattr(GM, "measure", _no_gpu)
+    code, out = run_report(["--run"], tmp_path, monkeypatch, capsys)
+    assert "CANNOT RUN HERE" in out
+    assert code == exit_codes.REFUSED
+    assert exit_codes.parse_result_lines(out) == []
+
+
+def test_the_override_probe_blames_an_absent_vllm_rather_than_the_hook():
+    """Two different failures, two different fixes, and only one of them is
+    "your vLLM is too new"."""
+    pytest.importorskip("torch")
+    try:
+        import vllm  # noqa: F401
+    except ImportError:
+        with pytest.raises(GM.CannotRunHere, match="not importable"):
+            GM.find_override_config()
+
+
+def test_a_resumed_run_skips_the_cells_already_on_disk(default_plan, tmp_path):
+    records = GM.synthesise(default_plan, "monotone", seed=0)[:10]
+    path = tmp_path / "cells.jsonl"
+    for record in records:
+        GM._append(path, record)
+    done = {r["id"] for r in GM.read_records(path)}
+    assert len(done) == 10
+    cell, group_m = default_plan.cells[0], default_plan.group_m[0]
+    assert GM._record_id(cell, group_m, 0) in done
+
+
+def test_a_run_killed_mid_write_still_replays(tmp_path, default_plan):
+    """Every cell is flushed and fsynced as it is measured, so an abort costs
+    one cell; the cost of that is a half-written last line."""
+    path = tmp_path / "cells.jsonl"
+    for record in GM.synthesise(default_plan, "monotone", seed=0)[:5]:
+        GM._append(path, record)
+    with path.open("a") as handle:
+        handle.write('{"kind": "cell", "id": "truncated"')
+    assert len(GM.read_records(path)) == 5
+
+
+def test_records_from_another_plan_are_ignored_and_named(
+        tmp_path, monkeypatch, capsys):
+    """A `--replay` with different flags must not silently report on a subset."""
+    run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+    directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+    _, out = run_report(["--replay", str(directory), "--model", "qwen2-57b-a14b"],
+                        tmp_path, monkeypatch, capsys)
+    assert "records name a cell this plan does not contain" in out
+
+
+def test_the_output_directory_prefers_the_env_then_the_volume_then_the_repo(
+        tmp_path, monkeypatch):
+    """The pod's container disk dies with the pod and the network volume does
+    not, so this is not a cosmetic preference."""
+    monkeypatch.setenv("MOE_RESULTS_DIR", str(tmp_path / "chosen"))
+    assert GM.results_root() == tmp_path / "chosen"
+    monkeypatch.delenv("MOE_RESULTS_DIR")
+    monkeypatch.setenv("WORKSPACE", str(tmp_path / "volume"))
+    assert GM.results_root() == ROOT / "results"
+    (tmp_path / "volume").mkdir()
+    assert GM.results_root() == tmp_path / "volume" / "results"
+
+
+def test_the_paired_table_drops_a_cell_that_never_reached_the_reference_setting(
+        default_plan):
+    """An aborted run leaves cells timed at some settings and not others.
+
+    Averaging those unpaired would compare a different set of cells at each
+    setting and read the composition change as a GROUP_SIZE_M effect.
+    """
+    cells = {c.key: c for c in default_plan.cells}
+    multi = next(c for c in default_plan.cells if not c.single_tile)
+    records = [
+        GM._record(multi, 1, 0, default_plan, 10.0),
+        GM._record(multi, 8, 0, default_plan, 5.0),
+    ]
+    orphan = next(c for c in default_plan.cells
+                  if not c.single_tile and c.key != multi.key)
+    records.append(GM._record(orphan, 8, 0, default_plan, 1.0))
+    ratios = GM.paired_ratios(records, cells, 1, want_single_tile=False)
+    assert ratios[8] == pytest.approx(0.5)
+
+
+def test_a_swizzle_that_changed_the_answer_fails_the_correctness_gate(default_plan):
+    """GROUP_SIZE_M reorders program ids and must return the identical tensor.
+
+    Nothing in a timing table would show otherwise: an illegal-for-the-shape
+    forced config still produces numbers, and if it were faster the report would
+    read it as a win.
+    """
+    records = GM.synthesise(default_plan, "monotone", seed=0)[:20]
+    assert GM.swizzle_integrity_gate(records).ok is True
+    records[7]["matches_reference"] = False
+    records[7]["max_abs_diff"] = 0.25
+    gate = GM.swizzle_integrity_gate(records)
+    assert gate.ok is False
+    assert "differed" in gate.detail
+
+
+def test_an_in_place_fused_experts_is_reported_as_such(default_plan):
+    """It would let every later setting time a decayed input, and the only
+    symptom would be that later settings look different."""
+    records = GM.synthesise(default_plan, "monotone", seed=0)[:20]
+    records[3]["input_unchanged"] = False
+    gate = GM.swizzle_integrity_gate(records)
+    assert gate.ok is False
+    assert "mutated in place" in gate.detail
+
+
+def test_rows_that_predate_the_correctness_check_answer_not_measured(default_plan):
+    records = GM.synthesise(default_plan, "monotone", seed=0)[:5]
+    for record in records:
+        record.pop("matches_reference")
+    assert GM.swizzle_integrity_gate(records).ok is None
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the exit-code repair: the log and the process say
+# the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. `no_gpu` marks
+#: the row that forces `measure` to refuse: on a pod there IS a CUDA device, so
+#: a test whose premise is "this machine has no GPU" stops testing anything on
+#: the only machine the code runs on.
+OFF_GPU_MODES = [
+    # The bare invocation: a plan, a preflight, a power analysis, an MDE and no
+    # timings. It returned 0 until a previous slice made it REFUSED.
+    ([], exit_codes.REFUSED, False),
+    (["--synthetic", "monotone"], exit_codes.DONE, False),
+    # P1 to P5 are the CLAIMs, and both of these laws refute one: a result.
+    (["--synthetic", "flat"], exit_codes.CLAIM_FAIL, False),
+    (["--synthetic", "order"], exit_codes.CLAIM_FAIL, False),
+    # A DESIGN REFUSED BY ITS OWN PREFLIGHT. Every cell is compute bound, so the
+    # sweep cannot ask the question. It returned 1 -- "a pre-registered claim
+    # was refuted" -- from a run that had spent nothing.
+    (["--tokens", "4096", "--seeds", "1", "--routings", "uniform"],
+     exit_codes.REFUSED, False),
+    (["--run"], exit_codes.REFUSED, True),
+]
+
+
+@pytest.mark.parametrize("argv,code,no_gpu", OFF_GPU_MODES,
+                         ids=[" ".join(a) or "bare" for a, _, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, no_gpu, tmp_path, monkeypatch, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+
+    Three of these rows used to break it. `verdict` printed one
+    `exit_codes.result_line` per gate and then returned codes of its own
+    devising -- 1 for any failed gate whatever its kind, 4 for any undecided one
+    -- so a failed `regime`, `control`, `design`, `identification` or
+    `correctness` gate, all VALIDITY, was reported as a refuted claim. The
+    compute-bound design and `--run` returned 1 and 3 from runs that measured
+    nothing at all.
+    """
+    if no_gpu:
+        def _no_gpu(*a, **kw):
+            raise GM.CannotRunHere("no CUDA device; --run needs the pod")
+        monkeypatch.setattr(GM, "measure", _no_gpu)
+    rc, out = run_report(argv, tmp_path, monkeypatch, capsys)
+    assert rc == code, out
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")
+
+
+# --------------------------------------------------------------------------
+# the LEVEL flag has a left-hand side, and this arm is the one that gives it
+# --------------------------------------------------------------------------
+
+def timing_module():
+    """`moe.bench.timing`, which owns `clock_flags` and `LEVEL_FRACTION`."""
+    from moe.bench import timing
+
+    return timing
+
+
+def test_the_level_reference_reaches_the_instrument_at_this_arms_call_site():
+    """THE SECOND CALL SITE, and it was in a script rather than in the driver.
+
+    `moe/bench/driver.py` resolves the reference and hands it to `time_kernel`,
+    which is what turned the LEVEL column on for the sweep path. This arm calls
+    `time_kernel` DIRECTLY and passed no reference, so it kept writing
+    `clock_level_ok = None` on every row while running on the same v2
+    instrument: eleven of the tree's thirteen callers passed one and this was
+    not among them. Checked in the SOURCE, because the failure being guarded
+    against is a future edit dropping the keyword, which every behavioural test
+    in this file would still pass on a laptop with no card.
+    """
+    tree = ast.parse((ROOT / "scripts" / "group_m_alpha_sweep.py").read_text())
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and getattr(node.func, "id", getattr(node.func, "attr", ""))
+             == "time_kernel"]
+    assert calls, "this arm no longer calls time_kernel; the wall moved"
+    for call in calls:
+        assert "reference_clock_mhz" in {k.arg for k in call.keywords}, (
+            f"time_kernel at line {call.lineno} passes no reference clock, so "
+            "every row it writes records clock_level_ok undetermined")
+
+
+def test_the_reference_is_this_cards_own_calibration_and_names_its_field():
+    """The number, and the field it came out of, on the committed yaml.
+
+    Naming the field matters as much as the number: a LEVEL exclusion is traced
+    back to a field in a file, and `calibrate.clock_established` exists because
+    the three candidate fields have disagreed by 450 MHz on one H200.
+    """
+    from moe.bench import roofline
+
+    ref = GM.reference_clock_for("NVIDIA H200")
+    # 1515, then 1485, then 1470 across three calibrations of this one card.
+    # THE FIELD IS WHAT IS PINNED; the number is whatever that field holds, so
+    # it is read back out of the yaml rather than typed. Which field also
+    # moved: the 2026-09-02 file carried only the scalar `gemm_clock_mhz`, the
+    # later ones carry the whole under-load record, and the resolver prefers
+    # its median because that is the sample taken while the GEMM ran. Either
+    # field is named here, because the point of the assertion is that the
+    # source SAYS which one it read.
+    doc, why = roofline.measured_doc("NVIDIA H200")
+    assert doc, why
+    detail = doc["detail"]
+    assert ref.mhz == float(
+        (detail.get("gemm_clock") or {}).get("median_mhz")
+        or detail["gemm_clock_mhz"])
+    assert "gemm_clock.median_mhz" in ref.source or "gemm_clock_mhz" in ref.source
+    assert ref.grade == "under-load"
+    assert ref.card == "NVIDIA H200"
+    # THE SAME READER THE DRIVER USES, not a fourth copy of the three-field
+    # rule. This is an identity rather than an equality of two numbers: a copy
+    # here would be the defect the driver's own pinning test exists to catch.
+    assert ref == roofline.reference_clock("NVIDIA H200")
+
+
+def test_a_card_with_no_calibration_says_so_in_words_the_operator_can_act_on():
+    """THE FAIL BRANCH. No calibration, no reference, and the arm has to say
+    that the column is dead rather than print an alpha as if it were not."""
+    ref = GM.reference_clock_for("NVIDIA B200")
+    assert ref.mhz is None
+    assert ref.card == "NVIDIA B200"
+    assert "calibrate_hardware.py --publish" in ref.source
+
+
+def test_with_the_reference_a_sagging_clock_is_visible_and_without_it_is_not():
+    """What the keyword actually buys, at the flag itself.
+
+    The PASS and the FAIL branch of the LEVEL verdict on one card's real
+    reference, beside the state this arm was in until now: the same three
+    samples with no reference return None, which is not "the clock was fine".
+    """
+    timing = timing_module()
+    reference = GM.reference_clock_for("NVIDIA H200").mhz
+    sagging = reference * (timing.LEVEL_FRACTION - 0.02)
+    steady = reference
+    assert timing.clock_flags(sagging, sagging, sagging, reference)[0] is False
+    assert timing.clock_flags(steady, steady, steady, reference)[0] is True
+    # The arm before this commit: the same sagging card, and nothing to say so.
+    assert timing.clock_flags(sagging, sagging, sagging, None)[0] is None
+
+
+def replay_with(records, tmp_path, monkeypatch, capsys, argv=("--synthetic",
+                                                              "monotone")):
+    """Measure-shaped rows through the report: synthesise a run, rewrite its
+    `cells.jsonl` through `records`, then `--replay` the directory.
+
+    The report's own reader is used rather than a hand-built file, so the rows
+    that reach `_analyse` are the rows a pod would write.
+    """
+    run_report(list(argv), tmp_path, monkeypatch, capsys)
+    directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+    rows = [json.loads(line) for line
+            in (directory / "cells.jsonl").read_text().splitlines()]
+    for row in rows:
+        records(row)
+    (directory / "cells.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    # The re-labelled rows carry no card and a synthetic directory has no
+    # plan.json to name one, so the replay names the card whose ridge the
+    # regime gate is re-scored against; a real run's plan.json carries it.
+    return run_report(["--replay", str(directory), "--card", "NVIDIA H200"],
+                      tmp_path, monkeypatch, capsys)
+
+
+def measured_row(row, *, level, mhz=1515.0, side=None, load=None,
+                 drift=None):
+    """One synthetic row re-labelled as a measurement that carries a clock.
+
+    `side` None leaves the column off the row, the shape of a jsonl written
+    before 2026-09-08; `load` None likewise for `sm_clock_load_mhz`, so a test
+    can plant a row the report has to read the side of from the row itself.
+    """
+    row["provenance"] = "measured"
+    row.pop("law", None)
+    row.pop("planted_alpha", None)
+    row["clock_level_ok"] = level
+    row["reference_clock_mhz"] = mhz
+    if side is not None:
+        row["clock_level_side"] = side
+    if load is not None:
+        row["sm_clock_load_mhz"] = load
+    if drift is not None:
+        row["clock_drift_ok"] = drift
+
+
+def test_the_report_says_how_many_cells_the_clock_could_not_examine(
+        tmp_path, monkeypatch, capsys):
+    """The state every row of this arm was written in, said out loud.
+
+    A run whose LEVEL column is undetermined everywhere is not a run whose card
+    was fine; it is a run that could not have noticed. This arm and
+    `alias_ablation` produce the two alphas `pod_session.sh` reconciles as the
+    last thing on the screen, so the reader has to be told which of them carries
+    clock evidence.
+    """
+    _, out = replay_with(lambda r: measured_row(r, level=None, mhz=None),
+                         tmp_path, monkeypatch, capsys)
+    assert "could not be examined on the clock at all" in out
+    assert "clock_level_ok undetermined" in out
+
+
+def test_the_report_names_the_cells_that_ran_under_the_roofs_clock(
+        tmp_path, monkeypatch, capsys):
+    """THE OTHER TWO BRANCHES OF THE SAME LINE, because a line that only ever
+    prints one of its three is not evidence about the run."""
+    _, failed = replay_with(lambda r: measured_row(r, level=False),
+                            tmp_path, monkeypatch, capsys)
+    assert "ran BELOW the clock this card's roof was measured at" in failed
+    assert "flagged LEVEL low; KEPT" in failed
+    assert "roof_at_cell_clock" in failed
+    _, clean = replay_with(lambda r: measured_row(r, level=True),
+                           tmp_path, monkeypatch, capsys)
+    assert "every timed cell was scored against 1515 MHz" in clean
+    assert "could not be examined" not in clean
+
+
+def test_a_boosted_ladder_is_kept_and_named_high_not_governor_bound(
+        tmp_path, monkeypatch, capsys):
+    """THE HIGH WORLD: every cell at 1980 MHz against the 1515 MHz reference,
+    the normal state of a memory-bound cell on the H200. The page must say
+    ABOVE and KEPT and must not call one of them the governor's time; until
+    2026-09-08 it read `clock_level_ok is False` alone and would have printed
+    the whole ladder as below the roof's clock. Nothing in this arm's fit
+    drops a row for its clock, so the alpha lines are unchanged either way;
+    the defect was in the sentence a reader quotes."""
+    code, out = replay_with(
+        lambda r: measured_row(r, level=False, side="high", load=1980.0),
+        tmp_path, monkeypatch, capsys)
+    assert "ran ABOVE the clock this card's roof was measured at" in out
+    assert "flagged LEVEL high; KEPT" in out
+    assert "roof_at_cell_clock" in out
+    assert "governor's" not in out
+    assert "ran BELOW" not in out
+    assert "VERDICT: PREDICTION HELD" in out
+    assert code == 0
+
+
+def test_a_sagging_ladder_is_named_low_and_kept(tmp_path, monkeypatch, capsys):
+    """THE LOW WORLD, the twin of the one above: 1400 MHz against 1515 with
+    side low.
+
+    IT IS KEPT, and the page said "their time is the governor's" until
+    2026-09-15 while nothing in this arm dropped the row. The 750-cell H200
+    census settled the word: the under-load clock is set per tile by that
+    tile's own power draw under the board cap, so a LOW cell is a tile family's
+    steady state and not a governor event, which is why the 2026-09-09 rule
+    excludes on DRIFT alone. The page names the side and says which roof
+    fraction is comparable; it does not call one side a defect.
+    """
+    _, out = replay_with(
+        lambda r: measured_row(r, level=False, side="low", load=1400.0),
+        tmp_path, monkeypatch, capsys)
+    assert "ran BELOW the clock this card's roof was measured at" in out
+    assert "flagged LEVEL low; KEPT" in out
+    assert "roof_at_cell_clock" in out
+    assert "governor's" not in out
+    assert "ran ABOVE" not in out
+
+
+def test_a_jsonl_from_before_the_side_column_derives_the_side_from_its_own_row(
+        tmp_path, monkeypatch, capsys):
+    """A row that failed LEVEL, carries no `clock_level_side`, and does carry
+    load 1980 and reference 1515: the report derives high from the row, by the
+    same `level_side` that scored it. The one with load 1400 derives low. A
+    replay of a pre-2026-09-08 pod jsonl must not be read as a cold run because
+    the column was not yet on the row."""
+    _, high = replay_with(lambda r: measured_row(r, level=False, load=1980.0),
+                          tmp_path, monkeypatch, capsys)
+    assert "flagged LEVEL high; KEPT" in high
+    assert "governor's" not in high
+    _, low = replay_with(lambda r: measured_row(r, level=False, load=1400.0),
+                         tmp_path, monkeypatch, capsys)
+    assert "flagged LEVEL low; KEPT" in low
+    assert "governor's" not in low
+
+
+def test_a_drift_failure_gets_its_own_line(tmp_path, monkeypatch, capsys):
+    """DRIFT is the other exclusion-shaped verdict and it is a different
+    measurement from LEVEL: the under-load samples disagreeing with each
+    other. A boosted-but-steady ladder must not print it; one whose samples
+    moved must, whatever side LEVEL landed on."""
+    _, steady = replay_with(
+        lambda r: measured_row(r, level=False, side="high", load=1980.0,
+                               drift=True),
+        tmp_path, monkeypatch, capsys)
+    assert "failed DRIFT" not in steady
+    _, moved = replay_with(
+        lambda r: measured_row(r, level=False, side="high", load=1980.0,
+                               drift=False),
+        tmp_path, monkeypatch, capsys)
+    assert "failed DRIFT" in moved
+    assert "flagged LEVEL high; KEPT" in moved
+
+
+def test_level_split_sorts_both_sides_and_reads_a_bare_false_as_low():
+    """The rule itself, on planted rows, so the page and the split cannot
+    disagree: a 1980-vs-1515 row with side high is `high`; a 1400 row with
+    side low is `low`; a False with no side and no load is the one-sided era's
+    below and is `low`; None is `blind`; True is in none of the three.
+
+    IT SORTS, IT DOES NOT EXCLUDE, and this test was named
+    `..._keeps_high_excludes_low` until 2026-09-15 over a function that has
+    never dropped a row: both lists are returned and both are reported.
+    """
+    high = {"clock_level_ok": False, "clock_level_side": "high",
+            "sm_clock_load_mhz": 1980.0, "reference_clock_mhz": 1515.0}
+    low = {"clock_level_ok": False, "clock_level_side": "low",
+           "sm_clock_load_mhz": 1400.0, "reference_clock_mhz": 1515.0}
+    bare = {"clock_level_ok": False}
+    derived_high = {"clock_level_ok": False, "sm_clock_load_mhz": 1980.0,
+                    "reference_clock_mhz": 1515.0}
+    blind = {"clock_level_ok": None}
+    level = {"clock_level_ok": True, "clock_level_side": ""}
+    split = GM.level_split([high, low, bare, derived_high, blind, level])
+    assert split["high"] == [high, derived_high]
+    assert split["low"] == [low, bare]
+    assert split["blind"] == [blind]
+    assert GM.level_side_of(high) == "high"
+    assert GM.level_side_of(derived_high) == "high"
+    assert GM.level_side_of(bare) == ""
+    assert GM.level_side_of(level) == ""
+
+
+def test_the_report_never_tests_the_level_flag_bare():
+    """The shape of the fifteenth instance, refused at the source: no function
+    in this arm outside `level_split` and `level_side_of` may test
+    `clock_level_ok is False` without reading the side. A reviewer found this
+    file doing exactly that after the other six were fixed."""
+    tree = ast.parse((ROOT / "scripts" / "group_m_alpha_sweep.py").read_text())
+    offenders = []
+    for func in ast.walk(tree):
+        if not isinstance(func, ast.FunctionDef):
+            continue
+        if func.name in ("level_split", "level_side_of"):
+            continue
+        for node in ast.walk(func):
+            if (isinstance(node, ast.Compare)
+                    and any(isinstance(op, ast.Is) for op in node.ops)
+                    and any(isinstance(c, ast.Constant) and c.value is False
+                            for c in node.comparators)
+                    and "clock_level_ok" in ast.unparse(node.left)):
+                offenders.append(f"{func.name}:{node.lineno}")
+    assert offenders == [], offenders
+
+
+def test_a_synthetic_report_claims_no_clock_evidence_either_way(
+        tmp_path, monkeypatch, capsys):
+    """Synthetic rows were never timed on a card, so the clock lines must not
+    appear at all: a generated table saying "a clock problem could have been
+    seen" would be the report claiming evidence it does not have."""
+    _, out = run_report(["--synthetic", "monotone"], tmp_path, monkeypatch,
+                        capsys)
+    assert "could not be examined on the clock" not in out
+    assert "a clock problem could have been seen" not in out

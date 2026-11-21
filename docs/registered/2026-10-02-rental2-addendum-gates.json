@@ -1,0 +1,79 @@
+{
+ "registered": "2026-10-02, after the rental-2 pages' gate results were seen and before any rental-2 score was computed",
+ "name": "2026-10-02-rental2-addendum-gates",
+ "status": "ADDENDUM: FIXED AFTER THE GATE RESULTS WERE SEEN, BEFORE ANY SCORE",
+ "amends": {
+  "2026-10-01-rental2-knobs-gh200": {
+   "json": "5e8277582adec3ba8252ee7de6954ad648cea0d53c8bd45d1e15e35521808856",
+   "txt": "81000c85f8cac314e6fa23ef7fb08b451c1ca7966a73d6943cf469f34697521c"
+  },
+  "2026-10-01-rental2-launch2-gh200": {
+   "json": "a2e1b4a375f158c196b4c863672030fc16aaa52c83c5df8e3d528b13e872a97d",
+   "txt": "93b4be81d18452c2bf9fc1482c6088125e272667d98626331fa9ff49aeadd186"
+  },
+  "2026-10-01-rental2-const-gh200": {
+   "json": "45ca7d9256d7eef8ae8e96b0d50f22ff4ef0af801b70db1c2d33937a158fb2e0",
+   "txt": "f77ed71394bd891bcc5bce330cd4e36eb2681e30ff78f8129780028802fd0660"
+  },
+  "2026-10-01-rental2-w1floor-gh200": {
+   "json": "2a4984e4ad6e089a9cf62fa573386b4680b0ba8fd8c7643013c3dbf0041c5d37",
+   "txt": "6107349359fae90b62054fde4a06cbe28df09cc8c2b7db0e1488ffc9e16275af"
+  }
+ },
+ "amends_note": "the four registrations stay byte-identical (sha256 above, pinned by tests/test_scoring_rental2.py); this file adds a rule they do not state and changes no band, threshold, cell set or rule they do state",
+ "why": "none of the four registrations says how a page that fails a validity gate is counted, and the scorers as committed with them read no gate. The 1710 MHz floor captures of rental 2 failed FL1, so the rule is fixed here, before any score exists",
+ "gate_records": {
+  "floor capture": "r3f-g64[-lock<F>].json, written by dram_counter_route.r3_floor: `gates` holds FL1 (VALIDITY, only under --floor-lock-mhz F) and, with the null kernel, V1 (VALIDITY, launch attribution); `clock` holds lock_mhz, band_mhz 15, held, off_lock (each GEMM's fit and each cell off the line) and fit; each cell's per_gemm[g].sm_clock_mhz is its own sm__cycles_elapsed.avg over gpu__time_duration.sum",
+  "byte page": "r3c-g<G>.json, written by dram_counter_route's page builder: `gates` holds V0 to V10 (VALIDITY; V1 launch attribution, V6 the arms' L2 requests, V10 the lock) and C1 to C6 (CLAIM, not validity gates)",
+  "launch-floor directory": "cells.csv, hostprobe*.csv, manifest*.json and traces/ from scripts/launch_floor.py: no validity gate is recorded; the registration's own P0 is the instrument check"
+ },
+ "FL1": "every cell and GEMM ran at the nvidia-smi lock, by its own counters' clock: per GEMM duration = t0 + cycles / f fitted over its cells, |f - lock| <= 15 MHz (one step), 0 <= t0 <= 50 us, no cell more than 3 steps off the lock's line (dram_counter_route.r3_lock_fit)",
+ "gate_outcomes_known_when_fixed": {
+  "tp8 floor2, tp4 floor, tp2 floor base captures (r3f-g64.json)": "PASS",
+  "tp8 floor2 1710 capture (r3f-g64-lock1710.json)": "FL1 FAIL from a degenerate fit: w1 1690.5 MHz + 3.9 us, w2 1672.6 MHz + 0.6 us (a low f traded against a small t0); no evidence of an off-lock run",
+  "tp4 floor 1710 capture": "FL1 FAIL: fitted w1 1707.3 MHz, w2 1695.6 MHz, with one cell, n=1 w2, at 1785 MHz",
+  "tp2 floor 1710 capture": "FL1 FAIL: fitted w1 1710.4 MHz, w2 1703.2 MHz, with n=1 w2 at 1773 MHz",
+  "tp4 floor1005 capture (r3f-g64-lock1005.json)": "PASS",
+  "every other rental-2 page": "not seen when this was fixed"
+ },
+ "rule": {
+  "1 clock": "every page counts at the clock its own cells measured, never the lock asked, and no absolute reading of a field with a known bias enters a verdict. sm_clock_mhz (cycles over ncu's duration) reads about 1.4% low uniformly, so it may enter only as a ratio of two captures, where the bias cancels. Per scorer: part 3 (score_const) K1, K2 and K4 are in SM cycles and read no clock; K3's rho_f = f_1005 / f_1710 is a ratio of the two captures' median per-cell sm_clock_mhz, so the bias cancels; each capture's clock_mhz is printed only; the identification reads only K1 to K4. Part 4 (score_w1floor) is in SM cycles (slopes over grid x S / 132, the registered asymptote in cycles per k-step) and reads no clock. Part 1 (score_knobs) reads DRAM and L2 bytes and occupancy, clock-free. Part 2 (score_launch) compares host-timed milliseconds with the registered C_reg and F; no verdict reads a clock field (cells.csv's NVML sm_clock_load_mhz is not read), and repricing C_reg would change a registered prediction, which this addendum does not do. No scorer used a nominal lock clock or an absolute measured clock in a verdict, and none is changed on this account",
+  "2 above-lock cells": "a (cell, GEMM) of a floor capture taken under a lock whose own sm_clock_mhz is above that capture's lock by more than one step (15 MHz) is dropped, in both views, and recorded. A clock above the lock cannot be run; such readings come only from short GEMMs, where ncu's fixed duration offset dominates the cycles-over-duration ratio. Base-clock captures carry no lock and drop nothing; byte pages are not touched (their scores read no clock, and the knobs registration states V10 gates no score). The comparison reads sm_clock_mhz absolutely against the lock; its known bias is downward (about -1.4%, some 24 MHz at 1710), so it can only leave an above-lock cell in, never drop a cell that ran at the lock. It decides which cells are kept, not any verdict's value",
+  "3 two views": "every verdict (each K and the identification of part 3; the part-4 families, theta call, w2 offset and co-primary per-cell test; every part-1 test, control-dependent verdict, partition cross-check and T5 candidate; every part-2 P) is computed twice: ALL, every page counted under rules 1 and 2, gate-failed pages included; CLEAN, every page that failed a validity gate excluded (for a floor capture under a lock, the lock check of rule 5 in place of FL1). The registered verdict is the common one when ALL and CLEAN agree; INCONCLUSIVE when they disagree; NOT SCORED when CLEAN has no data and ALL does, with ALL's verdict printed beside, labelled as reading only gate-failed pages (the label means that verdict exists only because gate-failed pages were read; K3, for one, reads the 1005 capture beside a 1710 one)",
+  "4 other gates": "a page that fails any validity gate other than FL1 is handled by the same rule. A gate fails when its verdict is anything but PASS (FAIL or REFUSE); CLAIM gates (C1 to C6) are findings, not validity gates, and gate nothing",
+  "V1": "a page whose V1 (launch attribution) failed is unusable in both views: a launch counted into the wrong slot moves every number after it",
+  "registered handling kept": "where a registration already states a gate's handling, that statement stands and the gate is not a CLEAN exclusion there: in part 1 a V6 failure flags the page and its verdicts read INCONCLUSIVE in both views, and V10 gates no part-1 score (bytes are clock-free)",
+  "5 CLEAN for floor captures": "for a floor capture taken under a lock, CLEAN does not use FL1. It uses V1 PASS (rule V1) and a lock-in-force check from an independent clock: the median over the capture's cells of the null kernel's sm_clock_mhz within 3% of the lock. Its bias is a uniform -1.4%; 3% passes a held lock and catches one not in force (the 2026-09-28 8x22B floor, about +5.6%). Where a capture has no null kernel, CLEAN falls back to FL1. FL1 is still recorded and printed per page and still decides nothing else. Base-clock captures carry no lock and no check. This check was chosen after the rental-2 pages' gate outcomes and null-kernel clock medians were seen (tp8, tp4, tp2 1710 medians 1684, 1687, 1688 MHz; tp4 1005 median 991 MHz) and before any score was computed. FL1 is set aside for this because of the gate audit of the published pre-rental-2 data (scratchpad gate-audit/AUDIT.md): whenever its fitted t0 is small its fitted f reads low (a degenerate f / t0 fit), while cell-matched lock / base ratios and the L2 counter's clock show the locks held; the only real off-lock floor (8x22B, the lock not in force) was a gross error"
+ },
+ "constants": {
+  "step_mhz": 15.0,
+  "unusable_gates": [
+   "V1"
+  ],
+  "lock_check_tol": 0.03,
+  "lock_gate_set_aside": "FL1"
+ },
+ "per_part": {
+  "knobs": {
+   "gates_not_gating": [
+    "V6",
+    "V10"
+   ],
+   "why": "the knobs registration states both: V6 flags the page (INCONCLUSIVE in both views), V10 gates no score"
+  },
+  "launch2": {
+   "gates_not_gating": [],
+   "why": "no launch-floor directory records a validity gate, so ALL and CLEAN read the same cells and agree by construction; P0 keeps its registered handling (P2, P4, P5, P8 marked host drift)"
+  },
+  "const": {
+   "gates_not_gating": [],
+   "why": "the 1710 captures are the primary for K1, K2 and K4 and enter K3; CLEAN judges them by the null-kernel lock check (rule 5), not FL1"
+  },
+  "w1floor": {
+   "gates_not_gating": [],
+   "why": "the base captures are primary; the 1710 captures are printed beside, scored by the same two views"
+  }
+ },
+ "scorer": "scripts/scoring/rental2/common.py (failed_gates, drop_above_lock, View, combine_verdict, combine, two_views); every score_*.py runs its score_view once per view; tests/test_scoring_rental2.py on synthetic pages only",
+ "clock_readings_known_when_fixed": "null kernel sm_clock_mhz medians: tp8, tp4, tp2 1710 captures 1684, 1687, 1688 MHz; tp4 1005 capture 991 MHz. A uniform -1.4% bias of that reading, not an off-lock run (tp4's and tp2's FL1 fits sit on the lock)"
+}

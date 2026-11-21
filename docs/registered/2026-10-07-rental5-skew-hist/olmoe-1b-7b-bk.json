@@ -1,0 +1,81 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "olmoe-1b-7b",
+ "page": "bk",
+ "shuffle_seed": 20261007,
+ "cells": [
+  {
+   "label": "balanced",
+   "n": 1,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 3,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 4,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 5,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 6,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 7,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 8,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 9,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  }
+ ],
+ "synthetic": "balanced cells only (R3's balanced_ids, counts null); no histogram"
+}

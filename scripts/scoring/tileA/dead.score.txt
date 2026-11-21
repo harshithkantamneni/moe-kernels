@@ -1,0 +1,9 @@
+SCORED against 2026-10-14-tileA-dead-gh200
+  pages: {'d9': 'counted', 'd15': 'counted'}
+DEAD: NOT SEPARATED by this page; delta 20.006017 us se 0.611886
+  D: {'pred_us': 10.019166, 'z': 16.321426, 'verdict': 'EXCLUDED'}
+  D2: {'pred_us': 10.104338, 'z': 16.18223, 'verdict': 'EXCLUDED'}
+  SLOT: {'pred_us': 24.6888, 'z': -7.653033, 'verdict': 'EXCLUDED'}
+  kappa 0.15: {'pred_us': 12.13104, 'verdict': 'NOT SCORED (c_128 None under 900)'}
+  kappa 0: {'pred_us': 12.13104, 'verdict': 'NOT SCORED (c_128 None under 900)'}
+  d 1.06: {'pred_us': 11.406526, 'z': 14.054075, 'verdict': 'EXCLUDED'}

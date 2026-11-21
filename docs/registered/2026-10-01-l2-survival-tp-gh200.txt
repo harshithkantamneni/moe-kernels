@@ -1,0 +1,36 @@
+REGISTERED 2026-10-01, before any page: G=1 slab survival s on the Mixtral 8x7B TP shards (rental 1 of design B)
+law fitted on calibration pages only (8x7B, 8x22B, Qwen2-57B, OLMoE); s at n = 2..9
+
+8x7B-tp8 w2                  x 0.233 d 0.121 ks  28  H1 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00
+8x7B-tp4 w2                  x 0.467 d 0.121 ks  56  H1 0.85 0.84 0.85 0.86 0.87 0.88 0.88 0.89
+8x7B-tp2 w2                  x 0.933 d 0.121 ks 112  H1 0.70 0.54 0.52 0.52 0.48 0.48 0.46 0.45   H0 0.76 0.74 0.76 0.77 0.79 0.80 0.81 0.82
+8x7B-tp8 w1                  x 0.467 d 0.085 ks  64  H1 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00
+8x7B-tp4 w1                  x 0.933 d 0.170 ks  64  H1 0.35 0.22 0.20 0.17 0.15 0.15 0.13 0.12   H0 0.49 0.56 0.60 0.60 0.66 0.67 0.69 0.71
+8x7B-tp2 w1                  x 1.867 d 0.339 ks  64  H1 0.03 0.01 0.01 0.00 0.00 0.00 0.00 0.00
+8x7B w2 stages4 (baseline)   x 1.837 d 0.121 ks 224  H1 0.70 0.54 0.52 0.52 0.48 0.48 0.46 0.45
+
+decision rules:
+  H1_vs_H0_tp2_w2: H1 (replicated two-partition L2, C_eff 0.5-0.67 L2) if tp2 w2 sits within 0.08 of the same-board 8x7B w2 G=1 curve at every n = 4..9 AND below 0.65 at every n = 4..9; H0 (unified 60 MiB LRU) if >= 0.74 at every n = 4..9; anything else INCONCLUSIVE
+  H1_vs_H0_tp4_w1: H1 if s < 0.40 at every n = 6..9 and within 0.08 of H1's numbers; H0 if s > 0.40 at every n = 6..9 and within 0.08 of H0's; else INCONCLUSIVE. tp4 w1 (x 0.93, d 0.170) and tp2 w2 (x 0.93, d 0.121) sit at one x and two d: under H1 + H2a they differ (0.12-0.15 against 0.45-0.52 at n = 6..9), under any x-only law they agree
+  x_only_rival: an x-only law (s a function of x alone) is falsified if tp4 w1 and tp2 w2 differ by more than 0.10 at three or more of n = 4..9
+  controls: tp8 w2, tp8 w1: s >= 0.95 at every n (both hypotheses; immune below the edge); tp4 w2: within 0.05 of 0.85-0.89 (both); tp2 w1: <= 0.08 (both). A control outside its band says the law's shape, not H0 vs H1, failed
+  noise: +/- 0.05 in s is the 2026-09-25 vs 09-27 board-to-board reproduction of 8x7B G=1 (0.04); it is valid against the same-board anchor only, which is why the anchor page is in the plan
+  fabric_control: PRIVATE F / Mn in [0.50, 0.56] on every cell: a CONTROL, it already holds on 1202 published cells and every hypothesis predicts it
+  far_share_record: far share of SHARED's extra L2 hits over PRIVATE, dFh / (dH + dFh) from the recorded l2_tex_read_sectors, l2_tex_read_hit_sectors, l2_read_miss_sectors and lts__t_sectors_srcunit_ltcfabric.sum, in [0.15, 0.45] where s >= 0.1 (H1 with equal-priority copies): a RECORD; no new metric is added in rental 1 (the partition metrics are rental 2's scaffolding)
+  gates: V10 (the short-kernel clock read, 1641-1688 MHz on every JetMoE and OLMoE lock page) does NOT gate survival scoring: bytes are clock-free (2026-09-27 G=2 at base vs lock agree within 0.03% w1, 0.8% w2). A page failing V6 (SHARED vs PRIVATE L2 read sectors > 0.5%) has its s flagged, since the activation-cancels premise is what V6 checks
+
+secondary G=2 (R0, 5% bar): q at n = 1..9 (-- = no number)
+  mixtral-8x7b-tp2   shared  w1 1.001 1.001 1.957 1.953 2.957 2.954 3.957 3.955 4.957
+  mixtral-8x7b-tp2   shared  w2 1.000 1.054 1.787 1.319 2.178 1.491 2.541 1.548 2.874
+  mixtral-8x7b-tp2   private w1 1.001 2.002 3.003 4.004 5.004 6.005 7.006 8.007 9.008
+  mixtral-8x7b-tp2   private w2 1.000 2.003 3.006 4.010 5.013 6.016 7.019 8.023 9.026
+  mixtral-8x7b-tp4   shared  w1 1.000 1.001 1.756 1.293 2.272 1.410 2.650 1.482 2.844
+  mixtral-8x7b-tp4   shared  w2 1.000 1.054 1.182 1.154 1.212 1.197 1.223 1.206 1.237
+  mixtral-8x7b-tp4   private w1 1.000 2.001 3.002 4.003 5.004 6.005 7.006 8.007 9.008
+  mixtral-8x7b-tp4   private w2 1.000 2.001 3.003 4.004 5.005 6.007 7.008 8.009 9.011
+  mixtral-8x7b-tp8   shared  w1 1.000 1.000 1.098 1.080 1.149 1.115 1.154 1.133 1.158
+  mixtral-8x7b-tp8   shared  w2 1.000 1.053 1.094 1.092 1.103 1.106 1.105 1.109 1.117
+  mixtral-8x7b-tp8   private w1 1.000 2.001 3.001 4.002 5.003 6.004 7.005 8.006 9.007
+  mixtral-8x7b-tp8   private w2 1.000 2.001 3.001 4.002 5.002 6.003 7.003 8.004 9.004
+
+not in rental 1: B's R0 anchors (8x7B, Qwen2 G = 1, 2 with partition metrics), R1 num_stages, R2 BLOCK_K (needs --block-k), R4 clock 1005 MHz, R5 slot padding: rental 2, which needs --block-k, --slot-pad-rows, the partition metrics and per-knob directories

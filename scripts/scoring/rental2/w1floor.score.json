@@ -1,0 +1,1631 @@
+{
+ "registration": "2026-10-01-rental2-w1floor-gh200",
+ "H_EST_recomputed": "agree",
+ "base (PRIMARY)": {
+  "gemms": {
+   "mixtral-8x7b-tp8 w1": {
+    "sets": {
+     "A": {
+      "slope": 333.28538295200866,
+      "r": -0.05370419377623892,
+      "bias": -0.110201,
+      "H_EST": 313.387207,
+      "sigma_slope": 8.716427
+     },
+     "B": {
+      "slope": 348.767368861607,
+      "r": -0.009746255361706369,
+      "bias": -0.004271,
+      "H_EST": 350.695701,
+      "sigma_slope": 3.2945
+     },
+     "C": {
+      "slope": 363.31759277343855,
+      "r": 0.03156613507506689,
+      "bias": 0.038102,
+      "H_EST": 365.619559,
+      "sigma_slope": 8.716427
+     }
+    },
+    "theta": 0.5442049018790646,
+    "delta": 0.0032255380978752496,
+    "residual_rms": 0.00775595870380216,
+    "delta_H": 0.014828561979040533,
+    "delta_F": -0.01062810468762613,
+    "sigma_theta": 0.276439,
+    "sigma_delta": 0.013099,
+    "per_cell": {
+     "cells": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 4248.009072275583,
+     "rms_fluid": 4103.773192446201,
+     "winner": "INCONCLUSIVE"
+    },
+    "per_cell_record": {
+     "6": 0.00451988558261154,
+     "8": -0.0003743778862771099,
+     "10": 0.004891740129647404,
+     "11": -0.004114027549206086,
+     "12": -0.003365498204363877,
+     "13": -0.004453457294434321,
+     "14": -0.005888436239836038,
+     "15": 0.003540345968254701,
+     "16": -0.008254460415167395
+    }
+   },
+   "mixtral-8x7b-tp8 w2": {
+    "sets": {
+     "W2a": {
+      "slope": 385.39230468750156,
+      "r": 0.016598007616727806,
+      "bias": 0.037936,
+      "H_EST": 393.481724,
+      "sigma_slope": 17.432855
+     },
+     "W2b": {
+      "slope": 386.55078055245485,
+      "r": 0.01965386587300144,
+      "bias": 0.037949,
+      "H_EST": 393.486328,
+      "sigma_slope": 17.432855
+     }
+    },
+    "w2_offset": {
+     "mean_r": 0.018125936744864624,
+     "H_EST_pred": 0.0379425,
+     "sigma": 0.032516196217203405,
+     "H_EST": "HOLDS",
+     "FLUID": "HOLDS"
+    },
+    "per_cell": {
+     "cells": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 871.6292416599214,
+     "rms_fluid": 1349.2055554200024,
+     "winner": "INCONCLUSIVE"
+    },
+    "per_cell_record": {
+     "6": 0.016202863394030622,
+     "8": 0.0033373503491000386,
+     "10": 0.015076656306625316,
+     "11": 0.009759566826295132,
+     "12": 0.006367732517614852,
+     "13": 0.005003817431345968,
+     "14": 0.0031579005588797423,
+     "15": 0.0019987498790333675,
+     "16": 0.0005186799668386924
+    }
+   },
+   "mixtral-8x7b-tp4 w1": {
+    "sets": {
+     "A": {
+      "slope": 336.30668648855976,
+      "r": -0.04512581916933622,
+      "bias": -0.036049,
+      "H_EST": 339.503383,
+      "sigma_slope": 4.358214
+     },
+     "B": {
+      "slope": 350.6292527553017,
+      "r": -0.0044598161405402514,
+      "bias": 0.001025,
+      "H_EST": 352.560896,
+      "sigma_slope": 2.179107
+     },
+     "C": {
+      "slope": 357.1257051927216,
+      "r": 0.013985534334814309,
+      "bias": 0.0381,
+      "H_EST": 365.618737,
+      "sigma_slope": 2.853121
+     }
+    },
+    "theta": 0.7971955604077052,
+    "delta": -0.01268409150629209,
+    "residual_rms": 0.00523764593526387,
+    "delta_H": -0.012892033658354056,
+    "delta_F": -0.011866700325020721,
+    "sigma_theta": 0.199464,
+    "sigma_delta": 0.005423,
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 4027.7340613131637,
+     "rms_fluid": 4423.325803581627,
+     "winner": "INCONCLUSIVE"
+    },
+    "per_cell_record": {
+     "4": 0.002090128971533164,
+     "6": 0.0001282313118945444,
+     "8": -0.005067080509432042,
+     "10": -0.004099944003515274,
+     "11": -0.006448837928108652,
+     "12": -0.008097366416911283,
+     "13": -0.008445112666536223,
+     "14": -0.00987492241613589,
+     "15": -0.006192087302629776,
+     "16": -0.00982016484282926
+    }
+   },
+   "mixtral-8x7b-tp4 w2": {
+    "sets": {
+     "W2a": {
+      "slope": 371.01300816127406,
+      "r": 0.026031549118567643,
+      "bias": 0.037974,
+      "H_EST": 375.331264,
+      "sigma_slope": 8.716427
+     },
+     "W2b": {
+      "slope": 371.029144461495,
+      "r": 0.026076173842629835,
+      "bias": 0.03798,
+      "H_EST": 375.333566,
+      "sigma_slope": 8.716427
+     }
+    },
+    "w2_offset": {
+     "mean_r": 0.02605386148059874,
+     "H_EST_pred": 0.037977,
+     "sigma": 0.017044924334672328,
+     "H_EST": "HOLDS",
+     "FLUID": "HOLDS"
+    },
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 707.6911372547073,
+     "rms_fluid": 4530.450437260964,
+     "winner": "CEIL"
+    },
+    "per_cell_record": {
+     "6": 0.022450726856801786,
+     "8": 0.015589300444332774,
+     "10": 0.01792744494179028,
+     "11": 0.014237471374797073,
+     "12": 0.011797007119443759,
+     "13": 0.010199419702039495,
+     "14": 0.009532097881075115,
+     "15": 0.008799213318697386,
+     "16": 0.006865379538288088
+    }
+   },
+   "mixtral-8x7b-tp2 w1": {
+    "sets": {
+     "D1": {
+      "slope": 354.4348328508659,
+      "r": 0.006345351649250208,
+      "bias": 0.001023,
+      "H_EST": 352.56032,
+      "sigma_slope": 2.179107
+     },
+     "D2": {
+      "slope": 351.4059704589845,
+      "r": -0.0022544847842574933,
+      "bias": 0.038099,
+      "H_EST": 365.618408,
+      "sigma_slope": 2.179107
+     }
+    },
+    "delta_H": -0.017515566567503645,
+    "delta_F": 0.0020454334324963575,
+    "sigma_delta": 0.003094,
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 8044.352515307865,
+     "rms_fluid": 5262.496931153776,
+     "winner": "FLUID"
+    },
+    "per_cell_record": {
+     "2": -0.006629247062191422,
+     "4": -0.007729823762918823,
+     "6": -0.010247764052969451,
+     "8": -0.010590990047568775,
+     "10": -0.010671228477573364,
+     "11": -0.011502240584608659,
+     "12": -0.008022897880035209,
+     "13": -0.012242986500487066,
+     "14": -0.012545326526816733,
+     "15": -0.012176026812631989,
+     "16": -0.012579175704989063
+    }
+   },
+   "mixtral-8x7b-tp2 w2": {
+    "sets": {
+     "W2a": {
+      "slope": 363.65603498186556,
+      "r": 0.03077107421163694,
+      "bias": 0.038141,
+      "H_EST": 366.256034,
+      "sigma_slope": 4.358214
+     },
+     "W2b": {
+      "slope": 369.3894627162387,
+      "r": 0.047022286610653996,
+      "bias": 0.038141,
+      "H_EST": 366.256034,
+      "sigma_slope": 4.358214
+     }
+    },
+    "w2_offset": {
+     "mean_r": 0.03889668041114547,
+     "H_EST_pred": 0.038141,
+     "sigma": 0.008735041590879105,
+     "H_EST": "HOLDS",
+     "FLUID": "FALSIFIED"
+    },
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 3413.878080124417,
+     "rms_fluid": 12859.816135843133,
+     "winner": "CEIL"
+    },
+    "per_cell_record": {
+     "6": 0.01696305192193276,
+     "8": 0.009016525452024339,
+     "10": 0.012755095792059643,
+     "11": 0.012858614075100017,
+     "12": 0.010546396191596854,
+     "13": 0.009728032297181445,
+     "14": 0.009753237427500453,
+     "15": 0.009746721394599414,
+     "16": 0.009601118040281128
+    }
+   }
+  },
+  "families": {
+   "theta_call": {
+    "mixtral-8x7b-tp8": "H_EST",
+    "mixtral-8x7b-tp4": "H_EST"
+   },
+   "H_EST": "FALSIFIED",
+   "FLUID": "FALSIFIED",
+   "FLUID_LOW": "FALSIFIED",
+   "H_NPN (secondary)": "FALSIFIED",
+   "verdict": "NEITHER",
+   "co_primary": "INCONCLUSIVE",
+   "co_primary_winners": {
+    "mixtral-8x7b-tp8 w1": "INCONCLUSIVE",
+    "mixtral-8x7b-tp4 w1": "INCONCLUSIVE"
+   }
+  }
+ },
+ "lock1710 (printed)": {
+  "gemms": {
+   "mixtral-8x7b-tp8 w1": {
+    "sets": {
+     "A": {
+      "slope": 352.7270350864955,
+      "r": 0.0014964085363302626,
+      "bias": -0.110201,
+      "H_EST": 313.387207,
+      "sigma_slope": 8.716427
+     },
+     "B": {
+      "slope": 350.01804886798465,
+      "r": -0.0061952048041321595,
+      "bias": -0.004271,
+      "H_EST": 350.695701,
+      "sigma_slope": 3.2945
+     },
+     "C": {
+      "slope": 350.84702950613985,
+      "r": -0.0038414835146511894,
+      "bias": 0.038102,
+      "H_EST": 365.619559,
+      "sigma_slope": 8.716427
+     }
+    },
+    "theta": -0.0430347294577801,
+    "delta": -0.003942280690381248,
+    "residual_rms": 0.0017749849247140474,
+    "delta_H": 0.0226099067391823,
+    "delta_F": -0.0028467599274843622,
+    "sigma_theta": 0.276439,
+    "sigma_delta": 0.013099,
+    "per_cell": {
+     "cells": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 5875.536000308546,
+     "rms_fluid": 2017.2396507155242,
+     "winner": "FLUID"
+    },
+    "per_cell_record": {
+     "6": 0.006794350903775677,
+     "8": -0.0039149644124193824,
+     "10": 0.010827853584747107,
+     "11": -0.004426145187123314,
+     "12": -0.0007133098501469865,
+     "13": -0.010022730989850818,
+     "14": -0.004782081157312532,
+     "15": 0.005924766854243175,
+     "16": -0.008159655058021721
+    }
+   },
+   "mixtral-8x7b-tp8 w2": {
+    "sets": {
+     "W2a": {
+      "slope": 383.4831110491081,
+      "r": 0.011561886175436742,
+      "bias": 0.037936,
+      "H_EST": 393.481724,
+      "sigma_slope": 17.432855
+     },
+     "W2b": {
+      "slope": 380.6629415457586,
+      "r": 0.00412276851954263,
+      "bias": 0.037949,
+      "H_EST": 393.486328,
+      "sigma_slope": 17.432855
+     }
+    },
+    "w2_offset": {
+     "mean_r": 0.007842327347489686,
+     "H_EST_pred": 0.0379425,
+     "sigma": 0.032516196217203405,
+     "H_EST": "HOLDS",
+     "FLUID": "HOLDS"
+    },
+    "per_cell": {
+     "cells": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 1537.5115288555915,
+     "rms_fluid": 688.842926401062,
+     "winner": "INCONCLUSIVE"
+    },
+    "per_cell_record": {
+     "6": 0.021660023634115854,
+     "8": 0.002522924777479847,
+     "10": 0.017426169704678817,
+     "11": 0.013844122768828886,
+     "12": 0.00999989046748484,
+     "13": 0.007686563192253414,
+     "14": 0.005246577627109271,
+     "15": 0.0028384250379556485,
+     "16": 0.00044202420536228404
+    }
+   },
+   "mixtral-8x7b-tp4 w1": {
+    "sets": {
+     "A": {
+      "slope": 343.4758593750001,
+      "r": -0.024770416311754362,
+      "bias": -0.036049,
+      "H_EST": 339.503383,
+      "sigma_slope": 4.358214
+     },
+     "B": {
+      "slope": 349.72480276925245,
+      "r": -0.007027817236648359,
+      "bias": 0.001025,
+      "H_EST": 352.560896,
+      "sigma_slope": 2.179107
+     },
+     "C": {
+      "slope": 357.75888973313903,
+      "r": 0.015783332575636022,
+      "bias": 0.0381,
+      "H_EST": 365.618737,
+      "sigma_slope": 2.853121
+     }
+    },
+    "theta": 0.5469227052335509,
+    "delta": -0.005899078404688369,
+    "residual_rms": 0.0011945399548006265,
+    "delta_H": -0.0063636336575889005,
+    "delta_F": -0.005338300324255567,
+    "sigma_theta": 0.199464,
+    "sigma_delta": 0.005423,
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 3923.552625150734,
+     "rms_fluid": 3284.221847613772,
+     "winner": "INCONCLUSIVE"
+    },
+    "per_cell_record": {
+     "4": -0.0034588263810846095,
+     "6": -0.00013248257840657587,
+     "8": -0.007715644827072331,
+     "10": -0.004214519681079317,
+     "11": -0.005337756524314416,
+     "12": -0.007224085399444674,
+     "13": -0.008278951499290636,
+     "14": -0.010609715060634834,
+     "15": -0.006054185216934436,
+     "16": -0.007948818666823065
+    }
+   },
+   "mixtral-8x7b-tp4 w2": {
+    "sets": {
+     "W2a": {
+      "slope": 369.43140904018003,
+      "r": 0.021657657743860526,
+      "bias": 0.037974,
+      "H_EST": 375.331264,
+      "sigma_slope": 8.716427
+     },
+     "W2b": {
+      "slope": 363.95994873046897,
+      "r": 0.006526406887358727,
+      "bias": 0.03798,
+      "H_EST": 375.333566,
+      "sigma_slope": 8.716427
+     }
+    },
+    "w2_offset": {
+     "mean_r": 0.014092032315609626,
+     "H_EST_pred": 0.037977,
+     "sigma": 0.017044924334672328,
+     "H_EST": "HOLDS",
+     "FLUID": "HOLDS"
+    },
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 1636.3474221956687,
+     "rms_fluid": 3577.0779706171243,
+     "winner": "INCONCLUSIVE"
+    },
+    "per_cell_record": {
+     "6": 0.01866738149607181,
+     "8": 0.005219567503917283,
+     "10": 0.019743931834250505,
+     "11": 0.017481792260041804,
+     "12": 0.014301892602876988,
+     "13": 0.012273830986294868,
+     "14": 0.011711683302214957,
+     "15": 0.00785587349898544,
+     "16": 0.006376511140168538
+    }
+   },
+   "mixtral-8x7b-tp2 w1": {
+    "sets": {
+     "D1": {
+      "slope": 350.4175904192252,
+      "r": -0.005060788133943284,
+      "bias": 0.001023,
+      "H_EST": 352.56032,
+      "sigma_slope": 2.179107
+     },
+     "D2": {
+      "slope": 351.25900294712636,
+      "r": -0.0026717690314412845,
+      "bias": 0.038099,
+      "H_EST": 365.618408,
+      "sigma_slope": 2.179107
+     }
+    },
+    "delta_H": -0.023427278582692286,
+    "delta_F": -0.003866278582692284,
+    "sigma_delta": 0.003094,
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 8392.39395260584,
+     "rms_fluid": 4205.465801632824,
+     "winner": "FLUID"
+    },
+    "per_cell_record": {
+     "2": 0.001384533230150207,
+     "4": -0.004701793621361997,
+     "6": -0.0066707244516749755,
+     "8": -0.007173376083840652,
+     "10": -0.007641954121135782,
+     "11": -0.010212240008743679,
+     "12": -0.007382832524728607,
+     "13": -0.010047513594253616,
+     "14": -0.012058020215575574,
+     "15": -0.01018035206485914,
+     "16": -0.011874861771787563
+    }
+   },
+   "mixtral-8x7b-tp2 w2": {
+    "sets": {
+     "W2a": {
+      "slope": 367.9654399762846,
+      "r": 0.04298594097586328,
+      "bias": 0.038141,
+      "H_EST": 366.256034,
+      "sigma_slope": 4.358214
+     },
+     "W2b": {
+      "slope": 366.68967668805743,
+      "r": 0.03936983188224885,
+      "bias": 0.038141,
+      "H_EST": 366.256034,
+      "sigma_slope": 4.358214
+     }
+    },
+    "w2_offset": {
+     "mean_r": 0.041177886429056065,
+     "H_EST_pred": 0.038141,
+     "sigma": 0.008735041590879105,
+     "H_EST": "HOLDS",
+     "FLUID": "FALSIFIED"
+    },
+    "per_cell": {
+     "cells": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "rms_ceil": 1229.3509803895736,
+     "rms_fluid": 10381.12629275863,
+     "winner": "CEIL"
+    },
+    "per_cell_record": {
+     "6": 0.01693773411378241,
+     "8": 0.008228182435962423,
+     "10": 0.01686296717201832,
+     "11": 0.013896230733747317,
+     "12": 0.012994402396298604,
+     "13": 0.012448547316948189,
+     "14": 0.010036025251271686,
+     "15": 0.009134411103753737,
+     "16": 0.008911957819498197
+    }
+   }
+  },
+  "families": {
+   "theta_call": {
+    "mixtral-8x7b-tp8": "FLUID",
+    "mixtral-8x7b-tp4": "H_EST"
+   },
+   "H_EST": "FALSIFIED",
+   "FLUID": "FALSIFIED",
+   "FLUID_LOW": "FALSIFIED",
+   "H_NPN (secondary)": "FALSIFIED",
+   "verdict": "NEITHER",
+   "co_primary": "INCONCLUSIVE",
+   "co_primary_winners": {
+    "mixtral-8x7b-tp8 w1": "FLUID",
+    "mixtral-8x7b-tp4 w1": "INCONCLUSIVE"
+   }
+  }
+ },
+ "addendum": {
+  "registration": "2026-10-02-rental2-addendum-gates",
+  "gates_not_gating": [],
+  "pages": {
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-floor-r3-counters/r3f-g64-lock1710.json": {
+    "failed_gates": [
+     "FL1"
+    ],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": {
+     "ok": true,
+     "null_median_mhz": 1687.8689172070358,
+     "rel": -0.012942153680095991,
+     "why": "null kernel median 1687.9 MHz, -1.29% of the 1710 MHz lock (within 3%: True)"
+    },
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-floor-r3-counters/r3f-g64.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json": {
+    "failed_gates": [
+     "FL1"
+    ],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": {
+     "ok": true,
+     "null_median_mhz": 1687.4690709680945,
+     "rel": -0.013175981890003241,
+     "why": "null kernel median 1687.5 MHz, -1.32% of the 1710 MHz lock (within 3%: True)"
+    },
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64-lock1710.json": {
+    "failed_gates": [
+     "FL1"
+    ],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": {
+     "ok": true,
+     "null_median_mhz": 1684.3992077464789,
+     "rel": -0.014971223540070855,
+     "why": "null kernel median 1684.4 MHz, -1.50% of the 1710 MHz lock (within 3%: True)"
+    },
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   }
+  },
+  "verdicts": [
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp8 w1 / per_cell / winner",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp8 w2 / w2_offset / H_EST",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp8 w2 / w2_offset / FLUID",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp8 w2 / per_cell / winner",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp4 w1 / per_cell / winner",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp4 w2 / w2_offset / H_EST",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp4 w2 / w2_offset / FLUID",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp4 w2 / per_cell / winner",
+    "ALL": "CEIL",
+    "CLEAN": "CEIL",
+    "registered": "CEIL"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp2 w1 / per_cell / winner",
+    "ALL": "FLUID",
+    "CLEAN": "FLUID",
+    "registered": "FLUID"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp2 w2 / w2_offset / H_EST",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp2 w2 / w2_offset / FLUID",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "base (PRIMARY) / gemms / mixtral-8x7b-tp2 w2 / per_cell / winner",
+    "ALL": "CEIL",
+    "CLEAN": "CEIL",
+    "registered": "CEIL"
+   },
+   {
+    "path": "base (PRIMARY) / families / H_EST",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "base (PRIMARY) / families / FLUID",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "base (PRIMARY) / families / FLUID_LOW",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "base (PRIMARY) / families / H_NPN (secondary)",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "base (PRIMARY) / families / verdict",
+    "ALL": "NEITHER",
+    "CLEAN": "NEITHER",
+    "registered": "NEITHER"
+   },
+   {
+    "path": "base (PRIMARY) / families / co_primary",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp8 w1 / per_cell / winner",
+    "ALL": "FLUID",
+    "CLEAN": "FLUID",
+    "registered": "FLUID"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp8 w2 / w2_offset / H_EST",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp8 w2 / w2_offset / FLUID",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp8 w2 / per_cell / winner",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp4 w1 / per_cell / winner",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp4 w2 / w2_offset / H_EST",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp4 w2 / w2_offset / FLUID",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp4 w2 / per_cell / winner",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp2 w1 / per_cell / winner",
+    "ALL": "FLUID",
+    "CLEAN": "FLUID",
+    "registered": "FLUID"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp2 w2 / w2_offset / H_EST",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp2 w2 / w2_offset / FLUID",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "lock1710 (printed) / gemms / mixtral-8x7b-tp2 w2 / per_cell / winner",
+    "ALL": "CEIL",
+    "CLEAN": "CEIL",
+    "registered": "CEIL"
+   },
+   {
+    "path": "lock1710 (printed) / families / H_EST",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "lock1710 (printed) / families / FLUID",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "lock1710 (printed) / families / FLUID_LOW",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "lock1710 (printed) / families / H_NPN (secondary)",
+    "ALL": "FALSIFIED",
+    "CLEAN": "FALSIFIED",
+    "registered": "FALSIFIED"
+   },
+   {
+    "path": "lock1710 (printed) / families / verdict",
+    "ALL": "NEITHER",
+    "CLEAN": "NEITHER",
+    "registered": "NEITHER"
+   },
+   {
+    "path": "lock1710 (printed) / families / co_primary",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-01-rental2-w1floor-gh200",
+   "H_EST_recomputed": "agree",
+   "base (PRIMARY)": {
+    "gemms": {
+     "mixtral-8x7b-tp8 w1": {
+      "sets": {
+       "A": {
+        "slope": 333.28538295200866,
+        "r": -0.05370419377623892,
+        "bias": -0.110201,
+        "H_EST": 313.387207,
+        "sigma_slope": 8.716427
+       },
+       "B": {
+        "slope": 348.767368861607,
+        "r": -0.009746255361706369,
+        "bias": -0.004271,
+        "H_EST": 350.695701,
+        "sigma_slope": 3.2945
+       },
+       "C": {
+        "slope": 363.31759277343855,
+        "r": 0.03156613507506689,
+        "bias": 0.038102,
+        "H_EST": 365.619559,
+        "sigma_slope": 8.716427
+       }
+      },
+      "theta": 0.5442049018790646,
+      "delta": 0.0032255380978752496,
+      "residual_rms": 0.00775595870380216,
+      "delta_H": 0.014828561979040533,
+      "delta_F": -0.01062810468762613,
+      "sigma_theta": 0.276439,
+      "sigma_delta": 0.013099,
+      "per_cell": {
+       "cells": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 4248.009072275583,
+       "rms_fluid": 4103.773192446201,
+       "winner": "INCONCLUSIVE"
+      },
+      "per_cell_record": {
+       "6": 0.00451988558261154,
+       "8": -0.0003743778862771099,
+       "10": 0.004891740129647404,
+       "11": -0.004114027549206086,
+       "12": -0.003365498204363877,
+       "13": -0.004453457294434321,
+       "14": -0.005888436239836038,
+       "15": 0.003540345968254701,
+       "16": -0.008254460415167395
+      }
+     },
+     "mixtral-8x7b-tp8 w2": {
+      "sets": {
+       "W2a": {
+        "slope": 385.39230468750156,
+        "r": 0.016598007616727806,
+        "bias": 0.037936,
+        "H_EST": 393.481724,
+        "sigma_slope": 17.432855
+       },
+       "W2b": {
+        "slope": 386.55078055245485,
+        "r": 0.01965386587300144,
+        "bias": 0.037949,
+        "H_EST": 393.486328,
+        "sigma_slope": 17.432855
+       }
+      },
+      "w2_offset": {
+       "mean_r": 0.018125936744864624,
+       "H_EST_pred": 0.0379425,
+       "sigma": 0.032516196217203405,
+       "H_EST": "HOLDS",
+       "FLUID": "HOLDS"
+      },
+      "per_cell": {
+       "cells": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 871.6292416599214,
+       "rms_fluid": 1349.2055554200024,
+       "winner": "INCONCLUSIVE"
+      },
+      "per_cell_record": {
+       "6": 0.016202863394030622,
+       "8": 0.0033373503491000386,
+       "10": 0.015076656306625316,
+       "11": 0.009759566826295132,
+       "12": 0.006367732517614852,
+       "13": 0.005003817431345968,
+       "14": 0.0031579005588797423,
+       "15": 0.0019987498790333675,
+       "16": 0.0005186799668386924
+      }
+     },
+     "mixtral-8x7b-tp4 w1": {
+      "sets": {
+       "A": {
+        "slope": 336.30668648855976,
+        "r": -0.04512581916933622,
+        "bias": -0.036049,
+        "H_EST": 339.503383,
+        "sigma_slope": 4.358214
+       },
+       "B": {
+        "slope": 350.6292527553017,
+        "r": -0.0044598161405402514,
+        "bias": 0.001025,
+        "H_EST": 352.560896,
+        "sigma_slope": 2.179107
+       },
+       "C": {
+        "slope": 357.1257051927216,
+        "r": 0.013985534334814309,
+        "bias": 0.0381,
+        "H_EST": 365.618737,
+        "sigma_slope": 2.853121
+       }
+      },
+      "theta": 0.7971955604077052,
+      "delta": -0.01268409150629209,
+      "residual_rms": 0.00523764593526387,
+      "delta_H": -0.012892033658354056,
+      "delta_F": -0.011866700325020721,
+      "sigma_theta": 0.199464,
+      "sigma_delta": 0.005423,
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 4027.7340613131637,
+       "rms_fluid": 4423.325803581627,
+       "winner": "INCONCLUSIVE"
+      },
+      "per_cell_record": {
+       "4": 0.002090128971533164,
+       "6": 0.0001282313118945444,
+       "8": -0.005067080509432042,
+       "10": -0.004099944003515274,
+       "11": -0.006448837928108652,
+       "12": -0.008097366416911283,
+       "13": -0.008445112666536223,
+       "14": -0.00987492241613589,
+       "15": -0.006192087302629776,
+       "16": -0.00982016484282926
+      }
+     },
+     "mixtral-8x7b-tp4 w2": {
+      "sets": {
+       "W2a": {
+        "slope": 371.01300816127406,
+        "r": 0.026031549118567643,
+        "bias": 0.037974,
+        "H_EST": 375.331264,
+        "sigma_slope": 8.716427
+       },
+       "W2b": {
+        "slope": 371.029144461495,
+        "r": 0.026076173842629835,
+        "bias": 0.03798,
+        "H_EST": 375.333566,
+        "sigma_slope": 8.716427
+       }
+      },
+      "w2_offset": {
+       "mean_r": 0.02605386148059874,
+       "H_EST_pred": 0.037977,
+       "sigma": 0.017044924334672328,
+       "H_EST": "HOLDS",
+       "FLUID": "HOLDS"
+      },
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 707.6911372547073,
+       "rms_fluid": 4530.450437260964,
+       "winner": "CEIL"
+      },
+      "per_cell_record": {
+       "6": 0.022450726856801786,
+       "8": 0.015589300444332774,
+       "10": 0.01792744494179028,
+       "11": 0.014237471374797073,
+       "12": 0.011797007119443759,
+       "13": 0.010199419702039495,
+       "14": 0.009532097881075115,
+       "15": 0.008799213318697386,
+       "16": 0.006865379538288088
+      }
+     },
+     "mixtral-8x7b-tp2 w1": {
+      "sets": {
+       "D1": {
+        "slope": 354.4348328508659,
+        "r": 0.006345351649250208,
+        "bias": 0.001023,
+        "H_EST": 352.56032,
+        "sigma_slope": 2.179107
+       },
+       "D2": {
+        "slope": 351.4059704589845,
+        "r": -0.0022544847842574933,
+        "bias": 0.038099,
+        "H_EST": 365.618408,
+        "sigma_slope": 2.179107
+       }
+      },
+      "delta_H": -0.017515566567503645,
+      "delta_F": 0.0020454334324963575,
+      "sigma_delta": 0.003094,
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 8044.352515307865,
+       "rms_fluid": 5262.496931153776,
+       "winner": "FLUID"
+      },
+      "per_cell_record": {
+       "2": -0.006629247062191422,
+       "4": -0.007729823762918823,
+       "6": -0.010247764052969451,
+       "8": -0.010590990047568775,
+       "10": -0.010671228477573364,
+       "11": -0.011502240584608659,
+       "12": -0.008022897880035209,
+       "13": -0.012242986500487066,
+       "14": -0.012545326526816733,
+       "15": -0.012176026812631989,
+       "16": -0.012579175704989063
+      }
+     },
+     "mixtral-8x7b-tp2 w2": {
+      "sets": {
+       "W2a": {
+        "slope": 363.65603498186556,
+        "r": 0.03077107421163694,
+        "bias": 0.038141,
+        "H_EST": 366.256034,
+        "sigma_slope": 4.358214
+       },
+       "W2b": {
+        "slope": 369.3894627162387,
+        "r": 0.047022286610653996,
+        "bias": 0.038141,
+        "H_EST": 366.256034,
+        "sigma_slope": 4.358214
+       }
+      },
+      "w2_offset": {
+       "mean_r": 0.03889668041114547,
+       "H_EST_pred": 0.038141,
+       "sigma": 0.008735041590879105,
+       "H_EST": "HOLDS",
+       "FLUID": "FALSIFIED"
+      },
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 3413.878080124417,
+       "rms_fluid": 12859.816135843133,
+       "winner": "CEIL"
+      },
+      "per_cell_record": {
+       "6": 0.01696305192193276,
+       "8": 0.009016525452024339,
+       "10": 0.012755095792059643,
+       "11": 0.012858614075100017,
+       "12": 0.010546396191596854,
+       "13": 0.009728032297181445,
+       "14": 0.009753237427500453,
+       "15": 0.009746721394599414,
+       "16": 0.009601118040281128
+      }
+     }
+    },
+    "families": {
+     "theta_call": {
+      "mixtral-8x7b-tp8": "H_EST",
+      "mixtral-8x7b-tp4": "H_EST"
+     },
+     "H_EST": "FALSIFIED",
+     "FLUID": "FALSIFIED",
+     "FLUID_LOW": "FALSIFIED",
+     "H_NPN (secondary)": "FALSIFIED",
+     "verdict": "NEITHER",
+     "co_primary": "INCONCLUSIVE",
+     "co_primary_winners": {
+      "mixtral-8x7b-tp8 w1": "INCONCLUSIVE",
+      "mixtral-8x7b-tp4 w1": "INCONCLUSIVE"
+     }
+    }
+   },
+   "lock1710 (printed)": {
+    "gemms": {
+     "mixtral-8x7b-tp8 w1": {
+      "sets": {
+       "A": {
+        "slope": 352.7270350864955,
+        "r": 0.0014964085363302626,
+        "bias": -0.110201,
+        "H_EST": 313.387207,
+        "sigma_slope": 8.716427
+       },
+       "B": {
+        "slope": 350.01804886798465,
+        "r": -0.0061952048041321595,
+        "bias": -0.004271,
+        "H_EST": 350.695701,
+        "sigma_slope": 3.2945
+       },
+       "C": {
+        "slope": 350.84702950613985,
+        "r": -0.0038414835146511894,
+        "bias": 0.038102,
+        "H_EST": 365.619559,
+        "sigma_slope": 8.716427
+       }
+      },
+      "theta": -0.0430347294577801,
+      "delta": -0.003942280690381248,
+      "residual_rms": 0.0017749849247140474,
+      "delta_H": 0.0226099067391823,
+      "delta_F": -0.0028467599274843622,
+      "sigma_theta": 0.276439,
+      "sigma_delta": 0.013099,
+      "per_cell": {
+       "cells": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 5875.536000308546,
+       "rms_fluid": 2017.2396507155242,
+       "winner": "FLUID"
+      },
+      "per_cell_record": {
+       "6": 0.006794350903775677,
+       "8": -0.0039149644124193824,
+       "10": 0.010827853584747107,
+       "11": -0.004426145187123314,
+       "12": -0.0007133098501469865,
+       "13": -0.010022730989850818,
+       "14": -0.004782081157312532,
+       "15": 0.005924766854243175,
+       "16": -0.008159655058021721
+      }
+     },
+     "mixtral-8x7b-tp8 w2": {
+      "sets": {
+       "W2a": {
+        "slope": 383.4831110491081,
+        "r": 0.011561886175436742,
+        "bias": 0.037936,
+        "H_EST": 393.481724,
+        "sigma_slope": 17.432855
+       },
+       "W2b": {
+        "slope": 380.6629415457586,
+        "r": 0.00412276851954263,
+        "bias": 0.037949,
+        "H_EST": 393.486328,
+        "sigma_slope": 17.432855
+       }
+      },
+      "w2_offset": {
+       "mean_r": 0.007842327347489686,
+       "H_EST_pred": 0.0379425,
+       "sigma": 0.032516196217203405,
+       "H_EST": "HOLDS",
+       "FLUID": "HOLDS"
+      },
+      "per_cell": {
+       "cells": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 1537.5115288555915,
+       "rms_fluid": 688.842926401062,
+       "winner": "INCONCLUSIVE"
+      },
+      "per_cell_record": {
+       "6": 0.021660023634115854,
+       "8": 0.002522924777479847,
+       "10": 0.017426169704678817,
+       "11": 0.013844122768828886,
+       "12": 0.00999989046748484,
+       "13": 0.007686563192253414,
+       "14": 0.005246577627109271,
+       "15": 0.0028384250379556485,
+       "16": 0.00044202420536228404
+      }
+     },
+     "mixtral-8x7b-tp4 w1": {
+      "sets": {
+       "A": {
+        "slope": 343.4758593750001,
+        "r": -0.024770416311754362,
+        "bias": -0.036049,
+        "H_EST": 339.503383,
+        "sigma_slope": 4.358214
+       },
+       "B": {
+        "slope": 349.72480276925245,
+        "r": -0.007027817236648359,
+        "bias": 0.001025,
+        "H_EST": 352.560896,
+        "sigma_slope": 2.179107
+       },
+       "C": {
+        "slope": 357.75888973313903,
+        "r": 0.015783332575636022,
+        "bias": 0.0381,
+        "H_EST": 365.618737,
+        "sigma_slope": 2.853121
+       }
+      },
+      "theta": 0.5469227052335509,
+      "delta": -0.005899078404688369,
+      "residual_rms": 0.0011945399548006265,
+      "delta_H": -0.0063636336575889005,
+      "delta_F": -0.005338300324255567,
+      "sigma_theta": 0.199464,
+      "sigma_delta": 0.005423,
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 3923.552625150734,
+       "rms_fluid": 3284.221847613772,
+       "winner": "INCONCLUSIVE"
+      },
+      "per_cell_record": {
+       "4": -0.0034588263810846095,
+       "6": -0.00013248257840657587,
+       "8": -0.007715644827072331,
+       "10": -0.004214519681079317,
+       "11": -0.005337756524314416,
+       "12": -0.007224085399444674,
+       "13": -0.008278951499290636,
+       "14": -0.010609715060634834,
+       "15": -0.006054185216934436,
+       "16": -0.007948818666823065
+      }
+     },
+     "mixtral-8x7b-tp4 w2": {
+      "sets": {
+       "W2a": {
+        "slope": 369.43140904018003,
+        "r": 0.021657657743860526,
+        "bias": 0.037974,
+        "H_EST": 375.331264,
+        "sigma_slope": 8.716427
+       },
+       "W2b": {
+        "slope": 363.95994873046897,
+        "r": 0.006526406887358727,
+        "bias": 0.03798,
+        "H_EST": 375.333566,
+        "sigma_slope": 8.716427
+       }
+      },
+      "w2_offset": {
+       "mean_r": 0.014092032315609626,
+       "H_EST_pred": 0.037977,
+       "sigma": 0.017044924334672328,
+       "H_EST": "HOLDS",
+       "FLUID": "HOLDS"
+      },
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 1636.3474221956687,
+       "rms_fluid": 3577.0779706171243,
+       "winner": "INCONCLUSIVE"
+      },
+      "per_cell_record": {
+       "6": 0.01866738149607181,
+       "8": 0.005219567503917283,
+       "10": 0.019743931834250505,
+       "11": 0.017481792260041804,
+       "12": 0.014301892602876988,
+       "13": 0.012273830986294868,
+       "14": 0.011711683302214957,
+       "15": 0.00785587349898544,
+       "16": 0.006376511140168538
+      }
+     },
+     "mixtral-8x7b-tp2 w1": {
+      "sets": {
+       "D1": {
+        "slope": 350.4175904192252,
+        "r": -0.005060788133943284,
+        "bias": 0.001023,
+        "H_EST": 352.56032,
+        "sigma_slope": 2.179107
+       },
+       "D2": {
+        "slope": 351.25900294712636,
+        "r": -0.0026717690314412845,
+        "bias": 0.038099,
+        "H_EST": 365.618408,
+        "sigma_slope": 2.179107
+       }
+      },
+      "delta_H": -0.023427278582692286,
+      "delta_F": -0.003866278582692284,
+      "sigma_delta": 0.003094,
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 8392.39395260584,
+       "rms_fluid": 4205.465801632824,
+       "winner": "FLUID"
+      },
+      "per_cell_record": {
+       "2": 0.001384533230150207,
+       "4": -0.004701793621361997,
+       "6": -0.0066707244516749755,
+       "8": -0.007173376083840652,
+       "10": -0.007641954121135782,
+       "11": -0.010212240008743679,
+       "12": -0.007382832524728607,
+       "13": -0.010047513594253616,
+       "14": -0.012058020215575574,
+       "15": -0.01018035206485914,
+       "16": -0.011874861771787563
+      }
+     },
+     "mixtral-8x7b-tp2 w2": {
+      "sets": {
+       "W2a": {
+        "slope": 367.9654399762846,
+        "r": 0.04298594097586328,
+        "bias": 0.038141,
+        "H_EST": 366.256034,
+        "sigma_slope": 4.358214
+       },
+       "W2b": {
+        "slope": 366.68967668805743,
+        "r": 0.03936983188224885,
+        "bias": 0.038141,
+        "H_EST": 366.256034,
+        "sigma_slope": 4.358214
+       }
+      },
+      "w2_offset": {
+       "mean_r": 0.041177886429056065,
+       "H_EST_pred": 0.038141,
+       "sigma": 0.008735041590879105,
+       "H_EST": "HOLDS",
+       "FLUID": "FALSIFIED"
+      },
+      "per_cell": {
+       "cells": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+       ],
+       "rms_ceil": 1229.3509803895736,
+       "rms_fluid": 10381.12629275863,
+       "winner": "CEIL"
+      },
+      "per_cell_record": {
+       "6": 0.01693773411378241,
+       "8": 0.008228182435962423,
+       "10": 0.01686296717201832,
+       "11": 0.013896230733747317,
+       "12": 0.012994402396298604,
+       "13": 0.012448547316948189,
+       "14": 0.010036025251271686,
+       "15": 0.009134411103753737,
+       "16": 0.008911957819498197
+      }
+     }
+    },
+    "families": {
+     "theta_call": {
+      "mixtral-8x7b-tp8": "FLUID",
+      "mixtral-8x7b-tp4": "H_EST"
+     },
+     "H_EST": "FALSIFIED",
+     "FLUID": "FALSIFIED",
+     "FLUID_LOW": "FALSIFIED",
+     "H_NPN (secondary)": "FALSIFIED",
+     "verdict": "NEITHER",
+     "co_primary": "INCONCLUSIVE",
+     "co_primary_winners": {
+      "mixtral-8x7b-tp8 w1": "FLUID",
+      "mixtral-8x7b-tp4 w1": "INCONCLUSIVE"
+     }
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+  "ridge": 155.9303223641331,
+  "bandwidth_gbps": 4374.299702465323,
+  "roofline_source": "measured on this device: NVIDIA H200 (measured)",
+  "l2_source": "read off NVIDIA H200 (L2_cache_size)",
+  "device": "NVIDIA H200",
+  "limits": {
+    "capability": [
+      9,
+      0
+    ],
+    "smem_per_sm": 233472,
+    "max_threads_per_sm": 2048,
+    "max_blocks_per_sm": 32,
+    "sm_count": 132,
+    "l2_bytes": 62914560,
+    "source": "read off NVIDIA H200"
+  },
+  "compiles": {
+    "s2w4g1": 32,
+    "s2w8g1": 32,
+    "s3w4g1": 32,
+    "s3w8g1": 32,
+    "s3w8g8": 32,
+    "s3w8g16": 32,
+    "s3w8g64": 32,
+    "s4w8g1": 33,
+    "s5w8g1": 32
+  },
+  "compiled_smem": {},
+  "compiled_smem_note": "vLLM exposes no fused_moe_kernel with a Triton cache under either known path, so the compiled shared memory could not be read"
+}

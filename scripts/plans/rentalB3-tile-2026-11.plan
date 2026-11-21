@@ -1,0 +1,64 @@
+# TILE RENTAL B3 (registered 2026-11-04): the blind test of the round-5 large-tile model at vLLM's two wgmma tiles
+# (128x128x64 w8 s3 at G 1 and G 16, 64x128x64 w8 s3 at G 1), on rental B2's 84 frozen NATIVE cells, at the owner's
+# working-model bar (rms <= 3%, every cell within 8%, |mean| <= 1.5%, per blind model and pooled). One gpu_1x_gh200 at
+# $2.29/h, run by B3's driver (C2's pinned driver plus lines marked B3: the two B3 gates):
+#   bash scripts/vm_run.sh start --ip <ip> --run-id <id> --deadline <launch + 186 min, epoch s> \
+#     --plan scripts/plans/rentalB3-tile-2026-11.plan --driver gh200_tileB3_session.sh
+# Registration (before any page): docs/registered/2026-11-04-tileB3-gh200.{txt,json}. The model is FROZEN there by
+# sha256 (round5/ROUND5.md's selected variant, unamended); its on-board inputs are the sag par of the two f128 pages
+# (B3-F) and the 64x128 sag par of the two f64w8 pages (B3-F64).
+# THE STOP RULE: every STOP is before the first timed unit, enacted by the driver. Power: 700 W set and read back
+# (enforced.power.limit and the -q GPU-scope limit both at 700 W within 1 W), else STOP, no fallback. Lock: 1410 MHz
+# locked and read back by the prelude, else STOP. Census: B3's compile-only census of the blind models equals A2's
+# merged census on every compiled fact at both tiles, no MMA path mismatch (gate b3census), else STOP. Band: A2's
+# G-BAND on the two f128 pages (gate band), else STOP. Sag: the on-board F1 fits and par inside the registered range
+# (gate b3sag: points, A, tau, rms per page, the 1 ms ratio, par's A), else STOP; its ledger line carries par and both
+# pages' sha256. A lost f128 page fails b3sag: a STOP. 64x128 sag: the same on the two f64w8 pages (gate b3sag64, the
+# registered 64x128 range), else STOP.
+# Units, in run order (line order is the priority; the driver drops the LAST unit first; a drop-group goes together):
+#   B3-P   prelude, calibrate (the ruler R3 is handed), the census of Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and
+#          deepseek-v2-lite at both tiles (compile only), the census gate
+#   B3-F   the sag estimator's two CAL pages on this board (OLMoE f128, Mixtral-8x7B f128: 128x128 G 64, treads 1-9),
+#          G-BAND, the sag gate
+#   B3-F64 the 64x128 sag estimator's two pages (OLMoE f64w8, Mixtral-8x7B f64w8: A2's units, 64x128 G 64), the 64x128
+#          sag gate
+#   B3-T   B2's eight blind timed pages (finalise.plan_b's lines, unchanged): Phi 64g1, 128g1, 128g16; Qwen1.5 128g1,
+#          128g16; JetMoE 128g1, 128g16 (nodrop); deepseek-v2-lite 128g1 (drop-group dsv, pooled only)
+#   B3-R   the OLMoE f128 page again at the end (label f128r; drop-group srep): the sag's drift, DESCRIPTIVE, never priced
+#   B3-B   B2's three byte pages (drop-group byt): Phi b128g1, Qwen1.5 b128g1, Phi b64g1 (B-BYTES, E2-TILE: DESCRIPTIVE)
+# Drop order, last first: byt, srep, dsv. nodrop: the prelude, calibrate, the census, every gate, both
+# f128 and both f64w8 pages and every Phi, Qwen1.5 and JetMoE timed page.
+# MINUTES: 143 of units estimated (112 nodrop): rental A's and A2's actual minutes (B2's estimates; A2's 1410 timed pages
+# ran in rental A's 1710 minutes), C4's for the f128 pages (3 and 7), A2's for the f64w8 pages (3 and 7), the gates (1
+# each).
+# Wall with about 25 min of boot, driver upgrade and setup: about 168 min ($6.41 at $2.29/h). Deadline launch + 186 min
+# (153 min of units after 25 of boot and the driver's 8 min reserve, 10 min over the estimate); guardian hard cap launch
+# + 201 min ($7.67 at most).
+- prelude lock-mhz=1410 power-limit-w=700 est=2 cap=15
+mixtral-8x7b calibrate label=tb nodrop=1 est=2 cap=30
+- tilecensus label=tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b nodrop=1 est=4 cap=15
+- gate label=gcen gate=b3census nodrop=1 est=1 cap=5
+# B3-F: the sag estimator's pages on this board, the lock band under load, the sag-fit range
+olmoe-1b-7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=3 cap=20
+mixtral-8x7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=7 cap=25
+- gate label=gband gate=band nodrop=1 est=1 cap=5
+- gate label=gsag gate=b3sag nodrop=1 est=1 cap=5
+# B3-F64: the 64x128 sag estimator's pages on this board (A2's f64w8 units), the 64x128 sag-fit range
+olmoe-1b-7b bytes label=f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=3 cap=20
+mixtral-8x7b bytes label=f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=7 cap=25
+- gate label=gsag64 gate=b3sag64 nodrop=1 est=1 cap=5
+# B3-T: B2's blind timed pages (E1-TILE)
+phi-3.5-moe timed label=t64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=10 cap=30
+phi-3.5-moe timed label=t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=14 cap=42
+phi-3.5-moe timed label=t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=16 cap=48
+qwen1.5-moe-a2.7b timed label=t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/qwen1.5-moe-a2.7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=13 cap=39
+jetmoe-8b timed label=t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/jetmoe-8b-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=9 cap=27
+qwen1.5-moe-a2.7b timed label=t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/qwen1.5-moe-a2.7b-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=11 cap=33
+jetmoe-8b timed label=t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/jetmoe-8b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=7 cap=21
+deepseek-v2-lite timed label=t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/deepseek-v2-lite-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=dsv est=12 cap=36
+# B3-R: the sag's drift (DESCRIPTIVE)
+olmoe-1b-7b bytes label=f128r block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 drop-group=srep est=3 cap=20
+# B3-B: B2's byte pages (DESCRIPTIVE)
+phi-3.5-moe bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native,shared byte-groups=1 drop-group=byt est=6 cap=18
+qwen1.5-moe-a2.7b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/qwen1.5-moe-a2.7b-128g1.json arms=native,shared byte-groups=1 drop-group=byt est=5 cap=15
+phi-3.5-moe bytes label=b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1 drop-group=byt est=5 cap=15

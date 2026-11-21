@@ -1,0 +1,25 @@
+REGISTERED 2026-10-05, before any rental-3 page: rental 3, 2026-10-05-rental3-replicate-gh200
+status: REGISTERED BEFORE ANY PAGE: noise models, no verdict of their own
+design: design-r3/DESIGN.md section 2.4 (part R) with REVIEW.md (R: name the page IDs); and the grading's finding that R did not replicate rental 2's per-GEMM-constant tests K1 and K4: the RK capture
+tool: scorer scripts/scoring/rental3/score_replicate.py
+
+
+R:
+  sigma_cell: R3's own repeat spread per cell (9 repeats; the page's CI), printed
+  sigma_page: {"what": "the rep8 unit's G = 8 page (treads 6) against the e2e timed step's G = 8 page, same board: per cell |T_rep / T_e2e - 1| over the cells that pass E's host rule; sigma_page is its rms", "cells": ["shared G=8 n=3", "shared G=8 n=4", "shared G=8 n=5", "shared G=8 n=6", "private G=8 n=2", "private G=8 n=3", "private G=8 n=4", "private G=8 n=5", "private G=8 n=6"], "pages": "gaps-<card>-qwen2-57b-a14b-tp8-rep8 against gaps-<card>-qwen2-57b-a14b-tp8-e2e (session tag -p2-), both under the same two views as E"}
+  sigma_board: {"pages_2026_09_25": ["d9f1f37c", "1b285de2", "df37ea07", "01c08abd", "6ff34777"], "pages_2026_09_27": ["04d9320b", "e20972ef", "8ab16728", "848523de", "2085264b"], "cells": 24, "groups": [2, 4], "rms": 0.00256, "mean": -0.000969, "label": "SEEN"}
+  resolution: sqrt(sigma_page^2 + sigma_board^2): E1's UNRESOLVED label reads it
+  without_rep8: when rep8 is dropped or NOT SCORED, sigma_page is not formed: E1 prints R3's per-cell CI and sigma_board alone and the label reads 'resolution: board only'
+RK:
+  what: a same-board floor replicate for rental 2's K1 and K4, which no earlier capture gave a noise floor: the tp4 floorrep unit's 1710 capture against the tp4 floor unit's 1710 capture (same treads, consecutive units, one board)
+  cells: [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]
+  cells_w2: [4, 6, 8, 10, 11, 12, 13, 14, 15, 16]
+  statistics: {"L": "sm__cycles_elapsed.avg - sm__cycles_active.max (K1's)", "D_imb": "sm__cycles_active.max - sm__cycles_active.avg - (ceil(q) - q) u (K4's)"}
+  noise: per statistic and GEMM, sigma = rms over the registered cells of (A - B) / sqrt(2): the per-capture noise of one cell
+  rule: K1 (K4) is RESOLVED on a pool when its verdict would not change if every cell within 2 sigma of a threshold (K1: 5,000 cycles; K4: +-0.2 u and 0.3 u) were flipped; else UNRESOLVED. Applied to rental 2's published K1 / K4 pool (SEEN: scripts/scoring/rental2/const.score.json) and to rental 3's tp4 1710 captures; printed beside rental 2's verdicts, which stand
+  K1_threshold: 5000
+  K4_bounds_u: [0.2, 0.3]
+  drop_order: the floorrep unit is in drop-group x with the tp4 floor, floor1005, floor1410 and wall units: it needs the floor unit's 1710 capture (its same-board pair) and fits the budget there (2 min); when x drops, RK is NOT RUN and K1 / K4 keep no noise floor
+seen_data:
+  - sigma_board is SEEN (8x7B's 09-25 and 09-27 pages)
+  - rental 2's K1 / K4 pool is SEEN

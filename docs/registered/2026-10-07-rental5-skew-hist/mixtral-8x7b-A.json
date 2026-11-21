@@ -1,0 +1,417 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "mixtral-8x7b",
+ "page": "A",
+ "shuffle_seed": 20261007,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 2,
+   "counts": [
+    71,
+    54,
+    33,
+    67,
+    68,
+    79,
+    54,
+    86
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 13.051,
+    "seed": 20261016,
+    "stats": {
+     "cv": 0.24357,
+     "max_mean": 1.34375,
+     "gini": 0.133789
+    },
+    "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 256",
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW",
+   "n": 2,
+   "counts": [
+    67,
+    97,
+    105,
+    53,
+    64,
+    22,
+    35,
+    69
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 3.7495,
+    "seed": 20262013,
+    "stats": {
+     "cv": 0.410807,
+     "max_mean": 1.640625,
+     "gini": 0.22998
+    },
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 256",
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW-hotfirst",
+   "n": 2,
+   "counts": [
+    105,
+    67,
+    97,
+    53,
+    64,
+    22,
+    35,
+    69
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "of": "PW",
+    "permutation": "the hottest expert moved to expert 0"
+   }
+  },
+  {
+   "label": "PW-rand1",
+   "n": 2,
+   "counts": [
+    105,
+    97,
+    35,
+    64,
+    22,
+    53,
+    69,
+    67
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "of": "PW",
+    "permutation": "numpy default_rng(20261008).permutation, the 1th draw"
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts": [
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 8,
+   "counts": [
+    190,
+    305,
+    320,
+    224,
+    251,
+    240,
+    303,
+    215
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 17.404,
+    "seed": 20264007,
+    "stats": {
+     "cv": 0.174955,
+     "max_mean": 1.25,
+     "gini": 0.098145
+    },
+    "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 1024",
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW",
+   "n": 8,
+   "counts": [
+    376,
+    326,
+    310,
+    142,
+    146,
+    139,
+    299,
+    310
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.0,
+    "seed": 20265047,
+    "stats": {
+     "cv": 0.354173,
+     "max_mean": 1.46875,
+     "gini": 0.18811
+    },
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 1024",
+    "matches": [
+     "cv",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW-hotfirst",
+   "n": 8,
+   "counts": [
+    376,
+    326,
+    310,
+    142,
+    146,
+    139,
+    299,
+    310
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "of": "PW",
+    "permutation": "the hottest expert moved to expert 0"
+   }
+  },
+  {
+   "label": "PW-rand1",
+   "n": 8,
+   "counts": [
+    139,
+    310,
+    326,
+    146,
+    310,
+    376,
+    299,
+    142
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "of": "PW",
+    "permutation": "numpy default_rng(20261008).permutation, the 2th draw"
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 8,
+   "counts": [
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 8,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 32,
+   "counts": [
+    1212,
+    758,
+    1001,
+    1070,
+    1045,
+    1149,
+    1020,
+    937
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 37.495,
+    "seed": 20267007,
+    "stats": {
+     "cv": 0.12563,
+     "max_mean": 1.183594,
+     "gini": 0.068207
+    },
+    "trace_statistic": "prefill layer 24 (the median-CV layer at this B) at B 4096",
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW",
+   "n": 32,
+   "counts": [
+    1289,
+    1059,
+    769,
+    1169,
+    1396,
+    1077,
+    347,
+    1086
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 7.339,
+    "seed": 20268025,
+    "stats": {
+     "cv": 0.301168,
+     "max_mean": 1.363281,
+     "gini": 0.156891
+    },
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 4096",
+    "matches": [
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW-hotfirst",
+   "n": 32,
+   "counts": [
+    1396,
+    1289,
+    1059,
+    769,
+    1169,
+    1077,
+    347,
+    1086
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "of": "PW",
+    "permutation": "the hottest expert moved to expert 0"
+   }
+  },
+  {
+   "label": "PW-rand1",
+   "n": 32,
+   "counts": [
+    1059,
+    347,
+    1169,
+    769,
+    1077,
+    1289,
+    1396,
+    1086
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "of": "PW",
+    "permutation": "numpy default_rng(20261008).permutation, the 3th draw"
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 32,
+   "counts": [
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 32,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "fitted Zipf/Dirichlet shapes (scripts/skew_synth.py); no trace count"
+}

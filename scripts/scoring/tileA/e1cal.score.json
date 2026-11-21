@@ -1,0 +1,13 @@
+{
+ "registration": "2026-10-14-tileA-e1cal-gh200",
+ "part": "e1cal",
+ "E1-CAL": {
+  "verdict": "NOT SCORED: tA-floor has no calibration (c_128, F_wg): v4 has no wgmma constants, rental B does not run"
+ },
+ "STOP": {
+  "verdict": "STOP: rental B does not run",
+  "why": [
+   "tA-floor has no calibration (c_128, F_wg): v4 has no wgmma constants, rental B does not run"
+  ]
+ }
+}

@@ -1,0 +1,36 @@
+RENTAL 5 v2 RE-PREDICTIONS (2026-10-07-rental5-v2-gh200): SEEN DIAGNOSTIC, NO VERDICT
+  SHARED + PRIVATE under rental 3's host rule; own counted bytes unless named; every page SEEN
+  M (DEAD_CTA_NS 1.333, k_w 0.5): 8x7B refit T0 0.044241, c 202.548, bw 3597.8, s_small 0.011976, s_block -0.00808
+  v2 (d 0.995 ns, kappa 0.325): 8x7B refit T0 0.04323, c 202.548, bw 3597.8, s_small 0.012987, s_block -0.007069
+  test                         M rms  v2 rms  M worst v2 worst  v2 bias  label
+  mixtral-8x7b (in-sample)     0.26%   0.26%   +0.60%   +0.60%   +0.03%  CAL (in-sample)
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (5 clusters, under 6): descriptive only; slope 1.0000 intercept -0.0004
+      v2 gamma: CONSISTENT; gamma 0.84375 (C 59, D 5) CI [0.571429, 1.0]
+  mixtral-8x22b                1.03%   0.99%   -2.64%   -2.58%   -0.33%  IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (3 clusters, under 6): descriptive only; slope 0.9979 intercept +0.0062
+      v2 gamma: CONSISTENT; gamma 0.84 (C 23, D 2) CI [0.6, 1.0]
+  qwen2-57b-a14b               1.06%   1.13%   -1.99%   -2.10%   -0.75%  IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (4 clusters, under 6): descriptive only; slope 1.0071 intercept -0.0006
+      v2 gamma: CONSISTENT; gamma 1.0 (C 27, D 0) CI [1.0, 1.0]
+  olmoe-1b-7b                  1.40%   0.88%   +3.13%   +2.09%   +0.64%  IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (5 clusters, under 6): descriptive only; slope 1.0089 intercept -0.0061
+      v2 gamma: NOT CONSISTENT; gamma 0.52381 (C 16, D 5) CI [-1.0, 1.0]
+  jetmoe-8b                    0.84%   0.86%   -2.72%   -2.70%   +0.16%  held-out, SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (4 clusters, under 6): descriptive only; slope 1.0144 intercept +0.0040
+      v2 gamma: CONSISTENT; gamma 1.0 (C 30, D 0) CI [1.0, 1.0]
+  qwen1.5-moe-a2.7b            1.87%   1.28%   +4.81%   +3.40%   +0.51%  held-out, SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (5 clusters, under 6): descriptive only; slope 1.0154 intercept -0.0056
+      v2 gamma: CONSISTENT; gamma 1.0 (C 28, D 0) CI [1.0, 1.0]
+  phi-3.5-moe                  0.57%   0.58%   -1.27%   -1.24%   -0.02%  held-out, SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (5 clusters, under 6): descriptive only; slope 1.0035 intercept -0.0027
+      v2 gamma: CONSISTENT; gamma 1.0 (C 65, D 0) CI [1.0, 1.0]
+  rental3 E2 (counted)         2.52%   0.97%   +4.72%   +2.02%   +0.20%  held-out, SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (3 clusters, under 6): descriptive only; slope 1.0217 intercept +0.0090
+      v2 gamma: NOT RESOLVED (6 resolved pairs, under 10); gamma 1.0 (C 6, D 0)
+  rental3 E1 (predicted)       3.66%   1.79%   +6.47%   +3.38%   +1.56%  held-out, SEEN
+      v2 calibration (ln meas on ln pred): NOT RESOLVED (3 clusters, under 6): descriptive only; slope 1.0149 intercept -0.0082
+      v2 gamma: NOT RESOLVED (6 resolved pairs, under 10); gamma 1.0 (C 6, D 0)
+  rental 4 dead contrasts (us): {"A1": {"model": "qwen2-57b-a14b-tp8", "Delta_meas_us": 22.925976, "M_pred_us": 27.769056, "v2_pred_us": 20.72784, "M_minus_meas_us": 4.84308, "v2_minus_meas_us": -2.198136, "label": "SEEN (rental 4 published); v2's d and kappa are D's, which A1 / A2 tested blind"}, "A2": {"model": "olmoe-1b-7b", "Delta_meas_us": 24.445998, "M_pred_us": 31.736064, "v2_pred_us": 23.68896, "M_minus_meas_us": 7.290066, "v2_minus_meas_us": -0.757038, "label": "SEEN (rental 4 published); v2's d and kappa are D's, which A1 / A2 tested blind"}, "per_gemm_d_printed": {"d_w2_ns": 1.1005172682654245, "d_w1_ns": 0.953078034356059}}
+  granite-3.0-3b-a800m: not scored: REFUSED by the timing model: no VALID R3 page among the inputs; nothing to fit
+  floors: jetmoe-floor unaffected: a floor capture reads cycles per CTA k-step, no dead term; mixtral-floor unaffected: a floor capture reads cycles per CTA k-step, no dead term
+  expected table: REPRODUCED to 0.01 point

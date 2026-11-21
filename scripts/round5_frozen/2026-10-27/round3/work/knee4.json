@@ -1,0 +1,184 @@
+{
+ "rows": 138,
+ "candidates": {
+  "N0": {
+   "constants": 1,
+   "SEEN": [
+    5.5
+   ],
+   "LOMO": {
+    "olmoe-1b-7b": [
+     6.0
+    ],
+    "qwen2-57b-a14b": [
+     5.5
+    ],
+    "mixtral-8x7b": [
+     5.0
+    ],
+    "mixtral-8x22b": [
+     5.25
+    ]
+   },
+   "E-fam (key = predicted family)": {
+    "8": [
+     4.75
+    ],
+    "64": [
+     6.75
+    ]
+   },
+   "LOMO cell means": {
+    "olmoe-1b-7b": -1.09,
+    "qwen2-57b-a14b": -0.39,
+    "mixtral-8x7b": 3.07,
+    "mixtral-8x22b": 2.03
+   },
+   "E-fam cell means": {
+    "olmoe-1b-7b": -1.46,
+    "qwen2-57b-a14b": -1.84,
+    "mixtral-8x7b": 3.66,
+    "mixtral-8x22b": 3.27
+   },
+   "SEEN cell means": {
+    "olmoe-1b-7b": -0.76,
+    "qwen2-57b-a14b": -0.39,
+    "mixtral-8x7b": 2.08,
+    "mixtral-8x22b": 1.51
+   },
+   "LOMO w1 G1 means": {
+    "olmoe-1b-7b": -0.46,
+    "qwen2-57b-a14b": -0.5,
+    "mixtral-8x7b": 4.56,
+    "mixtral-8x22b": 2.21
+   },
+   "LOMO w2 G1 means": {
+    "olmoe-1b-7b": -2.18,
+    "qwen2-57b-a14b": -0.18,
+    "mixtral-8x7b": -0.29,
+    "mixtral-8x22b": 1.62
+   },
+   "LOMO G16 mean": 0.59,
+   "pooled LOMO rms": 2.18,
+   "score": 3.07
+  },
+  "K1": {
+   "constants": 2,
+   "SEEN": [
+    6.0,
+    2.75
+   ],
+   "LOMO": {
+    "olmoe-1b-7b": [
+     5.75,
+     1.75
+    ],
+    "qwen2-57b-a14b": [
+     6.5,
+     2.75
+    ],
+    "mixtral-8x7b": [
+     5.75,
+     2.75
+    ],
+    "mixtral-8x22b": [
+     6.0,
+     2.75
+    ]
+   },
+   "E-fam (key = predicted family)": {
+    "8": [
+     5.5,
+     2.5
+    ],
+    "64": [
+     5.75,
+     0.0
+    ]
+   },
+   "LOMO cell means": {
+    "olmoe-1b-7b": -0.45,
+    "qwen2-57b-a14b": -1.15,
+    "mixtral-8x7b": 1.95,
+    "mixtral-8x22b": 0.16
+   },
+   "E-fam cell means": {
+    "olmoe-1b-7b": -1.34,
+    "qwen2-57b-a14b": -1.6,
+    "mixtral-8x7b": 2.19,
+    "mixtral-8x22b": 0.91
+   },
+   "SEEN cell means": {
+    "olmoe-1b-7b": -0.03,
+    "qwen2-57b-a14b": -0.59,
+    "mixtral-8x7b": 1.57,
+    "mixtral-8x22b": 0.16
+   },
+   "LOMO w1 G1 means": {
+    "olmoe-1b-7b": -0.07,
+    "qwen2-57b-a14b": -1.48,
+    "mixtral-8x7b": 3.25,
+    "mixtral-8x22b": 0.24
+   },
+   "LOMO w2 G1 means": {
+    "olmoe-1b-7b": -1.1,
+    "qwen2-57b-a14b": -0.51,
+    "mixtral-8x7b": -1.01,
+    "mixtral-8x22b": -0.02
+   },
+   "LOMO G16 mean": 0.41,
+   "pooled LOMO rms": 1.53,
+   "score": 1.95
+  },
+  "K1-CYC": {
+   "constants": 2,
+   "LOMO": {
+    "olmoe-1b-7b": [
+     5.5,
+     0.0
+    ],
+    "qwen2-57b-a14b": [
+     7.0,
+     2.25
+    ],
+    "mixtral-8x7b": [
+     6.0,
+     2.0
+    ],
+    "mixtral-8x22b": [
+     6.25,
+     1.75
+    ]
+   },
+   "LOMO cell means": {
+    "olmoe-1b-7b": -1.17,
+    "qwen2-57b-a14b": -1.84,
+    "mixtral-8x7b": 1.05,
+    "mixtral-8x22b": -0.72
+   },
+   "LOMO w1 G1 means": {
+    "olmoe-1b-7b": -0.54,
+    "qwen2-57b-a14b": -2.2,
+    "mixtral-8x7b": 2.02,
+    "mixtral-8x22b": -0.88
+   },
+   "LOMO w2 G1 means": {
+    "olmoe-1b-7b": -2.26,
+    "qwen2-57b-a14b": -1.13,
+    "mixtral-8x7b": -1.15,
+    "mixtral-8x22b": -0.37
+   },
+   "LOMO G16 mean": 0.38,
+   "pooled LOMO rms": 2.2,
+   "score": 1.84
+  }
+ },
+ "selection": {
+  "best": 1.84,
+  "within_0.25": [
+   "K1",
+   "K1-CYC"
+  ],
+  "chosen": "K1"
+ }
+}

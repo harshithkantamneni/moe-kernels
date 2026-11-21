@@ -1,0 +1,12 @@
+THE COUNTER PROBE, 2026-09-25T13:51:07Z (informational: it gates nothing, and the chain asks again on every pass)
+verdict     BLOCKED
+detail      ==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
+ncu         /usr/local/cuda-13.0/bin/ncu (on PATH)  [Version 2025.3.1.0 (build 36398880) (public-release)]
+searched    PATH, then /usr/local/cuda*/bin/ncu /opt/nvidia/nsight-compute/*/ncu /usr/local/cuda*/nsight-compute*/ncu
+candidates  /usr/local/cuda-13.0/bin/ncu /opt/nvidia/nsight-compute/2025.3.1/ncu
+access      CAP_PERFMON clear, CAP_SYS_ADMIN clear (CapEff 0000000000000000); module flag unread (the parameter is not listed by this driver)
+probe       scripts/dram_counter_route.py --probe --family r3-arms, exit 1 in 5 s; its page /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/chain-logs/counter-probe.log, its payload /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/COUNTERS.json
+probe note  this process holds NEITHER CAP_SYS_ADMIN NOR CAP_PERFMON. Either opens the gate on a driver from R450 on and PERFMON is the narrower ask, so ask the provider for --cap-add=PERFMON first, --cap-add=SYS_ADMIN second, and a host reboot last.
+probe note  the effective capability mask read 0000000000000000 (64 bits as the kernel printed it), so CAP_PERFMON (bit 38) is clear and CAP_SYS_ADMIN (bit 21) is clear by measurement.
+probe note  the host module parameter could not be read (the parameter is not listed by this driver), so 'the host forbids it' and 'this container lacks the capability' cannot be separated from inside; the capability line above is the side a tenant can act on.
+history     RunPod's record is in bash scripts/alpha_g_chain.sh --help

@@ -1,0 +1,97 @@
+REGISTERED 2026-10-05, before any rental-3 page: rental 3, 2026-10-05-rental3-floorlaw-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r3/DESIGN.md section 3, RE-REGISTERED as the review directs (REVIEW.md section 2): the X mechanism is refuted on SEEN data and dropped; CLOCK / CEIL / FLUID; B0 added; identifiable GEMMs only; tp2 printed; the tp4 1005 capture and a wall-time check outside ncu added
+tool: scripts/floor_estimator.py (joint_theta, rulers); scorer scripts/scoring/rental3/score_floorlaw.py
+
+registered floor-bound cells:
+  qwen2-57b-a14b-tp8 w1: n 3, 4, 5, 6, 8, 10, 12, 13, 14, 16
+  qwen2-57b-a14b-tp8 w2: n 2, 3, 4, 5, 6, 8, 10, 12, 13, 14, 16
+  granite-3.0-1b-a400m w1: n 3, 4, 5, 6, 8, 10, 12, 14, 16
+  granite-3.0-1b-a400m w2: n 3, 4, 5, 6, 8, 10, 12, 14, 16
+  mixtral-8x7b-tp4 w1: n 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp4 w2: n 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp8 w1: n 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp8 w2: n 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp2 w1: n 2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+  mixtral-8x7b-tp2 w2: n 4, 6, 8, 10, 11, 12, 13, 14, 15, 16
+
+SEEN rulers (rental 2), theta +- se per ruler:
+  mixtral-8x7b-tp2 lock1710        w1 ACT.max -0.15+-0.30  DUR +0.16+-0.28  EL.avg +0.21+-0.05  X -0.05+-0.25  GAP +0.36+-0.28
+  mixtral-8x7b-tp2 lock1710        w2 ACT.max +0.95+-0.03  DUR +0.63+-0.08  EL.avg +0.62+-0.05  X +0.01+-0.11  GAP -0.33+-0.04
+  mixtral-8x7b-tp2 base            w1 ACT.max +0.53+-0.16  DUR +0.55+-0.20  EL.avg +0.43+-0.18  X +0.13+-0.13  GAP -0.10+-0.05
+  mixtral-8x7b-tp2 base            w2 ACT.max +0.97+-0.04  DUR +0.80+-0.07  EL.avg +0.87+-0.07  X -0.07+-0.09  GAP -0.10+-0.07
+  mixtral-8x7b-tp4 lock1710        w1 ACT.max +0.93+-0.02  DUR +0.45+-0.08  EL.avg +0.50+-0.05  X -0.05+-0.08  GAP -0.43+-0.05
+  mixtral-8x7b-tp4 lock1710        w2 ACT.max +0.89+-0.05  DUR +0.15+-0.08  EL.avg +0.29+-0.08  X -0.14+-0.09  GAP -0.59+-0.07
+  mixtral-8x7b-tp4 base            w1 ACT.max +0.88+-0.02  DUR +0.49+-0.24  EL.avg +0.66+-0.08  X -0.17+-0.20  GAP -0.22+-0.08
+  mixtral-8x7b-tp4 base            w2 ACT.max +0.84+-0.04  DUR +0.61+-0.10  EL.avg +0.76+-0.04  X -0.15+-0.11  GAP -0.08+-0.06
+  mixtral-8x7b-tp4 lock1005        w1 ACT.max +0.95+-0.05  DUR +0.95+-0.03  EL.avg +0.95+-0.03  X +0.00+-0.00  GAP -0.00+-0.02
+  mixtral-8x7b-tp4 lock1005        w2 ACT.max +0.79+-0.05  DUR +0.81+-0.05  EL.avg +0.81+-0.05  X +0.00+-0.00  GAP +0.03+-0.02
+  mixtral-8x7b-tp8 lock1710        w1 ACT.max +0.91+-0.01  DUR +0.15+-0.13  EL.avg +0.15+-0.12  X +0.00+-0.05  GAP -0.76+-0.12
+  mixtral-8x7b-tp8 lock1710        w2 ACT.max +0.80+-0.05  DUR +0.22+-0.08  EL.avg +0.24+-0.09  X -0.02+-0.10  GAP -0.56+-0.05
+  mixtral-8x7b-tp8 base            w1 ACT.max +0.94+-0.02  DUR +0.57+-0.18  EL.avg +0.55+-0.16  X +0.03+-0.05  GAP -0.39+-0.16
+  mixtral-8x7b-tp8 base            w2 ACT.max +0.73+-0.05  DUR +0.43+-0.09  EL.avg +0.45+-0.07  X -0.02+-0.10  GAP -0.29+-0.08
+
+framing: with the wall-time check (B6) scored, part B asks whether the clock dependence of the floor law is ncu's or the kernel's; without it (unit dropped or NOT SCORED) part B is registered as the clock dependence of the NCU-MEASURED floor, and says so
+captures:
+  qwen2-57b-a14b-tp8: {"floor": {"clocks": ["base", "lock1710"], "treads": [2, 3, 4, 5, 6, 8, 10, 12, 13, 14, 16]}, "floor1005": {"clocks": ["lock1005"], "treads": [2, 3, 4, 5, 6, 8, 10, 12, 13, 14, 16]}}
+  granite-3.0-1b-a400m: {"floor": {"clocks": ["base", "lock1710"], "treads": [3, 4, 5, 6, 8, 10, 12, 14, 16]}, "floor1005": {"clocks": ["lock1005"], "treads": [3, 4, 5, 6, 8, 10, 12, 14, 16]}}
+  mixtral-8x7b-tp4: {"floor": {"clocks": ["base", "lock1710"], "treads": [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}, "floorrep": {"clocks": ["lock1710"], "treads": [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}, "floor1005": {"clocks": ["lock1005"], "treads": [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}, "floor1410": {"clocks": ["lock1410"], "treads": [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}}
+  mixtral-8x7b-tp8: {"floor1005": {"clocks": ["lock1005"], "treads": [6, 8, 10, 11, 12, 13, 14, 15, 16]}}
+  mixtral-8x7b-tp2: {"floor1005": {"clocks": ["lock1005"], "treads": [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}}
+capture_path: <date>-nvidia_gh200_480gb-<model>-<label>-r3-counters/r3f-g64[-lock<F>].json
+wall_unit: <date>-nvidia_gh200_480gb-launch-floor-wall/mixtral-8x7b-tp4/cells.csv (launch_floor.py, NATIVE, G = 64, modes E240 and GR, the 1710 lock, no profiler)
+definitions:
+  q: N_live / 132
+  frac: ceil(q) - q, the last wave's idle-SM share
+  u: S c + F_g (c 344.1, F_w1 520, F_w2 979: CAL, 0f77622)
+  rulers: floor_estimator.rulers: ACT.max sm__cycles_active.max; EL.avg sm__cycles_elapsed.avg; DUR gpu__time_duration x f / 1e3 with f the LOCK of a lock capture (a base capture: f the median over its cells of n >= 10 of EL.max / duration, printed only); X = DUR - EL.avg; GAP = EL.avg - ACT.max
+  fit: floor_estimator.joint_theta(y / u, q, frac) per ruler, GEMM and capture: theta 1 the ceil law on that ruler, 0 the fluid law
+  cells: the registered floor-bound cells (CORES floor share >= 0.97 at sigma 1 and waves >= 2, cells_registered) present on the capture
+identifiability:
+  rule: a GEMM capture is fitted only when it has >= 5 cells and |corr(q, frac)| <= 0.95; else NOT SCORED (printed)
+  per_gemm: {"qwen2-57b-a14b-tp8 w1": {"identifiable": true, "why": "corr(q, frac) -0.160", "cells": [3, 4, 5, 6, 8, 10, 12, 13, 14, 16]}, "qwen2-57b-a14b-tp8 w2": {"identifiable": true, "why": "corr(q, frac) +0.007", "cells": [2, 3, 4, 5, 6, 8, 10, 12, 13, 14, 16]}, "granite-3.0-1b-a400m w1": {"identifiable": true, "why": "corr(q, frac) +0.349", "cells": [3, 4, 5, 6, 8, 10, 12, 14, 16]}, "granite-3.0-1b-a400m w2": {"identifiable": true, "why": "corr(q, frac) +0.349", "cells": [3, 4, 5, 6, 8, 10, 12, 14, 16]}, "mixtral-8x7b-tp4 w1": {"identifiable": true, "why": "corr(q, frac) -0.048", "cells": [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}, "mixtral-8x7b-tp4 w2": {"identifiable": true, "why": "corr(q, frac) +0.239", "cells": [4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}, "mixtral-8x7b-tp8 w1": {"identifiable": true, "why": "corr(q, frac) -0.191", "cells": [6, 8, 10, 11, 12, 13, 14, 15, 16]}, "mixtral-8x7b-tp8 w2": {"identifiable": true, "why": "corr(q, frac) +0.158", "cells": [6, 8, 10, 11, 12, 13, 14, 15, 16]}, "mixtral-8x7b-tp2 w1": {"identifiable": true, "why": "corr(q, frac) -0.148", "cells": [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}, "mixtral-8x7b-tp2 w2": {"identifiable": true, "why": "corr(q, frac) +0.239", "cells": [4, 6, 8, 10, 11, 12, 13, 14, 15, 16]}}
+  note: computed here on the registered cells with q = N_live / 132: every new GEMM is identifiable (qwen2-tp8 w1 q = 4.85 n, granite-1B q = 3.88 n spread frac); the review's 'frac proportional to q' read q per occupancy wave (0.970 n), not the floor law's q, and the rule stands as written
+  se_rule: a GEMM capture whose se(theta) on the ruler a test reads exceeds 0.15 is printed for that test, not counted
+hypotheses:
+  CLOCK: the wall-time floor is ceil at 1005 and flatter at 1710, and the flattening sits in GAP = EL.avg - ACT.max (both SM-clock counters)
+  CEIL: theta about 1 on every ruler at every clock: the SEEN 1710 lows were noise
+  FLUID: theta about 0 at both clocks
+tests:
+  B0: {"what": "theta(X / u) at 1710", "gemms": "every identifiable new 1710 GEMM: granite-1B w1, w2; qwen2-tp8 w1; tp4 w1, w2 (floor and floorrep)", "band": [-0.15, 0.15], "rule": "HOLDS (X is uncorrelated with frac: it sets the level, not the shape) when every scored GEMM's theta lies in the band, FALSIFIED when any lies outside", "SEEN": {"theta_X_range": [-0.167035, 0.1253], "label": "SEEN: rental 2's 14 GEMM captures"}}
+  B1: {"what": "theta_ACT.max", "captures": "every lock capture (1005, 1410, 1710) of an identifiable GEMM; base printed", "band": [0.7, 1.05], "rule": "holds on a capture when theta lies in the band; B1 HOLDS when it holds on >= 80% of the scored lock captures", "SEEN": {"range": [-0.151211, 0.95067], "label": "SEEN rental-2 lock captures"}}
+  B2: {"what": "theta_DUR at 1005", "gemms": "qwen2-tp8 w1, w2; granite-1B w1, w2; tp4 w1, w2; tp8 w1, w2; tp2 w1, w2 (every identifiable 1005 GEMM)", "band": [0.7, 1.05], "rule": "holds per GEMM inside the band", "SEEN": "tp4 1005: 0.95 / 0.81 (rental 2)"}
+  B3: {"what": "dtheta = theta_DUR(1005) - theta_DUR(1710), same GEMM, same board", "pairs_counted": "granite-1B w1, w2; tp4 w1, w2 (floor1005 against the floor unit's 1710)", "pairs_printed": "qwen2-tp8 w2 (its 1710 DUR is printed: X's cell-to-cell scatter there is 1 to 2 u); tp8 and tp2 (their 1710 capture is rental 2's, another board)", "rule": "per pair where theta_DUR(1710) <= 0.70: CLOCK predicts dtheta >= 0.25, CEIL and FLUID |dtheta| <= 0.20"}
+  B4: {"what": "theta_DUR at 1710", "gemms": "granite-1B w1, w2; tp4 w1, w2; qwen2-tp8 w1 (new 1710 GEMMs; qwen2-tp8 w2 printed)", "rule": "CLOCK: theta_DUR <= theta_ACT.max - 0.20 on at least 2 of them, at least one of them a BLIND shape (granite-1B or qwen2-tp8; DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): the overlap narrowing below was chosen on SEEN rental-2 values, so the tp4 replicate alone, whose SEEN values meet the condition, may not pass the clause); CEIL: theta_DUR >= 0.70 on every one; a GEMM whose theta_DUR lies where the two clauses' bands overlap (theta_ACT.max > 0.90 and 0.70 <= theta_DUR <= theta_ACT.max - 0.20) is printed and enters neither clause (the design's 'touch' rule, narrowed to the overlap so a theta_ACT.max above 0.90 alone does not drop a GEMM: SEEN theta_ACT.max reads 0.91 to 0.95 on three of rental 2's 1710 GEMMs)"}
+  B5: {"what": "X at 1005 (median of cells)", "status": "PRINTED (a lock-in-force reading, in no verdict; SEEN 312 to 342 cycles)"}
+  B6: {"what": "the wall-time floor OUTSIDE ncu: GR (graph replay, the call's GPU time) cells of the wall unit, T(n) = a + b n + theta_wall W(n), W(n) = sum_g frac_g(n) u_g / 1710 MHz (ms), OLS over the unit's treads (every tp4 tread is floor-bound on both GEMMs at G = 64)", "W_ms": {"2": 0.008463, "4": 0.016927, "6": 0.012207, "8": 0.02067, "10": 0.00411, "11": 0.008341, "12": 0.012573, "13": 0.016805, "14": 0.021036, "15": 0.012085, "16": 0.016317}, "corr_n_W": 0.218192, "rule": "theta_wall >= 0.70: the 1710 flattening is ncu's (CLOCK reads 'in the ncu replay only'); theta_wall <= 0.50: it is the kernel's (CLOCK reads 'in wall time'); between: INCONCLUSIVE; se(theta_wall) > 0.20 or |corr(n, W)| > 0.95: NOT SCORED. E240 is printed beside GR", "label": "BLIND: no wall-time page at G = 64 exists"}
+  B7: {"what": "part 4 re-asked on the clean ruler: tp8 w1's registered sets on the 1005 capture's DUR", "sets": {"A": {"treads": [13, 14, 15], "H_EST": 313.387207, "bias": -0.110201, "FLUID": 352.2, "FLUID_LOW": 339.5208, "sigma_slope": 8.716427}, "B": {"treads": [11, 15, 16], "H_EST": 350.695701, "bias": -0.004271, "FLUID": 352.2, "FLUID_LOW": 339.5208, "sigma_slope": 3.2945}, "C": {"treads": [11, 12, 13], "H_EST": 365.619559, "bias": 0.038102, "FLUID": 352.2, "FLUID_LOW": 339.5208, "sigma_slope": 8.716427}}, "asymptote": 352.2, "sigma_theta": 0.04705, "rule": "theta and delta by floor_estimator.theta_delta over the three sets (slopes by implied_slope on DUR); H_EST HOLDS when theta > 0.5 and |theta - 1| <= 0.20 (2 sigma_theta, inflated for the SEEN 0.81 to 0.95 at 1005); FLUID HOLDS when |theta| <= 0.20; else INCONCLUSIVE; delta printed, never scored"}
+verdict:
+  CLOCK: HOLDS when B1 HOLDS, B2 holds on every scored 1005 GEMM, B3 gives dtheta >= 0.25 on every counted pair where it applies, B4's CLOCK clause holds and B0 HOLDS; FALSIFIED when B2 fails on 2 or more GEMMs or B4's CEIL clause holds
+  CEIL: HOLDS when B4's CEIL clause holds and B2 holds on every scored 1005 GEMM; FALSIFIED when B4's CEIL clause fails
+  FLUID: FALSIFIED when B1 HOLDS or B2 holds on 2 or more GEMMs; HOLDS when theta_DUR <= 0.30 on every scored 1005 and 1710 GEMM
+  selected: a hypothesis is SELECTED when it HOLDS and the other two are FALSIFIED; else INCONCLUSIVE. B6 then labels CLOCK 'in wall time' or 'in the ncu replay only', and its absence labels the claim 'ncu-measured'
+X_clock_law:
+  status: PRINTED (3.5 kept as printed, the review)
+  X1710: per GEMM, the median over the GEMM's registered cells of X at the tp4 floor unit's 1710 capture
+  X1005: the same at the tp4 floor1005 capture
+  X1410: the same at floor1410
+  LIN: X1410 within +-35% of X1005 + (405 / 705)(X1710 - X1005)
+  HIGH: X1410 <= 0.25 X1710
+  FLAT: X1410 >= 0.80 X1710
+  base: the base capture's X is printed (ncu's pin is not an -lgc lock)
+gates:
+  floor: {"null_tol": 0.03, "l2_lock_mhz": 1710.0, "l2_band_mhz": [1690.0, 1715.0], "l2_min_duration_ns": 500000.0, "smi_tol_mhz": 15.0, "rule": "a capture under a lock is in CLEAN when V1 passes and the lock is in force: the null kernel's median clock within 3% of the lock AND, at the 1710 lock only, the median over cells of duration >= 0.5 ms of lts__cycles_elapsed.avg / duration in [1690, 1715] MHz (SEEN 1700.5 to 1706.0 on every rental-2 1710 and base cell of 0.5 ms or more; DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): when fewer than 3 cells reach 0.5 ms, as on Granite-1B (30 to 230 us), the L2 leg is PRINTED, not gated, and the null kernel and nvidia-smi still gate: short cells read low through a fixed offset of about 0.75 us, 1675 to 1677 MHz under 50 us, 1694.5 to 1700 at 150 to 250 us, so an all-cell median would put a held lock on a coin flip; the L2 reads 1125 MHz at a 1005 lock, it follows a low SM lock, so 1005 and 1410 print it) AND nvidia-smi before and after within 15 MHz (one step) of the lock. FL1 is printed and gates nothing. Rental 2's rule 2 (a cell over the lock by more than 15 MHz is dropped) is kept; base captures carry no lock and no check", "SEEN_L2": [1703.959442, 1703.528513, 1705.31511, 1705.36428, 1703.305499, 1701.752122, 1704.994246, 1703.624441, 1125.080588, 1125.087644, 1701.758961, 1703.986673]}
+  wall: the wall unit has no validity gate; its manifest's profiler_enabled_ever must be False (else NOT SCORED)
+ambiguities_resolved:
+  B-1 cells: the registered floor-bound cells (CORES share >= 0.97, waves >= 2), cells_registered; never the route's 4-wave set
+  B-2 singular: the identifiability rule above (>= 5 cells, |corr(q, frac)| <= 0.95)
+  B-3 B1 denominator: lock captures only (1005, 1410, 1710); base printed
+  B-4 points or intervals: point estimates against the registered bands; a GEMM capture whose se(theta) exceeds 0.15 is printed for that test
+  B-5 B5: printed only
+  B-6 FLUID and B1: FLUID is FALSIFIED by B1 HOLDING (>= 80% of lock captures in [0.70, 1.05]) or by B2 holding on 2 or more GEMMs
+  B-7 X1710: per GEMM median over that GEMM's cells
+consequence_for_E: M prices the floor with ceil(q) at 1710. If CLOCK holds in wall time, M's floor-bound w1 cells at large frac are mispriced; qwen2-tp8 w1's frac is 0.06 to 0.27 at the scored n (q = 4.85 n), so the effect is small there; printed with E
+seen_data:
+  - every band is read off rental 2's captures (SEEN, labelled in each test); the cells are new captures
+  - tp8's and tp2's 1710 captures are rental 2's (another board): their B3 pairs are printed, not counted
+  - the X mechanism of the design (X flattens theta) is refuted on the SEEN theta(X/u) above; the drop sits in GAP

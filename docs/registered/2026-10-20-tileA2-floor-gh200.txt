@@ -1,0 +1,151 @@
+REGISTERED 2026-10-20, before any tile rental A2 page: tile rental A2, 2026-10-20-tileA2-floor-gh200
+status: REGISTERED BEFORE ANY A2 PAGE
+design: design-A2 DESIGN.md (2026-10-20) corrected by design-A2-review REVIEW.md (the review wins: every MAJOR and MINOR fix), the build review (GO-WITH-FIXES) and the owner's decisions of 2026-10-20: A 900 W GPU POWER LIMIT AND THE LOCK LADDER 1710, 1410, 1305 (the first rung whose probe passes is the lock of every later unit; the 900 W limit changes the owner's 2026-09-26 700 W decision for tile rental A2, and rental B2 at the limit A2 held, only); rental B2 at A2's power limit and lock rung; decode uses A2's constants only once A2's floor calibration is scored; the probe strict (one LOST cell fails a rung); every other decision is the design's recommendation as amended by the review: OD3 the byte pages re-run, OD4 sigma_page re-measured, OD5 w4, ms and dk droppable, OD6 CONV-L a registered test, nodrop, not a stop clause (REVIEW 3a: timed at 1710 and at L, a per-cell ratio), OD7 decode stays at 1710 by addendum, OD8 the band [0.975 L, L] (REVIEW 2c: the scaled band a registered fallback), OD9 the calibrate gate under the lowest rung (build review fix 3), OD10 the scorer import order fixed in place, OD11 the probe thresholds of DESIGN 6, OD12 the offline conversion check done before registering, OD13 rental A's timed pages against v4 forbidden
+tool: scorer scripts/scoring/tileA2/score_floor_a2.py (scripts/scoring/tileA/score_floor.py inside a2common.scoring); tcommon.joint_cF, floor_test, variant_rule, f_form_rule, unchanged; model v4 at L (scripts/r3_timing_model_v4L.py over scripts/r3_timing_model_v4.py)
+
+eta_mma Luo Table 11 per clock, per instruction (registered): pipe {'128x128x64w8s3': {'B': 769.230769, 'W': 538.461538, 'T': 521.083397}, '64x128x64w8s3': {'B': 538.461538, 'W': 365.384615, 'T': 265.16337}, '64x128x64w4s3': {'B': 461.538462, 'W': 288.461538, 'T': 260.541699}}
+  c128 600: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 384 w4 314; T c64w8 302 w4 298
+  c128 750: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 464 w4 405; T c64w8 398 w4 395
+  c128 900: B c64w8 584 w4 515; W c64w8 555 w4 504; T c64w8 498 w4 496
+  c128 1100: B c64w8 692 w4 633; W c64w8 683 w4 638; T c64w8 633 w4 631
+  c128 1300: B c64w8 813 w4 761; W c64w8 814 w4 772; T c64w8 768 w4 766
+eta_mma Luo Table 9 chip-relative (rival): pipe {'128x128x64w8s3': {'B': 769.230769, 'W': 587.038497, 'T': 587.038497}, '64x128x64w8s3': {'B': 538.461538, 'W': 365.384615, 'T': 298.725899}, '64x128x64w4s3': {'B': 461.538462, 'W': 293.519248, 'T': 293.519248}}
+  c128 600: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 368 w4 297; T c64w8 302 w4 297
+  c128 750: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 439 w4 382; T c64w8 386 w4 382
+  c128 900: B c64w8 584 w4 515; W c64w8 531 w4 482; T c64w8 485 w4 482
+  c128 1100: B c64w8 692 w4 633; W c64w8 660 w4 617; T c64w8 620 w4 617
+  c128 1300: B c64w8 813 w4 761; W c64w8 791 w4 752; T c64w8 754 w4 752
+lever accounting B: {'lever_cells': 0, 'max_abs_pct': 1.288147, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+lever accounting T: {'lever_cells': 0, 'max_abs_pct': 1.761569, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+lever F-cyc: {'lever_cells': 0, 'max_abs_pct': 0.152341, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+lever eta_mma rival (Table 9 chip-relative): {'lever_cells': 0, 'max_abs_pct': 0.8919, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+
+model_v4:
+  definition: v3 with every tile-dependent quantity read from the tile (scripts/r3_timing_model_v4.py docstring): c_time(tile) = c_card x c_counter(tile) / 344.1 and PHI(tile, g) = F(tile, g) / c_counter(tile); geometry, k-steps, grid, dead CTAs and bytes on the tile's geometry; occupancy from the census
+  reduction_to_v3 (design-tile-review 1a): at R3's tile c_counter is 344.1 and c_scale exactly 1.0, PHI is v3's own CTA_FIXED_KSTEPS (1.512 / 2.846): `python scripts/r3_timing_model_v4.py --check` re-prices all 300 registered v3 predictions of rental6-skew and rental7-skew and requires equality with the registered numbers (6 decimals) and with rental 6's pricer bit for bit (tests/test_tile_v4.py runs it)
+  c_counter:
+    R3 tile: 344.1 (the CAL counters' c)
+    mma.sync: 344.1 x MVA2(W_tile, BK, occ) / MVA2(W_R3, 64, occ_R3,g); W from the census PTX (R3's SEEN PTX gives 280)
+    wgmma 128x128x64 w8 s3: c_128, CAL-A (below)
+    wgmma other: mva(D_accounting(tile), Z_wg, occ): Z_wg puts the 128x128 tile at c_128
+    v4cal: the per-tile c and F measured on that tile's CAL pages (CAL-A), the fallback at 64x128
+  F_forms:
+    F-step (registered, v3's own form): PHI in k-steps carries: PHI_wg,g = F_wg,g / c_128 at every wgmma tile; R3's PHI on the mma.sync path
+    F-cyc (rival): F in cycles carries: PHI = F / c_counter(tile)
+    selection_rule: F-step unless, on rental A's two 64x128 w8 pages (the joint fit's F_64,w1 and F_64,w2), F-cyc is nearer the measured F on BOTH GEMMs AND F-step misses it by more than 3 se on at least one (tcommon.f_form_rule); the two forms are equal at 128x128
+  eta_mma:
+    registered: {"m64n128k16 (128x128 w8)": 0.982568, "m64n64k16 (64x128 w8 and w4)": 0.965443}
+    source: Luo et al., 'Dissecting the NVIDIA Hopper Architecture through Microbenchmarking and Multiple Level Analysis', arXiv 2501.12084, Table 11: m64n256k16 dense SS random data, 583 TFLOPS at 1260 MHz on 114 SMs = 0.991 per clock; carried to m64n128k16 and m64n64k16 by Table 9's within-table random-data ratios 659.8 / 665.4 and 648.3 / 665.4
+    why_per_clock (build-tile-review 1): v4 counts MMA cycles at a held lock (A2: L, 1410 MHz), so eta is a per-clock efficiency; Table 11 is the only wgmma rate with its clock recorded (1260 MHz, nearer 1410 than 1710 is)
+    what_it_is: MEASURED ON AN H800 PCIe (114 SMs, 350 W cap) WITH FP16 INPUTS; Luo attribute the random-data drop of Table 9 to the power cap lowering the clock
+    assumption: REGISTERED ASSUMPTION: BF16 on the GH200 runs at the same per-clock rate as FP16 on the H800 PCIe; untested here
+    rival: {"value": {"m64n128k16": 0.872174, "m64n64k16": 0.856973}, "source": "Luo et al. Table 9: 659.8 (N 128) and 648.3 (N 64) of the 756.5 TFLOPS chip peak at the 1620 MHz whitepaper clock (chip-relative, the power-capped clock folded in)", "status": "printed beside every accounting; NOT SEPARATED on rental B by construction (0 lever cells)"}
+    sensitivity (build-tile-review 1): {"rows": [{"c128": 600.0, "variant": "B", "f_form": "F-step", "note": "unreachable under one rate"}, {"c128": 600.0, "variant": "B", "f_form": "F-cyc", "note": "unreachable under one rate"}, {"c128": 600.0, "variant": "W", "f_form": "F-step", "c64_registered": 384.299384, "c64_rival": 367.605769, "c64_shift_pct": 4.541173, "phi_64x128_max_T_shift_pct": 0.014741}, {"c128": 600.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 384.299384, "c64_rival": 367.605769, "c64_shift_pct": 4.541173, "phi_64x128_max_T_shift_pct": 0.016373}, {"c128": 600.0, "variant": "T", "f_form": "F-step", "c64_registered": 302.040993, "c64_rival": 301.797027, "c64_shift_pct": 0.080838, "phi_64x128_max_T_shift_pct": 1.2e-05}, {"c128": 600.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 302.040993, "c64_rival": 301.797027, "c64_shift_pct": 0.080838, "phi_64x128_max_T_shift_pct": 1.5e-05}, {"c128": 750.0, "variant": "B", "f_form": "F-step", "note": "unreachable under one rate"}, {"c128": 750.0, "variant": "B", "f_form": "F-cyc", "note": "unreachable under one rate"}, {"c128": 750.0, "variant": "W", "f_form": "F-step", "c64_registered": 463.503054, "c64_rival": 439.462193, "c64_shift_pct": 5.470519, "phi_64x128_max_T_shift_pct": 0.195552}, {"c128": 750.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 463.503054, "c64_rival": 439.462193, "c64_shift_pct": 5.470519, "phi_64x128_max_T_shift_pct": 0.212097}, {"c128": 750.0, "variant": "T", "f_form": "F-step", "c64_registered": 397.971292, "c64_rival": 386.235599, "c64_shift_pct": 3.03848, "phi_64x128_max_T_shift_pct": 0.016872}, {"c128": 750.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 397.971292, "c64_rival": 386.235599, "c64_shift_pct": 3.03848, "phi_64x128_max_T_shift_pct": 0.019309}, {"c128": 900.0, "variant": "B", "f_form": "F-step", "c64_registered": 583.531047, "c64_rival": 583.531047, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 900.0, "variant": "B", "f_form": "F-cyc", "c64_registered": 583.531047, "c64_rival": 583.531047, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 900.0, "variant": "W", "f_form": "F-step", "c64_registered": 555.056578, "c64_rival": 530.916825, "c64_shift_pct": 4.546805, "phi_64x128_max_T_shift_pct": 0.899926}, {"c128": 900.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 555.056578, "c64_rival": 530.916825, "c64_shift_pct": 4.546805, "phi_64x128_max_T_shift_pct": 0.919528}, {"c128": 900.0, "variant": "T", "f_form": "F-step", "c64_registered": 498.412618, "c64_rival": 485.023673, "c64_shift_pct": 2.760472, "phi_64x128_max_T_shift_pct": 0.252869}, {"c128": 900.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 498.412618, "c64_rival": 485.023673, "c64_shift_pct": 2.760472, "phi_64x128_max_T_shift_pct": 0.270169}, {"c128": 1100.0, "variant": "B", "f_form": "F-step", "c64_registered": 691.774884, "c64_rival": 691.774884, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1100.0, "variant": "B", "f_form": "F-cyc", "c64_registered": 691.774884, "c64_rival": 691.774884, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1100.0, "variant": "W", "f_form": "F-step", "c64_registered": 682.99968, "c64_rival": 659.702719, "c64_shift_pct": 3.531433, "phi_64x128_max_T_shift_pct": 1.749019}, {"c128": 1100.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 682.99968, "c64_rival": 659.702719, "c64_shift_pct": 3.531433, "phi_64x128_max_T_shift_pct": 1.767617}, {"c128": 1100.0, "variant": "T", "f_form": "F-step", "c64_registered": 633.294235, "c64_rival": 619.515509, "c64_shift_pct": 2.224113, "phi_64x128_max_T_shift_pct": 0.809874}, {"c128": 1100.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 633.294235, "c64_rival": 619.515509, "c64_shift_pct": 2.224113, "phi_64x128_max_T_shift_pct": 0.815268}, {"c128": 1300.0, "variant": "B", "f_form": "F-step", "c64_registered": 813.298313, "c64_rival": 813.298313, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1300.0, "variant": "B", "f_form": "F-cyc", "c64_registered": 813.298313, "c64_rival": 813.298313, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1300.0, "variant": "W", "f_form": "F-step", "c64_registered": 813.586406, "c64_rival": 791.140246, "c64_shift_pct": 2.837191, "phi_64x128_max_T_shift_pct": 2.451548}, {"c128": 1300.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 813.586406, "c64_rival": 791.140246, "c64_shift_pct": 2.837191, "phi_64x128_max_T_shift_pct": 2.43702}, {"c128": 1300.0, "variant": "T", "f_form": "F-step", "c64_registered": 768.160052, "c64_rival": 754.45005, "c64_shift_pct": 1.817218, "phi_64x128_max_T_shift_pct": 1.43382}, {"c128": 1300.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 768.160052, "c64_rival": 754.45005, "c64_shift_pct": 1.817218, "phi_64x128_max_T_shift_pct": 1.431437}], "max_c64_shift_pct": 5.470519, "phi_64x128_max_T_shift_pct": 2.451548, "128x128_T_shift_pct": 0.0, "lever_cells": "see rows", "c64_shift_beyond_the_3pct_band": ["c128 600 W F-step", "c128 600 W F-cyc", "c128 750 W F-step", "c128 750 W F-cyc", "c128 750 T F-step", "c128 750 T F-cyc", "c128 900 W F-step", "c128 900 W F-cyc", "c128 1100 W F-step", "c128 1100 W F-cyc"], "selection_effect": "the 3% accounting band is DESCRIPTIVE, but its selection decides whether rental B derives c_64 or takes v4cal (D3). Where the eta choice moves c_64 by more than 3% (the cases listed) it can change WHICH accounting holds on rental A's 64x128 pages, so the selection is read under the registered (per-clock) rate only; under v4cal the eta effect on rental B is 0"}
+  eta_smem:
+    value: 0.832
+    status: UNTESTED REUSE: MVA2's eta, fitted on mma.sync LSU wavefronts (rental 4, SEEN-fitted), divides shared bytes on the wgmma path too
+  accountings:
+    B: wgmma operand reads plus cp.async writes, both at 128 B/clk/SM on one port
+    W: operand reads at 128 B/clk/SM, cp.async writes as LDGSTS wavefronts (1 per 512 B)
+    T: tensor-bound only (MMA cycles)
+  v4 at L (A2): r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L
+calibration (CAL-A):
+  pages: f128: OLMoE and Mixtral 8x7B, 128x128x64 w8 s3, G 64 counter pages, treads 1..9 (R3's counter ladder)
+  estimator: tcommon.joint_cF: sm__cycles_elapsed.avg = a(page model, GEMM, arm) + ceil(N_live / 132) (S_g c + F_g), one c for both GEMMs and both models, F_w1 and F_w2, by least squares over the NATIVE and SHARED cells at n 4..9 whose GEMM reads DRAM at no more than 0.5 x 4022 GB/s (each cell's own GEMM's dram_bytes_read over its gpu_time_ns, design-tile-review 9.4); OLMoE S 32 / 16 and Mixtral S 64 / 224 give four depths
+  outputs: c_128, F_wg,w1, F_wg,w2 (3 CAL-A constants), then Z_wg per accounting at the census occupancy (r3_timing_model_v4.z_wg); an accounting whose pipe alone exceeds c_128 is FALSIFIED by construction
+  refusal: fewer than 6 floor-bound cells or a rank-deficient design: NOT SCORED, and rental B does not run (no v4)
+test (BLIND-CALMODEL, DESCRIPTIVE):
+  pages: f64w8: OLMoE and Mixtral 8x7B at 64x128x64 w8 s3, G 64; f64w4 (drop-group w4): OLMoE at w4, printed
+  statistic: per (model, GEMM): u = S c + F; u_meas from the 64x128 joint fit (same estimator), u_pred from each accounting's c_64 and the registered F form; e = u_pred / u_meas - 1
+  rule: an accounting HOLDS when every |e| <= 3% (design-tile-review 9.4: within 3% of u, on the floor-bound n 4..9 cells of each page)
+  status: DESCRIPTIVE (design-tile-review 1c): the accounting reading has no consequence for E1-TILE; B, W and T move rental B's predictions by at most 1.761569% at the nominal constants
+  w4: the w4 page is printed only (w8 and w4 issue different instructions and their per-iteration delay may differ, so T's w8 / w4 = 1.00 is not a hard prediction); when dropped nothing changes
+  mma_sync_32x128_w4: MVA2 on the census wavefronts at 32x128x64 w4 s3: HOLDS / FAILS within 3% of the page's c, printed for D1 (the decode tiles' only floor evidence); MVA2 is SEEN-fitted (D5)
+selection_for_rental_B (D3):
+  accounting: tcommon.variant_rule: the accounting that HOLDS on every scored (model, GEMM) of the 64x128 w8 pages while every other FAILS or is unreachable is SELECTED and rental B's v4 derives c_64 from it; otherwise UNDECIDED and rental B's v4 takes v4cal at 64x128 (the joint fit's c_64, F_64,w1, F_64,w2, CAL-A: 3 conditional constants). At 128x128 v4 and v4cal are the same model (both read c_128 and F_wg)
+  F_form: tcommon.f_form_rule (above)
+  unselected: the other accountings, F-cyc and the eta_mma rival are printed as rivals on rental B; lever counts at the nominal constants below (fewer than 6: NOT SEPARATED by construction, stated before the page)
+  lever_counts_on_B:
+    accounting B: {"lever_cells": 0, "max_abs_pct": 1.288147, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    accounting T: {"lever_cells": 0, "max_abs_pct": 1.761569, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    F-cyc: {"lever_cells": 0, "max_abs_pct": 0.152341, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    eta_mma rival (Table 9 chip-relative): {"lever_cells": 0, "max_abs_pct": 0.8919, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+  lever_counts_on_B at the fallback rung 1305:
+    accounting B: {"lever_cells": 0, "max_abs_pct": 1.743297, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    accounting T: {"lever_cells": 3, "max_abs_pct": 2.696846, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    F-cyc: {"lever_cells": 0, "max_abs_pct": 0.207498, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    eta_mma rival (Table 9 chip-relative): {"lever_cells": 0, "max_abs_pct": 1.280251, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+parameters:
+  hardware (no fit): 132 SMs, A2's lock L (1410 MHz; the ladder's 1305 when the probe selects it), 4096 flop/clk/SM dense bf16, 128 B/clk/SM shared, the sm_90 occupancy limits; c_card converted to L by P1's rule
+  derived or read (no fit): geometry, k-steps, N-tiles, grid, dead CTAs, bytes per k-step and wavefronts from the census PTX, occupancy from the census cubins
+  carried from v3: 22 fitted (T2) + d, kappa, h
+  fitted, new in the timing model: 6:
+    - MVA2 eta, z0, z1 (SEEN-fitted at rental 4; mma.sync, D5)
+    - Z_wg, F_wg,w1, F_wg,w2 (CAL-A on the 128x128 counter pages; c_128 is the calibration's measured c, the analogue of v3's 344.1)
+  selections: 3:
+    - the wgmma accounting B / W / T (DESCRIPTIVE reading, rule above)
+    - the A key v3 / CLAMP / ROWKEY60 / ROWKEY30 (tileA-bytes)
+    - F-step / F-cyc (rule above)
+  uncertain inputs:
+    - eta_mma (Luo Table 11 per clock, H800 PCIe FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857)
+    - eta_smem = MVA2's eta, an untested reuse
+  conditional:
+    - v4cal adds 3 CAL-A constants at 64x128 when no accounting is selected
+    - ROWKEY60's 60 MiB is SEEN-chosen if it is NAMED
+mma_sync_design (derived, DESCRIPTIVE):
+  32x128x64w4s3:
+    occupancy: 5
+    design_wavefronts: 360.0
+    c_counter_w1: 442.138866
+    c_counter_w2: 439.787222
+  16x64x128w4s4:
+    occupancy: 3
+    design_wavefronts: 296.0
+    c_counter_w1: 363.42178
+    c_counter_w2: 361.488817
+  32x64x128w4s3:
+    occupancy: 4
+    design_wavefronts: 432.0
+    c_counter_w1: 530.399355
+    c_counter_w2: 527.578273
+nominal: DESIGN-NOMINAL: c_128 900 counter cycles (design-tile 2.2's mid value), F_wg the R3 tile's CAL 520 / 979, accounting W, F-step, A key CLAMP; for levers, sensitivities and power only, never a registered prediction
+labels:
+  c_128, F_wg, Z_wg: CAL-A
+  64x128 test: BLIND-CALMODEL, DESCRIPTIVE
+  MVA2: SEEN-fitted (D5)
+  eta_mma: SEEN third party, another card and dtype (assumption registered)
+seen_data:
+  - MVA2's eta, z0, z1
+  - the CAL F 520 / 979 and c 344.1 (R3's tile)
+  - Luo et al. Tables 9 and 11
+counter band at L (A2):
+  primary: below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)
+  fallback (REVIEW-A2 2c): [L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled
+  derivation and its limit (REVIEW-A2 2a): the 1.02% is rental 3's tp4 floor (mma.sync, R3's tile) at 1410: most of the held-lock shortfall at 1710 is real sub-lock clock (inference: it shrinks about 0.4x at 1410 and 0.02x at 1005, not like a fixed-ns counter artifact), so the rule is calibrated on an mma.sync tile's residual sag; wgmma cells could read 1.5 to 2.2% low at 1410, inside 2.5% but near its edge; G-BAND checks it on the first f128 pages
+  lock_gate: lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)
+expected outcomes (SEEN, DESIGN-A2 7d): with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)
+lock:
+  decision (owner, 2026-10-20): a 900 W GPU power limit (GPU scope, -sc 0) and the lock ladder 1710, 1410, 1305 MHz: the probe tries 1710 first; the first rung whose probe passes is the run's lock
+  changes: the owner's 2026-09-26 decision (the GPU power limit 700 W at the start, -sc 0) FOR TILE RENTAL A2 AND RENTAL B2 ONLY (B2 runs at the limit and the lock rung A2 held, read from A2's score directory); every other rental's driver keeps 700 W
+  why (DESIGN-A2 1, REVIEW-A2 1): rental A's wgmma pages sagged under the 1710 lock: reason 0x4 (SW power cap) only, 60 C at most; the smi trace went to 1290 MHz on the three heavy 128x128 pages; the inferred cause is the software power cap (GPU or module scope unresolved), so the limit rises to the card's maximum and the lock steps down only when the probe says the cap still bites
+  ladder (owner, 2026-10-20): 1710, then 1410, then 1305 MHz: the lock-hold probe's first rung that holds is A2's lock (tileA2-gates G-PROBE). At 1710 no clock conversion is used (v4L is v4 exactly) and CONV-L does not run; 1410 and 1305 carry the conversion
+  conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20): the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)
+  rules at L:
+    at 1710: rental A's own rules: the band [1640, 1710] (derived at that lock; the fallback band at 1710 is the same), G4 1705, v4 itself
+    counter band: below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)
+    fallback band (REVIEW-A2 2c): [L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled
+    G4: cell clock >= L - 5 MHz (1705, 1405, 1300)
+    dips: r7-median-run3 at the page's own lock_mhz (a read under L - 15 is dipped: 1395 is not at 1410, 1380 is)
+    lock_gate: lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)
+    v4 at L: r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L
+seen (REVIEW-A2 5):
+  label: SEEN before this registration (REVIEW-A2 5): none of it is a lever, the selection rules are tcommon's pinned functions unchanged (variant_rule, f_form_rule, joint_cF, floor_test); stated so a reader can weigh it
+  (i) rental A's out-of-band fits (DESIGN-A2 7d, work/fit.py, DESCRIPTIVE): tcommon.joint_cF on rental A's f128 pages with the band removed: c_128 698.67 +- 10.63 cycles, F_w1 2740 +- 615, F_w2 3113 +- 341, 36 cells, rel rms 0.53%, recorded occupancy 2; on the f64w8 pages c_64 459.1 +- 19.4; the cells' clocks 1601 to 1663 MHz
+  (ii) the 64x128 accounting outcome: predictable by interpolation from (i) and tileA-floor's registered table (W and T c_64 at c_128 600 and 750); nobody computed it
+  (iii) SEEN-expected: with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)
+  (iv) tA-dead: rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test
+  (v) the A key: rental A's key test on 19 of 56 rows: v3 5.0254% against CLAMP 5.0253% rms, NOT NAMED (CLAMP): the near tie is known; the 53 rows its band dropped stay unread
+  (vi) sigma_page: rental A's 0.1275% (24 cells, at a sagging 1710 clock); A2 re-measures it, and never copies rental A's in
+  (vii) what chose the lock, the probe cells and the gates: rental A's per-repeat clocks (cells.csv), the in-flight NVML reads, the smi traces (locked-r3/*/smi.csv: clock, power, temperature, reasons) and the calibrate log
+  (viii) rental A's times: rental A's 1710 times of every E1-CAL cell and its counted bytes of every byte row exist (results/published/2026-10-20-nvidia_gh200_480gb-tileA-session) UNREAD against v4: no v4 time is computed against the E1-CAL times, and the 53 band-dropped byte rows are not re-scored, before or after A2 (OD13, a rule of this registration); its rep and dead pages are scored and published ((iv), (vi)); A2's E1-CAL, byte, rep and dead pages read the same histogram files, so their workloads are SEEN while their times on A2's board are not; the per-row workload labels below are tileA's (as of 2026-10-14) and are not updated
+  (ix) the offline conversion check (OD12; REVIEW-A2 3b): see tileA2-convl 'offline_check (SEEN)': on the 2026-09-27 and R1 pages v3's c-only rule holds on the c-heavy G 4 / G 2 ladders and on the G 1 per-M-tile elasticity, and underpredicts the G 1 per-call clock elasticity

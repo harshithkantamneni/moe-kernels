@@ -1,0 +1,216 @@
+{
+ "registered": "2026-10-07, before any rental-5 page",
+ "name": "2026-10-07-rental5-c15-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r5 DESIGN.md 2.6 (the SHARED c15 lever) with design-r5-review (c15 kept; the c15 skew cells are BLIND-CALMODEL)",
+ "tool": "scorer scripts/scoring/rental5/score_c15.py",
+ "pages": {
+  "c15": "olmoe-1b-7b timed label sk15: SHARED at 15 copies on PT PW DW uniform, NATIVE uniform, n 2 and 4 (docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json)",
+  "c9": "the skew pages ska (PT, PW, uniform) and skb (DW) of olmoe-1b-7b at 9 copies",
+  "declaration_check": "each page's recorded experts_declared for SHARED must be 64 x its label's copies (15 or 9), else NOT SCORED"
+ },
+ "why": "at fixed n the SHARED dead term and the live (NATIVE-path) term are collinear on the c9 skew cells (design-r5 work/collin_skew.txt: r -0.999); with the c15 cells r is about -0.08",
+ "statistic": {
+  "Delta": "Delta(h, n) = [S - N](c15) - [S - N](c9), N the NATIVE uniform cell of each page, us; the alignment growth A_n (SHARED - NATIVE align_probe, c15 minus c9, rental 4's) subtracted when both pages carry an align_probe, else raw Delta, labelled",
+  "median": "the median over the 8 cells (PT PW DW uniform x n 2, 4)",
+  "two_regressor": "[S - N] = a + d N_dead + b live over the c9 and c15 cells, printed with its VIF"
+ },
+ "predictions": [
+  {
+   "label": "PT",
+   "n": 2,
+   "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4",
+   "S9_ms": 0.487008,
+   "S15_ms": 0.510697,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 33856,
+   "dead15_total": 57664,
+   "live_rows": 157,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  },
+  {
+   "label": "PW",
+   "n": 2,
+   "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af",
+   "S9_ms": 0.49734,
+   "S15_ms": 0.521029,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 33600,
+   "dead15_total": 57408,
+   "live_rows": 161,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  },
+  {
+   "label": "DW",
+   "n": 2,
+   "counts_sha256": "dbb9ee40935f75133f526ce97724e375927c22a8203cfa2c3d2a64c0a3cf8454",
+   "S9_ms": 0.486777,
+   "S15_ms": 0.510466,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 33728,
+   "dead15_total": 57536,
+   "live_rows": 159,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366",
+   "S9_ms": 0.414601,
+   "S15_ms": 0.43829,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 35712,
+   "dead15_total": 59520,
+   "live_rows": 128,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  },
+  {
+   "label": "PT",
+   "n": 4,
+   "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6",
+   "S9_ms": 0.838106,
+   "S15_ms": 0.861795,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 33600,
+   "dead15_total": 57408,
+   "live_rows": 289,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  },
+  {
+   "label": "PW",
+   "n": 4,
+   "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53",
+   "S9_ms": 0.837979,
+   "S15_ms": 0.861668,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 33472,
+   "dead15_total": 57280,
+   "live_rows": 291,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  },
+  {
+   "label": "DW",
+   "n": 4,
+   "counts_sha256": "47812379ffb4c3890e26449563d0c0a74a6e45800728dd99eb6399f78bf9c62b",
+   "S9_ms": 0.827756,
+   "S15_ms": 0.851445,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 33856,
+   "dead15_total": 57664,
+   "live_rows": 285,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 4,
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "S9_ms": 0.755367,
+   "S15_ms": 0.779056,
+   "dead_increment_ctas": {
+    "w1": 11904,
+    "w2": 11904
+   },
+   "dead9_total": 35712,
+   "dead15_total": 59520,
+   "live_rows": 256,
+   "Delta_us": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   }
+  }
+ ],
+ "predicted_median_us": {
+  "D": 23.68896,
+  "M": 31.736064,
+  "FIXED": 0.0
+ },
+ "noise": {
+  "sigma_noise_us": 1.286503,
+  "basis": "the sd of the median of the 8 Deltas by simulation (c15_sigma: 40000 draws, seed 20261007), every cell at 0.18% of T = the median predicted S(c15) 0.6500 ms, with ONE NATIVE uniform cell per (page, n) shared by the four histograms (build-r5-review F4: the Deltas are correlated)",
+  "independent_formula_us": 1.034211,
+  "independent_formula": "1.25 x 2 x 0.18% x T / sqrt 8 (the design's, which treats the 8 Deltas as independent): printed only",
+  "review_check": "build-r5-review's own simulation read 1.292 us and D against M 6.2 sigma; this registration's seeded simulation reads the value above"
+ },
+ "z": "(Delta_meas - Delta_pred) / sigma_noise",
+ "rules": {
+  "D": "FAILS if |z_D| > 3; else HOLDS",
+  "M": "EXCLUDED if |z_M| > 3",
+  "FIXED": "EXCLUDED if Delta > 3 sigma_noise",
+  "SKEW-DEAD": "D predicts the dead increment is the same at every h (it depends on numel and the declaration only); SKEW-DEAD is shown when |median_h Delta(h in PT PW DW) - Delta(uniform)| > 3 sigma_noise",
+  "separation": "D against M 6.3 sigma, D against FIXED 18.4 sigma",
+  "printed": "every Delta(h, n), raw and alignment-corrected, both noise values (0.18% and 0.10%)"
+ },
+ "labels": "BLIND-CALMODEL: the c15 skew cells have no page; A2's uniform c15 page (rental 4) is SEEN, so D's level is SEEN-confirmed there and only the skew invariance is blind",
+ "secondary": "calibration and gamma: NOT APPLICABLE (one statistic over 8 cells; fewer than 3 predicted values are distinct)",
+ "missing": "the c15 page or either c9 page missing: NOT SCORED (drop-group c15 holds sk15; the c9 pages are ska / skb of sko, never dropped)",
+ "seen_data": [
+  "d, kappa CAL-counters; the fit CAL",
+  "A2's uniform c15 page SEEN",
+  "sigma_page SEEN"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/private_weight_reference.py": "6c90112eb2f850382003bca2d5b947e6b67f192dcea16eec10c83e0c2ccde277",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/instr_probe.py": "a5b421bfd6825da67a8241a9535319c83824620928309633ac3b096ca479a6fe",
+  "scripts/skew_synth.py": "eea9d019f25b2b427ed74f6c33194dbd35b37f4ba95aab27a030c3d88fb94c23",
+  "scripts/cross_model_score.py": "d770e8ba1c4178add7c7180921d434aca8c4ee115068809cb5f0227dad22ef07",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "moe/instrumented/__init__.py": "331d8130c6aaee92c0e0cedab7fa7d2f79fc1479c1a5ddfea8cd1b3b44141488",
+  "moe/instrumented/fused_moe_instr.py": "16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250",
+  "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+  "scripts/scoring/rental5/r5common.py": "b3ae6f0d7feaa733e5c1aa7ed2f34706025bc02739aac6f4536ed8d3567e1086",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11"
+ }
+}

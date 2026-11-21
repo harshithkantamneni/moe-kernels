@@ -1,0 +1,7 @@
+TILE CENSUS (A2): compile only, no lock, nothing timed; each model at its smallest whole tread
+tiles   128x128x64w8s3
+models  mixtral-8x7b-tp2
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  mixtral-8x7b-tp2: tread 128x128x64w8s3 n 1
+DRY RUN: nothing compiled (exit 2)

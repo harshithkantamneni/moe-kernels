@@ -1,0 +1,4 @@
+COUNTER ROUTE r3-decode (wide): olmoe-1b-7b, page docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-wide.json (sha256 97f8ef9ef9206159...), 6 (cell, arm), 3 calls + 2 warmups each, at most 180 profiled launches (the GEMMs, the align, activation and reduction kernels), about 1.8 min
+  kernel filter: regex:^(fused_moe_kernel|moe_align_block_size\w*|count_and_sort_expert_tokens\w*|act_and_mul\w*|silu\w*|moe_sum\w*)$
+  child: scripts/r3_decode.py --counter-child (vLLM's own tile, the spy's grids in the manifest)
+RESULT: VALIDITY grid PASS 6 cells, 60 GEMM launches attributed, 95 other launches by place; /home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-olmoe-1b-7b-dw-r3-counters/lock1710/r3d.json

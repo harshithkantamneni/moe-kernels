@@ -1,0 +1,78 @@
+2026-10-27T22:39:55Z setup_vm.sh start: commit aa5e1b7cc561635dd939fcc1972efa142b3739ca from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-27T23:43:07Z
+2026-10-27T22:42:05Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-27T22:42:07Z driver start: commit aa5e1b7cc561635dd939fcc1972efa142b3739ca, steps of the plan scripts/plans/rentalC4-cal-2026-10.plan, deadline 2026-10-27T23:43:07Z (53 min of work left)
+2026-10-27T22:42:07Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalC4-cal-2026-10.plan (sha256 ab5a7aedd674ce24c0bc55f6e222af813744b1ab491f86ac982c77b33f15a935), 8 units
+2026-10-27T22:42:07Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/8 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 53 min left)
+2026-10-27T22:42:07Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-27T22:42:07Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-27T22:42:07Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-27T22:42:07Z prelude: power.max_limit 900.00 W, at or over the registered 700 W
+2026-10-27T22:42:07Z prelude: the power limit read back after 0 s: enforced.power.limit 700.00 W, -q -d POWER GPU scope Current 700.00 W (Requested 700.00 W), power.limit 700.00 W (S1 read-back)
+2026-10-27T22:42:09Z lock probe: the session lock 1410 MHz held (C2)
+2026-10-27T22:42:09Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261027T224207Z, session lock 1410 MHz
+2026-10-27T22:42:09Z prelude END: exit 0 after 0 min [unit 1/8 - lock-mhz=1410 power-limit-w=700]
+2026-10-27T22:42:10Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T22:42:11Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/8 mixtral-8x7b tc4] (estimate 1 min, cap 30 min, 52 min left)
+2026-10-27T22:42:36Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-10-27T22:42:36Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3725.4 GB/s
+2026-10-27T22:42:36Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3948.9 GB/s against a derived pin rate of 4022.8 GB/s
+2026-10-27T22:42:36Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3948.9 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-10-27T22:42:36Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-10-27T22:42:36Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1440 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-10-27T22:42:36Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-10-27T22:42:36Z calibrate END: exit 0 after 0 min [unit 2/8 mixtral-8x7b tc4]
+2026-10-27T22:42:36Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T22:42:38Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 on mixtral-8x7b-tp2; refused on an MMA path mismatch [unit 3/8 - tc4 tiles=128x128x64w8s3 models=mixtral-8x7b-tp2] (estimate 1 min, cap 15 min, 52 min left)
+2026-10-27T22:42:47Z tilecensus: RESULT: VALIDITY census_path PASS 2 configs, 0 path mismatches, 0 errors
+2026-10-27T22:42:47Z tilecensus: RESULT: DESCRIPTIVE olmoe_n1_n3 DIFFERS NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED
+2026-10-27T22:42:47Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tc4/tile-census.json)
+2026-10-27T22:42:47Z tilecensus END: exit 0 after 0 min [unit 3/8 - tc4 tiles=128x128x64w8s3 models=mixtral-8x7b-tp2]
+2026-10-27T22:42:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T22:42:48Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 4/8 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 52 min left)
+2026-10-27T22:43:04Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-27T22:43:04Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-27T22:43:04Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-10-27T22:43:04Z bytes: the registered list G = 64 (olmoe-1b-7b, f128): no tail drop, no re-price, no base-clock control
+2026-10-27T22:45:51Z bytes: G=64 page exit 3 after 165 s
+2026-10-27T22:45:53Z bytes: lock block exit 0 (G=64 exit 3 22:45:51 165 s;)
+2026-10-27T22:45:58Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-27T22:45:58Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-27T22:46:00Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/summary.json)
+2026-10-27T22:46:00Z bytes END: exit 0 after 3 min [unit 4/8 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-10-27T22:46:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T22:46:02Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 5/8 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 7 min, cap 25 min, 49 min left)
+2026-10-27T22:46:02Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-27T22:46:02Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-10-27T22:46:02Z bytes: the registered list G = 64 (mixtral-8x7b, f128): no tail drop, no re-price, no base-clock control
+2026-10-27T22:52:50Z bytes: G=64 page exit 3 after 406 s
+2026-10-27T22:52:52Z bytes: lock block exit 0 (G=64 exit 3 22:52:50 406 s;)
+2026-10-27T22:52:57Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-27T22:52:58Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/summary.json)
+2026-10-27T22:52:58Z bytes END: exit 0 after 7 min [unit 5/8 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-10-27T22:52:59Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T22:53:00Z gate START: gate band: scripts/tileA2_gate.py band at the 1410 lock; FAIL ends the rental (tileA2-gates) [unit 6/8 - gband gate=band] (estimate 1 min, cap 5 min, 42 min left)
+2026-10-27T22:53:02Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)
+2026-10-27T22:53:02Z gate END: exit 0 after 0 min [unit 6/8 - gband gate=band]
+2026-10-27T22:53:02Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T22:53:04Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 7/8 mixtral-8x7b-tp2 t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 6 min, cap 25 min, 42 min left)
+2026-10-27T22:53:04Z timed: declared-copies 9 on every page of this unit
+2026-10-27T22:53:04Z timed: histogram page docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json, arms native,shared, deepest tread 2, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-27T22:53:05Z timed: G = 1 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-27T23:00:12Z timed: P2 locked_r3 exit 0
+2026-10-27T23:00:12Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-27T23:00:12Z timed: 2026-10-27T23:00:07Z G=1 held at lock 1410: R3 exit 0 DONE, cells=108 worst=1410.0 MHz, 420 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-hist7a20bf5f3-c7ada9ae
+2026-10-27T23:00:12Z timed END: exit 0 after 7 min [unit 7/8 mixtral-8x7b-tp2 t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-27T23:00:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T23:00:14Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json --arms native,shared; tile 128x128x64 w8 s3 [unit 8/8 mixtral-8x7b-tp2 b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared byte-groups=1] (estimate 4 min, cap 20 min, 34 min left)
+2026-10-27T23:00:30Z census for mixtral-8x7b-tp2 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp2.json)
+2026-10-27T23:00:30Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-27T23:00:30Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json --arms native,shared on every page of this unit
+2026-10-27T23:00:30Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, b128g1): no tail drop, no re-price, no base-clock control
+2026-10-27T23:02:14Z bytes: G=1 page exit 0 after 101 s
+2026-10-27T23:02:16Z bytes: lock block exit 0 (G=1 exit 0 23:02:14 101 s;)
+2026-10-27T23:02:21Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-27T23:02:21Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-27T23:02:22Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-mixtral-8x7b-tp2-b128g1-r3-counters/lock1410/summary.json)
+2026-10-27T23:02:22Z bytes END: exit 0 after 2 min [unit 8/8 mixtral-8x7b-tp2 b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared byte-groups=1]
+2026-10-27T23:02:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T23:02:25Z driver end: exit 0

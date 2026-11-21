@@ -1,0 +1,2 @@
+== 2026-10-20T23:34:04Z step gate: gate f64w8: scripts/tileA2_gate.py f64w8 at the 1410 lock; FAIL ends the rental (tileA2-gates)
+2026-10-20T23:34:05Z gate f64w8 at 1410 MHz: RESULT: GATE f64w8 PASS (exit 0)

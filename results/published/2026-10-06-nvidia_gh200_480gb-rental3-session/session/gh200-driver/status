@@ -1,0 +1,200 @@
+2026-10-06T06:57:23Z setup_vm.sh start: commit 49f219808863cc3515979babf6eaed123d73f876 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-06T13:35:50Z
+2026-10-06T06:58:50Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-06T06:58:51Z driver start: commit 49f219808863cc3515979babf6eaed123d73f876, steps of the plan scripts/plans/rental3-2026-10.plan, deadline 2026-10-06T13:35:50Z (388 min of work left)
+2026-10-06T06:58:51Z plan: /home/ubuntu/moe/repo/scripts/plans/rental3-2026-10.plan (sha256 3de1bab346d873ec96e41f24a515fda8ef37da40944244798282d447a700be28), 24 units
+2026-10-06T06:58:51Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/24 -] (estimate 3 min, cap 15 min, 388 min left)
+2026-10-06T06:58:51Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-06T06:58:51Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-06T06:58:51Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-06T06:58:51Z lock plan: LOCK_PROBE_1005 supported (a plan's floor lock; probed below)
+2026-10-06T06:58:51Z lock plan: LOCK_PROBE_1410 supported (a plan's floor lock; probed below)
+2026-10-06T06:58:53Z lock probe: 1005 MHz held
+2026-10-06T06:58:55Z lock probe: 1410 MHz held
+2026-10-06T06:58:55Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261006T065851Z
+2026-10-06T06:58:55Z prelude END: exit 0 after 0 min [unit 1/24 -]
+2026-10-06T06:58:56Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T06:58:57Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,3,4,5,6,8,10,12,13,14,16, base clock and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1] (estimate 5 min, cap 15 min, 388 min left)
+2026-10-06T06:59:12Z census for qwen2-57b-a14b-tp8 written (/home/ubuntu/moe/session/census-qwen2-57b-a14b-tp8.json)
+2026-10-06T07:01:20Z floor: r3f-g64 exit 0
+2026-10-06T07:01:20Z floor: r3f-g64-lock1710 exit 0
+2026-10-06T07:01:20Z floor: registered floor design: groups 64, treads 2,3,4,5,6,8,10,12,13,14,16
+2026-10-06T07:01:20Z floor END: exit 0 after 2 min [unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:01:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:01:23Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,3,4,5,6,8,10,12,13,14,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 386 min left)
+2026-10-06T07:02:46Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1005 MHz lock only)
+2026-10-06T07:02:46Z floor: r3f-g64-lock1005 exit 0
+2026-10-06T07:02:46Z floor: registered floor design: groups 64, treads 2,3,4,5,6,8,10,12,13,14,16
+2026-10-06T07:02:46Z floor END: exit 0 after 1 min [unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:02:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:02:49Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 4/24 qwen2-57b-a14b-tp8 e2e] (estimate 2 min, cap 30 min, 385 min left)
+2026-10-06T07:03:13Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-10-06T07:03:13Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3725.9 GB/s
+2026-10-06T07:03:13Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3949.3 GB/s against a derived pin rate of 4022.8 GB/s
+2026-10-06T07:03:13Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3949.3 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-10-06T07:03:13Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-10-06T07:03:13Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1455 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-10-06T07:03:13Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-10-06T07:03:13Z calibrate END: exit 0 after 0 min [unit 4/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T07:03:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:03:15Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 [unit 5/24 qwen2-57b-a14b-tp8 e2e] (estimate 38 min, cap 90 min, 384 min left)
+2026-10-06T07:38:59Z timed: P2 locked_r3 exit 0
+2026-10-06T07:38:59Z timed: P5 locked_r3 exit 0
+2026-10-06T07:38:59Z timed: 2026-10-06T07:14:01Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-3908df9d
+2026-10-06T07:38:59Z timed: 2026-10-06T07:24:42Z G=32 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g32-l2flushtrue-modelqwen2_57b_a14b-f037a06b
+2026-10-06T07:38:59Z timed: 2026-10-06T07:38:54Z G=3 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=216 worst=1710.0 MHz, 851 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g3-l2flushtrue-modelqwen2_57b_a14b-5989ba0c
+2026-10-06T07:38:59Z timed END: exit 0 after 36 min [unit 5/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T07:39:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:39:02Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 3 8 32, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32] (estimate 9 min, cap 30 min, 348 min left)
+2026-10-06T07:39:02Z bytes: the registered list G = 3 8 32 (qwen2-57b-a14b-tp8, e2e): no tail drop, no re-price, no base-clock control
+2026-10-06T07:40:48Z bytes: G=3 page exit 3 after 104 s
+2026-10-06T07:42:34Z bytes: G=8 page exit 3 after 104 s
+2026-10-06T07:44:19Z bytes: G=32 page exit 3 after 103 s
+2026-10-06T07:44:22Z bytes: lock block exit 0 (G=3 exit 3 07:40:48 104 s;G=8 exit 3 07:42:34 104 s;G=32 exit 3 07:44:19 103 s;)
+2026-10-06T07:44:27Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T07:44:27Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T07:44:28Z bytes: analyse of 3 pages exit 3 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/summary.json)
+2026-10-06T07:44:28Z bytes END: exit 0 after 5 min [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32]
+2026-10-06T07:44:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:44:31Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 3,4,5,6,8,10,12,14,16, base clock and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1] (estimate 4 min, cap 15 min, 343 min left)
+2026-10-06T07:44:45Z census for granite-3.0-1b-a400m written (/home/ubuntu/moe/session/census-granite-3.0-1b-a400m.json)
+2026-10-06T07:46:00Z floor: r3f-g64 exit 0
+2026-10-06T07:46:00Z floor: r3f-g64-lock1710 exit 0
+2026-10-06T07:46:00Z floor: registered floor design: groups 64, treads 3,4,5,6,8,10,12,14,16
+2026-10-06T07:46:00Z floor END: exit 0 after 1 min [unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:46:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:46:03Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 3,4,5,6,8,10,12,14,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 8/24 granite-3.0-1b-a400m floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 341 min left)
+2026-10-06T07:46:53Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1005 MHz lock only)
+2026-10-06T07:46:53Z floor: r3f-g64-lock1005 exit 0
+2026-10-06T07:46:53Z floor: registered floor design: groups 64, treads 3,4,5,6,8,10,12,14,16
+2026-10-06T07:46:53Z floor END: exit 0 after 1 min [unit 8/24 granite-3.0-1b-a400m floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:46:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:46:56Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, base clock and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 9/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 15 min, 340 min left)
+2026-10-06T07:47:12Z census for mixtral-8x7b-tp4 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp4.json)
+2026-10-06T07:49:32Z floor: r3f-g64 exit 0
+2026-10-06T07:49:32Z floor: r3f-g64-lock1710 exit 0
+2026-10-06T07:49:32Z floor: registered floor design: groups 64, treads 2,4,6,8,10,11,12,13,14,15,16
+2026-10-06T07:49:32Z floor END: exit 0 after 3 min [unit 9/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:49:33Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:49:35Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1710 lock; --floor-shape-metrics --floor-null-kernel [unit 10/24 mixtral-8x7b-tp4 floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1] (estimate 2 min, cap 10 min, 338 min left)
+2026-10-06T07:50:50Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1710 MHz lock only)
+2026-10-06T07:50:50Z floor: r3f-g64-lock1710 exit 0
+2026-10-06T07:50:50Z floor: registered floor design: groups 64, treads 2,4,6,8,10,11,12,13,14,15,16
+2026-10-06T07:50:50Z floor END: exit 0 after 1 min [unit 10/24 mixtral-8x7b-tp4 floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:50:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:50:53Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 11/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 2 min, cap 10 min, 336 min left)
+2026-10-06T07:52:25Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1005 MHz lock only)
+2026-10-06T07:52:25Z floor: r3f-g64-lock1005 exit 0
+2026-10-06T07:52:25Z floor: registered floor design: groups 64, treads 2,4,6,8,10,11,12,13,14,15,16
+2026-10-06T07:52:25Z floor END: exit 0 after 2 min [unit 11/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:52:26Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:52:29Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1410 lock; --floor-shape-metrics --floor-null-kernel [unit 12/24 mixtral-8x7b-tp4 floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 335 min left)
+2026-10-06T07:53:46Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1410 MHz lock only)
+2026-10-06T07:53:46Z floor: r3f-g64-lock1410 exit 0
+2026-10-06T07:53:46Z floor: registered floor design: groups 64, treads 2,4,6,8,10,11,12,13,14,15,16
+2026-10-06T07:53:46Z floor END: exit 0 after 1 min [unit 12/24 mixtral-8x7b-tp4 floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T07:53:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:53:50Z launchfloor START: launch floor at the 1710 lock: arms native, G=64, treads 2,4,6,8,10,11,12,13,14,15,16, modes E240,GR; a timed process (no profiler), no trace phase [unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0] (estimate 7 min, cap 25 min, 334 min left)
+2026-10-06T07:59:01Z launchfloor: mixtral-8x7b-tp4 exit 3 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-launch-floor-wall/mixtral-8x7b-tp4)
+2026-10-06T07:59:01Z launchfloor END: exit 3 after 5 min [unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0]
+2026-10-06T07:59:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:59:04Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 6,8,10,11,12,13,14,15,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 2 min, cap 10 min, 328 min left)
+2026-10-06T07:59:19Z census for mixtral-8x7b-tp8 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp8.json)
+2026-10-06T08:00:21Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1005 MHz lock only)
+2026-10-06T08:00:21Z floor: r3f-g64-lock1005 exit 0
+2026-10-06T08:00:21Z floor: registered floor design: groups 64, treads 6,8,10,11,12,13,14,15,16
+2026-10-06T08:00:21Z floor END: exit 0 after 1 min [unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T08:00:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:00:25Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 15/24 mixtral-8x7b-tp2 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 3 min, cap 12 min, 327 min left)
+2026-10-06T08:00:40Z census for mixtral-8x7b-tp2 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp2.json)
+2026-10-06T08:02:54Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1005 MHz lock only)
+2026-10-06T08:02:54Z floor: r3f-g64-lock1005 exit 0
+2026-10-06T08:02:54Z floor: registered floor design: groups 64, treads 2,4,6,8,10,11,12,13,14,15,16
+2026-10-06T08:02:54Z floor END: exit 0 after 2 min [unit 15/24 mixtral-8x7b-tp2 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T08:02:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:02:58Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1] (estimate 5 min, cap 20 min, 324 min left)
+2026-10-06T08:02:58Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, l2base): no tail drop, no re-price, no base-clock control
+2026-10-06T08:06:24Z bytes: G=1 page exit 0 after 203 s
+2026-10-06T08:06:28Z bytes: lock block exit 0 (G=3 exit 3 07:40:48 104 s;G=8 exit 3 07:42:34 104 s;G=32 exit 3 07:44:19 103 s;G=1 exit 0 08:06:24 203 s;)
+2026-10-06T08:06:33Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T08:06:33Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T08:06:35Z bytes: analyse of 1 pages exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/summary.json)
+2026-10-06T08:06:35Z bytes END: exit 0 after 4 min [unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1]
+2026-10-06T08:06:35Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:06:38Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 8 --block-k 32 [unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8] (estimate 5 min, cap 20 min, 321 min left)
+2026-10-06T08:06:38Z bytes: rental 2 knobs --num-stages 8 --block-k 32 on every page of this unit
+2026-10-06T08:06:38Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, k32s8): no tail drop, no re-price, no base-clock control
+2026-10-06T08:10:05Z bytes: G=1 page exit 0 after 204 s
+2026-10-06T08:10:09Z bytes: lock block exit 0 (G=3 exit 3 07:40:48 104 s;G=8 exit 3 07:42:34 104 s;G=32 exit 3 07:44:19 103 s;G=1 exit 0 08:06:24 203 s;G=1 exit 0 08:10:05 204 s;)
+2026-10-06T08:10:14Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T08:10:14Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T08:10:15Z bytes: analyse of 1 pages exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k32s8-r3-counters/lock1710/summary.json)
+2026-10-06T08:10:15Z bytes END: exit 0 after 4 min [unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8]
+2026-10-06T08:10:16Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:10:19Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 128 [unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4] (estimate 5 min, cap 20 min, 317 min left)
+2026-10-06T08:10:19Z bytes: rental 2 knobs --num-stages 4 --block-k 128 on every page of this unit
+2026-10-06T08:10:19Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, k128s4): no tail drop, no re-price, no base-clock control
+2026-10-06T08:13:45Z bytes: G=1 page exit 0 after 204 s
+2026-10-06T08:13:49Z bytes: lock block exit 0 (G=3 exit 3 07:40:48 104 s;G=8 exit 3 07:42:34 104 s;G=32 exit 3 07:44:19 103 s;G=1 exit 0 08:06:24 203 s;G=1 exit 0 08:10:05 204 s;G=1 exit 0 08:13:45 204 s;)
+2026-10-06T08:13:54Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T08:13:54Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T08:13:55Z bytes: analyse of 1 pages exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k128s4-r3-counters/lock1710/summary.json)
+2026-10-06T08:13:55Z bytes END: exit 0 after 4 min [unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4]
+2026-10-06T08:13:56Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:13:59Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 128 [unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3] (estimate 5 min, cap 20 min, 313 min left)
+2026-10-06T08:13:59Z bytes: rental 2 knobs --num-stages 3 --block-k 128 on every page of this unit
+2026-10-06T08:13:59Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, k128s3): no tail drop, no re-price, no base-clock control
+2026-10-06T08:17:25Z bytes: G=1 page exit 0 after 203 s
+2026-10-06T08:17:29Z bytes: lock block exit 0 (G=3 exit 3 07:40:48 104 s;G=8 exit 3 07:42:34 104 s;G=32 exit 3 07:44:19 103 s;G=1 exit 0 08:06:24 203 s;G=1 exit 0 08:10:05 204 s;G=1 exit 0 08:13:45 204 s;G=1 exit 0 08:17:25 203 s;)
+2026-10-06T08:17:34Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T08:17:34Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T08:17:35Z bytes: analyse of 1 pages exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k128s3-r3-counters/lock1710/summary.json)
+2026-10-06T08:17:35Z bytes END: exit 0 after 4 min [unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3]
+2026-10-06T08:17:36Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:17:39Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 7 [unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7] (estimate 5 min, cap 20 min, 310 min left)
+2026-10-06T08:17:39Z bytes: rental 2 knobs --num-stages 7 on every page of this unit
+2026-10-06T08:17:39Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, k64s7): no tail drop, no re-price, no base-clock control
+2026-10-06T08:21:06Z bytes: G=1 page exit 0 after 204 s
+2026-10-06T08:21:10Z bytes: lock block exit 0 (G=3 exit 3 07:40:48 104 s;G=8 exit 3 07:42:34 104 s;G=32 exit 3 07:44:19 103 s;G=1 exit 0 08:06:24 203 s;G=1 exit 0 08:10:05 204 s;G=1 exit 0 08:13:45 204 s;G=1 exit 0 08:17:25 203 s;G=1 exit 0 08:21:06 204 s;)
+2026-10-06T08:21:15Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T08:21:15Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T08:21:16Z bytes: analyse of 1 pages exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k64s7-r3-counters/lock1710/summary.json)
+2026-10-06T08:21:16Z bytes END: exit 0 after 4 min [unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7]
+2026-10-06T08:21:17Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:21:20Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 [unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3] (estimate 5 min, cap 20 min, 306 min left)
+2026-10-06T08:21:20Z bytes: rental 2 knobs --num-stages 3 on every page of this unit
+2026-10-06T08:21:20Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, k64s3): no tail drop, no re-price, no base-clock control
+2026-10-06T08:24:46Z bytes: G=1 page exit 0 after 203 s
+2026-10-06T08:24:50Z bytes: lock block exit 0 (G=3 exit 3 07:40:48 104 s;G=8 exit 3 07:42:34 104 s;G=32 exit 3 07:44:19 103 s;G=1 exit 0 08:06:24 203 s;G=1 exit 0 08:10:05 204 s;G=1 exit 0 08:13:45 204 s;G=1 exit 0 08:17:25 203 s;G=1 exit 0 08:21:06 204 s;G=1 exit 0 08:24:46 203 s;)
+2026-10-06T08:24:55Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-06T08:24:55Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-06T08:24:57Z bytes: analyse of 1 pages exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k64s3-r3-counters/lock1710/summary.json)
+2026-10-06T08:24:57Z bytes END: exit 0 after 4 min [unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3]
+2026-10-06T08:24:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:25:01Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 6), no G=3 page [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6] (estimate 14 min, cap 40 min, 302 min left)
+2026-10-06T08:25:01Z timed: G = 8 at treads 6, no G=3 page (timed-groups / timed-treads)
+2026-10-06T08:35:49Z timed: P2 locked_r3 exit 0
+2026-10-06T08:35:49Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-06T08:35:49Z timed: 2026-10-06T08:35:44Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-ef2ea3e8
+2026-10-06T08:35:49Z timed END: exit 0 after 11 min [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6]
+2026-10-06T08:35:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T08:35:53Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 [unit 23/24 qwen2-57b-a14b-tp8 e2e] (estimate 35 min, cap 75 min, 291 min left)
+2026-10-06T09:08:00Z deep: locked_r3 exit 0 (gh200-20261006T065851Z-deep, G = 4 2)
+2026-10-06T09:08:05Z deep: 2026-10-06T08:51:58Z G=4 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modelqwen2_57b_a14b-5bd3885e
+2026-10-06T09:08:05Z deep: 2026-10-06T09:07:59Z G=2 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l2flushtrue-modelqwen2_57b_a14b-4711b2ef
+2026-10-06T09:08:05Z deep: G=2 treads 1..9 declared 9 VALIDITY not PASS: none
+2026-10-06T09:08:05Z deep: G=4 treads 1..9 declared 9 VALIDITY not PASS: none
+2026-10-06T09:08:05Z deep: G=2 SHARED ms 0.2690 0.2789 0.3883 0.4965 0.6041 0.7125 0.8131 0.9214 1.0298 | increments 0.010 0.109 0.108 0.108 0.108 0.101 0.108 0.108
+2026-10-06T09:08:05Z deep: G=4 SHARED ms 0.2749 0.2788 0.3872 0.4948 0.6027 0.7113 0.8114 0.9199 1.0277 | increments 0.004 0.108 0.108 0.108 0.109 0.100 0.108 0.108
+2026-10-06T09:08:05Z deep: P3 G=2 minus G=4 at n = 3 5 7 9: 0.001 0.001 0.002 0.002 ms
+2026-10-06T09:08:05Z deep: P4 G=4 n=8 to 9: 0.108 ms against the median of the others, 0.108
+2026-10-06T09:08:05Z deep END: exit 0 after 32 min [unit 23/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T09:08:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T09:08:09Z launchfloor START: launch floor at the 1710 lock: arms native,shared,private, G=4, treads 1,2,3, modes E0,E240,E360,E480, traces at 1; a timed process (no profiler) then a trace process [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1] (estimate 14 min, cap 35 min, 259 min left)
+2026-10-06T09:15:51Z launchfloor: mixtral-8x7b-tp8 exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-launch-floor-r3/mixtral-8x7b-tp8)
+2026-10-06T09:15:51Z launchfloor END: exit 0 after 8 min [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1]
+2026-10-06T09:15:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T09:15:56Z driver end: exit 3
+2026-10-06T09:16:50Z RECOVERY start: timed G to retake [32 ], deep G to retake []
+2026-10-06T09:17:01Z RECOVERY timed G=32 retake exit 2: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- MHz, 10 s, dir (none named); R3 exited 2 before naming its run dire
+REFUSED, nothing measured: R3 refused before its first timed cell: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- 
+2026-10-06T09:17:05Z RECOVERY END

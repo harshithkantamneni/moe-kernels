@@ -1,0 +1,140 @@
+REGISTERED 2026-10-20, before any tile rental A2 page: tile rental B2 (frozen; finalised mechanically), 2026-10-20-tileB2-e1tile-gh200
+status: FROZEN BEFORE ANY TILE RENTAL A2 PAGE; FINALISED MECHANICALLY FROM A2'S SELECTIONS (D3) at A2's lock: the cells, files, rules, rivals and gates are tileB-e1tile's; the numeric v4 predictions are written by scripts/scoring/tileA2/finalise_a2.py from A2's scored selections under at_lock(L), by the registered rules, before rental B2 runs, into docs/registered/2026-10-20-tileB2-predictions-gh200.json (a test holds finalise_a2.py to synthetic selections)
+design: design-A2 DESIGN.md (2026-10-20) corrected by design-A2-review REVIEW.md (the review wins: every MAJOR and MINOR fix), the build review (GO-WITH-FIXES) and the owner's decisions of 2026-10-20: A 900 W GPU POWER LIMIT AND THE LOCK LADDER 1710, 1410, 1305 (the first rung whose probe passes is the lock of every later unit; the 900 W limit changes the owner's 2026-09-26 700 W decision for tile rental A2, and rental B2 at the limit A2 held, only); rental B2 at A2's power limit and lock rung; decode uses A2's constants only once A2's floor calibration is scored; the probe strict (one LOST cell fails a rung); every other decision is the design's recommendation as amended by the review: OD3 the byte pages re-run, OD4 sigma_page re-measured, OD5 w4, ms and dk droppable, OD6 CONV-L a registered test, nodrop, not a stop clause (REVIEW 3a: timed at 1710 and at L, a per-cell ratio), OD7 decode stays at 1710 by addendum, OD8 the band [0.975 L, L] (REVIEW 2c: the scaled band a registered fallback), OD9 the calibrate gate under the lowest rung (build review fix 3), OD10 the scorer import order fixed in place, OD11 the probe thresholds of DESIGN 6, OD12 the offline conversion check done before registering, OD13 rental A's timed pages against v4 forbidden
+tool: scorer scripts/scoring/tileA2/score_tileB2_a2.py (scripts/scoring/tileA/score_tileB.py inside a2common.scoring); tcommon.e1tile_rule, rival_rule, bar; predictions finalise_a2.py
+
+power common 0 / model-specific 0: {'P(E1-TILE)': 0.98296, 'P(E1-TILE, deepseek in each-model clause)': 0.97159, 'P(stop rule A2 passes)': 0.92455, 'P(stop rule A2 and A3 pass)': 0.8977, 'P(E1-TILE | A2 passes)': 0.98299, 'P(E1-TILE | A2 and A3 pass)': 0.98295}
+power common 0.005 / model-specific 0: {'P(E1-TILE)': 0.91077, 'P(E1-TILE, deepseek in each-model clause)': 0.82374, 'P(stop rule A2 passes)': 0.48735, 'P(stop rule A2 and A3 pass)': 0.47291, 'P(E1-TILE | A2 passes)': 0.94436, 'P(E1-TILE | A2 and A3 pass)': 0.94447}
+power common 0.01 / model-specific 0: {'P(E1-TILE)': 0.65002, 'P(E1-TILE, deepseek in each-model clause)': 0.487, 'P(stop rule A2 passes)': 0.14217, 'P(stop rule A2 and A3 pass)': 0.13705, 'P(E1-TILE | A2 passes)': 0.90237, 'P(E1-TILE | A2 and A3 pass)': 0.90427}
+power common 0.02 / model-specific 0: {'P(E1-TILE)': 0.24169, 'P(E1-TILE, deepseek in each-model clause)': 0.15163, 'P(stop rule A2 passes)': 0.02367, 'P(stop rule A2 and A3 pass)': 0.02262, 'P(E1-TILE | A2 passes)': 0.87621, 'P(E1-TILE | A2 and A3 pass)': 0.88042}
+power common 0 / model-specific 0.005: {'P(E1-TILE)': 0.88836, 'P(E1-TILE, deepseek in each-model clause)': 0.788, 'P(stop rule A2 passes)': 0.48728, 'P(stop rule A2 and A3 pass)': 0.4052, 'P(E1-TILE | A2 passes)': 0.88848, 'P(E1-TILE | A2 and A3 pass)': 0.88766}
+power common 0 / model-specific 0.01: {'P(E1-TILE)': 0.49872, 'P(E1-TILE, deepseek in each-model clause)': 0.32488, 'P(stop rule A2 passes)': 0.1426, 'P(stop rule A2 and A3 pass)': 0.08807, 'P(E1-TILE | A2 passes)': 0.49705, 'P(E1-TILE | A2 and A3 pass)': 0.49569}
+power common 0 / model-specific 0.015: {'P(E1-TILE)': 0.18591, 'P(E1-TILE, deepseek in each-model clause)': 0.0902, 'P(stop rule A2 passes)': 0.05266, 'P(stop rule A2 and A3 pass)': 0.02524, 'P(E1-TILE | A2 passes)': 0.1805, 'P(E1-TILE | A2 and A3 pass)': 0.18506}
+power common 0.005 / model-specific 0.005: {'P(E1-TILE)': 0.76907, 'P(E1-TILE, deepseek in each-model clause)': 0.62175, 'P(stop rule A2 passes)': 0.29035, 'P(stop rule A2 and A3 pass)': 0.23551, 'P(E1-TILE | A2 passes)': 0.80157, 'P(E1-TILE | A2 and A3 pass)': 0.80521}
+power common 0.01 / model-specific 0.01: {'P(E1-TILE)': 0.26996, 'P(E1-TILE, deepseek in each-model clause)': 0.15218, 'P(stop rule A2 passes)': 0.06157, 'P(stop rule A2 and A3 pass)': 0.03385, 'P(E1-TILE | A2 passes)': 0.34668, 'P(E1-TILE | A2 and A3 pass)': 0.35539}
+rival lever cells (nominal): {'v3own': 81, 'roofline': 84}
+leakage rows: {'SEEN-WORKLOAD': 14, 'BLIND counts': 70}
+
+what: the blind end-to-end test at the tile vLLM picks (D1: prefill, the two reachable wgmma tiles): v4 from CAL models to held-out models at the same tile, the transfer the study claims
+leakage (design-tile-review 3):
+  blind: time at vLLM's two wgmma tiles on the GH200 for Phi, Qwen1.5, JetMoE and deepseek-v2-lite; the fresh PT and PW draws; deepseek-v2-lite's E 64, k 6 routing
+  seen:
+    - each BLIND-TILE model's GEMM shapes (K, N), timed at R3's tile on GH200 (rentals 5 to 7; v3 is CERTIFIED on Phi)
+    - deepseek-v2-lite: SEEN-SHAPE (D7): results/published/2026-09-01-nvidia_h200-alpha-surface-s4 times it on H200 at BLOCK_M 32 and 64, BN 64, w8 s4, and its H and F (2048 / 1408) equal Qwen1.5's, so its GEMMs are Qwen1.5's at 128x128 (N-tiles 22 and 16); its claim is 'new model, seen shapes'
+    - the tiles: SEEN on the CAL models in rental A, and the blind models' cubins compiled there (compile only)
+    - SEEN-WORKLOAD: on a uniform or balanced cell the routing counts depend only on M, so where a published R3 page timed the model at the same rows per expert (a histogram page's control, or a plain ladder page's balanced_ids at tread n x BLOCK_M / 32) the workload is SEEN and ONLY THE TILE IS BLIND: Phi 64g1 n 1 (M 512), 128g1 n 1 and n 2 (M 1024, 2048) and 128g16 n 3 (M 3072); Qwen1.5 128g1 n 1 and n 2 (M 1920, 3840); JetMoE 128g1 n 2 (M 1024) (build-tile-review 4); every such cell is labelled per row below
+  rows:
+    SEEN-WORKLOAD: 14
+    BLIND counts: 70
+nominal: DESIGN-NOMINAL: c_128 900 counter cycles (design-tile 2.2's mid value), F_wg the R3 tile's CAL 520 / 979, accounting W, F-step, A key CLAMP; for levers, sensitivities and power only, never a registered prediction
+tests:
+  E1-TILE (primary, D2):
+    statistic: e = T_v4 / T_meas - 1 per valid NATIVE cell (all six labels), v4 from predicted bytes at the finalised constants; NATIVE has no term (b) and its dead term is about 1 to 2 us
+    rule: HOLDS iff the POOLED NATIVE cells AND each BLIND-TILE model's (Phi, Qwen1.5, JetMoE; D4: 'each shape' is each model) meet rms <= 2%, worst <= 5%, |mean| <= 1%, in each view; the registered verdict holds only if ALL and CLEAN hold
+    deepseek-v2-lite (design-tile-review 9.6): in the pooled bar; its own bar is printed DESCRIPTIVE (one page: it can never be CERTIFIED); dropped (dsv), it leaves the pool
+    certification: a BLIND-TILE model is CERTIFIED in CLEAN with its cells meeting the bar and at least 2 of its pages in CLEAN (Phi 3 pages, Qwen1.5 2, JetMoE 2: jg1 and qg16 are nodrop for this)
+    a model left with one page: its bar is scored and it is NOT CERTIFIED
+    a model left with no valid cell (build-tile-review 9): E1-TILE reads NOT SCORED (incomplete), not FAILS, unless the pool or another blind model fails
+    G3_void: a strict G3 FAIL voids every histogram cell: E1-TILE NOT SCORED, printed DESCRIPTIVELY
+  E1-TILE-S (secondary): SHARED cells, v4 + term (b) as v3 (the page's own A) + the v2 dead term; the same bar; a registered verdict that certifies nothing
+  E2-TILE: NATIVE time from the byte pages' counted bytes (v4's timing alone) on the cells both pages carry; rental 6's E2 bar (rms <= 2%, worst <= 5%, |mean| <= 1.5%)
+  B-BYTES: byte rows of the byte pages under the finalised key: rms <= 3% and every row <= 5% (B-SKEW's bar), per GEMM
+  G3: rental 7's TOST on uniform minus balanced (clusters the pages, margin 0.36%), strict
+  rivals:
+    v3own: v3 at its own constants, only the geometry moving (c 344.1, R3's PHI)
+    roofline: T0 + sum over GEMMs of max(flops / (4096 x eta_mma x 132 x L), bytes / bw), L A2's lock (1.71, 1.41 or 1.305 GHz)
+    OLS (design-tile-review 9.10): ONE ridge regression over every valid NATIVE E1-CAL cell of rental A (classes pooled): T = a + b waves + c bytes / bw + d ln(1 + CTAs), waves = sum over GEMMs of live CTAs / (132 x occ), bytes v4's predicted, CTAs live over both GEMMs; standardised features, ridge lambda 1e-3 x trace(X'X) / 3, intercept unpenalised; NOT SCORED under 12 cells or when the standardised X'X has condition number over 1e6; frozen at finalisation
+    unselected accountings, F-cyc, eta_mma rival: tileA-floor's lever counts: NOT SEPARATED by construction under 6 lever cells
+    v4cal: NOT SEPARATED by construction (the same model at 128x128)
+    exclusion rule: on lever cells (|T_R / T_v4 - 1| >= 2%, at least 6): R's rms over 2% and over v4's rms + 3 se, se = sigma_page / sqrt(cells) (tcommon.rival_rule)
+    lever_cells_nominal: {"v3own": 81, "roofline": 84}
+  split views (DESCRIPTIVE):
+    G-16 cells: E1 on the 128 G 16 cells alone (the floor law)
+    G-1 n-1 cells: E1 on the G 1 n 1 cells alone (the byte model at G 1)
+gates:
+  G1: rental7-g1rule (r7-median-run3 from cells.csv)
+  repeats: 6 of 9 clean
+  G2 host (design-tile-review 9.7): rental 3's registered rule, T + F240 < 0.40 ms is host-bound, on the FINALISED prediction (after rental A's selections), AND the timer flag; the design's 0.3324 ms was a design-script threshold, never registered
+  G4: cell clock >= L - 5 MHz (L A2's lock: 1705, 1405 or 1300)
+  G5: provenance
+  tile: the page's recorded tile is the unit's
+  census (tileA-census): a (model, tile) whose rental-B2 census occupancy differs from A2's merged census (tileA2-census): NOT SCORED
+  views: ALL and CLEAN (rental 2's rule 3)
+power:
+  model: design-tile-review work/power_rb075.py's, re-run on the registered 84 cells (power_tile.py): ln(T_meas / T_v4) = common-mode tile bias + model-specific bias + cell 0.6% + bytes 1.75% x dln T / dln B (each cell's, DESIGN-NOMINAL) + page 0.18% + board 0.26%
+  cells: (in the JSON)
+  blind_models:
+    - phi-3.5-moe
+    - qwen1.5-moe-a2.7b
+    - jetmoe-8b
+  noise:
+    sig_byte: 0.0175
+    sig_cell: 0.006
+    sig_page: 0.0018
+    sig_board: 0.0026
+    cal_cells_per_class: 18
+  R: 200000
+  device: cpu
+  dtype: float64
+  points: (in the JSON)
+  mps_check:
+    path: docs/registered/2026-10-14-tileB-hist/power_tile_check.json
+    sha256: 030e3b8debda7df6afec1a45a76ea0fc19c743ecddd95ba33c2663185d45d6de
+    torch: 2.13.0
+    device: mps
+    dtype: float32
+    R: 200000
+    max_abs_diff: 5.000000000032756e-06
+    seconds: {"device": 4.41, "cpu_float64": 3.83}
+  reading: P(E1-TILE) rests on the model-specific drift, which no rental-A page can bound for a blind model; the common-mode part is what the stop rule catches
+  points at 1710 (tileB-e1tile's, printed beside; REVIEW-A2 7b):
+    common 0 / model-specific 0: {"P(E1-TILE)": 0.96835, "P(E1-TILE, deepseek in each-model clause)": 0.95729, "P(stop rule A2 passes)": 0.92455, "P(stop rule A2 and A3 pass)": 0.8977, "P(E1-TILE | A2 passes)": 0.96836, "P(E1-TILE | A2 and A3 pass)": 0.96834}
+    common 0.005 / model-specific 0: {"P(E1-TILE)": 0.89002, "P(E1-TILE, deepseek in each-model clause)": 0.80602, "P(stop rule A2 passes)": 0.48735, "P(stop rule A2 and A3 pass)": 0.47291, "P(E1-TILE | A2 passes)": 0.92566, "P(E1-TILE | A2 and A3 pass)": 0.92569}
+    common 0.01 / model-specific 0: {"P(E1-TILE)": 0.62433, "P(E1-TILE, deepseek in each-model clause)": 0.47108, "P(stop rule A2 passes)": 0.14217, "P(stop rule A2 and A3 pass)": 0.13705, "P(E1-TILE | A2 passes)": 0.88345, "P(E1-TILE | A2 and A3 pass)": 0.88526}
+    common 0.02 / model-specific 0: {"P(E1-TILE)": 0.2248, "P(E1-TILE, deepseek in each-model clause)": 0.14397, "P(stop rule A2 passes)": 0.02367, "P(stop rule A2 and A3 pass)": 0.02262, "P(E1-TILE | A2 passes)": 0.85467, "P(E1-TILE | A2 and A3 pass)": 0.85853}
+    common 0 / model-specific 0.005: {"P(E1-TILE)": 0.86869, "P(E1-TILE, deepseek in each-model clause)": 0.77077, "P(stop rule A2 passes)": 0.48728, "P(stop rule A2 and A3 pass)": 0.4052, "P(E1-TILE | A2 passes)": 0.8683, "P(E1-TILE | A2 and A3 pass)": 0.86745}
+    common 0 / model-specific 0.01: {"P(E1-TILE)": 0.47618, "P(E1-TILE, deepseek in each-model clause)": 0.30995, "P(stop rule A2 passes)": 0.1426, "P(stop rule A2 and A3 pass)": 0.08807, "P(E1-TILE | A2 passes)": 0.47518, "P(E1-TILE | A2 and A3 pass)": 0.47366}
+    common 0 / model-specific 0.015: {"P(E1-TILE)": 0.17205, "P(E1-TILE, deepseek in each-model clause)": 0.08331, "P(stop rule A2 passes)": 0.05266, "P(stop rule A2 and A3 pass)": 0.02524, "P(E1-TILE | A2 passes)": 0.16977, "P(E1-TILE | A2 and A3 pass)": 0.17496}
+    common 0.005 / model-specific 0.005: {"P(E1-TILE)": 0.74621, "P(E1-TILE, deepseek in each-model clause)": 0.60367, "P(stop rule A2 passes)": 0.29035, "P(stop rule A2 and A3 pass)": 0.23551, "P(E1-TILE | A2 passes)": 0.78025, "P(E1-TILE | A2 and A3 pass)": 0.78358}
+    common 0.01 / model-specific 0.01: {"P(E1-TILE)": 0.25288, "P(E1-TILE, deepseek in each-model clause)": 0.14239, "P(stop rule A2 passes)": 0.06157, "P(stop rule A2 and A3 pass)": 0.03385, "P(E1-TILE | A2 passes)": 0.32727, "P(E1-TILE | A2 and A3 pass)": 0.33501}
+labels:
+  phi-3.5-moe, qwen1.5-moe-a2.7b, jetmoe-8b: BLIND-TILE
+  deepseek-v2-lite: SEEN-SHAPE (D7)
+  uniform and balanced: per row: SEEN-WORKLOAD where a published page timed the counts
+seen_data:
+  - every R3-tile page of the blind models
+  - deepseek-v2-lite's H200 page
+  - the design's sensitivities
+  - rental A's pages and scores (tileA2 SEEN block)
+power limit and lock (owner, 2026-10-20): rental B2 runs at the GPU power limit and the lock rung A2 actually held, both read by finalise_a2.py from A2's score directory (session.score.json; floor and e1cal must name the same lock, else it refuses); no argument sets either; both go on B2's plan's prelude line
+at rung 1710: every L-dependent number is tileB-e1tile's own (v4L at 1710 is v4: r3_timing_model_v4L.py --check)
+a2:
+  stop rule input: A2's CLEAN E1-CAL score (tileB2-stop)
+  census: A2's merged census (tileA2-census)
+  power (REVIEW-A2 7b): the power block is regenerated at L (its cells' dlnT/dlnB move with c at L) and printed beside tileB-e1tile's; whitelisted, never held equal
+  rental B at L (REVIEW-A2 9: an inference): rental B's 128 G 16 wgmma tiles on Phi, Qwen1.5 and JetMoE are as power-heavy as rental A's, so rental B runs at A2's lock, not 1710
+lock:
+  decision (owner, 2026-10-20): a 900 W GPU power limit (GPU scope, -sc 0) and the lock ladder 1710, 1410, 1305 MHz: the probe tries 1710 first; the first rung whose probe passes is the run's lock
+  changes: the owner's 2026-09-26 decision (the GPU power limit 700 W at the start, -sc 0) FOR TILE RENTAL A2 AND RENTAL B2 ONLY (B2 runs at the limit and the lock rung A2 held, read from A2's score directory); every other rental's driver keeps 700 W
+  why (DESIGN-A2 1, REVIEW-A2 1): rental A's wgmma pages sagged under the 1710 lock: reason 0x4 (SW power cap) only, 60 C at most; the smi trace went to 1290 MHz on the three heavy 128x128 pages; the inferred cause is the software power cap (GPU or module scope unresolved), so the limit rises to the card's maximum and the lock steps down only when the probe says the cap still bites
+  ladder (owner, 2026-10-20): 1710, then 1410, then 1305 MHz: the lock-hold probe's first rung that holds is A2's lock (tileA2-gates G-PROBE). At 1710 no clock conversion is used (v4L is v4 exactly) and CONV-L does not run; 1410 and 1305 carry the conversion
+  conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20): the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)
+  rules at L:
+    at 1710: rental A's own rules: the band [1640, 1710] (derived at that lock; the fallback band at 1710 is the same), G4 1705, v4 itself
+    counter band: below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)
+    fallback band (REVIEW-A2 2c): [L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled
+    G4: cell clock >= L - 5 MHz (1705, 1405, 1300)
+    dips: r7-median-run3 at the page's own lock_mhz (a read under L - 15 is dipped: 1395 is not at 1410, 1380 is)
+    lock_gate: lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)
+    v4 at L: r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L
+seen (REVIEW-A2 5):
+  label: SEEN before this registration (REVIEW-A2 5): none of it is a lever, the selection rules are tcommon's pinned functions unchanged (variant_rule, f_form_rule, joint_cF, floor_test); stated so a reader can weigh it
+  (i) rental A's out-of-band fits (DESIGN-A2 7d, work/fit.py, DESCRIPTIVE): tcommon.joint_cF on rental A's f128 pages with the band removed: c_128 698.67 +- 10.63 cycles, F_w1 2740 +- 615, F_w2 3113 +- 341, 36 cells, rel rms 0.53%, recorded occupancy 2; on the f64w8 pages c_64 459.1 +- 19.4; the cells' clocks 1601 to 1663 MHz
+  (ii) the 64x128 accounting outcome: predictable by interpolation from (i) and tileA-floor's registered table (W and T c_64 at c_128 600 and 750); nobody computed it
+  (iii) SEEN-expected: with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)
+  (iv) tA-dead: rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test
+  (v) the A key: rental A's key test on 19 of 56 rows: v3 5.0254% against CLAMP 5.0253% rms, NOT NAMED (CLAMP): the near tie is known; the 53 rows its band dropped stay unread
+  (vi) sigma_page: rental A's 0.1275% (24 cells, at a sagging 1710 clock); A2 re-measures it, and never copies rental A's in
+  (vii) what chose the lock, the probe cells and the gates: rental A's per-repeat clocks (cells.csv), the in-flight NVML reads, the smi traces (locked-r3/*/smi.csv: clock, power, temperature, reasons) and the calibrate log
+  (viii) rental A's times: rental A's 1710 times of every E1-CAL cell and its counted bytes of every byte row exist (results/published/2026-10-20-nvidia_gh200_480gb-tileA-session) UNREAD against v4: no v4 time is computed against the E1-CAL times, and the 53 band-dropped byte rows are not re-scored, before or after A2 (OD13, a rule of this registration); its rep and dead pages are scored and published ((iv), (vi)); A2's E1-CAL, byte, rep and dead pages read the same histogram files, so their workloads are SEEN while their times on A2's board are not; the per-row workload labels below are tileA's (as of 2026-10-14) and are not updated
+  (ix) the offline conversion check (OD12; REVIEW-A2 3b): see tileA2-convl 'offline_check (SEEN)': on the 2026-09-27 and R1 pages v3's c-only rule holds on the c-heavy G 4 / G 2 ladders and on the G 1 per-M-tile elasticity, and underpredicts the G 1 per-call clock elasticity

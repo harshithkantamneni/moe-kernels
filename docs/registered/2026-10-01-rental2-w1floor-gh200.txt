@@ -1,0 +1,69 @@
+REGISTERED 2026-10-01, before any rental-2 page: rental 2 part 4, tp8's w1 floor on unseen tread sets
+primary capture: the BASE-clock G = 64 captures (r3f-g64.json) of the tp8 floor2, tp4 floor and tp2 floor units; the 1710 lock captures are printed beside, as the 2026-09-30 registration did
+x grid: grid x S / 132, grid = live + dead CTAs from the page's own launch__grid_size, asserted equal to the registered grid (V1 already holds it)
+
+per set: the slope over grid x S / 132 (F4's estimator); H_EST = the CORES model's cells through it (CAL)
+  mixtral-8x7b-tp8 w1 (S 64, npn 56, asymptote 352.2)
+    A (13, 14, 15): H_EST 313.4 (bias -11.02%)  FLUID 352.2  FLUID_LOW 339.5  sigma 8.7
+    B (11, 15, 16): H_EST 350.7 (bias -0.43%)  FLUID 352.2  FLUID_LOW 339.5  sigma 3.3
+    C (11, 12, 13): H_EST 365.6 (bias +3.81%)  FLUID 352.2  FLUID_LOW 339.5  sigma 8.7
+  mixtral-8x7b-tp8 w2 (S 28, npn 64, asymptote 379.1)
+    W2a (11, 12, 13): H_EST 393.5 (bias +3.79%)  FLUID 379.1  FLUID_LOW 365.5  sigma 17.4
+    W2b (14, 15, 16): H_EST 393.5 (bias +3.79%)  FLUID 379.1  FLUID_LOW 365.5  sigma 17.4
+  mixtral-8x7b-tp4 w1 (S 64, npn 112, asymptote 352.2)
+    A (14, 15, 16): H_EST 339.5 (bias -3.60%)  FLUID 352.2  FLUID_LOW 339.5  sigma 4.4
+    B (11, 13, 15): H_EST 352.6 (bias +0.10%)  FLUID 352.2  FLUID_LOW 339.5  sigma 2.2
+    C (10, 12, 13): H_EST 365.6 (bias +3.81%)  FLUID 352.2  FLUID_LOW 339.5  sigma 2.9
+  mixtral-8x7b-tp4 w2 (S 56, npn 64, asymptote 361.6)
+    W2a (11, 12, 13): H_EST 375.3 (bias +3.80%)  FLUID 361.6  FLUID_LOW 348.6  sigma 8.7
+    W2b (14, 15, 16): H_EST 375.3 (bias +3.80%)  FLUID 361.6  FLUID_LOW 348.6  sigma 8.7
+  mixtral-8x7b-tp2 w1 (S 64, npn 224, asymptote 352.2)
+    D1 (10, 11, 12): H_EST 352.6 (bias +0.10%)  FLUID 352.2  FLUID_LOW 339.5  sigma 2.2
+    D2 (12, 13, 14): H_EST 365.6 (bias +3.81%)  FLUID 352.2  FLUID_LOW 339.5  sigma 2.2
+  mixtral-8x7b-tp2 w2 (S 112, npn 64, asymptote 352.8)
+    W2a (11, 12, 13): H_EST 366.3 (bias +3.81%)  FLUID 352.8  FLUID_LOW 340.1  sigma 4.4
+    W2b (14, 15, 16): H_EST 366.3 (bias +3.81%)  FLUID 352.8  FLUID_LOW 340.1  sigma 4.4
+  every tread in these sets is >= 10 on tp4/tp2 and >= 11 on tp8: on no published page (rental-1 r3c pages hold n = 1..9 at G = 64 on every shard, and tp8's floor n = 1..6, 8, 10). tp2 w1 has only two unseen sets, of bias about 0 and +3.8%: delta only. Every w2 set within 10..16 sits at +3.8% (ceil(512 n / 132) does not wrap there): w2 is an offset test, H_EST +3.8% against FLUID 0%
+  SEEN replication: {'tp8 w1 (6, 8, 10) SEEN': 339.502232}
+
+noise: sigma_cell 2678 cycles (CAL: the median over the four calibration models' G = 64 base and lock captures of the rms of (elapsed - CORES) about a free line in grid S / 132, floor-bound cells of >= 4 waves)
+  mixtral-8x7b-tp8 w1: sigma_theta 0.2764, sigma_delta 0.0131
+  mixtral-8x7b-tp4 w1: sigma_theta 0.1995, sigma_delta 0.0054
+  mixtral-8x7b-tp2 w1: sigma_delta 0.0031
+  every slope, theta and delta is linear in the cells' cycles (floor_estimator.slope_weights, theta_delta_weights): sigma = sigma_cell x ||weights||, exact for sets that share cells; the fit is unweighted OLS over the sets
+
+families:
+  H_EST: the CORES model through F4's estimator: theta 1, delta 0
+  FLUID: a set-independent slope at the asymptote 344.1 + F / S: theta 0, delta 0
+  FLUID_LOW: the FINDINGS reading of rental 1: a set-independent slope of 0.964 x the asymptote: theta 0, delta -3.6%
+  H_NPN: secondary, labelled: H_EST x (1 + delta_npn), delta_npn -3.6% at npn 56 log-linear to -0.7% at 448 (already refuted on SEEN data: it predicts 327.3 on (6, 8, 10) where 339.6 was measured)
+  H_NPN deficits: mixtral-8x7b-tp8 -3.60%, mixtral-8x7b-tp4 -2.63%, mixtral-8x7b-tp2 -1.67%
+
+rules:
+  fit: per w1 GEMM with three sets (tp8, tp4): r_k = slope_k / asymptote - 1 = delta + theta x bias_k, unweighted OLS over the sets (floor_estimator.theta_delta); tp2 w1: delta_H = mean(r_k - bias_k) and delta_F = mean(r_k)
+  theta_call: theta > 0.5 reads H_EST's side, theta < 0.5 FLUID's
+  H_EST: FALSIFIED if |theta - 1| > 2 sigma_theta on tp8 w1 or tp4 w1, or |delta_H| > 2 sigma_delta on two of the three w1 GEMMs
+  FLUID: FALSIFIED if |theta| > 2 sigma_theta on tp8 w1 or tp4 w1, or |delta_F| > 2 sigma_delta on two of the three w1 GEMMs
+  FLUID_LOW: FALSIFIED if |theta| > 2 sigma_theta on tp8 w1 or tp4 w1, or |delta_F + 0.036| > 2 sigma_delta on tp8 w1
+  H_NPN: FALSIFIED if delta_H on tp8 w1 > -2.0% (secondary)
+  w2_offset: per shard, the mean over W2a, W2b of slope / asymptote - 1: H_EST predicts the mean registered bias (+3.8%), FLUID 0; each family HOLDS within 2 sigma (sigma the mean's propagated noise / asymptote), else FALSIFIED
+  co_primary_per_cell: per GEMM, on the unseen cells of >= 4 waves (n >= 10 on tp4/tp2, n >= 11 on tp8): rms_C of cycles about ceil(q) u + a and rms_F about q u + a, a one free constant each; CEIL wins when rms_F - rms_C > sigma_cell, FLUID when rms_C - rms_F > sigma_cell, else INCONCLUSIVE. H_EST is supported when CEIL wins on tp8 w1 and tp4 w1; FLUID (and FLUID_LOW) when FLUID wins on both
+  both_fail: when every family is FALSIFIED the verdict is NEITHER: no family is selected and the per-set slopes are printed
+  per_cell_record: each >= 4-wave cell's (measured - CORES) / CORES is printed beside part 3's a
+
+power:
+  mixtral-8x7b-tp8 w1: theta 2-sigma bands H_EST [0.447122, 1.552878], FLUID [-0.552878, 0.552878], disjoint False
+  mixtral-8x7b-tp4 w1: theta 2-sigma bands H_EST [0.601072, 1.398928], FLUID [-0.398928, 0.398928], disjoint True
+  theta's 2-sigma bands overlap on tp8 w1 (sigma_theta 0.28 at sigma_cell 2.7k cycles over 3-tread sets) and are disjoint on tp4 w1; the co-primary per-cell test (about 2.5 sigma_cell of rms separation per GEMM) carries the call where theta cannot
+
+co-primary test, expected rms of the wrong form about the right one (cycles):
+  mixtral-8x7b-tp8 w1: cells [11, 12, 13, 14, 15, 16], 6020
+  mixtral-8x7b-tp8 w2: cells [11, 12, 13, 14, 15, 16], 2197
+  mixtral-8x7b-tp4 w1: cells [10, 11, 12, 13, 14, 15, 16], 6417
+  mixtral-8x7b-tp4 w2: cells [10, 11, 12, 13, 14, 15, 16], 4909
+  mixtral-8x7b-tp2 w1: cells [10, 11, 12, 13, 14, 15, 16], 6345
+  mixtral-8x7b-tp2 w2: cells [10, 11, 12, 13, 14, 15, 16], 9580
+
+seen data:
+  tp8 w1 (6, 8, 10) and every tread <= 9 at G = 64 on all three shards are SEEN; none is in a scored set
+  H_NPN's -3.6% is read off rental-1 tp8 (SEEN) and 8x7B's -0.7%

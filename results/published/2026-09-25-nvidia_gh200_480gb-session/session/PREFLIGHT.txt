@@ -1,0 +1,11 @@
+THE VM PREFLIGHT, 2026-09-25T06:53:16Z: can the R3 counter run happen on this box
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, UUID 33948cb3-46ff-1834-07b0-6d05730ad309, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; the study's timing pages are nvidia_h200.
+commit f49a2133c942c20c3b1b72e002b03af1ccd216a3; counter door sudo; launcher sudo -E env PATH=/usr/local/cuda-13.0/bin:/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin HOME=/home/ubuntu; ncu /usr/local/cuda-13.0/bin/ncu
+PF1 PASS nvidia-smi and torch in both venvs name one card: NVIDIA GH200 480GB (nvidia_gh200_480gb), UUID 33948cb3-46ff-1834-07b0-6d05730ad309; NOT the study's nvidia_h200: every alpha here is this card's
+PF2 PASS each venv's torch CUDA major <= the driver's, and a kernel launches: driver CUDA 13.0; base 13.0, vllm 13.0; both launched
+PF3 PASS the venvs hold the versions requirements/resolved-*.txt pin, and fused_experts imports: base: torch 2.13.0, triton 3.7.1; vllm: torch 2.13.0, triton 3.7.1, vllm 0.27.1
+PF4 PASS ncu lists every STRICT metric the r3-arms family asks: 5 STRICT listed
+PF5 PASS dram_counter_route.py --probe --family r3-arms READ every STRICT metric here: all 5 STRICT metrics read back: counters readable: all 5 STRICT metrics of the r3-arms family came back as numbers on a profiled launch of the probe kernel (dram__bytes_read.sum 4.19942e+06); 11 of 11 cross-check and recorded metrics proven; the CSV was WIDE
+PF6 PASS dram_counter_route.py --run --family r3-arms --census-only passes: GEMMS_PER_CALL, grids and the memory plan as the census gates them
+PF7 PASS ncu's first-pass save has somewhere to go: the card keeps 75.6 GB free beside the 25.8 GB footprint, so the save stays on the device
+verdict READY (exit 0: 0 DONE: measured; every VALIDITY and CLAIM gate PASSED)

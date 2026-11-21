@@ -1,0 +1,29 @@
+2026-10-08T23:28:30Z the branch's first commit: the VM can push
+2026-10-08T23:30:39Z setup_vm.sh: READY
+2026-10-08T23:30:41Z prelude (unit 1/22 -): exit 0 (0 min)
+2026-10-08T23:31:08Z calibrate (unit 2/22 mixtral-8x7b r5): exit 0 (0 min)
+2026-10-08T23:31:39Z regcheck (unit 3/22 - rc instr-variants=v1,v2,v3): exit 1 (0 min)
+2026-10-08T23:43:52Z timed (unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 1 (12 min)
+2026-10-08T23:53:25Z timed (unit 5/22 mixtral-8x7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 1 (9 min)
+2026-10-08T23:57:06Z bytes: G=8 page exit 0
+2026-10-08T23:57:17Z bytes (unit 6/22 mixtral-8x7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json arms=native,shared byte-groups=8): exit 0 (4 min)
+2026-10-09T00:14:49Z timed (unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (17 min)
+2026-10-09T00:25:31Z timed (unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (11 min)
+2026-10-09T00:27:37Z bytes: G=8 page exit 0
+2026-10-09T00:27:48Z bytes (unit 9/22 olmoe-1b-7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json arms=native,shared byte-groups=8): exit 0 (2 min)
+2026-10-09T00:45:11Z timed (unit 10/22 qwen1.5-moe-a2.7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (17 min)
+2026-10-09T00:55:44Z timed (unit 11/22 qwen1.5-moe-a2.7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (10 min)
+2026-10-09T01:01:56Z timed (unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8): exit 0 (6 min)
+2026-10-09T01:02:57Z perturb (unit 13/22 - pt instr-variants=v1,v2,v3): exit 1 (1 min)
+2026-10-09T01:03:02Z stamps (unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3): exit 2 (0 min)
+2026-10-09T01:03:07Z stamps (unit 15/22 mixtral-8x22b stt8x22 stamp-groups=8 stamp-treads=1 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
+2026-10-09T01:03:12Z stamps (unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
+2026-10-09T01:03:17Z stamps (unit 17/22 olmoe-1b-7b std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3): exit 2 (0 min)
+2026-10-09T01:03:22Z stamps (unit 18/22 olmoe-1b-7b std2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 num-stages=8): exit 2 (0 min)
+2026-10-09T01:05:28Z bytes: G=64 page exit 3
+2026-10-09T01:05:40Z bytes (unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64): exit 0 (2 min)
+2026-10-09T01:07:32Z bytes: G=64 page exit 3
+2026-10-09T01:07:44Z bytes (unit 20/22 qwen2-57b-a14b-tp8 k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (2 min)
+2026-10-09T01:13:18Z timed (unit 21/22 olmoe-1b-7b bk64 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 num-stages=4): exit 0 (5 min)
+2026-10-09T01:18:52Z timed (unit 22/22 olmoe-1b-7b bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4): exit 0 (5 min)
+2026-10-09T01:18:56Z the session ended: driver exit 3

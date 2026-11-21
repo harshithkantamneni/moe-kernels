@@ -1,0 +1,15 @@
+phi3.5: phi-3.5-moe, docs/registered/2026-09-29-phi-3.5-moe-gh200.json, results/published/2026-09-29-nvidia_gh200_480gb-phi3.5-session (ledger rows [30, 31, 32])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6] 349.6 registered 352.2 (-0.73%) all-cell 349.6 HELD
+  floor r3f-g64.json             w2 n=[2, 3, 4, 6] 355.4 registered 353.9 (+0.42%) all-cell 355.4 HELD
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6] 349.8 registered 352.2 (-0.67%) all-cell 349.8 HELD
+  floor r3f-g64-lock1710.json    w2 n=[2, 3, 4, 6] 354.4 registered 353.9 (+0.14%) all-cell 354.4 HELD
+  time from predicted bytes (printed): 76 cells rms 0.65% worst -2.48% beyond 5% 0
+  G>=8 SHARED slope n=2..6: G=8 0.4839, G=32 0.4828 (registered (0.4898, 0.4896), band None)
+  bytes w1 all arms                                       216 cells rms 8.84% worst -42.67% beyond 5% 16
+  bytes w1 shared+private                                 144 cells rms 7.67% worst -42.67% beyond 5% 8
+  bytes private w1                                         72 cells rms 0.36% worst -1.94% beyond 5% 0
+  bytes private w2                                         72 cells rms 1.81% worst -7.99% beyond 5% 3
+  bytes shared w1                                          72 cells rms 10.84% worst -42.67% beyond 5% 8
+  bytes shared w2                                          68 cells rms 18.46% worst -60.31% beyond 5% 33
+  bytes shared+native w2 G<=16 n<=4                        48 cells rms 12.41% worst -41.03% beyond 5% 8
+  bytes named set (w1 S+P, PRIVATE w2, SHARED w2 G<=16 n<=4)  240 cells rms 7.19% worst -42.67% beyond 5% 15

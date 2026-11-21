@@ -1,0 +1,77 @@
+REGISTERED 2026-10-14, before any tile-stage page: the tile stage, rental A, 2026-10-14-tileA-bytes-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4
+tool: scorer scripts/scoring/tileA/score_bytes.py; tcommon.named_key; bytes scripts/wave_split_bytes_v4.py (M4 at the tile); row keys scripts/scoring/tileA/rowkeys_tile.py
+
+v3 vs CLAMP: {'rows': 56, 'rms_pct': 6.00813, 'max_abs_pct': 19.7195}
+CLAMP vs ROWKEY60: {'rows': 56, 'rms_pct': 16.502324, 'max_abs_pct': 48.510149}
+ROWKEY60 vs ROWKEY30: {'rows': 56, 'rms_pct': 9.793547, 'max_abs_pct': 28.753891}
+v3 vs ROWKEY60: {'rows': 56, 'rms_pct': 14.693979, 'max_abs_pct': 48.510149}
+
+what: the A key of v4 (D3): which w1 A accounting prices rental B's G-1 cells, where bytes reach time (design-tile 2.4)
+pages:
+  units:
+    - olmoe-1b-7b bytes label=b128g1 (histogram olmoe-1b-7b-128g1.json)
+    - mixtral-8x7b bytes label=b64g1 (histogram mixtral-8x7b-64g1.json)
+    - mixtral-8x7b bytes label=b128g16 (histogram mixtral-8x7b-128g16.json)
+    - qwen2-57b-a14b bytes label=b128g1 (histogram qwen2-57b-a14b-128g1.json)
+  files: (in the JSON)
+  same_counts (design-tile-review 9.14): each byte page reads the SAME file as its (model, tile, G)'s timed page, so their counts are identical by construction
+keys:
+  v3: M4's content key (rental 6), unchanged
+  CLAMP: v3 with each GEMM's q floored at the active weights once (q_ideal = experts with a row / E): a physical floor, not a fit (design-tile-review 5). M4 prices uniform cells below one weight set at BLOCK_M 128 (Qwen1.5 n 1 w1 q 0.967)
+  ROWKEY60: rental 6's row-granular LRU at 60 MiB (rental 7's NAMED key, SEEN-chosen, OPEN)
+  ROWKEY30: the same at 30 MiB: one of the GH200's two L2 partitions (its L2 read 60 MiB on rental 4's rulers, CONSISTENT with RRZE's GH200 run; Hopper's L2 is two partitions, NVIDIA H100 whitepaper). The design's 'Fan et al.' attribution is withdrawn (no source supports it; design-tile-review 9.13)
+rowkey_rows:
+  path: docs/registered/2026-10-14-tileA-hist/rowkey_tile.json
+  sha256: 6abb298bfe2bb8c0f2b6ac17567b2c85f848c326a080bace7f7911e4867699c6
+  device: cpu
+  dtype: int64 (exact)
+  cells: (in the JSON)
+  wall_s: 82.3
+  occupancy:
+    olmoe-1b-7b-128g1: {"w1": 2, "source": "DESIGN (shared-memory rule; the census replaces it)"}
+    mixtral-8x7b-64g1: {"w1": 3, "source": "DESIGN (shared-memory rule; the census replaces it)"}
+    qwen2-57b-a14b-128g1: {"w1": 2, "source": "DESIGN (shared-memory rule; the census replaces it)"}
+  method: streamed (rowkeys_tile.stream_misses): the pinned rival's access order and hit rule with bounded memory (peak 0.25 GB); the pinned rowkeys.simulate's own run on this page was stopped at 19 GB of unified memory on 2026-10-14
+  equality_check: the stream's read bytes EQUAL rowkeys.simulate's (CPU float64, and the MPS float32 run before it was stopped) on all 13 OLMoE 128 G 1 cells that run priced (n 1, 2, 4, 8; 4.2 to 33.8 million accesses each); tests/test_tile_plumbing.py re-runs n 1
+  arms: NATIVE priced, SHARED carried (the same walk at G 1)
+  recompute: re-priced at the census occupancy if it differs from the design occupancy (tileA-census)
+deviation: the design's OLMoE 128x128 G 1 n 8 tread is removed (build-tile-review 5): M4 rules w2 at G 1 and n >= 6 ILL-POSED on Hopper (wave_split_bytes.HOPPER_G1_N), applied per tread and literally at BLOCK_M 128 (n 4 is already 512 rows per expert, past BLOCK_M 32's n 6 at 192), so an n-8 cell would have no v4 prediction; OLMoE runs n 1, 2, 4, and the deepest A-heavy w1 row (n 8) is lost
+separations_on_scored_w1_rows:
+  v3 vs CLAMP:
+    rows: 56
+    rms_pct: 6.00813
+    max_abs_pct: 19.7195
+  CLAMP vs ROWKEY60:
+    rows: 56
+    rms_pct: 16.502324
+    max_abs_pct: 48.510149
+  ROWKEY60 vs ROWKEY30:
+    rows: 56
+    rms_pct: 9.793547
+    max_abs_pct: 28.753891
+  v3 vs ROWKEY60:
+    rows: 56
+    rms_pct: 14.693979
+    max_abs_pct: 48.510149
+statistic: per (cell, arm, GEMM): q_counted = (dram_bytes_read - n x operand_per_tile_g) / W_g at the tile's BYTE_MODEL; e_K = q_pred_K / q_counted - 1
+rule (D3; design-tile-review 5): over EVERY scored w1 row (the G-1 pages: OLMoE 128 G 1, Mixtral 64 G 1, Qwen2-57B 128 G 1; uniform, balanced and skewed, NATIVE and SHARED): the key nearest by rms is NAMED iff the next is at least 2x farther and every row of the nearest is within 5%; if none is NAMED v4 takes CLAMP (the physical floor), not v3. The NAMED key or CLAMP becomes rental B's w1 A key. Mixtral's G-16 rows and every w2 row are printed
+brackets_printed: q_group (every M-tile re-reads its expert's slabs, G 1) and q_ideal (active weights once)
+B_BYTES_bar_printed: rms <= 3% and every row <= 5% per key on the scored rows
+gates:
+  clock: rental 6's counter clock rule (lock_gate.check_page PASS, each cell in [1640, 1710] MHz)
+  G5: histogram sha256, shuffle seed, every cell's counts sha256
+  tile: the page's recorded block_m, block_n, block_k, num_warps, num_stages must be the unit's
+noise:
+  counter:
+    within_board_pct: 0.3
+    board_to_board_pct: [0.03, 0.66]
+labels:
+  rows: BLIND-CALMODEL (CAL models); uniform and balanced rows may be SEEN-WORKLOAD (per row)
+  ROWKEY60: SEEN-chosen capacity
+  ROWKEY30: derived from the measured L2
+seen_data:
+  - M4 (v3's bytes) SEEN-fitted on 8x7B CAL
+  - C 60 MiB SEEN-chosen
+  - the 60 MiB L2 (rental 4)

@@ -1,0 +1,5 @@
+SCORED against 2026-10-20-tileA2-convl-gh200 at 1410 MHz and 1710
+CONV-L: HOLDS
+  G1: HOLDS {'cells': 7, 'rms': 0.006082, 'worst': 0.009956, 'mean': 0.003788}
+  G8: HOLDS {'cells': 8, 'rms': 0.001568, 'worst': -0.002835, 'mean': -0.001303}
+READING (DESCRIPTIVE): CONV-L HOLDS and E1-CAL does not: this indicates the wgmma calibration or v4's wgmma terms, not the conversion; a carried constant can still weigh more on 128x128 G 1 cells (more bytes, bw at the lower L2 clock) than on R3's tile, so it is not ruled out

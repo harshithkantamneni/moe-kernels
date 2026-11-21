@@ -1,0 +1,8 @@
+{
+ "gate": "calibrate",
+ "verdict": "PASS",
+ "gemm_clock_mhz": 1455.0,
+ "lowest_rung_mhz": 1305.0,
+ "source": "/home/ubuntu/moe/session/logs/calibrate-mixtral-8x7b-ta2.log",
+ "why": ""
+}

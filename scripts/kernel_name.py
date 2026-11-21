@@ -12,13 +12,42 @@ runs inside the same process that dispatched the kernel. So a rented pod where
     python scripts/kernel_name.py --impl torch_grouped_mm_down
 
 T=1 is the default because there every active expert holds exactly one row, so
-M-tiles and active experts are the same number and nothing else is moving. The
-BLOCK_M=128 claim in FINDINGS section 2 was inferred from timing alone; a tile
-shape in the kernel name confirms or kills it.
+M-tiles and active experts are the same number and nothing else is moving. This
+was written to settle a `BLOCK_M = 128` figure that had been inferred from timing
+alone, and it killed it: FINDINGS C1 now records `TileShape M,N = 64,128` with
+MMA atom `MMA_64x128x16_F32BF16BF16_SS` and schedule `Pingpong`, identical at
+T = 1, 16, 256, 1024 and 4096. Re-run it when a new shape, dtype or card enters
+the study, because the tile belongs to the cell rather than to the project.
+
+The tile this reports is CUTLASS's, reached through
+`torch.nn.functional.grouped_mm`, and it is NOT vLLM's Triton `BLOCK_SIZE_M`.
+Different mechanisms, different values in the same cell: CUTLASS is pinned at
+M=64 by the wgmma instruction shape, while vLLM reads a tuned JSON keyed on
+(E, N, device, dtype) if one exists and otherwise takes a hardcoded ladder off
+the token count. Only 2 of this study's 8 (model x card) cells have such a JSON.
+Reading one number as the other is how a wrong tile survived days of analysis.
 
 Why not nsys: an external tracer has to agree with you about its own command
 line, and the version a pod happens to ship may not. Ubuntu's nsight-systems
 2022.4 rejects `--` as an end-of-options separator. This has no such surface.
+
+NO TRITON CACHE PROBLEM HERE, audited 2026-09-01 against the sibling failure in
+`scripts/check_mma_path.sh`. That script needs Triton to COMPILE, because a
+cache hit writes no PTX and the dump comes back empty; this one needs the kernel
+only to LAUNCH, and a kernel served from cache launches identically and is
+recorded by the profiler identically. The default span is CUTLASS besides, which
+Triton's cache never touches. So this script must NOT be given a private
+TRITON_CACHE_DIR: it would force a recompile that buys nothing and costs a
+minute of metered pod time per cell.
+
+WHAT WAS WRONG WAS THE EXIT CODE. Every failure below used to print and return
+zero: no GEMM matched, a mangled name whose tile could not be parsed, an empty
+--tokens list. So `python scripts/kernel_name.py && echo captured` printed
+`captured` on a run that captured nothing, and the operator's log looked the
+same either way. A cell that yields no tile now exits nonzero and says which
+cell. Pipe it somewhere that survives the pod, since nothing here writes a file:
+
+    python scripts/kernel_name.py --tokens 1,16,256 2>&1 | tee kernel_name.log
 """
 from __future__ import annotations
 
@@ -110,17 +139,37 @@ def main() -> int:
     ap.add_argument("--routing", default="uniform")
     args = ap.parse_args()
 
+    # Argument check BEFORE the device check, so a malformed invocation is
+    # caught on the laptop that typed it rather than on metered pod time.
+    counts = [int(v) for v in str(args.tokens).split(",") if v.strip()]
+    if not counts:
+        # `--tokens ""` and `--tokens ,` both used to run zero cells and exit 0,
+        # which is the same silent success the exit code below exists to remove.
+        print(f"--tokens {args.tokens!r} names no token count", file=sys.stderr)
+        return 2
+
     if not torch.cuda.is_available():
         print("no CUDA device; this has to run on the GPU box", file=sys.stderr)
         return 1
 
     moe.bootstrap("reference", "baselines")
-    for tokens in (int(v) for v in str(args.tokens).split(",") if v.strip()):
-        run_one(args, tokens)
+    unanswered = [t for t in counts if not run_one(args, t)]
+    if unanswered:
+        print(f"\n[kernel_name] NO TILE READ at tokens={unanswered}. This run is "
+              f"NOT evidence about C1; do not quote it.", file=sys.stderr)
+        return 1
     return 0
 
 
-def run_one(args, tokens: int) -> None:
+def run_one(args, tokens: int) -> bool:
+    """True only when this cell actually yielded a tile shape.
+
+    The return value is the whole point: reading a tile out of a kernel name is
+    the only outcome that settles C1, and every other outcome used to look
+    identical to a caller. Printing "NO GEMM KERNEL MATCHED" and returning
+    success is how a pod session ends with a log full of nothing and a green
+    exit status.
+    """
     spec = BenchSpec(MODEL_CONFIGS[args.model], num_tokens=tokens,
                      routing=RoutingSpec(args.routing))
     cfg = spec.model
@@ -164,19 +213,33 @@ def run_one(args, tokens: int) -> None:
         print("  kernel is named unlike any marker. Hottest kernels were:")
         for e in events[:5]:
             print(f"    {e.self_device_time_total:9.1f} us  {e.key[:110]}")
-        return
+        return False
 
+    answered = False
     for e in gemms[:5]:
         print(f"  {e.self_device_time_total:9.1f} us  {e.key[:100]}")
         tile = describe_tile(e.key)
         if tile:
             print(f"  {'':9s}      {tile}")
+            answered = True
         elif not e.key.startswith("_Z"):
             # A Triton kernel keeps its tile in a compile-time constexpr, not
-            # in the symbol, so absence here is expected rather than a failure.
+            # in the symbol, so absence here is a property of the kernel rather
+            # than a parse failure. It is still not an answer: read a Triton
+            # tile off the row's tile_* columns, or dump PTX with
+            # scripts/check_mma_path.sh.
             print(f"  {'':9s}      no tile in the name (Triton keeps it in a constexpr)")
+        else:
+            # A MANGLED name that describe_tile could not read. Silent before,
+            # and the silence was indistinguishable from a CUTLASS kernel with
+            # no tile parameters -- so a regex that stopped matching a new
+            # CUTLASS release would have degraded to printing nothing at all.
+            print(f"  {'':9s}      MANGLED NAME, NO TILE PARSED. The name is C++ so a"
+                  f" tile should be in it; the regexes in describe_tile no longer"
+                  f" match this CUTLASS version.")
     top = [f"{e.self_device_time_total:.1f}us" for e in events[:3]]
     print(f"  (hottest kernels overall: {', '.join(top)})")
+    return answered
 
 
 if __name__ == "__main__":

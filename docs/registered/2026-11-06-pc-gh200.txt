@@ -1,0 +1,189 @@
+REGISTERED 2026-11-06, before any PC page: rental PC, 2026-11-06-pc-gh200
+status: MEASUREMENT, DESCRIPTIVE: PC certifies nothing, registers no model form, no constant, no bar and no gate on any model, and moves no registered verdict. Every reading is DESCRIPTIVE; H1's label is printed beside the numbers (owner decision 4)
+design: moe-kernels-work 2026-11-06 design-PC/DESIGN.md (read-only over the repo at 6c800f84)
+motivation: The PC core (blocks A, C, D) is motivated by the decode CAL2 few-CTA failure: v5d's CAL2 worst cell, Mixtral T128 A4 w2 (128 CTAs in one wave, about 1 CTA per SM), ran slower than bandwidth, and no ceiling read off DS's pages priced it (decode closure, 3160bed5). Phi-3.5's B3 miss is the w1 byte law, the L2 hit fraction of w1 re-reads, not a per-CTA rate miss (moe-kernels-work 2026-11-06 phi-split/REPORT.md, POST-HOC on SEEN pages: counted bytes take 128g1 from +3.38% to +0.20% and 64g1 from -3.24% to -0.07%); the Phi units ask the launch-schedule question (PC-R10), not the rate question (coordinator, 2026-11-06)
+tool: scripts/gh200_pc_session.sh (C3's pinned driver plus lines marked PC), scripts/instr_probe_pc.py (the new host-side probe), scripts/instr_probe_c3.py (Phi E1, unchanged), moe/instrumented/fused_moe_instr.py (the copy, unchanged, STAMPS 3), scripts/tileA2_gate.py band (G-BAND), scripts/dram_counter_route_decode3.py (unit 16), scripts/scoring/pc/read_pc.py (the reader)
+
+OWNER DECISIONS (2026-11-06)
+  1 the full plan, cut last unit first: the replicate, b128g16, the counter cross-check, the T <= 32 block, then the Phi group as one drop group (the design's order with the coordinator's changes: E1 and E2 cut together, so the design's separate Phi 64g1 step is gone, and b128g16 cut right after the replicate)
+  2 the new probe and driver accepted on a first-GPU run, after full laptop tests, a driver dry run and an independent review; a failed start-up regcheck drops only the new probe's units
+  3 synthetic shapes (top_k 2, the least grid 2 CTAs), the Mixtral tp shards and JetMoE at decode tiles; Mixtral-8x22B, Qwen2-57B and Granite-3.0-1B untouched, a test asserts nothing loads them
+  4 the reader prints H1's SUPPORTED / FALSIFIED / MIXED label beside every number; the bands registered before any page; every reading DESCRIPTIVE; no model form and no constant registered
+  5 the 1410 MHz clock twin on the decode tile; C3's STOP rule (its f128 pages and G-BAND) kept for the Phi pages; DS's counter step ported for the same-board cross-check; gpubench dropped; PERTURBED pages read under C3's rule
+
+COORDINATOR (2026-11-06, phi-split REPORT.md)
+  PC-R10's pairs on E2 (64x128) as well as E1, E2 against B3's counted 64g1 bytes; PC-R11 a printed extra
+  E1 and E2 one drop group (never E2 before E1)
+  Phi counted-bytes units at 1410 on the existing bytes tool, as B3 ran them: b128g1 and b64g1 in the Phi group, b128g16 its own lower-priority group; read DESCRIPTIVELY
+  PC-R12 notes that w2's ncu times are confounded
+  this registration says the core is motivated by the decode CAL2 few-CTA failure; Phi's miss is the byte law
+
+BUILD CORRECTIONS
+  loads in flight: the design's 'cp.async.wait_group immediate + 1, expected s - 1' reads 3 on C3's published s3 PTX (wait 2, A and B committed as two groups per k-step); n_if = wait / groups per step + 1 (2 there), required to equal num_stages - 1
+  PC-R1's 8-CTA rule at G 2: cells whose read GEMM has under 4 live CTAs take 6 stamped calls
+  plateau CTAs: n_c >= 0.9 x the launch's PEAK live count (G_live within one wave; past a wave G_live cannot be concurrent)
+  independent review (GO-WITH-FIXES), applied before any page: each variant's regcheck and gate lines are written as it finishes and a cell failing its readback is excluded, not its block; an uncaught probe error exits 4; a probe=pc regcheck that writes no line for a probe=pc stamps unit is a failed start; a perturb unit gates no dropped unit; b128g16 depends on the Phi group (C3's STOP rule); the start-up regcheck's cap is 20 min; sigma reads every live CTA of a READ cell; the L2 guard takes the tile's s4 loads in flight; a launch of a few CTAs takes its call's w1 timer for the clock64 path; X_sat's w1 members need K >= 4096 and a flush; the plateau falsifier is r(G 2) / r(G 16) as the design; PC-R11 follows C3-R3 (e_plain on the plain reference, means, the live check); b128g1 and b64g1 take B3's registered estimates (6, 5); price_pc.py and phi-split's split.json live outside the repo (moe-kernels-work 2026-11-06), recorded by sha256 in the priced file
+  the X ceiling and the L2 guard apply where every slab is read by one CTA (PC's decode cells); on Phi's tread cells X is a demand rate (C3's design note: Mixtral w2 at 3.8 to 4.1 TB/s against triad 3.73)
+  the census: the tile census dry run gives 10 distinct configs (64x128x64w8s3 is both D64's warps factorial and Phi E2's tile); the s4 BK 64 config holds 2 CTAs per SM, so A-G384-s4k64 crosses a wave
+  the C3 probe's E1 units and PC's units write one gate env and one regcheck env (ids u<unit>-<label>); a PC regcheck line ends 'excluded N: labels' when cells failed their readback (readers parse the first word)
+  the probe writes stamps.json, the stamp arrays, the PTX and the regcheck and gate files atomically (a temporary file, then os.replace)
+
+PLAN scripts/plans/rentalPC-2026-11.plan sha256 5c19aa936ccf7c52c7bc74ad9497cf6696e9d3d0b3e023d4f4462a2453af8ba1: 20 units, 84 min estimated (30 nodrop), drop order last first ['rep', 'b16', 'cnt', 'd16', 'phi']
+  - prelude  est 2 cap 15 nodrop {"lock-mhz": "1410", "power-limit-w": "700"}
+  - tilecensus pc est 4 cap 15 nodrop {"models": "mixtral-8x7b,phi-3.5-moe", "tiles": "64x128x64w4s3,64x128x64w4s2,64x128x64w4s4,64x128x128w4s2,64x128x128w4s3,64x128x64w8s3,16x64x128w4s4,16x64x128w4s2,16x64x128w4s3,128x128x64w8s3"}
+  - regcheck rcp est 3 cap 20 nodrop {"probe": "pc"}
+  - perturb ptp est 8 cap 25 nodrop {"gates": "sa,sd,sr", "lock-mhz": "1710", "probe": "pc"}
+  - stamps sa est 6 cap 20 nodrop {"lock-mhz": "1710", "page": "docs/registered/2026-11-06-pc-pages/pc-a.json", "probe": "pc"}
+  - perturb ptc est 4 cap 15 nodrop {"gates": "sc,se2", "probe": "pc"}
+  - stamps sc est 3 cap 10 nodrop {"page": "docs/registered/2026-11-06-pc-pages/pc-c.json", "probe": "pc"}
+  olmoe-1b-7b bytes f128 est 3 cap 20 phi {"block-k": "64", "block-m": "128", "block-n": "128", "byte-groups": "64", "num-stages": "3", "num-warps": "8"}
+  mixtral-8x7b bytes f128 est 7 cap 25 phi {"block-k": "64", "block-m": "128", "block-n": "128", "byte-groups": "64", "num-stages": "3", "num-warps": "8"}
+  - gate gband est 1 cap 5 phi {"gate": "band"}
+  - regcheck rc3 est 2 cap 10 phi {"probe": "c3"}
+  - perturb pt3 est 4 cap 15 phi {"probe": "c3"}
+  phi-3.5-moe stamps se1 est 4 cap 15 phi {"block-k": "64", "block-m": "128", "block-n": "128", "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json", "instr-stamps": "ends", "num-stages": "3", "num-warps": "8", "stamp-arms": "native", "stamp-groups": "1"}
+  phi-3.5-moe stamps se2 est 4 cap 15 phi {"block-k": "64", "block-m": "64", "block-n": "128", "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json", "instr-stamps": "ends", "num-stages": "3", "num-warps": "8", "probe": "pc", "stamp-arms": "native", "stamp-groups": "1"}
+  phi-3.5-moe bytes b128g1 est 6 cap 18 phi {"arms": "native,shared", "block-k": "64", "block-m": "128", "block-n": "128", "byte-groups": "1", "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json", "num-stages": "3", "num-warps": "8"}
+  phi-3.5-moe bytes b64g1 est 5 cap 15 phi {"arms": "native,shared", "block-k": "64", "block-m": "64", "block-n": "128", "byte-groups": "1", "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json", "num-stages": "3", "num-warps": "8"}
+  - stamps sd est 4 cap 15 d16 {"lock-mhz": "1710", "page": "docs/registered/2026-11-06-pc-pages/pc-d.json", "probe": "pc"}
+  mixtral-8x7b decodebytes cnt est 4 cap 15 cnt {"histogram": "docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json", "kernels": "wide", "lock-mhz": "1710"}
+  phi-3.5-moe bytes b128g16 est 7 cap 21 b16 depends phi {"arms": "native,shared", "block-k": "64", "block-m": "128", "block-n": "128", "byte-groups": "16", "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json", "num-stages": "3", "num-warps": "8"}
+  - stamps sr est 3 cap 10 rep {"lock-mhz": "1710", "page": "docs/registered/2026-11-06-pc-pages/pc-r.json", "probe": "pc"}
+  wall about 109 min with 25 min of boot and setup: $4.16 at $2.29/h; deadline launch + 125 min ($4.77); guardian hard cap launch + 140 min ($5.34 at most); the nodrop core 30 min, about 55 min wall ($2.10)
+  rule: units x 1 plus 25 min of boot and setup (C3's rule); deadline launch + wall + the driver's 8 min reserve + 5 min, rounded up to 5 min; the guardian's hard cap 15 min after the deadline
+
+STOP RULES
+  prelude (C3's, unchanged): the session STOPS before any page unless the checkout is clean, sudo works, the GPU is idle, 700 W reads back on both enforced.power.limit and -q's GPU-scope Current Power Limit within 1 W (polled up to 30 s; no fallback), persistence is Enabled and the session lock 1410 MHz reads back; the prelude also probes 1710 MHz (lock, read back, reset)
+  unit locks (PC): a perturb, stamps or decodebytes unit at lock-mhz=1710 refuses unless the prelude's probe held it; it locks, reads back (two tries) and runs; after the tool the lock is read back again (pc-locks.env); the reset on exit restores the session, whose next unit locks its own; the reader refuses a stamps unit whose own lock, or whose probe=pc perturb unit's lock, did not read back after its tool
+  the regcheck drop rule (owner decision 2): the probe=pc regcheck (unit 3) exiting anything but 0 or 1 (refused, crashed, stopped at its cap, skipped) or that writes no regcheck line for a probe=pc stamps unit drops every probe=pc unit (4 to 7, 14, 17, 20); the existing tools still run (units 8 to 13, 15, 16, 18, 19). Exit 1 (a variant's occupancy or path FAIL) refuses that variant's stamps unit by its regcheck line; a cell failing its readback is excluded alone. The probe exits 4 on any uncaught error, never 0 or 1. The rule drops E2 while E1 (C3's probe) still runs: owner decision 2 is read as winning over 'never E2 before E1' (an owner item)
+  G-BAND (owner decision 5: C3's STOP rule kept for the Phi pages): A2's G-BAND (tileA2_gate.py band) after the two f128 pages: on a FAIL, or when the gate is skipped, the Phi group (drop-group phi: the f128 pages, the gate, C3's regcheck and perturb, E1, E2, b128g1, b64g1) and b128g16 (depends=phi) are dropped and the session goes on; the decode units at 1710 are not gated by it. The reader reads the Phi units only on a G-BAND PASS
+  the gate and the stamps (C3's): a stamps unit runs only when its regcheck line and the gate's HARD line (occupancy, the all-off SASS, the upstream file, C3's SASS legs, and for probe=pc every cell's readback) read PASS; a timing FAIL alone runs it PERTURBED (C3's OD-1, owner decision 5)
+  budget: the driver drops the LAST droppable unit first: rep, b16, cnt, d16, then the phi group (one drop-group: E1 and E2 together, never E2 before E1); a unit whose estimate no longer fits is SKIPPED; the guardian terminates at the hard cap
+  never: no PC reading is a STOP; a reading that does not identify reads NOT IDENTIFIED
+
+READINGS
+  every reading: DESCRIPTIVE: computed from PC's pages by the rule below (read_pc.py), registered before any PC page; none is a model term, a constant, a STOP, a bar or a verdict. A reading that does not clear its rule reads NOT IDENTIFIED with the reason; nothing falls back and nothing reads 0 by default. Common rule: a reading is read only when PC-R0 holds for every launch it uses, the per-call medians' spread is at most 3% (5% at G <= 8), and its own rule holds
+  PC-R0 (validity; read_pc.launch, stamp_unit, board): per launch: every row stamped live or dead; the live CTAs exactly the pids under (ntpp / BLOCK_M) x ceil(N / BLOCK_N) and equal to the cell's sum over experts of ceil(c_e / BLOCK_M) x ceil(N / BLOCK_N); USE_TD False; no late buffer; the first w2 start after the last w1 end of the call; ROW SANITY. Per unit: the board (C2_POWER_W=700, LOCK_PROBE_1410=held, LOCK_PROBE_1710=held; G-BAND PASS for the Phi units only), the variant's regcheck line and the gate's HARD line PASS (a timing FAIL alone reads PERTURBED), the page's label the gate's, the page the registered file (sha256), the versions (python on major.minor; torch, triton, vllm exact), every stamped compile passing C3's SASS legs (every DISTINCT compile of the unit, keyed by its config and the CompiledKernel's hash, so a config Triton compiles twice is checked twice; the loads in flight must agree over every compile of a tile), the page COMPLETE (a PARTIAL page, cut by a cap or a crash, is REFUSED: its SASS legs are written only at the unit's end), and the unit's lock read back after its tool (pc-locks.env). A failing launch or unit is NOT READ, never zero. vLLM's EM padding launches dead CTAs (kind 2) past the live ones; they are counted, printed and excluded
+  ROW SANITY (read_pc.launch): every live start and end positive and finite, end after start, clock64 life positive; the per-CTA clock in (0, 1980] MHz; every per-CTA rate at most 4022 GB/s (the HBM3 spec peak) and, where every slab is read by one CTA (PC's decode cells), the launch's X too; on a flushed decode cell no CTA faster than Q_max / 350 ns, Q_max the tile's in-flight B bytes at s4 (3 tiles; L2-served: the launch is void); the overhead finite. Else the launch is NOT READ
+  per CTA (read_pc.launch): s_c, e_c globaltimer ns; k_c clock64 cycles; lambda_c = (e_c - s_c) / (1 + o), o the cell GEMM's overhead median from its perturb unit; where the globaltimer resolution (the least positive difference of the launch's distinct starts) exceeds a tenth of the median life, lambda_c = k_c / f_l / (1 + o), f_l the median clock of the CTAs living at least 10 resolutions, the call's w1 launch's resolution and clock where this launch has neither (a few CTAs in one tick; the source is recorded) (clock64 is never compared across SMs); f_c = k_c / (e_c - s_c); b_c = K x the CTA's BLOCK_N columns x 2 (the B slab; A rows are L2-hot by vLLM's order and printed apart); r_c = b_c / lambda_c; n_c and m_c the time averages over [s_c, e_c] of the launch's live CTAs GPU-wide and on the CTA's SM (itself included); plateau CTAs n_c >= 0.9 x the launch's peak live count; X_l = the B bytes streamed in the steady window (the live count at least 0.9 x its peak) over its length, times (1 + o)
+  per cell and GEMM (read_pc.cell_gemm): pooled over the stamped calls: r = the median r_c over plateau CTAs, NOT READ under 8; the spread of the per-call medians at most 3% (5% at G <= 8); NOT READ when the GEMM's |overhead median| exceeds 0.1 or its |worst pair| 0.2 (C3's OD-1 bound per cell, owner decision 5); PERTURBED pages are read under it and labelled. w2 is the read GEMM of every decode cell; w1 is stamped in every call
+  PC-R1 rate curve (read): r(rung) against G_live and the measured n and m, per block (tile, config, lock): each rung's median per-CTA clock printed with whether it sits in the lock's band (A2's fallback band at 1410, rental 6's at 1710; printed, not applied); the medians split by SM sharing (every live CTA alone, m_c <= 1.2, and sharing, m_c >= 1.8); and trap 13 (DRAM addresses): each CTA's expert read off expert_ids[pid // ceil(N / BLOCK_N)] (the saved -experts.npy), the median r_c over plateau CTAs per expert, flagged SPREAD OVER 5% when (max - min) / median of the expert medians exceeds 0.05 (read_pc.per_expert, by_sharing; DESCRIPTIVE, never a refusal)
+  PC-R2 F ladders (read_pc.f_ladder): per G (8: pcs-e8-h512 at F 1792, 3584, 7168 and A-G8 at 14336; 128: Mixtral tp8, tp4, tp2 and 8x7B T128 A4): lambda_med = c0 + b / r_inf by OLS over the 4 rungs, READ with all 4 and the standard error of 1 / r_inf at most 5% of it; DS's per-ladder offsets printed beside (cross-board)
+  PC-R3 stage and BLOCK_K elasticity (read_pc.beta_q): beta_Q = d ln r / d ln Q_B by least squares over (s2, s3, s4 at BK 64; 3 READ) and (s2, s3 at BK 128; 2 READ) at G 8, 128 and 384 (BK 64 only at 384); Q_B = n_if x BLOCK_K x BLOCK_N x 2 with n_if read off the stamped copy's PTX (pccommon.inflight_stages: in the innermost loop, cp.async.wait_group's immediate over the commit groups per k-step, plus 1) and required to equal num_stages - 1, else that config is NOT IDENTIFIED; rates c0-corrected (b / (lambda_med - c0)) by PC-R2 at the same G when READ, uncorrected and labelled otherwise; rho_seg = r(s2, BK 128) / r(s3, BK 64) at equal Q_B; scored against the PTX in-flight ratio, never against 1. D16's (s2, s3, s4) at G 16 and 128 printed, DESCRIPTIVE
+  PC-R4 clock elasticity (read_pc.beta_f): beta_f = ln(r_1410 / r_1710) / ln(f_1410 / f_1710) per twin (block C against block A), f the rungs' measured median per-CTA clock, not the nominal lock; both nulls printed (compute-bound 1, latency-bound 0)
+  PC-R5 warps: omega = r(w8) / r(w4) at 64x128x64 s3, G 8 and G 128; both READ
+  PC-R6 SM sharing inside one launch (read_pc.sigma_of): at A-G160, A-G192, A-G288, over EVERY live CTA of the cell's valid launches: sigma = the median r_c of the CTAs with m_c >= 1.8 over the median r_c of the CTAs with m_c <= 1.2; read only when the cell reads READ under the common rule; at least 20 CTAs in each group, else NOT IDENTIFIED (the scheduler did not mix them; at G 288 every SM holds 2 or more); each group's median n_c printed beside. The design's 10% n window is DROPPED (review MAJOR-4): a CTA sharing its SM at half the rate outlives the alone ones, so its n_c falls out of any window around theirs and the H3 falsifier (sigma < 0.6) could never fire; the groups' n_c are printed instead
+  PC-R7 transition into saturation (read_pc.transition): over the D64 ladder (A-G2 to A-G1024, w2): X_l against G and N_if = n Q_B; L_gpu = Q_B n / X; X_sat = the median X over the w2 rungs at G >= 396 and every flushed D64 w1 launch with at least one full wave and K >= 4096 (each member's K printed; 396; read only when the census reads 3 CTAs per SM at 64x128x64w4s3), printed beside triad 3,726 GB/s; r0 = the median r over G 2, 4, 8, 16 (READ with at least 3 of them within 10% of r0); saturation READ with at least 2 rungs within 3% of X_sat; G_90 = the least rung with X >= 0.9 X_sat; d(G) = X / min(G r0, X_sat) - 1
+  PC-R8 transfer (read): t = r(anchor) / r(synthetic rung) - 1: Mixtral T128 A4 against A-G128 (same tile, config, G and F); JetMoE T128 A4 against A-G64 and Mixtral tp8, tp4, tp2 against A-G128, each labelled 'F differs'; the 1410 twin; D16's Mixtral T16 A2 against D-G128, and the row-fill rungs Mixtral T4 A2 and T2 A2 against D-G128; each anchor's per-expert spread and flag (trap 13) printed beside its t. The CAL2 cell: r(Mixtral T128 A4) against Q_B / L_gpu(X), L_gpu read off the ladder at the anchor's X (piecewise linear, NOT IDENTIFIED outside the ladder's X span): within 10% CARRIES, over 10% SHAPE-SPECIFIC
+  PC-R9 L2 control: r(A-G8, flush off) / r(A-G8, flush on); both READ. The flush-off cell's overhead o is the perturb unit's, measured on flushed bursts (the burst timer always flushes)
+  PC-R10 Phi w1 re-read pairs (read_pc.reread, phi_pairs; coordinator 2026-11-06: E1 and E2): per Phi cell (the n x BLOCK_M per-expert counts only for 'balanced'; a cell with no counts is NOT READ) from its w1 stamps, E1 at 128x128 (W_c 264, C3's probe) and E2 at 64x128 (W_c 396, PC's probe), each read only when the census reads the registered occupancy: re-read pairs (C3-R2's pairs: same expert, same pid_n, pid_m - 1), their launch gap in units of M4's gap P L / W_c, the share launched together (g < 0.5), the share whose lives overlap, the B bytes streamed GPU-wide between partner starts dB; compulsory C = each active expert's w1 once plus the gathered A rows once (T k rows x H x 2: phi-split's C, so the miss fraction compares with REPORT.md's), re-read demand R = pairs x the slab, the measured miss fraction (D - C) / R with D B3's counted w1 bytes for the cell (board ebedab, by value), and the zero-constant rule's bytes (a re-read misses iff its life does not overlap its partner's and more than 60 MiB stream between their starts) against D; printed, never selected or fitted. This board's own counted w1 bytes (units b128g1, b64g1; read_pc.board_counted) are printed beside, DESCRIPTIVE (they will likely fail B3's per-cell clock rule again)
+  PC-R11 Phi 64g1 life against packing (read_pc.phi_life_packing; a printed extra): C3-R3's rule per cell and GEMM at W_c 396: ln(T_pred / T_stamp) = ln(L_pred / L_med) [LIFE] + ln(live L_med / (W_c T_stamp)) [PACKING], T_pred the frozen round-5 per-GEMM price by value, overhead-corrected, the stamped live CTAs equal to the priced live; the means over cells and the skew contrast; READ when e_plain (the mean of T_pred / T_plain - 1 over the skewed cells, T_plain the perturb unit's plain median) is at least 2% in size and the median |o| at most a quarter of it, else NOT REPRODUCED or DESCRIPTIVE ONLY
+  PC-R12 counter against time (read_pc.counter_vs_time): per matching cell (Mixtral T128 A4, T128 A8, T16 A2, T4 A2): launch_ms - the stamps' span; with unit 16's counter page (page sha256, V_ALIGN_grid PASS, kernels wide, versions), gpu__time_duration - span and the counted DRAM bytes over the construction's (each active expert's weights once; the A operand's bytes printed beside, so a w1 ratio a little over 1 is no defect). w2's ncu times are confounded: ncu flushes L2 before each kernel, so w2's A operand (L2-hot in vLLM's order) is a DRAM read under ncu, and ncu's replays run at a lower clock (coordinator, 2026-11-06)
+  PC-R13 clock at kernel start: per launch: the median f_c of the CTAs starting in the first 50 us over the rest's, at least 8 in each; flagged under 0.97
+  PC-R14 placement: for launches of at most 132 live CTAs: distinct SMs, the most CTAs on one SM, Spearman's rank of start order against pid; always printed
+  replicate: r(R-G8, R-G128, R-G512) / r(A-G8, A-G128, A-G512) - 1: page noise, printed
+
+H1
+  hypothesis: H1, per-CTA memory-level parallelism: a CTA's streaming rate is its loads in flight over the memory latency, r = Q_B / L, with L rising as the GPU's demand nears saturation
+  label: owner decision 4 (2026-11-06): the reader prints SUPPORTED, FALSIFIED or MIXED beside every number, DESCRIPTIVE; the bands are registered here before any page (pccommon.h1_label)
+  inputs (low load: D64 at 1710 MHz, G 8; sigma at G 192): beta_Q over (s2, s3, s4) at BK 64, G 8 (PC-R3); beta_f of C-G8 against A-G8 (PC-R4); omega of A-G8-w8 against A-G8 (PC-R5); the plateau ratio max / min of r over A-G2, A-G4, A-G8, A-G16 with X(G 16) / X_sat (PC-R1, PC-R7); sigma at A-G192 (PC-R6); X(G 8) / X_sat, the low-load premise
+  FALSIFIED when any read falsifier holds: ["beta_Q < 0.5 (the rate barely moves when loads in flight triple)", "beta_f > 0.5 (the rate tracks the SM clock)", "omega > 1.25 (more warps at the same loads in flight run faster)", "no plateau: r(G 2) / r(G 16) > 1.5 with X(G 16) <= 0.25 X_sat (the limit is shared, H4)", "sigma < 0.6 (CTAs sharing an SM run at about half the rate, H3)"]
+  SUPPORTED when every band holds: ["beta_Q in [0.7, 1.3]", "|beta_f| <= 0.3", "omega in [0.85, 1.15]", "the plateau within 15% over G 2 to 16", "sigma >= 0.85"]
+  otherwise: NOT IDENTIFIED when no falsifier fires and an input is unread (the low-load premise included: it is unread only when X(G 8) is, since an unread X_sat falls back to the triad), or the premise fails (X(G 8) over 0.25 of its denominator: G 8 is not low load); else MIXED. A beta_Q under 1 at G 128 or 384 does not falsify H1 (its own prediction once L rises with load)
+  the CAL2 sub-reading: PC-R8: within 10% CARRIES; over 10% SHAPE-SPECIFIC
+  printed beside the label: whether beta_Q's rates were c0-corrected (PC-R2 READ at G 8) or not; and which denominator the low-load premise used
+  the low-load premise and its fallback (owner decision, 2026-11-06): X(G 8) / X_sat with PC-R7's X_sat when it is read; when it is not, X(G 8) / the published triad, 3726.2 GB/s (scripts/scoring/cal2/read_c2.py TRIAD_A2_GBPS 3726.2 GB/s (A2's calibration page; the 15 calibrated rentals read 3725.6 to 3727.6)), and the output labels the clause FALLBACK every time it is used. The fallback replaces X_sat in this premise only: the plateau falsifier's load condition (X(G 16) <= 0.25 X_sat) keeps X_sat, so no falsifier is loosened
+  bands: {"falsify": {"beta_Q_below": 0.5, "beta_f_above": 0.5, "omega_above": 1.25, "plateau_ratio_above": 1.5, "plateau_load_frac_max": 0.25, "sigma_below": 0.6}, "support": {"beta_Q": [0.7, 1.3], "beta_f_abs_max": 0.3, "omega": [0.85, 1.15], "plateau_within": 0.15, "sigma_min": 0.85}, "low_load_frac_max": 0.25}
+
+CELLS (COMPUTED)
+  pc-a:
+    A-G2: pcs-e8-h128 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 2 calls 6
+    A-G4: pcs-e8-h256 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 4 calls 3
+    A-G8: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 8 calls 3
+    A-G16: pcs-e8-h1024 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 16 calls 3
+    A-G32: pcs-e8-h2048 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 32 calls 3
+    A-G64: pcs-e32-h4096 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 64 calls 3
+    A-G128: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x64w4s3 live w1 896 w2 128 calls 3
+    A-G160: pcs-e32-h4096 T 160 A 5 c_e 64 64x128x64w4s3 live w1 1120 w2 160 calls 3
+    A-G192: pcs-e32-h4096 T 192 A 6 c_e 64 64x128x64w4s3 live w1 1344 w2 192 calls 3
+    A-G256: pcs-e32-h4096 T 256 A 8 c_e 64 64x128x64w4s3 live w1 1792 w2 256 calls 3
+    A-G288: pcs-e32-h4096 T 288 A 9 c_e 64 64x128x64w4s3 live w1 2016 w2 288 calls 3
+    A-G384: pcs-e32-h4096 T 384 A 12 c_e 64 64x128x64w4s3 live w1 2688 w2 384 calls 3
+    A-G416: pcs-e32-h4096 T 416 A 13 c_e 64 64x128x64w4s3 live w1 2912 w2 416 calls 3
+    A-G512: pcs-e32-h4096 T 512 A 16 c_e 64 64x128x64w4s3 live w1 3584 w2 512 calls 3
+    A-G768: pcs-e32-h4096 T 768 A 24 c_e 64 64x128x64w4s3 live w1 5376 w2 768 calls 3
+    A-G1024: pcs-e32-h4096 T 1024 A 32 c_e 64 64x128x64w4s3 live w1 7168 w2 1024 calls 3
+    A-MX-T128-A4: mixtral-8x7b T 128 A 4 c_e 64 64x128x64w4s3 live w1 896 w2 128 calls 3
+    A-JM-T128-A4: jetmoe-8b T 128 A 4 c_e 64 64x128x64w4s3 live w1 352 w2 64 calls 3
+    A-MX-T128-A8: mixtral-8x7b T 128 A 8 c_e 32 64x128x64w4s3 live w1 1792 w2 256 calls 3
+    A-F1792-G8: pcs-e8-h512-f1792 T 64 A 2 c_e 64 64x128x64w4s3 live w1 56 w2 8 calls 3
+    A-F3584-G8: pcs-e8-h512-f3584 T 64 A 2 c_e 64 64x128x64w4s3 live w1 112 w2 8 calls 3
+    A-F7168-G8: pcs-e8-h512-f7168 T 64 A 2 c_e 64 64x128x64w4s3 live w1 224 w2 8 calls 3
+    A-TP8-G128: mixtral-8x7b-tp8 T 128 A 4 c_e 64 64x128x64w4s3 live w1 112 w2 128 calls 3
+    A-TP4-G128: mixtral-8x7b-tp4 T 128 A 4 c_e 64 64x128x64w4s3 live w1 224 w2 128 calls 3
+    A-TP2-G128: mixtral-8x7b-tp2 T 128 A 4 c_e 64 64x128x64w4s3 live w1 448 w2 128 calls 3
+    A-G8-s2k64: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s2 live w1 448 w2 8 calls 3
+    A-G8-s4k64: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s4 live w1 448 w2 8 calls 3
+    A-G8-s2k128: pcs-e8-h512 T 64 A 2 c_e 64 64x128x128w4s2 live w1 448 w2 8 calls 3
+    A-G8-s3k128: pcs-e8-h512 T 64 A 2 c_e 64 64x128x128w4s3 live w1 448 w2 8 calls 3
+    A-G8-w8: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w8s3 live w1 448 w2 8 calls 3
+    A-G128-s2k64: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x64w4s2 live w1 896 w2 128 calls 3
+    A-G128-s4k64: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x64w4s4 live w1 896 w2 128 calls 3
+    A-G128-s2k128: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x128w4s2 live w1 896 w2 128 calls 3
+    A-G128-s3k128: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x128w4s3 live w1 896 w2 128 calls 3
+    A-G128-w8: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x64w8s3 live w1 896 w2 128 calls 3
+    A-G384-s2k64: pcs-e32-h4096 T 384 A 12 c_e 64 64x128x64w4s2 live w1 2688 w2 384 calls 3
+    A-G384-s4k64: pcs-e32-h4096 T 384 A 12 c_e 64 64x128x64w4s4 live w1 2688 w2 384 calls 3
+    A-G8-noflush: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 8 calls 3 NO FLUSH
+  pc-c:
+    C-G8: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 8 calls 3
+    C-G32: pcs-e8-h2048 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 32 calls 3
+    C-G128: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x64w4s3 live w1 896 w2 128 calls 3
+    C-G256: pcs-e32-h4096 T 256 A 8 c_e 64 64x128x64w4s3 live w1 1792 w2 256 calls 3
+    C-G512: pcs-e32-h4096 T 512 A 16 c_e 64 64x128x64w4s3 live w1 3584 w2 512 calls 3
+    C-G1024: pcs-e32-h4096 T 1024 A 32 c_e 64 64x128x64w4s3 live w1 7168 w2 1024 calls 3
+    C-G8-s2k64: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s2 live w1 448 w2 8 calls 3
+    C-G8-s4k64: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s4 live w1 448 w2 8 calls 3
+    C-MX-T128-A4: mixtral-8x7b T 128 A 4 c_e 64 64x128x64w4s3 live w1 896 w2 128 calls 3
+  pc-d:
+    D-G4: pcs-e8-h128 T 16 A 2 c_e 16 16x64x128w4s4 live w1 896 w2 4 calls 3
+    D-G16: pcs-e8-h512 T 16 A 2 c_e 16 16x64x128w4s4 live w1 896 w2 16 calls 3
+    D-G64: pcs-e8-h2048 T 16 A 2 c_e 16 16x64x128w4s4 live w1 896 w2 64 calls 3
+    D-G128: pcs-e32-h4096 T 16 A 2 c_e 16 16x64x128w4s4 live w1 896 w2 128 calls 3
+    D-G256: pcs-e32-h4096 T 32 A 4 c_e 16 16x64x128w4s4 live w1 1792 w2 256 calls 3
+    D-G384: pcs-e32-h4096 T 48 A 6 c_e 16 16x64x128w4s4 live w1 2688 w2 384 calls 3
+    D-G512: pcs-e32-h4096 T 64 A 8 c_e 16 16x64x128w4s4 live w1 3584 w2 512 calls 3
+    D-G1024: pcs-e32-h4096 T 128 A 16 c_e 16 16x64x128w4s4 live w1 7168 w2 1024 calls 3
+    D-MX-T2-A2: mixtral-8x7b T 2 A 2 c_e 2 16x64x128w4s4 live w1 896 w2 128 calls 3
+    D-MX-T4-A2: mixtral-8x7b T 4 A 2 c_e 4 16x64x128w4s4 live w1 896 w2 128 calls 3
+    D-MX-T16-A2: mixtral-8x7b T 16 A 2 c_e 16 16x64x128w4s4 live w1 896 w2 128 calls 3
+    D-G16-s2: pcs-e8-h512 T 16 A 2 c_e 16 16x64x128w4s2 live w1 896 w2 16 calls 3
+    D-G16-s3: pcs-e8-h512 T 16 A 2 c_e 16 16x64x128w4s3 live w1 896 w2 16 calls 3
+    D-G128-s2: pcs-e32-h4096 T 16 A 2 c_e 16 16x64x128w4s2 live w1 896 w2 128 calls 3
+    D-G128-s3: pcs-e32-h4096 T 16 A 2 c_e 16 16x64x128w4s3 live w1 896 w2 128 calls 3
+  pc-r:
+    R-G8: pcs-e8-h512 T 64 A 2 c_e 64 64x128x64w4s3 live w1 448 w2 8 calls 3
+    R-G128: pcs-e32-h4096 T 128 A 4 c_e 64 64x128x64w4s3 live w1 896 w2 128 calls 3
+    R-G512: pcs-e32-h4096 T 512 A 16 c_e 64 64x128x64w4s3 live w1 3584 w2 512 calls 3
+
+PAGES
+  docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json: da6f1854206a6038da338ac31e79d391742e9bfd47092ae94e2d35ad0c4de433 (4 cells)
+  docs/registered/2026-11-06-pc-pages/pc-a.json: eaddaa52eac66ea73e4e43cc17eec6d089ceef4fcdb3dba15e507be84b623c3c (38 cells)
+  docs/registered/2026-11-06-pc-pages/pc-c.json: 3aed1caad780ef2997071e119c5a4649c82463a24cd7f08902af370bfa7bea40 (9 cells)
+  docs/registered/2026-11-06-pc-pages/pc-d.json: c8d6626f5033540b3a445a2a6230f51c1eab34a89c0993ab05f4687f2198b809 (15 cells)
+  docs/registered/2026-11-06-pc-pages/pc-r.json: 826e83fd772d1e79e2c5cbedcdc9172dad93b01ecdc7552e585ca80e719f841f (3 cells)
+  docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json: cd9246dcf43f52078f3017afafc6c06243d47aea089e0a12e72e9fef0a28bf41 (12 cells)
+  docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json: a43063a80d87b61b99820fa3046da34d13dc7cfec0682f8168059b741d75bd99 (6 cells)
+  docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json: 9f5de8124e55f3c1eaf8a944996a799ff595b779d1d06b9c51100d0ed6c9e300 (12 cells)
+SHAPES docs/registered/2026-11-06-pc-shapes.json sha256 36432b2f84cfa14cf5d641f526ea2435988f21d567a31d16b78dd7981d24cb77
+PRICED docs/registered/2026-11-06-pc-priced.json sha256 56b97fb0b28b24d8a22542b0f63b85a8ce61f6cf7b0cea421c16433d31acae58 (18 rows): PC-R10's counted Phi w1 and w2 bytes (B3's published byte pages, board ebedab, 1410 MHz, ncu kernel replay with L2 flushed before each kernel, NATIVE cells; the cells fail B3's per-cell clock rule and are read DESCRIPTIVELY) and PC-R11's per-GEMM prices (the frozen round-5 model, gemm + dead + const ms, from the phi-split analysis, POST-HOC on SEEN pages), registered by value before any PC page
+
+SEEN
+  {"becomes SEEN at decode tiles": ["mixtral-8x7b-tp4", "mixtral-8x7b-tp8"], "loaded (all SEEN)": ["mixtral-8x7b", "mixtral-8x7b-tp2", "mixtral-8x7b-tp4", "mixtral-8x7b-tp8", "jetmoe-8b", "phi-3.5-moe", "olmoe-1b-7b", "the registered synthetic shapes"], "reserved (owner decision 3)": {"models": ["mixtral-8x22b", "qwen2-57b-a14b", "qwen2-57b-a14b-tp8", "granite-3.0-1b-a400m"], "rule": "never loaded, never timed, never shaped: the probe refuses a variant, cell or weight build naming one or a shape equal to one (pccommon.shape_cfg), and tests/test_instr_probe_pc.py asserts nothing in the plan loads them"}, "statement": "PC times none of the three models held for the decode blind and keeps every unseen model unseen at prefill tiles", "still unseen at vLLM's prefill tiles (COMPUTED at 6c800f84, FROZEN)": ["granite-3.0-3b-a800m", "granite-3.0-1b-a400m", "mixtral-8x7b-tp4", "mixtral-8x7b-tp8", "qwen2-57b-a14b-tp8", "deepseek-v3", "deepseek-v3-tp4", "deepseek-v3-tp8"]}
+
+CENSUS AND OCCUPANCY: {"design occupancy (dry run, printed)": {"128x128x64w8s3": 2, "16x64x128w4s2": 10, "16x64x128w4s3": 5, "16x64x128w4s4": 3, "64x128x128w4s2": 2, "64x128x128w4s3": 1, "64x128x64w4s2": 4, "64x128x64w4s3": 3, "64x128x64w4s4": 2, "64x128x64w8s3": 3}, "registered occupancy": {"128x128x64w8s3": 2, "16x64x128w4s4": 3, "64x128x64w4s3": 3, "64x128x64w8s3": 3}, "rule": "the wave-dependent readings (PC-R7's X_sat pool, PC-R10, PC-R11) read only where the census reads the registered occupancy; a missing census or a path mismatch makes them NOT IDENTIFIED", "unit": "unit 2: tile_census_a2.py over the 10 PC configs and C3's 128x128 on Mixtral-8x7B and Phi-3.5 (compile only)"}
+PAGE IDENTITY AND VERSIONS: {"major_minor": ["python"], "pages": "each stamps manifest's source_sha256 equals the registered page's (histogram_sha256 on C3's E1)", "versions": {"python": "3.12.16", "torch": "2.13.0", "triton": "3.7.1", "vllm": "0.27.1"}}
+CONSTANTS: {"alone_m": 1.2, "carry_within": 0.1, "f_ceiling_mhz": 1980.0, "f_rungs": 4, "knee_frac": 0.9, "l2_latency_ns": 350.0, "min_plateau_ctas": 8, "min_share_ctas": 20, "overhead_frac": 0.25, "overhead_median_max": 0.1, "overhead_worst_max": 0.2, "plateau_Gs": [2, 4, 8, 16], "plateau_frac": 0.9, "plateau_within": 0.1, "rate_ceiling_gbps": 4022.0, "repro_min": 0.02, "reread_l2_mib": 60.0, "sat_rungs": 2, "sat_within": 0.03, "se_inv_rinf_max": 0.05, "shared_m": 1.8, "sigma_Gs": [160, 192, 288], "spread_max": 0.03, "spread_max_small": 0.05, "spread_small_G": 8, "start_flag": 0.97, "start_min_ctas": 8, "start_window_ns": 50000.0, "timer_max_frac": 0.1, "triad_gbps": 3726.0}
+EARLIER REGISTRATIONS KEPT BYTE-IDENTICAL: 2026-10-26-cal3-gh200, 2026-11-04-decode-addendum4-gh200, 2026-11-04-tileB3-gh200
+
+code_pins: (in the JSON)

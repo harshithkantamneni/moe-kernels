@@ -1,0 +1,82 @@
+REGISTERED 2026-10-20, before any tile rental A2 page: tile rental A2, 2026-10-20-tileA2-census-gh200
+status: REGISTERED BEFORE ANY A2 PAGE (an addendum to tileA-census: rental A's VALID (INCOMPLETE) stands)
+design: design-A2 DESIGN.md (2026-10-20) corrected by design-A2-review REVIEW.md (the review wins: every MAJOR and MINOR fix), the build review (GO-WITH-FIXES) and the owner's decisions of 2026-10-20: A 900 W GPU POWER LIMIT AND THE LOCK LADDER 1710, 1410, 1305 (the first rung whose probe passes is the lock of every later unit; the 900 W limit changes the owner's 2026-09-26 700 W decision for tile rental A2, and rental B2 at the limit A2 held, only); rental B2 at A2's power limit and lock rung; decode uses A2's constants only once A2's floor calibration is scored; the probe strict (one LOST cell fails a rung); every other decision is the design's recommendation as amended by the review: OD3 the byte pages re-run, OD4 sigma_page re-measured, OD5 w4, ms and dk droppable, OD6 CONV-L a registered test, nodrop, not a stop clause (REVIEW 3a: timed at 1710 and at L, a per-cell ratio), OD7 decode stays at 1710 by addendum, OD8 the band [0.975 L, L] (REVIEW 2c: the scaled band a registered fallback), OD9 the calibrate gate under the lowest rung (build review fix 3), OD10 the scorer import order fixed in place, OD11 the probe thresholds of DESIGN 6, OD12 the offline conversion check done before registering, OD13 rental A's timed pages against v4 forbidden
+tool: scripts/tile_census_a2.py (compile only) in A2's tilecensus unit (scripts/gh200_tileA2_session.sh); the merge step and scorer scripts/scoring/tileA2/score_census_a2.py (census_a2.py); the gate scripts/tileA2_gate.py census
+
+16x64x128w4s4: mma.sync, shared 61440 B, design occupancy 3
+32x64x128w4s3: mma.sync, shared 49152 B, design occupancy 4
+32x128x64w4s3: mma.sync, shared 40960 B, design occupancy 5
+64x128x64w4s3: wgmma, shared 73728 B, design occupancy 3
+64x128x64w8s3: wgmma, shared 73728 B, design occupancy 3
+128x128x64w8s3: wgmma, shared 98304 B, design occupancy 2
+SEEN PTX 128x128x64w8s4: {'path': 'wgmma', 'wgmma': 4, 'instruction': 'm64n128k16', 'dtype': 'bf16', 'cp_async_cg': 8, 'cp_async_bytes_per_thread': 128, 'bar_sync': 2, 'fence_proxy_async': 1, 'wgmma_wait_group': 1, 'cp_async_wait_group': 1, 'threads': 256, 'per_warpgroup': 4, 'warpgroups': 2}
+SEEN PTX 64x128x64w8s4: {'path': 'wgmma', 'wgmma': 4, 'instruction': 'm64n64k16', 'dtype': 'bf16', 'cp_async_cg': 6, 'cp_async_bytes_per_thread': 96, 'bar_sync': 2, 'fence_proxy_async': 1, 'wgmma_wait_group': 1, 'cp_async_wait_group': 1, 'threads': 256, 'per_warpgroup': 4, 'warpgroups': 2}
+SEEN PTX 32x64x64w8s4: {'path': 'mma.sync', 'mma_sync': 8, 'ldmatrix': 8, 'cp_async_cg': 3, 'ldmatrix_bytes_per_thread': 128, 'cp_async_bytes_per_thread': 48, 'threads': 256, 'wavefronts': 280.0}
+
+unit: - tilecensus label=ta2, A2's fourth unit, nodrop, before any lock-hold probe: rental A's six tiles on the seven models, each model at its smallest whole tread, and OLMoE again at n 3
+what: per (tile, model, GEMM): registers (EIATTR_REGCOUNT), shared bytes, warps, stages, CTAs per SM and the binding limit (moe.instrumented.cubin.occupancy, the sm_90 calculator), the MMA path, and the main loop's per-thread PTX counts (mma.sync: ldmatrix and cp.async, then LSU wavefronts per CTA k-step; wgmma: the instruction and its count per warpgroup, cp.async, bar.sync, fence.proxy.async and the waits)
+rules:
+  path: the unit REFUSES itself (exit 3, VALIDITY census_path FAIL) when any config's compiled MMA path is not the predicate's (wgmma iff BLOCK_M % 64 == 0 and num_warps % 4 == 0): every v4 law is per path
+  occupancy_read_not_fitted: v4 reads each (tile, GEMM)'s CTAs per SM from the census of the model it prices; the geometry's co-residency window W_c = 132 x that occupancy
+  re_key (design-tile-review 9.11): a rental-A counter page whose recorded launch__occupancy_limit_* minimum differs from the census (integers, exact) is scored at its recorded occupancy (rental 4's re-key rule) and printed; the census value stays v4's for every other page
+  rental_B_scope (design-tile-review 9.11): rental B re-reads the census on its own board (a tilecensus unit, compile only; score_tileB.census_check). A (model, tile) whose rental-B occupancy differs from rental A's census on either GEMM has its predictions NOT SCORED on every page of that (model, tile); a missing or refused rental-B census leaves every page NOT SCORED
+  path_mismatch_is_a_STOP (build-tile-review 9): a census that refuses (MMA path mismatch) or is missing STOPS rental B (tileB-stop) and finalise.py refuses: never a fallback to the design occupancy
+  mechanical_steps:
+    - every occupancy is read by tcommon.occupancy_of (the census, else the shared-memory rule): `rowkeys_tile.py --census-score <census.score.json>` re-prices the row-key rows and `register.py --census-score <census.score.json>` rebuilds every registration at the census occupancy before rental B is finalised; no number is edited by hand
+    - v4's wavefronts (mma.sync) and wgmma counts (wgmma) are the census's; the design estimates above are replaced
+  registers: printed, not gating (the occupancy is what v4 reads)
+labels:
+  census: compile only: no time
+  deepseek-v2-lite at n 3: the tread rental B's deepseek page times; Triton specialises integers divisible by 16 and num_valid_tokens and EM are at n 3 as at OLMoE n 1 (REVIEW-A2 8, inference), which the n 1 / n 3 rule checks
+seen_data:
+  - the SEEN H200 PTX above
+  - the shared-memory rule read off 1,304 published cubins (design-tile 1)
+a2_rules:
+  tread (DESIGN-A2 5b): each model compiles at the smallest n with n x BLOCK_M x E divisible by k (tile_census_a2.tread_of); deepseek-v2-lite n 3 at every tile, every other model n 1
+  treads:
+    olmoe-1b-7b: {"16x64x128w4s4": 1, "32x64x128w4s3": 1, "32x128x64w4s3": 1, "64x128x64w4s3": 1, "64x128x64w8s3": 1, "128x128x64w8s3": 1}
+    mixtral-8x7b: {"16x64x128w4s4": 1, "32x64x128w4s3": 1, "32x128x64w4s3": 1, "64x128x64w4s3": 1, "64x128x64w8s3": 1, "128x128x64w8s3": 1}
+    qwen2-57b-a14b: {"16x64x128w4s4": 1, "32x64x128w4s3": 1, "32x128x64w4s3": 1, "64x128x64w4s3": 1, "64x128x64w8s3": 1, "128x128x64w8s3": 1}
+    phi-3.5-moe: {"16x64x128w4s4": 1, "32x64x128w4s3": 1, "32x128x64w4s3": 1, "64x128x64w4s3": 1, "64x128x64w8s3": 1, "128x128x64w8s3": 1}
+    qwen1.5-moe-a2.7b: {"16x64x128w4s4": 1, "32x64x128w4s3": 1, "32x128x64w4s3": 1, "64x128x64w4s3": 1, "64x128x64w8s3": 1, "128x128x64w8s3": 1}
+    jetmoe-8b: {"16x64x128w4s4": 1, "32x64x128w4s3": 1, "32x128x64w4s3": 1, "64x128x64w4s3": 1, "64x128x64w8s3": 1, "128x128x64w8s3": 1}
+    deepseek-v2-lite: {"16x64x128w4s4": 3, "32x64x128w4s3": 3, "32x128x64w4s3": 3, "64x128x64w4s3": 3, "64x128x64w8s3": 3, "128x128x64w8s3": 3}
+  equality gate (DESIGN-A2 3.1; tileA2-gates G-CEN): every (model, tile, GEMM) rental A compiled must be in A2's census with every compiled fact equal (regs, shared, num_warps, mma, occupancy, ptx_counts, config); any difference is STACK DRIFT: the gate ends the rental, and a drifted census scores REFUSED (a STOP; finalise_a2 refuses)
+  OLMoE n 1 / n 3 (REVIEW-A2 8a): OLMoE compiled again at n 3 on every tile; any field differing from its n 1 entry makes deepseek-v2-lite's entries NOT SCORED (left out of the merge), and rental B2's deepseek pages stay NOT SCORED as today
+  merge (REVIEW-A2 6a): the NAMED MERGE STEP (score_census_a2.py, census_a2.merge): rental A's 72 entries (held to A2's by the equality gate) plus A2's deepseek-v2-lite entries at tread 3 when the OLMoE n 1 / n 3 rule reads SAME, scored by score_census.py; the merged file is kept beside it
+  rental_B2_scope: rental B2's own census unit (label tb, tile_census_a2.py) is held to A2's merged census by score_tileB.census_check, unchanged
+lock:
+  decision (owner, 2026-10-20): a 900 W GPU power limit (GPU scope, -sc 0) and the lock ladder 1710, 1410, 1305 MHz: the probe tries 1710 first; the first rung whose probe passes is the run's lock
+  changes: the owner's 2026-09-26 decision (the GPU power limit 700 W at the start, -sc 0) FOR TILE RENTAL A2 AND RENTAL B2 ONLY (B2 runs at the limit and the lock rung A2 held, read from A2's score directory); every other rental's driver keeps 700 W
+  why (DESIGN-A2 1, REVIEW-A2 1): rental A's wgmma pages sagged under the 1710 lock: reason 0x4 (SW power cap) only, 60 C at most; the smi trace went to 1290 MHz on the three heavy 128x128 pages; the inferred cause is the software power cap (GPU or module scope unresolved), so the limit rises to the card's maximum and the lock steps down only when the probe says the cap still bites
+  ladder (owner, 2026-10-20): 1710, then 1410, then 1305 MHz: the lock-hold probe's first rung that holds is A2's lock (tileA2-gates G-PROBE). At 1710 no clock conversion is used (v4L is v4 exactly) and CONV-L does not run; 1410 and 1305 carry the conversion
+  conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20): the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)
+  rules at L:
+    at 1710: rental A's own rules: the band [1640, 1710] (derived at that lock; the fallback band at 1710 is the same), G4 1705, v4 itself
+    counter band: below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)
+    fallback band (REVIEW-A2 2c): [L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled
+    G4: cell clock >= L - 5 MHz (1705, 1405, 1300)
+    dips: r7-median-run3 at the page's own lock_mhz (a read under L - 15 is dipped: 1395 is not at 1410, 1380 is)
+    lock_gate: lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)
+    v4 at L: r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L
+seen (REVIEW-A2 5):
+  label: SEEN before this registration (REVIEW-A2 5): none of it is a lever, the selection rules are tcommon's pinned functions unchanged (variant_rule, f_form_rule, joint_cF, floor_test); stated so a reader can weigh it
+  (i) rental A's out-of-band fits (DESIGN-A2 7d, work/fit.py, DESCRIPTIVE): tcommon.joint_cF on rental A's f128 pages with the band removed: c_128 698.67 +- 10.63 cycles, F_w1 2740 +- 615, F_w2 3113 +- 341, 36 cells, rel rms 0.53%, recorded occupancy 2; on the f64w8 pages c_64 459.1 +- 19.4; the cells' clocks 1601 to 1663 MHz
+  (ii) the 64x128 accounting outcome: predictable by interpolation from (i) and tileA-floor's registered table (W and T c_64 at c_128 600 and 750); nobody computed it
+  (iii) SEEN-expected: with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)
+  (iv) tA-dead: rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test
+  (v) the A key: rental A's key test on 19 of 56 rows: v3 5.0254% against CLAMP 5.0253% rms, NOT NAMED (CLAMP): the near tie is known; the 53 rows its band dropped stay unread
+  (vi) sigma_page: rental A's 0.1275% (24 cells, at a sagging 1710 clock); A2 re-measures it, and never copies rental A's in
+  (vii) what chose the lock, the probe cells and the gates: rental A's per-repeat clocks (cells.csv), the in-flight NVML reads, the smi traces (locked-r3/*/smi.csv: clock, power, temperature, reasons) and the calibrate log
+  (viii) rental A's times: rental A's 1710 times of every E1-CAL cell and its counted bytes of every byte row exist (results/published/2026-10-20-nvidia_gh200_480gb-tileA-session) UNREAD against v4: no v4 time is computed against the E1-CAL times, and the 53 band-dropped byte rows are not re-scored, before or after A2 (OD13, a rule of this registration); its rep and dead pages are scored and published ((iv), (vi)); A2's E1-CAL, byte, rep and dead pages read the same histogram files, so their workloads are SEEN while their times on A2's board are not; the per-row workload labels below are tileA's (as of 2026-10-14) and are not updated
+  (ix) the offline conversion check (OD12; REVIEW-A2 3b): see tileA2-convl 'offline_check (SEEN)': on the 2026-09-27 and R1 pages v3's c-only rule holds on the c-heavy G 4 / G 2 ladders and on the G 1 per-M-tile elasticity, and underpredicts the G 1 per-call clock elasticity
+a2_score_directory:
+  A2's score directory (REVIEW-A2 6a; build review fix 4): scripts/scoring/tileA2/ (the score files committed beside A2's scorers, as rental A's are in scripts/scoring/tileA/), every file written by A2's own wrappers (score_*_a2.py) from A2's pages at the lock the driver selected; no rental-A score file is copied in
+  session.score.json: score_session_a2.py: the lock rung the probe selected (a2-lock.env) and the GPU power limit read back after -pl (two readings within 1 W): rental B2's lock and limit (finalise_a2.py)
+  census.score.json: the NAMED MERGE STEP (score_census_a2.py, census_a2.merge): rental A's 72 entries (held to A2's by the equality gate) plus A2's deepseek-v2-lite entries at tread 3 when the OLMoE n 1 / n 3 rule reads SAME, scored by score_census.py; the merged file is kept beside it
+  floor.score.json: score_floor_a2.py at L (the band in force recorded)
+  bytes.score.json: score_bytes_a2.py at L, in the band in force; NOT SCORED or NOT NAMED gives CLAMP by tcommon's rule
+  rep.score.json: score_rep_a2.py at L; dropped, lost or not scored: tcommon.sigma_page_of's fallback, rental 3's 0.18% (rental A's 0.1275% is never copied in)
+  e1cal.score.json: score_e1cal_a2.py at L (v4 at_lock L from A2's selections)
+  dead.score.json, convl.score.json: score_dead_a2.py (SEEN-REPLICATE) and score_convl_a2.py
+  order: session, census, floor, bytes, rep, e1cal, dead, convl, probe (each reads the ones before it)

@@ -1,0 +1,707 @@
+{
+ "registered": "2026-10-14, before any tile-stage page",
+ "name": "2026-10-14-tileA-floor-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4",
+ "tool": "scorer scripts/scoring/tileA/score_floor.py; tcommon.joint_cF, floor_test, variant_rule, f_form_rule; model v4 scripts/r3_timing_model_v4.py",
+ "model_v4": {
+  "definition": "v3 with every tile-dependent quantity read from the tile (scripts/r3_timing_model_v4.py docstring): c_time(tile) = c_card x c_counter(tile) / 344.1 and PHI(tile, g) = F(tile, g) / c_counter(tile); geometry, k-steps, grid, dead CTAs and bytes on the tile's geometry; occupancy from the census",
+  "reduction_to_v3 (design-tile-review 1a)": "at R3's tile c_counter is 344.1 and c_scale exactly 1.0, PHI is v3's own CTA_FIXED_KSTEPS (1.512 / 2.846): `python scripts/r3_timing_model_v4.py --check` re-prices all 300 registered v3 predictions of rental6-skew and rental7-skew and requires equality with the registered numbers (6 decimals) and with rental 6's pricer bit for bit (tests/test_tile_v4.py runs it)",
+  "c_counter": {
+   "R3 tile": "344.1 (the CAL counters' c)",
+   "mma.sync": "344.1 x MVA2(W_tile, BK, occ) / MVA2(W_R3, 64, occ_R3,g); W from the census PTX (R3's SEEN PTX gives 280)",
+   "wgmma 128x128x64 w8 s3": "c_128, CAL-A (below)",
+   "wgmma other": "mva(D_accounting(tile), Z_wg, occ): Z_wg puts the 128x128 tile at c_128",
+   "v4cal": "the per-tile c and F measured on that tile's CAL pages (CAL-A), the fallback at 64x128"
+  },
+  "F_forms": {
+   "F-step (registered, v3's own form)": "PHI in k-steps carries: PHI_wg,g = F_wg,g / c_128 at every wgmma tile; R3's PHI on the mma.sync path",
+   "F-cyc (rival)": "F in cycles carries: PHI = F / c_counter(tile)",
+   "selection_rule": "F-step unless, on rental A's two 64x128 w8 pages (the joint fit's F_64,w1 and F_64,w2), F-cyc is nearer the measured F on BOTH GEMMs AND F-step misses it by more than 3 se on at least one (tcommon.f_form_rule); the two forms are equal at 128x128"
+  },
+  "eta_mma": {
+   "registered": {
+    "m64n128k16 (128x128 w8)": 0.982568,
+    "m64n64k16 (64x128 w8 and w4)": 0.965443
+   },
+   "source": "Luo et al., 'Dissecting the NVIDIA Hopper Architecture through Microbenchmarking and Multiple Level Analysis', arXiv 2501.12084, Table 11: m64n256k16 dense SS random data, 583 TFLOPS at 1260 MHz on 114 SMs = 0.991 per clock; carried to m64n128k16 and m64n64k16 by Table 9's within-table random-data ratios 659.8 / 665.4 and 648.3 / 665.4",
+   "why_per_clock (build-tile-review 1)": "v4 counts MMA cycles at a locked 1710 MHz, so eta is a per-clock efficiency; Table 11 is the only wgmma rate with its clock recorded",
+   "what_it_is": "MEASURED ON AN H800 PCIe (114 SMs, 350 W cap) WITH FP16 INPUTS; Luo attribute the random-data drop of Table 9 to the power cap lowering the clock",
+   "assumption": "REGISTERED ASSUMPTION: BF16 on the GH200 runs at the same per-clock rate as FP16 on the H800 PCIe; untested here",
+   "rival": {
+    "value": {
+     "m64n128k16": 0.872174,
+     "m64n64k16": 0.856973
+    },
+    "source": "Luo et al. Table 9: 659.8 (N 128) and 648.3 (N 64) of the 756.5 TFLOPS chip peak at the 1620 MHz whitepaper clock (chip-relative, the power-capped clock folded in)",
+    "status": "printed beside every accounting; NOT SEPARATED on rental B by construction (0 lever cells)"
+   },
+   "sensitivity (build-tile-review 1)": {
+    "rows": [
+     {
+      "c128": 600.0,
+      "variant": "B",
+      "f_form": "F-step",
+      "note": "unreachable under one rate"
+     },
+     {
+      "c128": 600.0,
+      "variant": "B",
+      "f_form": "F-cyc",
+      "note": "unreachable under one rate"
+     },
+     {
+      "c128": 600.0,
+      "variant": "W",
+      "f_form": "F-step",
+      "c64_registered": 384.299384,
+      "c64_rival": 367.605769,
+      "c64_shift_pct": 4.541173,
+      "phi_64x128_max_T_shift_pct": 0.001
+     },
+     {
+      "c128": 600.0,
+      "variant": "W",
+      "f_form": "F-cyc",
+      "c64_registered": 384.299384,
+      "c64_rival": 367.605769,
+      "c64_shift_pct": 4.541173,
+      "phi_64x128_max_T_shift_pct": 0.001113
+     },
+     {
+      "c128": 600.0,
+      "variant": "T",
+      "f_form": "F-step",
+      "c64_registered": 302.040993,
+      "c64_rival": 301.797027,
+      "c64_shift_pct": 0.080838,
+      "phi_64x128_max_T_shift_pct": 1e-06
+     },
+     {
+      "c128": 600.0,
+      "variant": "T",
+      "f_form": "F-cyc",
+      "c64_registered": 302.040993,
+      "c64_rival": 301.797027,
+      "c64_shift_pct": 0.080838,
+      "phi_64x128_max_T_shift_pct": 1e-06
+     },
+     {
+      "c128": 750.0,
+      "variant": "B",
+      "f_form": "F-step",
+      "note": "unreachable under one rate"
+     },
+     {
+      "c128": 750.0,
+      "variant": "B",
+      "f_form": "F-cyc",
+      "note": "unreachable under one rate"
+     },
+     {
+      "c128": 750.0,
+      "variant": "W",
+      "f_form": "F-step",
+      "c64_registered": 463.503054,
+      "c64_rival": 439.462193,
+      "c64_shift_pct": 5.470519,
+      "phi_64x128_max_T_shift_pct": 0.014836
+     },
+     {
+      "c128": 750.0,
+      "variant": "W",
+      "f_form": "F-cyc",
+      "c64_registered": 463.503054,
+      "c64_rival": 439.462193,
+      "c64_shift_pct": 5.470519,
+      "phi_64x128_max_T_shift_pct": 0.016315
+     },
+     {
+      "c128": 750.0,
+      "variant": "T",
+      "f_form": "F-step",
+      "c64_registered": 397.971292,
+      "c64_rival": 386.235599,
+      "c64_shift_pct": 3.03848,
+      "phi_64x128_max_T_shift_pct": 0.001153
+     },
+     {
+      "c128": 750.0,
+      "variant": "T",
+      "f_form": "F-cyc",
+      "c64_registered": 397.971292,
+      "c64_rival": 386.235599,
+      "c64_shift_pct": 3.03848,
+      "phi_64x128_max_T_shift_pct": 0.001324
+     },
+     {
+      "c128": 900.0,
+      "variant": "B",
+      "f_form": "F-step",
+      "c64_registered": 583.531047,
+      "c64_rival": 583.531047,
+      "c64_shift_pct": 0.0,
+      "phi_64x128_max_T_shift_pct": 0.0
+     },
+     {
+      "c128": 900.0,
+      "variant": "B",
+      "f_form": "F-cyc",
+      "c64_registered": 583.531047,
+      "c64_rival": 583.531047,
+      "c64_shift_pct": 0.0,
+      "phi_64x128_max_T_shift_pct": 0.0
+     },
+     {
+      "c128": 900.0,
+      "variant": "W",
+      "f_form": "F-step",
+      "c64_registered": 555.056578,
+      "c64_rival": 530.916825,
+      "c64_shift_pct": 4.546805,
+      "phi_64x128_max_T_shift_pct": 0.142798
+     },
+     {
+      "c128": 900.0,
+      "variant": "W",
+      "f_form": "F-cyc",
+      "c64_registered": 555.056578,
+      "c64_rival": 530.916825,
+      "c64_shift_pct": 4.546805,
+      "phi_64x128_max_T_shift_pct": 0.153043
+     },
+     {
+      "c128": 900.0,
+      "variant": "T",
+      "f_form": "F-step",
+      "c64_registered": 498.412618,
+      "c64_rival": 485.023673,
+      "c64_shift_pct": 2.760472,
+      "phi_64x128_max_T_shift_pct": 0.023539
+     },
+     {
+      "c128": 900.0,
+      "variant": "T",
+      "f_form": "F-cyc",
+      "c64_registered": 498.412618,
+      "c64_rival": 485.023673,
+      "c64_shift_pct": 2.760472,
+      "phi_64x128_max_T_shift_pct": 0.026027
+     },
+     {
+      "c128": 1100.0,
+      "variant": "B",
+      "f_form": "F-step",
+      "c64_registered": 691.774884,
+      "c64_rival": 691.774884,
+      "c64_shift_pct": 0.0,
+      "phi_64x128_max_T_shift_pct": 0.0
+     },
+     {
+      "c128": 1100.0,
+      "variant": "B",
+      "f_form": "F-cyc",
+      "c64_registered": 691.774884,
+      "c64_rival": 691.774884,
+      "c64_shift_pct": 0.0,
+      "phi_64x128_max_T_shift_pct": 0.0
+     },
+     {
+      "c128": 1100.0,
+      "variant": "W",
+      "f_form": "F-step",
+      "c64_registered": 682.99968,
+      "c64_rival": 659.702719,
+      "c64_shift_pct": 3.531433,
+      "phi_64x128_max_T_shift_pct": 0.773054
+     },
+     {
+      "c128": 1100.0,
+      "variant": "W",
+      "f_form": "F-cyc",
+      "c64_registered": 682.99968,
+      "c64_rival": 659.702719,
+      "c64_shift_pct": 3.531433,
+      "phi_64x128_max_T_shift_pct": 0.783735
+     },
+     {
+      "c128": 1100.0,
+      "variant": "T",
+      "f_form": "F-step",
+      "c64_registered": 633.294235,
+      "c64_rival": 619.515509,
+      "c64_shift_pct": 2.224113,
+      "phi_64x128_max_T_shift_pct": 0.31154
+     },
+     {
+      "c128": 1100.0,
+      "variant": "T",
+      "f_form": "F-cyc",
+      "c64_registered": 633.294235,
+      "c64_rival": 619.515509,
+      "c64_shift_pct": 2.224113,
+      "phi_64x128_max_T_shift_pct": 0.322897
+     },
+     {
+      "c128": 1300.0,
+      "variant": "B",
+      "f_form": "F-step",
+      "c64_registered": 813.298313,
+      "c64_rival": 813.298313,
+      "c64_shift_pct": 0.0,
+      "phi_64x128_max_T_shift_pct": 0.0
+     },
+     {
+      "c128": 1300.0,
+      "variant": "B",
+      "f_form": "F-cyc",
+      "c64_registered": 813.298313,
+      "c64_rival": 813.298313,
+      "c64_shift_pct": 0.0,
+      "phi_64x128_max_T_shift_pct": 0.0
+     },
+     {
+      "c128": 1300.0,
+      "variant": "W",
+      "f_form": "F-step",
+      "c64_registered": 813.586406,
+      "c64_rival": 791.140246,
+      "c64_shift_pct": 2.837191,
+      "phi_64x128_max_T_shift_pct": 1.298474
+     },
+     {
+      "c128": 1300.0,
+      "variant": "W",
+      "f_form": "F-cyc",
+      "c64_registered": 813.586406,
+      "c64_rival": 791.140246,
+      "c64_shift_pct": 2.837191,
+      "phi_64x128_max_T_shift_pct": 1.310806
+     },
+     {
+      "c128": 1300.0,
+      "variant": "T",
+      "f_form": "F-step",
+      "c64_registered": 768.160052,
+      "c64_rival": 754.45005,
+      "c64_shift_pct": 1.817218,
+      "phi_64x128_max_T_shift_pct": 0.664786
+     },
+     {
+      "c128": 1300.0,
+      "variant": "T",
+      "f_form": "F-cyc",
+      "c64_registered": 768.160052,
+      "c64_rival": 754.45005,
+      "c64_shift_pct": 1.817218,
+      "phi_64x128_max_T_shift_pct": 0.668001
+     }
+    ],
+    "max_c64_shift_pct": 5.470519,
+    "phi_64x128_max_T_shift_pct": 1.310806,
+    "128x128_T_shift_pct": 0.0,
+    "lever_cells": 0,
+    "c64_shift_beyond_the_3pct_band": [
+     "c128 600 W F-step",
+     "c128 600 W F-cyc",
+     "c128 750 W F-step",
+     "c128 750 W F-cyc",
+     "c128 750 T F-step",
+     "c128 750 T F-cyc",
+     "c128 900 W F-step",
+     "c128 900 W F-cyc",
+     "c128 1100 W F-step",
+     "c128 1100 W F-cyc"
+    ],
+    "selection_effect": "the 3% accounting band is DESCRIPTIVE, but its selection decides whether rental B derives c_64 or takes v4cal (D3). Where the eta choice moves c_64 by more than 3% (the cases listed) it can change WHICH accounting holds on rental A's 64x128 pages, so the selection is read under the registered (per-clock) rate only; under v4cal the eta effect on rental B is 0"
+   }
+  },
+  "eta_smem": {
+   "value": 0.832,
+   "status": "UNTESTED REUSE: MVA2's eta, fitted on mma.sync LSU wavefronts (rental 4, SEEN-fitted), divides shared bytes on the wgmma path too"
+  },
+  "accountings": {
+   "B": "wgmma operand reads plus cp.async writes, both at 128 B/clk/SM on one port",
+   "W": "operand reads at 128 B/clk/SM, cp.async writes as LDGSTS wavefronts (1 per 512 B)",
+   "T": "tensor-bound only (MMA cycles)"
+  }
+ },
+ "calibration (CAL-A)": {
+  "pages": "f128: OLMoE and Mixtral 8x7B, 128x128x64 w8 s3, G 64 counter pages, treads 1..9 (R3's counter ladder)",
+  "estimator": "tcommon.joint_cF: sm__cycles_elapsed.avg = a(page model, GEMM, arm) + ceil(N_live / 132) (S_g c + F_g), one c for both GEMMs and both models, F_w1 and F_w2, by least squares over the NATIVE and SHARED cells at n 4..9 whose GEMM reads DRAM at no more than 0.5 x 4022 GB/s (each cell's own GEMM's dram_bytes_read over its gpu_time_ns, design-tile-review 9.4); OLMoE S 32 / 16 and Mixtral S 64 / 224 give four depths",
+  "outputs": "c_128, F_wg,w1, F_wg,w2 (3 CAL-A constants), then Z_wg per accounting at the census occupancy (r3_timing_model_v4.z_wg); an accounting whose pipe alone exceeds c_128 is FALSIFIED by construction",
+  "refusal": "fewer than 6 floor-bound cells or a rank-deficient design: NOT SCORED, and rental B does not run (no v4)"
+ },
+ "test (BLIND-CALMODEL, DESCRIPTIVE)": {
+  "pages": "f64w8: OLMoE and Mixtral 8x7B at 64x128x64 w8 s3, G 64; f64w4 (drop-group w4): OLMoE at w4, printed",
+  "statistic": "per (model, GEMM): u = S c + F; u_meas from the 64x128 joint fit (same estimator), u_pred from each accounting's c_64 and the registered F form; e = u_pred / u_meas - 1",
+  "rule": "an accounting HOLDS when every |e| <= 3% (design-tile-review 9.4: within 3% of u, on the floor-bound n 4..9 cells of each page)",
+  "status": "DESCRIPTIVE (design-tile-review 1c): the accounting reading has no consequence for E1-TILE; B, W and T move rental B's predictions by at most 0.28408% at the nominal constants",
+  "w4": "the w4 page is printed only (w8 and w4 issue different instructions and their per-iteration delay may differ, so T's w8 / w4 = 1.00 is not a hard prediction); when dropped nothing changes",
+  "mma_sync_32x128_w4": "MVA2 on the census wavefronts at 32x128x64 w4 s3: HOLDS / FAILS within 3% of the page's c, printed for D1 (the decode tiles' only floor evidence); MVA2 is SEEN-fitted (D5)"
+ },
+ "selection_for_rental_B (D3)": {
+  "accounting": "tcommon.variant_rule: the accounting that HOLDS on every scored (model, GEMM) of the 64x128 w8 pages while every other FAILS or is unreachable is SELECTED and rental B's v4 derives c_64 from it; otherwise UNDECIDED and rental B's v4 takes v4cal at 64x128 (the joint fit's c_64, F_64,w1, F_64,w2, CAL-A: 3 conditional constants). At 128x128 v4 and v4cal are the same model (both read c_128 and F_wg)",
+  "F_form": "tcommon.f_form_rule (above)",
+  "unselected": "the other accountings, F-cyc and the eta_mma rival are printed as rivals on rental B; lever counts at the nominal constants below (fewer than 6: NOT SEPARATED by construction, stated before the page)",
+  "lever_counts_on_B": {
+   "accounting B": {
+    "lever_cells": 0,
+    "max_abs_pct": 0.28408,
+    "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"
+   },
+   "accounting T": {
+    "lever_cells": 0,
+    "max_abs_pct": 0.244963,
+    "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"
+   },
+   "F-cyc": {
+    "lever_cells": 0,
+    "max_abs_pct": 0.028845,
+    "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"
+   },
+   "eta_mma rival (Table 9 chip-relative)": {
+    "lever_cells": 0,
+    "max_abs_pct": 0.142595,
+    "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"
+   }
+  }
+ },
+ "parameters": {
+  "hardware (no fit)": "132 SMs, the 1710 MHz lock, 4096 flop/clk/SM dense bf16, 128 B/clk/SM shared, the sm_90 occupancy limits",
+  "derived or read (no fit)": "geometry, k-steps, N-tiles, grid, dead CTAs, bytes per k-step and wavefronts from the census PTX, occupancy from the census cubins",
+  "carried from v3": "22 fitted (T2) + d, kappa, h",
+  "fitted, new in the timing model: 6": [
+   "MVA2 eta, z0, z1 (SEEN-fitted at rental 4; mma.sync, D5)",
+   "Z_wg, F_wg,w1, F_wg,w2 (CAL-A on the 128x128 counter pages; c_128 is the calibration's measured c, the analogue of v3's 344.1)"
+  ],
+  "selections: 3": [
+   "the wgmma accounting B / W / T (DESCRIPTIVE reading, rule above)",
+   "the A key v3 / CLAMP / ROWKEY60 / ROWKEY30 (tileA-bytes)",
+   "F-step / F-cyc (rule above)"
+  ],
+  "uncertain inputs": [
+   "eta_mma (Luo Table 11 per clock, H800 PCIe FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857)",
+   "eta_smem = MVA2's eta, an untested reuse"
+  ],
+  "conditional": [
+   "v4cal adds 3 CAL-A constants at 64x128 when no accounting is selected",
+   "ROWKEY60's 60 MiB is SEEN-chosen if it is NAMED"
+  ]
+ },
+ "design_tables (derived, DESCRIPTIVE)": {
+  "eta_mma Luo Table 11 per clock, per instruction (registered)": {
+   "pipe_service_cycles": {
+    "128x128x64w8s3": {
+     "B": 769.230769,
+     "W": 538.461538,
+     "T": 521.083397
+    },
+    "64x128x64w8s3": {
+     "B": 538.461538,
+     "W": 365.384615,
+     "T": 265.16337
+    },
+    "64x128x64w4s3": {
+     "B": 461.538462,
+     "W": 288.461538,
+     "T": 260.541699
+    }
+   },
+   "by_c128": [
+    {
+     "c128": 600.0,
+     "B": "unreachable (the pipe alone exceeds c_128): FALSIFIED by construction",
+     "W": {
+      "Z_wg": 326.225393,
+      "c_64x128_w8": 384.299384,
+      "c_64x128_w4": 313.562128,
+      "w8_over_w4": 1.225592
+     },
+     "T": {
+      "Z_wg": 376.35919,
+      "c_64x128_w8": 302.040993,
+      "c_64x128_w4": 298.068683,
+      "w8_over_w4": 1.013327
+     }
+    },
+    {
+     "c128": 750.0,
+     "B": "unreachable (the pipe alone exceeds c_128): FALSIFIED by construction",
+     "W": {
+      "Z_wg": 733.61046,
+      "c_64x128_w8": 463.503054,
+      "c_64x128_w4": 405.149841,
+      "w8_over_w4": 1.144029
+     },
+     "T": {
+      "Z_wg": 768.334894,
+      "c_64x128_w8": 397.971292,
+      "c_64x128_w4": 394.759823,
+      "w8_over_w4": 1.008135
+     }
+    },
+    {
+     "c128": 900.0,
+     "B": {
+      "Z_wg": 597.977989,
+      "c_64x128_w8": 583.531047,
+      "c_64x128_w4": 514.903921,
+      "w8_over_w4": 1.133281
+     },
+     "W": {
+      "Z_wg": 1082.689744,
+      "c_64x128_w8": 555.056578,
+      "c_64x128_w4": 503.943882,
+      "w8_over_w4": 1.101425
+     },
+     "T": {
+      "Z_wg": 1112.72318,
+      "c_64x128_w8": 498.412618,
+      "c_64x128_w4": 495.598996,
+      "w8_over_w4": 1.005677
+     }
+    },
+    {
+     "c128": 1100.0,
+     "B": {
+      "Z_wg": 1117.079617,
+      "c_64x128_w8": 691.774884,
+      "c_64x128_w4": 633.311652,
+      "w8_over_w4": 1.092314
+     },
+     "W": {
+      "Z_wg": 1520.735611,
+      "c_64x128_w8": 682.99968,
+      "c_64x128_w4": 637.73502,
+      "w8_over_w4": 1.070977
+     },
+     "T": {
+      "Z_wg": 1547.664296,
+      "c_64x128_w8": 633.294235,
+      "c_64x128_w4": 630.786481,
+      "w8_over_w4": 1.003976
+     }
+    },
+    {
+     "c128": 1300.0,
+     "B": {
+      "Z_wg": 1578.7597,
+      "c_64x128_w8": 813.298313,
+      "c_64x128_w4": 761.293139,
+      "w8_over_w4": 1.068312
+     },
+     "W": {
+      "Z_wg": 1944.779422,
+      "c_64x128_w8": 813.586406,
+      "c_64x128_w4": 772.001715,
+      "w8_over_w4": 1.053866
+     },
+     "T": {
+      "Z_wg": 1969.912863,
+      "c_64x128_w8": 768.160052,
+      "c_64x128_w4": 765.839291,
+      "w8_over_w4": 1.00303
+     }
+    }
+   ]
+  },
+  "eta_mma Luo Table 9 chip-relative (rival)": {
+   "pipe_service_cycles": {
+    "128x128x64w8s3": {
+     "B": 769.230769,
+     "W": 587.038497,
+     "T": 587.038497
+    },
+    "64x128x64w8s3": {
+     "B": 538.461538,
+     "W": 365.384615,
+     "T": 298.725899
+    },
+    "64x128x64w4s3": {
+     "B": 461.538462,
+     "W": 293.519248,
+     "T": 293.519248
+    }
+   },
+   "by_c128": [
+    {
+     "c128": 600.0,
+     "B": "unreachable (the pipe alone exceeds c_128): FALSIFIED by construction",
+     "W": {
+      "Z_wg": 137.001028,
+      "c_64x128_w8": 367.605769,
+      "c_64x128_w4": 296.676276,
+      "w8_over_w4": 1.23908
+     },
+     "T": {
+      "Z_wg": 137.001028,
+      "c_64x128_w8": 301.797027,
+      "c_64x128_w4": 296.676276,
+      "w8_over_w4": 1.01726
+     }
+    },
+    {
+     "c128": 750.0,
+     "B": "unreachable (the pipe alone exceeds c_128): FALSIFIED by construction",
+     "W": {
+      "Z_wg": 629.743898,
+      "c_64x128_w8": 439.462193,
+      "c_64x128_w4": 382.21539,
+      "w8_over_w4": 1.149776
+     },
+     "T": {
+      "Z_wg": 629.743898,
+      "c_64x128_w8": 386.235599,
+      "c_64x128_w4": 382.21539,
+      "w8_over_w4": 1.010518
+     }
+    },
+    {
+     "c128": 900.0,
+     "B": {
+      "Z_wg": 597.977989,
+      "c_64x128_w8": 583.531047,
+      "c_64x128_w4": 514.903921,
+      "w8_over_w4": 1.133281
+     },
+     "W": {
+      "Z_wg": 995.153415,
+      "c_64x128_w8": 530.916825,
+      "c_64x128_w4": 481.579937,
+      "w8_over_w4": 1.102448
+     },
+     "T": {
+      "Z_wg": 995.153415,
+      "c_64x128_w8": 485.023673,
+      "c_64x128_w4": 481.579937,
+      "w8_over_w4": 1.007151
+     }
+    },
+    {
+     "c128": 1100.0,
+     "B": {
+      "Z_wg": 1117.079617,
+      "c_64x128_w8": 691.774884,
+      "c_64x128_w4": 633.311652,
+      "w8_over_w4": 1.092314
+     },
+     "W": {
+      "Z_wg": 1443.222652,
+      "c_64x128_w8": 659.702719,
+      "c_64x128_w4": 616.50051,
+      "w8_over_w4": 1.070077
+     },
+     "T": {
+      "Z_wg": 1443.222652,
+      "c_64x128_w8": 619.515509,
+      "c_64x128_w4": 616.50051,
+      "w8_over_w4": 1.004891
+     }
+    },
+    {
+     "c128": 1300.0,
+     "B": {
+      "Z_wg": 1578.7597,
+      "c_64x128_w8": 813.298313,
+      "c_64x128_w4": 761.293139,
+      "w8_over_w4": 1.068312
+     },
+     "W": {
+      "Z_wg": 1872.869174,
+      "c_64x128_w8": 791.140246,
+      "c_64x128_w4": 751.691081,
+      "w8_over_w4": 1.052481
+     },
+     "T": {
+      "Z_wg": 1872.869174,
+      "c_64x128_w8": 754.45005,
+      "c_64x128_w4": 751.691081,
+      "w8_over_w4": 1.00367
+     }
+    }
+   ]
+  }
+ },
+ "mma_sync_design (derived, DESCRIPTIVE)": {
+  "32x128x64w4s3": {
+   "occupancy": 5,
+   "design_wavefronts": 360.0,
+   "c_counter_w1": 442.138866,
+   "c_counter_w2": 439.787222
+  },
+  "16x64x128w4s4": {
+   "occupancy": 3,
+   "design_wavefronts": 296.0,
+   "c_counter_w1": 363.42178,
+   "c_counter_w2": 361.488817
+  },
+  "32x64x128w4s3": {
+   "occupancy": 4,
+   "design_wavefronts": 432.0,
+   "c_counter_w1": 530.399355,
+   "c_counter_w2": 527.578273
+  }
+ },
+ "nominal": "DESIGN-NOMINAL: c_128 900 counter cycles (design-tile 2.2's mid value), F_wg the R3 tile's CAL 520 / 979, accounting W, F-step, A key CLAMP; for levers, sensitivities and power only, never a registered prediction",
+ "labels": {
+  "c_128, F_wg, Z_wg": "CAL-A",
+  "64x128 test": "BLIND-CALMODEL, DESCRIPTIVE",
+  "MVA2": "SEEN-fitted (D5)",
+  "eta_mma": "SEEN third party, another card and dtype (assumption registered)"
+ },
+ "scorer_ambiguities": {
+  "1 which c is the denominator, and F's units": "c_time = c_card x c_counter(tile) / 344.1 (344.1 the CAL counters' c); F is held in counter cycles and PHI = F / c_counter(tile) in k-steps; at R3's tile v4 is v3 exactly (r3_timing_model_v4.py --check)",
+  "2 F-cyc against F-step": "F-step (v3's form) is registered; F-cyc replaces it only when, on the 64x128 w8 pages, it is nearer the measured F on both GEMMs and F-step misses by more than 3 se on one (tcommon.f_form_rule)",
+  "3 eta_mma": "per clock (Luo Table 11, 0.991), per instruction by Table 9's ratios: 0.983 (m64n128k16, 128x128 w8), 0.965 (m64n64k16, 64x128); H800 PCIe, FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857",
+  "4 tA-floor": "the test statistic is u = S c + F per (model, GEMM), within 3%; cells are the NATIVE and SHARED cells at n 4..9 whose own GEMM reads DRAM at no more than 0.5 x 4022 GB/s; a dropped w4 page changes nothing (printed only); at 128x128 v4cal and v4 are the same model",
+  "5 the NAMED rule's rows, and the default": "every scored w1 row of the G-1 byte pages (uniform, balanced and skewed, NATIVE and SHARED); nothing NAMED gives CLAMP, not v3",
+  "6 E1-TILE's 'each model'": "the three BLIND-TILE models; deepseek-v2-lite is in the pooled bar only (its own bar DESCRIPTIVE, never CERTIFIED); a model left with one page is scored and NOT CERTIFIED",
+  "7 the host cut": "0.40 ms (T + F240), rental 3's registered rule, on the FINALISED v4 prediction",
+  "8 tA-rep dropped": "rental 3's 0.18% feeds the rivals' se, tA-dead's z and the power at finalisation",
+  "9 tA-e1cal 'fails'": "on the CLEAN view: the pooled NATIVE bar, each class mean within 0.75%, the 128 G 1 CAL models within 1%; a SKIPPED, LOST or NOT SCORED E1-CAL page, or a G3 void, is a STOP (tileB-stop)",
+  "10 the OLS rival": "one ridge OLS over every valid NATIVE E1-CAL cell (features waves, bytes / bw, ln(1 + CTAs); lambda 1e-3 x trace(X'X) / 3 on standardised features); NOT SCORED under 12 cells or condition number over 1e6",
+  "11 census against counter occupancy": "integers, exact; a counter page at another occupancy is scored at its recorded one (rental 4's re-key, score_floor: Z_wg at the 128x128 pages' recorded occupancy, each 64x128 page's c at its own); on rental B a (model, tile) at another occupancy than rental A's census is NOT SCORED on every page of that (model, tile), and a missing or refused rental-B census leaves every page NOT SCORED (score_tileB.census_check); a refused rental-A census is a STOP",
+  "12 tA-dead": "tread n 1 (uniform and balanced); align growth = (A_S - A_N) at c15 minus at c9 off each page's align_probe; se = 2 sigma_page mean(T) / sqrt(cells), sigma_page tA-rep's or 0.18%",
+  "13 the 30 MiB row key": "one of the card's two L2 partitions of its measured 60 MiB (rental 4's rulers, CONSISTENT with RRZE's GH200; Hopper's partitioned L2, NVIDIA H100 whitepaper); the 'Fan et al.' attribution is withdrawn",
+  "14 byte pages and timed pages": "one histogram file per (model, tile, G): a byte page and a timed page of the same (model, tile, G) read the same file, so their counts are identical (the files' sha256 above)"
+ },
+ "seen_data": [
+  "MVA2's eta, z0, z1",
+  "the CAL F 520 / 979 and c 344.1 (R3's tile)",
+  "Luo et al. Tables 9 and 11"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0"
+ }
+}

@@ -1,0 +1,95 @@
+experiment  clock_elasticity / nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-0d8858eb
+card        NVIDIA H200
+model       mixtral-8x7b bf16: E=8 k=2 H=4096 F=14336, rows per expert must be a multiple of 1
+pinned      BLOCK_SIZE_K=64, BLOCK_SIZE_M=32, BLOCK_SIZE_N=64, GROUP_SIZE_M=1, num_stages=4, num_warps=8
+session     alpha_g-nvidia_h200-20260923T163248Z
+ladder      8 exactly-full tile stacks, rows per expert 32..256, tokens 128..1024
+states      duty 1, 0.5, 0.25, 10 s of the state's own cadence before its first cell
+repeats     13, state order reversed on alternate repeats so a thermal trend does not line up with the state axis
+burst       target 40 ms of GPU per burst, at least 8 calls, the FIRST call of every burst discarded
+instrument  scripts/clock_elasticity.py: bursts of N back-to-back fused_experts calls under one pinned tile, each call L2-flushed and bracketed by its own pre-primed event pair, the FIRST call of every burst discarded as a drained-queue launch, a host-side idle gap after each burst setting the sustained duty cycle, and the SM clock, board power and memory clock read through NVML with the burst still in flight; NOT timing.TIMING_BASIS
+WRITES TO   /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-0d8858eb
+  cells.csv   /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-0d8858eb/cells.csv   git could not be asked (rc 128 is a path outside the work tree)
+  report.txt  /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-0d8858eb/report.txt   git could not be asked (rc 128 is a path outside the work tree)
+  report.json /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-0d8858eb/report.json   git could not be asked (rc 128 is a path outside the work tree)
+
+NO RULER IS RESOLVED. An elasticity is a ratio of logs: no ridge, no bandwidth, no
+compute peak, no fitted level. The reference clock is resolved on the pod for the
+LEVEL RECORD only, and LEVEL excludes nothing here on either side; DRIFT and
+host-bound are the two exclusions and V4 holds them to 20% of all rows.
+
+THE BURST TABLE, computed by the same `burst_shape` the pod calls:
+  tread   modelled ms   calls/burst   bursts/trial   kept calls/trial
+      1        0.7738            52              6                306
+      2        1.3252            30              6                174
+      3        1.8911            21              6                120
+      4        2.4154            17              6                 96
+      5        3.0127            13              6                 72
+      6        3.5662            11              6                 60
+      7        4.1618            10              6                 54
+      8        4.6153             9              6                 48
+  the modelled ms PRICE this run and score nothing; they are the 2026-09-10
+  bn_decomposition medians at this exact tile, named in the source.
+
+V1 THRESHOLD 1.060x, from the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread
+
+==============================================================================
+PREDICTIONS, registered before the run and printed before any measurement
+
+  P1  the duty cycle moves the clock at a byte-identical kernel
+        predicts  every tread's under-load SM clock spans at least the ratio the design arithmetic below requires, across the duty states, with the same tensors, the same pinned tile and the same tread count in every state
+        a FAIL    V1 FAILS and the arm is INVALID. Three states at one clock measure nothing, and the honest reading is that this container's governor does not respond to duty at this kernel -- not that the elasticity is zero.
+
+  P2  the measured PER-M-TILE cost is BELOW 0.25 in elasticity: most of what one more tile adds at this cell is traffic, not issue rate
+        predicts  the 95% interval on -d log b / d log f, b the ladder slope, read over treads 2 and deeper, lies wholly below 0.25, which is the band in which the study's raw readings stand and pooled EXA alpha_b is near 0.974 with the BLOCK_M ladder monotone
+        a FAIL    a FAIL is a RESULT and not a retry. Above 0.4 the BLOCK_M ladder is non-monotone, pooled alpha_b falls to about 0.93 and C3's DIRECTION is retracted; between the two the analysis registered no reading at all and the page says so instead of inventing one.
+
+  P3  and the design resolves which of the three registered worlds it is in
+        predicts  the 95% interval lies wholly inside ONE of the three bands, which needs a half-width under 0.075
+        a FAIL    C1 FAILS. The apparatus worked and the answer is 'not resolved': the states separated too little or the repeats were too few, and NO registered consequence may be quoted off this page.
+
+THE THREE REGISTERED BANDS, and the reading each licenses:
+  RAW-STANDS         < 0.25         the raw readings stand: pooled EXA alpha_b is near 0.974 and the 26.7-sigma monotone rise of alpha_b with BLOCK_M survives. The clock is not what is wrong with alpha; FORM and PHYSICS still are.
+  UNREGISTERED-GAP   0.25 to 0.40   NEITHER registered consequence is licensed. The analysis that produced the two readings below and above swept the elasticity past this band without stopping in it, so there is no pooled alpha_b to quote here and the honest report is the interval and the refusal to read it further.
+  CLOCK-CARRIES      > 0.40         the BLOCK_M ladder is NON-MONOTONE, pooled EXA alpha_b falls to about 0.93, and C3's DIRECTION is RETRACTED while C3's inequality survives. Every alpha in the study is then a blend of traffic and clock and none of them may be quoted as traffic.
+
+  NOT A READOUT. Nothing above was measured. The arm decides which band it is in by
+  where its 95% interval falls, and it may decide none of them (C1 FAIL), which is
+  a result about the design and not a licence to read the nearer edge.
+
+RESOLUTION, computed from the design and not from the result.
+  across-repeat spread of one cell   0.01071 of log ms, the median over the 8 treads of the 2026-09-10 bn_decomposition ladder at this exact tile, 17 repeats each
+  x median penalty sqrt(pi/2)        1.2533
+  / sqrt(13 repeats)                    -> sigma per cell 0.00372
+  design                             8 treads x 3 states = 24 cells, slope Sxx = sum of (log f - tread mean)^2
+  target half-width                  0.0750, half the width of the unregistered gap [0.25, 0.4]
+  so the states must span            1.0600x in clock at every tread (the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread)
+  at exactly that span the interval  half-width ~0.0639, of the POOLED PER-CALL estimator
+  V1'S THRESHOLD IS SIZED FOR THAT ESTIMATOR AND NOT FOR THE GATED ONE. The claim, over treads 2..8,
+  fits one slope per tread and its interval is 3.20x wider at this design (13 repeats x 8 treads x 3 states):
+  the claim at exactly V1's span     half-width ~0.2043
+  the claim reaches the target at    a span of 1.1720x at every tread
+  A run that passes V1 below that span can still straddle a registered edge (C1 FAIL); S4 scores the estimator itself over the planted design.
+  THE THRESHOLD IS A RATIO OF TWO CLOCKS ON ONE CARD, never a clock. The same arithmetic gates an A100 without being told which part is attached, and a shallower run is held to a WIDER separation rather than to the same number.
+
+==============================================================================
+
+estimated wall time 1124 s (18.7 min), itemised:
+  kernel per state per repeat      7.40 s over 8 treads (200 ms warm + 3 x ~200 ms each)
+  duty inflation                   7.00x = sum of 1/duty over 1, 0.5, 0.25
+  settles per repeat              30.00 s = 3 states x 10 s
+  per repeat                      81.81 s
+  x 13 repeats                 1063.56 s
+  + weight build and first compile    60 s (an ALLOWANCE: 2.82 GB of mixtral expert weights built once and reused by every tread, and Triton's first choice under the pin, neither timed here)
+  rows                          312 (13 repeats x 3 states x 8 treads)
+  EVERY TERM IS ON THE WALL CLOCK. This arm holds a cadence for a stated number of
+  seconds per state and the gaps are the experiment, so there is no kernel-time
+  figure to quote instead; the weight build and the first compile are charged above.
+
+==============================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+  No gate was scored, so no RESULT line was printed and none of the above
+  is a result. --self-test scores the planted worlds off GPU; the bare
+  command with --card measures this card.
+==============================================================================

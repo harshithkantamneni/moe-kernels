@@ -1,0 +1,218 @@
+REGISTERED 2026-10-05, before any rental-3 page: rental 3, 2026-10-05-rental3-e2e-gh200
+status: REGISTERED BEFORE ANY PAGE: no rental-3 page exists when this is committed
+design: scratchpad design-r3/DESIGN.md section 2 with design-r3-review/REVIEW.md sections 1, 5 and 6 (E); the review wins where they differ
+tool: scripts/cross_model_predict.py --gemm-const at this commit (the numbers below); scorer scripts/scoring/rental3/score_e2e.py
+
+scope: a blind test of an UNSEEN SHAPE INSIDE THE 64-EXPERT, TOP-8 FAMILY on which every post-2026-09-28 term was chosen: the 64-expert analogue of the 8x22B test. It is NOT a test of transfer across expert counts (FINDINGS' rule: such a claim needs a model none of the terms has seen), and E1's label says so
+
+predicted T (ms), M and M+Z, the core population (host rule passed):
+  shared   G=8   n=3  M 0.4048  M+Z 0.3952
+  shared   G=8   n=4  M 0.5117  M+Z 0.5021
+  shared   G=8   n=5  M 0.6185  M+Z 0.6089
+  shared   G=8   n=6  M 0.7253  M+Z 0.7158
+  private  G=8   n=2  M 0.3610  M+Z 0.3514
+  private  G=8   n=3  M 0.5000  M+Z 0.4904
+  private  G=8   n=4  M 0.6389  M+Z 0.6294
+  private  G=8   n=5  M 0.7779  M+Z 0.7684
+  private  G=8   n=6  M 0.9169  M+Z 0.9074
+  shared   G=32  n=3  M 0.4048  M+Z 0.3952
+  shared   G=32  n=4  M 0.5117  M+Z 0.5021
+  shared   G=32  n=5  M 0.6185  M+Z 0.6089
+  shared   G=32  n=6  M 0.7253  M+Z 0.7158
+  private  G=32  n=2  M 0.3627  M+Z 0.3531
+  private  G=32  n=3  M 0.5034  M+Z 0.4938
+  private  G=32  n=4  M 0.6441  M+Z 0.6345
+  private  G=32  n=5  M 0.7848  M+Z 0.7752
+  private  G=32  n=6  M 0.9255  M+Z 0.9160
+  shared   G=3   n=3  M 0.4048  M+Z 0.3952
+  shared   G=3   n=4  M 0.5117  M+Z 0.5021
+  shared   G=3   n=5  M 0.6185  M+Z 0.6089
+  shared   G=3   n=6  M 0.7253  M+Z 0.7158
+  shared   G=3   n=7  M 0.8221  M+Z 0.8125
+  shared   G=3   n=8  M 0.9289  M+Z 0.9194
+  private  G=3   n=2  M 0.3607  M+Z 0.3511
+  private  G=3   n=3  M 0.4994  M+Z 0.4899
+  private  G=3   n=4  M 0.6382  M+Z 0.6286
+  private  G=3   n=5  M 0.7769  M+Z 0.7674
+  private  G=3   n=6  M 0.9157  M+Z 0.9061
+  private  G=3   n=7  M 1.0550  M+Z 1.0454
+  private  G=3   n=8  M 1.1937  M+Z 1.1841
+  core 31 cells, deep 30 cells
+
+predicted PRIVATE / SHARED q (w1 / w2), byte G's:
+  shared G=3 n=1       1.0 / 1.0
+  shared G=3 n=2       1.0071 / 1.0102
+  shared G=3 n=3       1.0006 / 1.0102
+  shared G=3 n=4       1.0125 / 1.0134
+  shared G=3 n=5       1.0131 / 1.0148
+  shared G=3 n=6       1.0082 / 1.014
+  shared G=3 n=7       1.0134 / 1.0149
+  shared G=3 n=8       1.0133 / 1.0148
+  shared G=3 n=9       1.0101 / 1.0148
+  shared G=8 n=1       1.0 / 1.0002
+  shared G=8 n=2       1.0017 / 1.0078
+  shared G=8 n=3       1.0158 / 1.0182
+  shared G=8 n=4       1.0022 / 1.0117
+  shared G=8 n=5       1.0189 / 1.0205
+  shared G=8 n=6       1.0157 / 1.0189
+  shared G=8 n=7       1.0195 / 1.0206
+  shared G=8 n=8       1.0021 / 1.0137
+  shared G=8 n=9       1.019 / 1.0219
+  shared G=32 n=1      1.0 / 1.0015
+  shared G=32 n=2      1.0103 / 1.0093
+  shared G=32 n=3      1.0375 / 1.0247
+  shared G=32 n=4      1.013 / 1.0137
+  shared G=32 n=5      1.0387 / 1.0282
+  shared G=32 n=6      1.0335 / 1.0263
+  shared G=32 n=7      1.0398 / 1.0297
+  shared G=32 n=8      1.0126 / 1.017
+  shared G=32 n=9      1.0393 / 1.0305
+  private G=3 n=1      1.0 / 1.0001
+  private G=3 n=2      2.0012 / 2.0002
+  private G=3 n=3      3.0024 / 3.0003
+  private G=3 n=4      4.0036 / 4.0004
+  private G=3 n=5      5.0049 / 5.0005
+  private G=3 n=6      6.0061 / 6.0006
+  private G=3 n=7      7.0073 / 7.0007
+  private G=3 n=8      8.0086 / 8.0008
+  private G=3 n=9      9.0098 / 9.0009
+  private G=8 n=1      1.0 / 1.0003
+  private G=8 n=2      2.0042 / 2.0007
+  private G=8 n=3      3.0084 / 3.001
+  private G=8 n=4      4.0127 / 4.0014
+  private G=8 n=5      5.017 / 5.0018
+  private G=8 n=6      6.0212 / 6.0021
+  private G=8 n=7      7.0255 / 7.0025
+  private G=8 n=8      8.0298 / 8.0029
+  private G=8 n=9      9.0341 / 9.0032
+  private G=32 n=1     1.0 / 1.0018
+  private G=32 n=2     2.0244 / 2.0039
+  private G=32 n=3     3.049 / 3.006
+  private G=32 n=4     4.0737 / 4.0081
+  private G=32 n=5     5.0985 / 5.0102
+  private G=32 n=6     6.1232 / 6.0124
+  private G=32 n=7     7.148 / 7.0145
+  private G=32 n=8     8.1727 / 8.0166
+  private G=32 n=9     9.1975 / 9.0187
+
+target: qwen2-57b-a14b-tp8
+parent_inputs:
+  routing and declaration: E 64, top 8, 9 copies, 576 slots (vLLM's 1024 bound passed), the alignment and sort over 576 slots at the same id counts, moe_sum at H 3584: the parent's exactly
+  w2 grid: N = H = 3584, npn 56, so 558 dead M-rows x 56 = 31,248 dead CTAs a SHARED or PRIVATE call: the parent's w2 count exactly (its counted SHARED - NATIVE w2 time is SEEN, E6's FIXED rival)
+  w1 per-CTA unit: K 3584, S 56, u = 19,790 cycles: the parent's w1 (the full model's w1 read 353.3 to 353.7 cycles per k-step at this S, FINDINGS 2026-09-28); only its grid width (npn 10 against 80) is new
+  per-CTA fixed cost: c 344.1, F_w1 520, F_w2 979 (CTA_FIXED_KSTEPS) were measured on four CAL models' counter pages, the parent's among them
+  per-GEMM constant (M+Z only): the AFF coefficients are fitted on CAL floor captures, the parent's base and 1710 among them
+  dead-CTA term: DEAD_CTA_NS is measured on 8x7B's 2026-09-27 counter pages; it was ADOPTED to repair the parent's 2.71% miss (2.71 to 1.42% rms): selected on the parent
+  LATER_MISS: the capacity form was written for the parent's w2 SHARED (wave_split_bytes, 2026-09-29)
+  what is not the parent's: w2's K 320 (S 5, F = 36% of u = 2,700 cycles, the shortest CTA ever timed), w1's npn 10, and their combination's exposure; the dead term's hiding window shrinks from about 4.3 occ us to 0.8 occ us, so the term is extrapolated there (E6 tests it)
+source:
+  model: mixtral-8x7b
+  board: board 9b6d01
+  clock_mhz: 1710.0
+  pages: ["04d9320b", "e20972ef", "8ab16728", "848523de", "2085264b"]
+  timing_params: {"T0": 0.044241, "c": 202.547644, "bw": 3597.800853, "s_small": 0.011976, "s_block": -0.00808}
+  p_knee: 14.0
+  k_w: 0.5
+  byte_view: mix
+  label: CAL: 8x7B's 2026-09-27 fit held, nothing fitted on the target
+design_of_target:
+  experts: 64
+  copies_declared: 9
+  declared: {"native": 64, "shared": 576, "private": 576}
+  native_path: {"1": "block-scan", "2": "block-scan", "3": "block-scan", "4": "block-scan", "5": "block-scan", "6": "block-scan", "7": "block-scan", "8": "block-scan", "9": "block-scan"}
+  source_experts: 8
+shapes:
+  w1: {"K": 3584, "npn": 10, "W_bytes": 293601280}
+  w2: {"K": 320, "npn": 56, "W_bytes": 146800640}
+models:
+  M: the model at this commit (primary): F, the dead-CTA term, LATER_MISS, CORES; the JSON's ms
+  M0: the 0f77622 model of the 09-29 registrations: differs from M only through CORES, inactive at every scored cell (2.9 or more waves): predicted differences under 0.3%; M vs M0 does not separate, stated not tested
+  M+Z: M plus the per-GEMM constant's cycle form (r3_timing_model --gemm-const) with T0 refit on 8x7B (timing_params_MZ); a near-uniform shift of about -9.6 us a call
+timing_params_MZ:
+  T0: 0.028563
+  c: 202.547644
+  bw: 3597.800853
+  s_small: 0.011976
+  s_block: -0.00808
+gemm_const:
+  cycles: 2850.0
+  per_u: 0.2081
+  c_cycles_per_kstep: 344.1
+host_rule:
+  rule: a cell is scored when T_M + F240 >= 0.40 ms (T_M the JSON's prediction, never the measurement)
+  F240_ms: 0.067551
+  host_ms: 0.4
+  basis: 0.40 ms is the top of the measured eager host time on four models (0.33 to 0.36 ms, SEEN) plus a margin; F240 = 251.7 MB over the 3.7261 TB/s ruler
+E1:
+  what: time from PREDICTED bytes: (T_meas - T_M) / T_M per scored cell
+  label: BLIND (scope above: unseen shape, seen family)
+  rule: HOLDS when rms <= 2% and no cell beyond 5%; FALSIFIED otherwise
+  rms_max: 0.02
+  max_abs: 0.05
+  unresolved: beside the registered verdict, the label UNRESOLVED when |rms - 2%| or |max - 5%| is under the resolution sqrt(sigma_page^2 + sigma_board^2) (the replicate registration); the verdict stands
+E2:
+  what: time from COUNTED bytes: scripts/cross_model_score.py score() at this commit on the target's timed and counter pages (the byte G's 3, 8, 32)
+  cells: the E1 population restricted to G with a byte page (3, 8, 32): every core cell
+  rule: the same as E1
+  label: BLIND
+E3:
+  what: PRIVATE weight-set reads q (dram_counter_route.r3_q) against the JSON's q
+  cells: every G in (3, 8, 32), n = 1..9 (bytes are not host-bound), w1 and w2: 54 cells
+  rule: HOLDS when the rms of q_meas / q_pred - 1 is <= 3% and at most 10% of cells lie beyond 5%; FALSIFIED otherwise
+  rms_max: 0.03
+  beyond: 0.05
+  beyond_share_max: 0.1
+  label: BLIND
+E3s:
+  what: SHARED q (an expert fits in L2: q 1.00 to 1.04 predicted)
+  rule: E3's rule, SECONDARY (Qwen2 w2 SHARED missed by +97%, SEEN)
+  label: BLIND
+E4:
+  what: the floor's per-CTA unit u = S c + F on w2 (S 5, F 979: 36% of u), from the 1005 capture's DUR ruler
+  gemm: w2 only: w1's unit (S 56) is the parent's, a SEEN replicate, printed
+  fit: floor_estimator.joint_theta(DUR / u, q, frac), DUR = gpu__time_duration x 1005 MHz / 1e3, over the registered floor-bound w2 cells of the 1005 capture
+  cells_w2: [2, 3, 4, 5, 6, 8, 10, 12, 13, 14, 16]
+  cells_w1_printed: [3, 4, 5, 6, 8, 10, 12, 13, 14, 16]
+  u_w2: 2699.5
+  M_band: [0.98, 1.02]
+  F0_rival_b: 0.63734
+  F0_band: [0.59734, 0.67734]
+  rule: M HOLDS when b lies in [0.98, 1.02] (F0 FALSIFIED unless inside its own band); F0 HOLDS when b lies in [b_F0 - 0.04, b_F0 + 0.04]; else NEITHER. w1 printed with its q-only slope (ceil reads 1 / mean waves share, fluid 1.000)
+  label: BLIND
+E5:
+  what: M against M+Z on E1's cells: rms(M), rms(M+Z), their difference
+  status: PRINTED, NOT A TEST (the review, section 6 E-6): M+Z - M is a near-uniform -9.6 us a call, which a board-level T0 offset reproduces; part A carries the form question
+  illustrative_rel_shift_on_population: {"min": -0.026526, "max": -0.008015}
+  sigma: printed with sigma_rms = sqrt(2 sigma_page^2 / N + sigma_board^2)
+  M+Z_refit: T0 0.04424 -> 0.02856 ms; c, bw, s_small, s_block unchanged
+E6:
+  what: the dead-CTA term in isolation: counted SHARED - NATIVE in-kernel time per GEMM on the target's byte pages, sum over the GEMM of recorded sm__cycles_elapsed.avg (SHARED) - (NATIVE) over the 1710 MHz lock, per (G, n)
+  cells: G in (3, 8, 32), n = 2..9, each byte page whose V-gates pass (CLEAN) or every page (ALL)
+  statistic: per GEMM, the median over cells
+  predicted: {"w1": {"dead_ctas_shared": 5580, "dead_ctas_native": 620, "hidden_us": 29.1223, "shared_us": 0.0, "native_us": 0.0, "pred_us": 0.0}, "w2": {"dead_ctas_shared": 31248, "dead_ctas_native": 3472, "hidden_us": 3.178378, "shared_us": 38.475206, "native_us": 1.449798, "pred_us": 37.025408}}
+  hypotheses: {"DEAD": "M's term: dead x DEAD_CTA_NS less one effective lifetime k_w occ_g S'_g c, so w2 at S' 7.85 hides 3.2 us of 41.7", "FIXED": "the exposure does not shrink with the CTA's length: w2 reads the parent's counted SHARED - NATIVE w2 time at the same 31,248 dead CTAs (SEEN)"}
+  parent_counted_SEEN_us: {"w1": 24.148031, "w2": 21.540533}
+  bands_w2: {"DEAD": [29.620326, 44.43049], "FIXED": [17.232426, 25.84864]}
+  band_basis: +-20%: DEAD_CTA_NS's own se (0.58 of 8.74 us, 6.6%) and the term's miss on the parent (25.1 printed against 21.5 counted, 14%), SEEN
+  rule: on w2 (the primary): a hypothesis HOLDS when the median lies in its band and FALSIFIED outside it; DEAD is SELECTED when it holds and FIXED is falsified, and the reverse; else INCONCLUSIVE. w1 (5,580 against 620 dead CTAs, all hidden: predicted 0) is printed
+  label: BLIND (the parent's counted value is SEEN)
+gates:
+  timed: every VALIDITY gate except V5 gates CLEAN (V5 reads the declaration's machinery from slopes a host-bound n = 1 bends; Granite-3B lost every timed page to it); V1 makes a page unusable in both views; a V8 that reads UNKNOWN on the eager fallback latches the page INVALID: CLEAN drops it and ALL keeps it (fixed now, the review section 5)
+  bytes: every V-gate gates CLEAN for E3, E3s and E6, V10 (lock_gate.check_lock) included; V1 unusable in both. DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): an earlier draft exempted V10; that is withdrawn: E6 converts cycles to microseconds at 1710 MHz, so it needs the clock gate, and the stored V10 FAILs on published pages are a stale fit (all 101 published lock pages pass when lock_gate re-gates them on the nvidia-smi bracket, and five rental-2 TP-shard byte pages passed V10 as stored)
+  floor: the floorlaw registration's lock-in-force check (E4 reads the 1005 capture)
+  views: every verdict on ALL and CLEAN, rental 2's rule 3
+ambiguities_resolved:
+  E-1 ALL vs CLEAN: a cell's T is the median of ms_p50 over the pages the view counts; ALL counts every page of the unit's directory with V1 passing, CLEAN every page with no failing VALIDITY gate but V5
+  E-2 rep8: rep8's page is in its own directory (gaps-<card>-qwen2-57b-a14b-tp8-rep8) and is never read by E1 to E6; it is R's input only
+  E-3 population: 31 core cells, fixed above; deep cells printed with their own verdict
+  E-4 E3: 54 cells, rms <= 3% and at most 10% beyond 5%; n = 1..9
+  E-5 E4: w2 only, the joint fit (identifiable: corr(q, frac) 0.007 on the w2 cells); w1 printed
+  E-6 E5: printed only
+  E-7 UNRESOLVED: either margin (rms to 2%, max to 5%) under the resolution
+  E-8 above-lock: timed cells are not dropped by clock: R3's own clock gates decide a page (CLEAN), and each cell's sm_clock_load_mhz is printed
+  E-9 M+Z: the source pages and the refit numbers are in source.pages and timing_params_MZ
+  E-10 E6: added, with the FIXED rival from the parent's counted value
+seen_data:
+  - every published page is SEEN, rental 2's and the parent Qwen2-57B's (2026-09-28) included; the target has no cell on any of them
+  - the timing fit is 8x7B's 2026-09-27 pages alone (CAL); the byte model's registered view is fitted on the same board's 8x7B counter pages (CAL)
+  - the terms added after 2026-09-28 (DEAD_CTA_NS, LATER_MISS's capacity form, CORES) were chosen on SEEN pages, two of them on this family (the review, section 1)

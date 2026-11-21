@@ -1,0 +1,8 @@
+== 2026-11-12T02:05:35Z step stamps: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-11-rr-pages/rr-64.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_rr.py)
+2026-11-12T02:05:35Z stamps: the overhead gate for u7-s64 reads 'FAIL median=0.00997811605479798 worst=0.02896708458078545': the pages run PERTURBED (owner OD-1, C3)
+INSTRUMENTED KERNEL RR (stamps): 1 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u7-s64       page  docs/registered/2026-11-11-rr-pages/rr-64.json cells 40 tiles 64x128x64w8s3 shapes mixtral-8x7b rrs-e64-h4096-p36-k8 rrs-e64-h4096-p64-k8 rrs-e8-h4096-p100 rrs-e8-h4096-p160 rrs-e8-h4096-p20 rrs-e8-h4096-p36 rrs-e8-h4096-p48 rrs-e8-h4096-p64 rrs-e8-h4096-p80 rrs-e8-h8192-p24 rrs-e8-h8192-p40 spec stamps=ends,evict_a=none,evict_b=none
+  3 warm-up calls, then 3 stamped calls per cell (6 where the read GEMM has under 4 live CTAs), each held ahead and flushed (not on a flush-false cell); on a PASS regcheck and gate hard legs (PERTURBED on a timing FAIL alone)
+PERTURBED: the overhead gate for u7-s64 reads FAIL; the stamps run and the pages are labelled PERTURBED, the measured overhead beside every reading (C3's OD-1, owner decision 5)
+STAMPS u7-s64: 240 launches, 0 cells failed; /home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-instr-pc-s64
+2026-11-12T02:05:54Z stamps: u7-s64 exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-instr-pc-s64, probe=pc)

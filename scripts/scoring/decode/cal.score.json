@@ -1,0 +1,3318 @@
+{
+ "what": "the decode stage's CAL score under the second addendum",
+ "tile_params": "the tile stage's selections from A2's score directory (scripts/scoring/tileA2)",
+ "tile_params_dict": {
+  "c128": 691.6475590359868,
+  "F_wg": {
+   "w1": 2898.052707811491,
+   "w2": 3346.3006086105324
+  },
+  "variant": "W",
+  "f_form": "F-step",
+  "eta_rival": false,
+  "v4cal": {},
+  "occupancy": {
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   }
+  },
+  "counts": {
+   "128x128x64w8s3": {
+    "path": "wgmma",
+    "wgmma": 4,
+    "instruction": "m64n128k16",
+    "dtype": "bf16",
+    "cp_async_cg": 8,
+    "cp_async_bytes_per_thread": 128,
+    "bar_sync": 2,
+    "fence_proxy_async": 1,
+    "wgmma_wait_group": 1,
+    "cp_async_wait_group": 1,
+    "threads": 256,
+    "per_warpgroup": 4,
+    "warpgroups": 2
+   },
+   "64x128x64w8s3": {
+    "path": "wgmma",
+    "wgmma": 4,
+    "instruction": "m64n64k16",
+    "dtype": "bf16",
+    "cp_async_cg": 6,
+    "cp_async_bytes_per_thread": 96,
+    "bar_sync": 2,
+    "fence_proxy_async": 1,
+    "wgmma_wait_group": 1,
+    "cp_async_wait_group": 1,
+    "threads": 256,
+    "per_warpgroup": 4,
+    "warpgroups": 2
+   },
+   "64x128x64w4s3": {
+    "path": "wgmma",
+    "wgmma": 4,
+    "instruction": "m64n128k16",
+    "dtype": "bf16",
+    "cp_async_cg": 12,
+    "cp_async_bytes_per_thread": 192,
+    "bar_sync": 2,
+    "fence_proxy_async": 1,
+    "wgmma_wait_group": 1,
+    "cp_async_wait_group": 1,
+    "threads": 128,
+    "per_warpgroup": 4,
+    "warpgroups": 1
+   },
+   "32x128x64w4s3": {
+    "path": "mma.sync",
+    "mma_sync": 32,
+    "ldmatrix": 16,
+    "cp_async_cg": 10,
+    "ldmatrix_bytes_per_thread": 256,
+    "cp_async_bytes_per_thread": 160,
+    "threads": 128,
+    "wavefronts": 296.0
+   },
+   "16x64x128w4s4": {
+    "path": "mma.sync",
+    "mma_sync": 16,
+    "ldmatrix": 16,
+    "cp_async_cg": 10,
+    "ldmatrix_bytes_per_thread": 256,
+    "cp_async_bytes_per_thread": 160,
+    "threads": 128,
+    "wavefronts": 296.0
+   },
+   "32x64x128w4s3": {
+    "path": "mma.sync",
+    "mma_sync": 32,
+    "ldmatrix": 24,
+    "cp_async_cg": 12,
+    "ldmatrix_bytes_per_thread": 384,
+    "cp_async_bytes_per_thread": 192,
+    "threads": 128,
+    "wavefronts": 432.0
+   }
+  },
+  "law": "v4"
+ },
+ "units": {
+  "olmoe-1b-7b-dm-r3decode": {
+   "state": "counted",
+   "nodrop": true,
+   "page": "olmoe-1b-7b-main.json",
+   "inst": "GRR"
+  },
+  "mixtral-8x7b-dm-r3decode": {
+   "state": "counted",
+   "nodrop": true,
+   "page": "mixtral-8x7b-main.json",
+   "inst": "GRR"
+  },
+  "olmoe-1b-7b-dc-r3decode": {
+   "state": "counted",
+   "nodrop": true,
+   "page": "olmoe-1b-7b-ctl.json",
+   "inst": "GR1"
+  },
+  "mixtral-8x7b-dc-r3decode": {
+   "state": "counted",
+   "nodrop": true,
+   "page": "mixtral-8x7b-ctl.json",
+   "inst": "GR1"
+  },
+  "mixtral-8x7b-de-r3decode": {
+   "state": "counted",
+   "nodrop": false,
+   "page": "mixtral-8x7b-e240.json",
+   "inst": "E240"
+  },
+  "olmoe-1b-7b-dn-decodebytes": {
+   "state": "counted",
+   "nodrop": false
+  },
+  "mixtral-8x7b-dn-decodebytes": {
+   "state": "counted",
+   "nodrop": false
+  },
+  "olmoe-1b-7b-dd-r3decode": {
+   "state": "counted",
+   "nodrop": false,
+   "page": "olmoe-1b-7b-decl.json",
+   "inst": "GRR"
+  },
+  "mixtral-8x7b-dd-r3decode": {
+   "state": "counted",
+   "nodrop": false,
+   "page": "mixtral-8x7b-decl.json",
+   "inst": "GRR"
+  },
+  "olmoe-1b-7b-dr-r3decode": {
+   "state": "counted",
+   "nodrop": false,
+   "page": "olmoe-1b-7b-main.json",
+   "inst": "GRR"
+  }
+ },
+ "V_ALIGN_refused": [],
+ "dropped": {
+  "olmoe-1b-7b-dm": [],
+  "mixtral-8x7b-dm": []
+ },
+ "FIT": {
+  "forms": {
+   "fixed": {
+    "verdict": "FITTED",
+    "cells": 92,
+    "T0_GR_ms": 0.015459498712066392,
+    "s_naive_GR_ms": -0.00991958665465546,
+    "s_block_GR_ms": -0.015243536696384967,
+    "fitted_paths": [
+     "naive",
+     "block-scan"
+    ],
+    "in_sample": {
+     "cells": 92,
+     "rms": 0.150707,
+     "worst": 0.403809,
+     "mean": 0.052382
+    },
+    "sub_wave": {
+     "cells": 41,
+     "rms": 0.195624,
+     "worst": 0.403809,
+     "mean": 0.110444
+    }
+   },
+   "scaled": {
+    "verdict": "FITTED",
+    "cells": 92,
+    "T0_GR_ms": 0.02483091764232842,
+    "s_naive_GR_ms": -0.008373783200701885,
+    "s_block_GR_ms": -0.010406917373846703,
+    "fitted_paths": [
+     "naive",
+     "block-scan"
+    ],
+    "in_sample": {
+     "cells": 92,
+     "rms": 0.047524,
+     "worst": -0.227202,
+     "mean": 0.016739
+    },
+    "sub_wave": {
+     "cells": 41,
+     "rms": 0.048658,
+     "worst": 0.080363,
+     "mean": 0.026958
+    }
+   }
+  },
+  "selected": "scaled",
+  "rule": "the lower CAL rms on sub-wave cells (sub-wave: some GEMM under one wave at the census occupancy); fixed unless scaled's rms is lower by 0.1 percentage points (absolute)"
+ },
+ "NOT_PRICED": [],
+ "tile_selections_missing": false,
+ "E1_CAL_IN_SAMPLE": {
+  "verdict": "FAILS",
+  "stats": {
+   "cells": 92,
+   "rms": 0.047524,
+   "worst": -0.227202,
+   "mean": 0.016739
+  },
+  "bars": {
+   "rms_max": 0.03,
+   "max_abs": 0.08,
+   "mean_max": 0.015
+  },
+  "label": "IN-SAMPLE"
+ },
+ "rows": [
+  {
+   "key": "olmoe-1b-7b/main/L-T1-A8/1/native",
+   "meas_ms": 0.04152177770932516,
+   "pred_ms": 0.044765,
+   "e": 0.078116,
+   "path": "naive",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.027979118386680185,
+    1.292929292929293,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T1/1/native",
+   "meas_ms": 0.04156088829040527,
+   "pred_ms": 0.044765,
+   "e": 0.077102,
+   "path": "naive",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.027979118386680185,
+    1.292929292929293,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T2-A8/2/native",
+   "meas_ms": 0.06124266650941637,
+   "pred_ms": 0.047328,
+   "e": -0.227202,
+   "path": "naive",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.027979118386680185,
+    2.585858585858586,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T2-A11/2/native",
+   "meas_ms": 0.06180088718732198,
+   "pred_ms": 0.059415,
+   "e": -0.038611,
+   "path": "naive",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.03847128778168526,
+    2.585858585858586,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T2-A13/2/native",
+   "meas_ms": 0.06708799799283345,
+   "pred_ms": 0.066665,
+   "e": 0.0,
+   "path": "naive",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.045466067378355304,
+    2.585858585858586,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T2-A16/2/native",
+   "meas_ms": 0.07413333654403687,
+   "pred_ms": 0.07757,
+   "e": 0.046359,
+   "path": "naive",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.05595823677336037,
+    2.585858585858586,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T2/2/native",
+   "meas_ms": 0.0743359989590115,
+   "pred_ms": 0.071742,
+   "e": -0.0349,
+   "path": "naive",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.05246084697502535,
+    2.585858585858586,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T4-A8/4/native",
+   "meas_ms": 0.055043554968304105,
+   "pred_ms": 0.053252,
+   "e": -0.032552,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 32,
+   "features": [
+    0.027979118386680185,
+    1.292929292929293,
+    7.337587743538596,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T4-A16/4/native",
+   "meas_ms": 0.08466844426261054,
+   "pred_ms": 0.086021,
+   "e": 0.015977,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.05595823677336037,
+    2.585858585858586,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T4-A24/4/native",
+   "meas_ms": 0.10783466696739197,
+   "pred_ms": 0.109794,
+   "e": 0.018171,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.08393735516004056,
+    3.878787878787879,
+    6.240275845170769,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T4-A32/4/native",
+   "meas_ms": 0.13659021589491102,
+   "pred_ms": 0.138064,
+   "e": 0.010787,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.11191647354672074,
+    5.171717171717172,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/MIN-T4/4/native",
+   "meas_ms": 0.054979556136661105,
+   "pred_ms": 0.053252,
+   "e": -0.031426,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 32,
+   "features": [
+    0.027979118386680185,
+    1.292929292929293,
+    7.337587743538596,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T4/4/native",
+   "meas_ms": 0.12274489137861463,
+   "pred_ms": 0.120394,
+   "e": -0.019149,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.09442952455504562,
+    4.363636363636363,
+    5.771441123130016,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/DW-T4/4/native",
+   "meas_ms": 0.10519822438557942,
+   "pred_ms": 0.10626,
+   "e": 0.010089,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.08043996536170553,
+    3.717171717171717,
+    6.3578422665081,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T8-A8/8/native",
+   "meas_ms": 0.05527466535568237,
+   "pred_ms": 0.053402,
+   "e": -0.033878,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 64,
+   "features": [
+    0.027979118386680185,
+    1.292929292929293,
+    8.184513753033722,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T8-A27/8/native",
+   "meas_ms": 0.12331732776429918,
+   "pred_ms": 0.120545,
+   "e": -0.02248,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.09442952455504562,
+    4.363636363636363,
+    7.7702232041587855,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T8-A45/8/native",
+   "meas_ms": 0.18071289194954765,
+   "pred_ms": 0.184153,
+   "e": 0.019038,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.15738254092507603,
+    7.2727272727272725,
+    7.104144092987527,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T8-A64/8/native",
+   "meas_ms": 0.24288177490234375,
+   "pred_ms": 0.251296,
+   "e": 0.034644,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.22383294709344148,
+    10.343434343434344,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T8/8/native",
+   "meas_ms": 0.16928177409701878,
+   "pred_ms": 0.170018,
+   "e": 0.0,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.14339298173173595,
+    6.626262626262626,
+    7.29505641646263,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/US-T8/8/native",
+   "meas_ms": 0.1692675550778707,
+   "pred_ms": 0.170018,
+   "e": 0.0,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.14339298173173595,
+    6.626262626262626,
+    7.29505641646263,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/DW-T8/8/native",
+   "meas_ms": 0.1690008905198839,
+   "pred_ms": 0.170018,
+   "e": 0.006021,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.14339298173173595,
+    6.626262626262626,
+    7.29505641646263,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T16-A8/16/native",
+   "meas_ms": 0.05631111396683587,
+   "pred_ms": 0.053703,
+   "e": -0.046323,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 128,
+   "features": [
+    0.027979118386680185,
+    1.292929292929293,
+    8.253488028345904,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T16-A27/16/native",
+   "meas_ms": 0.1250435577498542,
+   "pred_ms": 0.120846,
+   "e": -0.033573,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 128,
+   "features": [
+    0.09442952455504562,
+    4.363636363636363,
+    7.872836175025724,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T16-A45/16/native",
+   "meas_ms": 0.18246755335066053,
+   "pred_ms": 0.184454,
+   "e": 0.010887,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 128,
+   "features": [
+    0.15738254092507603,
+    7.2727272727272725,
+    7.29505641646263,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T16-A64/16/native",
+   "meas_ms": 0.24493511517842612,
+   "pred_ms": 0.251597,
+   "e": 0.027198,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 128,
+   "features": [
+    0.22383294709344148,
+    10.343434343434344,
+    5.54907608489522,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/MIN-T16/16/native",
+   "meas_ms": 0.05619200070699056,
+   "pred_ms": 0.053703,
+   "e": -0.044301,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 128,
+   "features": [
+    0.027979118386680185,
+    1.292929292929293,
+    8.253488028345904,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T16/16/native",
+   "meas_ms": 0.22182755337821114,
+   "pred_ms": 0.22686,
+   "e": 0.022687,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 128,
+   "features": [
+    0.19935121850509632,
+    9.212121212121213,
+    6.558197802812269,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/DW-T16/16/native",
+   "meas_ms": 0.19422221846050686,
+   "pred_ms": 0.198589,
+   "e": 0.022483,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 128,
+   "features": [
+    0.17137210011841614,
+    7.91919191919192,
+    7.104144092987527,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T32-A27/32/native",
+   "meas_ms": 0.12752889262305367,
+   "pred_ms": 0.121447,
+   "e": -0.047693,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 256,
+   "features": [
+    0.09442952455504562,
+    4.363636363636363,
+    8.051022208190679,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T32-A45/32/native",
+   "meas_ms": 0.18556088871426052,
+   "pred_ms": 0.185055,
+   "e": 0.0,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 256,
+   "features": [
+    0.15738254092507603,
+    7.2727272727272725,
+    7.59337419312129,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T32-A64/32/native",
+   "meas_ms": 0.24823644426133898,
+   "pred_ms": 0.252198,
+   "e": 0.015959,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 256,
+   "features": [
+    0.22383294709344148,
+    10.343434343434344,
+    6.645090969505644,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T32/32/native",
+   "meas_ms": 0.24444267484876844,
+   "pred_ms": 0.248663,
+   "e": 0.017264,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 256,
+   "features": [
+    0.22033555729510645,
+    10.181818181818182,
+    6.725033642166843,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/US-T32/32/native",
+   "meas_ms": 0.24443199899461535,
+   "pred_ms": 0.248663,
+   "e": 0.017309,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 256,
+   "features": [
+    0.22033555729510645,
+    10.181818181818182,
+    6.725033642166843,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/DW-T32/32/native",
+   "meas_ms": 0.2370684411790636,
+   "pred_ms": 0.241599,
+   "e": 0.019112,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 256,
+   "features": [
+    0.2133407776984364,
+    9.858585858585858,
+    6.8679744089702925,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T64-A27/64/native",
+   "meas_ms": 0.1316302220026652,
+   "pred_ms": 0.123659,
+   "e": -0.060561,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 512,
+   "features": [
+    0.09442952455504562,
+    3.272727272727273,
+    8.09101504171053,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T64-A45/64/native",
+   "meas_ms": 0.1926435563299391,
+   "pred_ms": 0.187916,
+   "e": -0.024538,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 512,
+   "features": [
+    0.15738254092507603,
+    5.454545454545454,
+    7.655864017616056,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T64-A64/64/native",
+   "meas_ms": 0.25461333327823216,
+   "pred_ms": 0.255772,
+   "e": 0.00455,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 512,
+   "features": [
+    0.22383294709344148,
+    7.757575757575758,
+    6.799055862058796,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T64/64/native",
+   "meas_ms": 0.25486934185028076,
+   "pred_ms": 0.255772,
+   "e": 0.0,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 512,
+   "features": [
+    0.22383294709344148,
+    7.757575757575758,
+    6.799055862058796,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T96-A27/96/native",
+   "meas_ms": 0.13453866375817192,
+   "pred_ms": 0.124834,
+   "e": -0.07213,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 768,
+   "features": [
+    0.09442952455504562,
+    1.6363636363636365,
+    7.543802867501509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T96-A45/96/native",
+   "meas_ms": 0.20391288730833265,
+   "pred_ms": 0.198783,
+   "e": -0.025156,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 768,
+   "features": [
+    0.15738254092507603,
+    2.727272727272727,
+    7.180069874302796,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T96-A64/96/native",
+   "meas_ms": 0.2597084442774455,
+   "pred_ms": 0.256934,
+   "e": -0.010684,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 768,
+   "features": [
+    0.22383294709344148,
+    3.878787878787879,
+    6.558197802812269,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T96/96/native",
+   "meas_ms": 0.25973333252800834,
+   "pred_ms": 0.25693,
+   "e": -0.010793,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 768,
+   "features": [
+    0.22383294709344148,
+    3.878787878787879,
+    6.558197802812269,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T128-A27/128/native",
+   "meas_ms": 0.1433173285590278,
+   "pred_ms": 0.145569,
+   "e": 0.015712,
+   "path": "block-scan",
+   "sub_wave": false,
+   "numel": 1024,
+   "features": [
+    0.09442952455504562,
+    2.1818181818181817,
+    7.417580402414544,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T128-A45/128/native",
+   "meas_ms": 0.18627199861738417,
+   "pred_ms": 0.183173,
+   "e": -0.016637,
+   "path": "block-scan",
+   "sub_wave": false,
+   "numel": 1024,
+   "features": [
+    0.15738254092507603,
+    3.6363636363636362,
+    6.9930151229329605,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/L-T128-A64/128/native",
+   "meas_ms": 0.25280355082617867,
+   "pred_ms": 0.252392,
+   "e": 0.0,
+   "path": "block-scan",
+   "sub_wave": false,
+   "numel": 1024,
+   "features": [
+    0.22383294709344148,
+    5.171717171717172,
+    6.175867270105761,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/U-T128/128/native",
+   "meas_ms": 0.2528497775395711,
+   "pred_ms": 0.252398,
+   "e": 0.0,
+   "path": "block-scan",
+   "sub_wave": false,
+   "numel": 1024,
+   "features": [
+    0.22383294709344148,
+    5.171717171717172,
+    6.175867270105761,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "key": "olmoe-1b-7b/main/US-T128/128/native",
+   "meas_ms": 0.2528337770038181,
+   "pred_ms": 0.252398,
+   "e": 0.0,
+   "path": "block-scan",
+   "sub_wave": false,
+   "numel": 1024,
+   "features": [
+    0.22383294709344148,
+    5.171717171717172,
+    6.175867270105761,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T1-A2/1/native",
+   "meas_ms": 0.215938001871109,
+   "pred_ms": 0.227626,
+   "e": 0.054128,
+   "path": "naive",
+   "sub_wave": true,
+   "numel": 2,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T1/1/native",
+   "meas_ms": 0.21448399871587753,
+   "pred_ms": 0.227626,
+   "e": 0.061274,
+   "path": "naive",
+   "sub_wave": true,
+   "numel": 2,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T2-A2/2/native",
+   "meas_ms": 0.2185179963707924,
+   "pred_ms": 0.236079,
+   "e": 0.080363,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 4,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T2-A3/2/native",
+   "meas_ms": 0.3089260011911392,
+   "pred_ms": 0.319639,
+   "e": 0.034677,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 4,
+   "features": [
+    0.29378074306014196,
+    3.878787878787879,
+    6.240275845170769,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T2-A4/2/native",
+   "meas_ms": 0.3957519978284836,
+   "pred_ms": 0.417855,
+   "e": 0.05585,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 4,
+   "features": [
+    0.3917076574135226,
+    5.171717171717171,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T2/2/native",
+   "meas_ms": 0.3063960075378418,
+   "pred_ms": 0.319636,
+   "e": 0.043213,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 4,
+   "features": [
+    0.29378074306014196,
+    3.878787878787879,
+    6.240275845170769,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T4-A2/4/native",
+   "meas_ms": 0.2212980017066002,
+   "pred_ms": 0.236236,
+   "e": 0.067503,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    8.030409562130485,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T4-A4/4/native",
+   "meas_ms": 0.40604598820209503,
+   "pred_ms": 0.418005,
+   "e": 0.029452,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.3917076574135226,
+    5.171717171717171,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T4-A6/4/native",
+   "meas_ms": 0.5803579986095428,
+   "pred_ms": 0.614443,
+   "e": 0.058731,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.5875614861202839,
+    7.757575757575758,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T4-A8/4/native",
+   "meas_ms": 0.7860220074653625,
+   "pred_ms": 0.831664,
+   "e": 0.058068,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 8,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/MIN-T4/4/native",
+   "meas_ms": 0.21964000165462494,
+   "pred_ms": 0.236236,
+   "e": 0.075561,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    8.030409562130485,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T4/4/native",
+   "meas_ms": 0.5794059932231903,
+   "pred_ms": 0.614442,
+   "e": 0.060468,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.5875614861202839,
+    7.757575757575758,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/DW-T4/4/native",
+   "meas_ms": 0.49062199890613556,
+   "pred_ms": 0.516226,
+   "e": 0.052186,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 8,
+   "features": [
+    0.4896345717669032,
+    6.4646464646464645,
+    7.337587743538596,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T8-A2/8/native",
+   "meas_ms": 0.2218180000782013,
+   "pred_ms": 0.236551,
+   "e": 0.066419,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 16,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    8.184513753033722,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T8-A4/8/native",
+   "meas_ms": 0.4080759882926941,
+   "pred_ms": 0.418306,
+   "e": 0.025068,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 16,
+   "features": [
+    0.3917076574135226,
+    5.171717171717171,
+    7.848153086199526,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T8-A6/8/native",
+   "meas_ms": 0.5811499953269958,
+   "pred_ms": 0.614745,
+   "e": 0.057807,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 16,
+   "features": [
+    0.5875614861202839,
+    7.757575757575758,
+    7.337587743538596,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T8-A8/8/native",
+   "meas_ms": 0.7876400053501129,
+   "pred_ms": 0.83197,
+   "e": 0.056282,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    6.240275845170769,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T8/8/native",
+   "meas_ms": 0.7865920066833496,
+   "pred_ms": 0.831981,
+   "e": 0.057703,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    6.240275845170769,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/US-T8/8/native",
+   "meas_ms": 0.7864600121974945,
+   "pred_ms": 0.831981,
+   "e": 0.05788,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    6.240275845170769,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/DW-T8/8/native",
+   "meas_ms": 0.7060379981994629,
+   "pred_ms": 0.766429,
+   "e": 0.085535,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 16,
+   "features": [
+    0.6854884004736645,
+    9.05050505050505,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T16-A2/16/native",
+   "meas_ms": 0.22204399853944778,
+   "pred_ms": 0.237181,
+   "e": 0.06817,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 32,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    8.318010277546872,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T16-A4/16/native",
+   "meas_ms": 0.4113619923591614,
+   "pred_ms": 0.418907,
+   "e": 0.018341,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 32,
+   "features": [
+    0.3917076574135226,
+    5.171717171717171,
+    8.030409562130485,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T16-A6/16/native",
+   "meas_ms": 0.5828900039196014,
+   "pred_ms": 0.615345,
+   "e": 0.055679,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 32,
+   "features": [
+    0.5875614861202839,
+    7.757575757575758,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T16-A8/16/native",
+   "meas_ms": 0.7898960113525391,
+   "pred_ms": 0.832581,
+   "e": 0.054039,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/MIN-T16/16/native",
+   "meas_ms": 0.22002200037240982,
+   "pred_ms": 0.237181,
+   "e": 0.077986,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 32,
+   "features": [
+    0.1958538287067613,
+    2.5858585858585856,
+    8.318010277546872,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T16/16/native",
+   "meas_ms": 0.7895219922065735,
+   "pred_ms": 0.83258,
+   "e": 0.054537,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/DW-T16/16/native",
+   "meas_ms": 0.7904340028762817,
+   "pred_ms": 0.832573,
+   "e": 0.053312,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 32,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T32-A4/32/native",
+   "meas_ms": 0.4160259962081909,
+   "pred_ms": 0.420109,
+   "e": 0.009814,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 64,
+   "features": [
+    0.3917076574135226,
+    5.171717171717171,
+    8.318010277546872,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T32-A6/32/native",
+   "meas_ms": 0.5883679986000061,
+   "pred_ms": 0.616548,
+   "e": 0.047895,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 64,
+   "features": [
+    0.5875614861202839,
+    7.757575757575758,
+    8.030409562130485,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T32-A8/32/native",
+   "meas_ms": 0.7948180139064789,
+   "pred_ms": 0.833804,
+   "e": 0.04905,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T32/32/native",
+   "meas_ms": 0.7953299880027771,
+   "pred_ms": 0.833791,
+   "e": 0.048359,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/US-T32/32/native",
+   "meas_ms": 0.7956559956073761,
+   "pred_ms": 0.833791,
+   "e": 0.04793,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/DW-T32/32/native",
+   "meas_ms": 0.7942980229854584,
+   "pred_ms": 0.833801,
+   "e": 0.049733,
+   "path": "small-batch",
+   "sub_wave": false,
+   "numel": 64,
+   "features": [
+    0.7834153148270452,
+    10.343434343434343,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T64-A4/64/native",
+   "meas_ms": 0.4278560131788254,
+   "pred_ms": 0.423686,
+   "e": -0.009747,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 128,
+   "features": [
+    0.3917076574135226,
+    3.878787878787879,
+    8.318010277546872,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T64-A6/64/native",
+   "meas_ms": 0.6111779808998108,
+   "pred_ms": 0.62071,
+   "e": 0.015597,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 128,
+   "features": [
+    0.5875614861202839,
+    5.818181818181818,
+    8.030409562130485,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T64-A8/64/native",
+   "meas_ms": 0.7859979867935181,
+   "pred_ms": 0.817732,
+   "e": 0.040374,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 128,
+   "features": [
+    0.7834153148270452,
+    7.757575757575758,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T64/64/native",
+   "meas_ms": 0.7866320013999939,
+   "pred_ms": 0.817729,
+   "e": 0.039531,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 128,
+   "features": [
+    0.7834153148270452,
+    7.757575757575758,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T96-A6/96/native",
+   "meas_ms": 0.6424620151519775,
+   "pred_ms": 0.667456,
+   "e": 0.038904,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 192,
+   "features": [
+    0.5875614861202839,
+    2.909090909090909,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T96-A8/96/native",
+   "meas_ms": 0.8243359923362732,
+   "pred_ms": 0.820123,
+   "e": -0.005111,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 192,
+   "features": [
+    0.7834153148270452,
+    3.878787878787879,
+    7.337587743538596,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T96/96/native",
+   "meas_ms": 0.8244879841804504,
+   "pred_ms": 0.820123,
+   "e": -0.005294,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 192,
+   "features": [
+    0.7834153148270452,
+    3.878787878787879,
+    7.337587743538596,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T128-A4/128/native",
+   "meas_ms": 0.478070005774498,
+   "pred_ms": 0.460682,
+   "e": -0.03637,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 256,
+   "features": [
+    0.3917076574135226,
+    2.5858585858585856,
+    7.6251071482389,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T128-A6/128/native",
+   "meas_ms": 0.6374779939651489,
+   "pred_ms": 0.629009,
+   "e": -0.013285,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 256,
+   "features": [
+    0.5875614861202839,
+    3.878787878787879,
+    7.337587743538596,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/L-T128-A8/128/native",
+   "meas_ms": 0.8147720098495483,
+   "pred_ms": 0.827191,
+   "e": 0.015242,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 256,
+   "features": [
+    0.7834153148270452,
+    5.171717171717171,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/U-T128/128/native",
+   "meas_ms": 0.8151319921016693,
+   "pred_ms": 0.827191,
+   "e": 0.014794,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 256,
+   "features": [
+    0.7834153148270452,
+    5.171717171717171,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "key": "mixtral-8x7b/main/US-T128/128/native",
+   "meas_ms": 0.8146019876003265,
+   "pred_ms": 0.827191,
+   "e": 0.015454,
+   "path": "small-batch",
+   "sub_wave": true,
+   "numel": 256,
+   "features": [
+    0.7834153148270452,
+    5.171717171717171,
+    6.932447891572509,
+    0.0,
+    0.0
+   ]
+  }
+ ],
+ "RIVAL_FITS": {
+  "line": {
+   "verdict": "FITTED",
+   "a_ms": 0.386188837577602,
+   "b_ms_per_row": -0.00015105085662582606,
+   "cells": 92
+  },
+  "OLS": {
+   "verdict": "FITTED",
+   "cells": 92,
+   "mu": [
+    0.33609155659869516,
+    5.574000878348704,
+    6.211523143198864,
+    0.09782608695652174,
+    0.05434782608695652
+   ],
+   "sd": [
+    0.2700750139658921,
+    2.9790492827967174,
+    2.594471812148445,
+    0.2970793558416625,
+    0.22670275668058923
+   ],
+   "beta": [
+    0.2672831186893663,
+    -0.006654035598610312,
+    0.0017698143819819619,
+    -0.002600928224144609,
+    0.001082196209820443
+   ],
+   "a": 0.35892744167091506
+  }
+ },
+ "G3D": {
+  "shuffle": {
+   "verdict": "EQUIVALENT",
+   "tost": {
+    "verdict": "EQUIVALENT",
+    "mean": 0.062814,
+    "se": 0.112769,
+    "ci": [
+     -0.164421,
+     0.29005
+    ],
+    "df": 5,
+    "t": 2.015048,
+    "margin": 1.8707288205623627,
+    "clusters": 6,
+    "cells": 6,
+    "cluster_means": {
+     "olmoe-1b-7b/T8": 0.014219,
+     "olmoe-1b-7b/T32": 0.010676,
+     "olmoe-1b-7b/T128": 0.016001,
+     "mixtral-8x7b/T8": 0.131994,
+     "mixtral-8x7b/T32": -0.326008,
+     "mixtral-8x7b/T128": 0.530005
+    }
+   },
+   "margin_us": 1.870729,
+   "rows": [
+    {
+     "model": "olmoe-1b-7b",
+     "a": "U-T8",
+     "b": "US-T8",
+     "d_us": 0.014219
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "a": "U-T32",
+     "b": "US-T32",
+     "d_us": 0.010676
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "a": "U-T128",
+     "b": "US-T128",
+     "d_us": 0.016001
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "U-T8",
+     "b": "US-T8",
+     "d_us": 0.131994
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "U-T32",
+     "b": "US-T32",
+     "d_us": -0.326008
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "U-T128",
+     "b": "US-T128",
+     "d_us": 0.530005
+    }
+   ],
+   "test": "shuffle"
+  },
+  "label": {
+   "verdict": "NOT EQUIVALENT",
+   "tost": {
+    "verdict": "NOT EQUIVALENT",
+    "mean": -0.912073,
+    "se": 0.38459,
+    "ci": [
+     -1.68704,
+     -0.137105
+    ],
+    "df": 5,
+    "t": 2.015048,
+    "margin": 0.5199140056967736,
+    "clusters": 6,
+    "cells": 6,
+    "cluster_means": {
+     "olmoe-1b-7b/T4": -0.063999,
+     "olmoe-1b-7b/T16": -0.119113,
+     "olmoe-1b-7b/T64": -0.005335,
+     "mixtral-8x7b/T4": -1.658,
+     "mixtral-8x7b/T16": -2.021998,
+     "mixtral-8x7b/T64": -1.603991
+    }
+   },
+   "margin_us": 0.519914,
+   "rows": [
+    {
+     "model": "olmoe-1b-7b",
+     "a": "MIN-T4",
+     "b": "L-T4-A8",
+     "d_us": -0.063999
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "a": "MIN-T16",
+     "b": "L-T16-A8",
+     "d_us": -0.119113
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "a": "MIN-T64",
+     "b": "L-T64-A8",
+     "d_us": -0.005335
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "MIN-T4",
+     "b": "L-T4-A2",
+     "d_us": -1.658
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "MIN-T16",
+     "b": "L-T16-A2",
+     "d_us": -2.021998
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "MIN-T64",
+     "b": "L-T64-A2",
+     "d_us": -1.603991
+    }
+   ],
+   "test": "label"
+  },
+  "fill": {
+   "verdict": "NOT EQUIVALENT",
+   "tost": {
+    "verdict": "NOT EQUIVALENT",
+    "mean": 3.285556,
+    "se": 0.316887,
+    "ci": [
+     1.28481,
+     5.286302
+    ],
+    "df": 1,
+    "t": 6.313752,
+    "margin": 2.8296792268753053,
+    "clusters": 2,
+    "cells": 9,
+    "cluster_means": {
+     "olmoe-1b-7b/16x64x128w4s4": 2.968669,
+     "mixtral-8x7b/16x64x128w4s4": 3.602443
+    }
+   },
+   "margin_us": 2.829679,
+   "rows": [
+    {
+     "model": "olmoe-1b-7b",
+     "a": "L-T16-A64",
+     "b": "L-T8-A64",
+     "d_us": 1.752785
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "a": "L-T32-A64",
+     "b": "L-T8-A64",
+     "d_us": 4.453003
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "a": "L-T32-A64",
+     "b": "L-T16-A64",
+     "d_us": 2.700218
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "L-T8-A8",
+     "b": "L-T4-A8",
+     "d_us": 1.312373
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "L-T16-A8",
+     "b": "L-T4-A8",
+     "d_us": 2.95713
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "L-T16-A8",
+     "b": "L-T8-A8",
+     "d_us": 1.644757
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "L-T32-A8",
+     "b": "L-T4-A8",
+     "d_us": 6.656634
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "L-T32-A8",
+     "b": "L-T8-A8",
+     "d_us": 5.34426
+    },
+    {
+     "model": "mixtral-8x7b",
+     "a": "L-T32-A8",
+     "b": "L-T16-A8",
+     "d_us": 3.699504
+    }
+   ],
+   "test": "fill"
+  }
+ },
+ "REP": {
+  "pairs": 47,
+  "sigma_page": 0.001884,
+  "bars_blind": {
+   "rms_max": 0.015,
+   "max_abs": 0.04,
+   "mean_max": 0.0075,
+   "source": "tightened from the CAL replicate's sigma_page 0.00188"
+  },
+  "label": "the kept cells only (owner, 2026-10-28, review m3): these bars go to the blind rental"
+ },
+ "E1_CAL_REP": {
+  "verdict": "FAILS",
+  "stats": {
+   "cells": 47,
+   "rms": 0.045713,
+   "worst": -0.229506,
+   "mean": -0.005992
+  },
+  "bars": {
+   "rms_max": 0.03,
+   "max_abs": 0.08,
+   "mean_max": 0.015
+  },
+  "label": "DESCRIPTIVE (the replicate, constants fitted on the main page)"
+ },
+ "GD2": {
+  "verdict": "PASS",
+  "median_us": 3.661007,
+  "band_us": [
+   -0.459551,
+   5.91
+  ],
+  "cells": 40,
+  "max_width_us": 8.0,
+  "expected_us": [
+   0.0,
+   5.0
+  ],
+  "stop_us": [
+   -1.0,
+   10.0
+  ],
+  "in_expected": 36,
+  "rows": [
+   {
+    "cell": "olmoe-1b-7b/L-T4-A32",
+    "gr1_us": 140.064001,
+    "grr_us": 136.590216,
+    "d_us": 3.473785
+   },
+   {
+    "cell": "olmoe-1b-7b/U-T4",
+    "gr1_us": 126.271993,
+    "grr_us": 122.744891,
+    "d_us": 3.527102
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T8-A64",
+    "gr1_us": 245.264001,
+    "grr_us": 242.881775,
+    "d_us": 2.382226
+   },
+   {
+    "cell": "olmoe-1b-7b/U-T8",
+    "gr1_us": 173.056006,
+    "grr_us": 169.281774,
+    "d_us": 3.774232
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T16-A64",
+    "gr1_us": 247.391999,
+    "grr_us": 244.935115,
+    "d_us": 2.456884
+   },
+   {
+    "cell": "olmoe-1b-7b/U-T16",
+    "gr1_us": 225.024,
+    "grr_us": 221.827553,
+    "d_us": 3.196446
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T32-A64",
+    "gr1_us": 250.367999,
+    "grr_us": 248.236444,
+    "d_us": 2.131555
+   },
+   {
+    "cell": "olmoe-1b-7b/U-T32",
+    "gr1_us": 246.560007,
+    "grr_us": 244.442675,
+    "d_us": 2.117332
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T64-A64",
+    "gr1_us": 255.712003,
+    "grr_us": 254.613333,
+    "d_us": 1.098669
+   },
+   {
+    "cell": "olmoe-1b-7b/U-T64",
+    "gr1_us": 256.24001,
+    "grr_us": 254.869342,
+    "d_us": 1.370668
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T96-A64",
+    "gr1_us": 259.424001,
+    "grr_us": 259.708444,
+    "d_us": -0.284443
+   },
+   {
+    "cell": "olmoe-1b-7b/U-T96",
+    "gr1_us": 259.167999,
+    "grr_us": 259.733333,
+    "d_us": -0.565333
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T128-A64",
+    "gr1_us": 253.343999,
+    "grr_us": 252.803551,
+    "d_us": 0.540449
+   },
+   {
+    "cell": "olmoe-1b-7b/U-T128",
+    "gr1_us": 253.600001,
+    "grr_us": 252.849778,
+    "d_us": 0.750224
+   },
+   {
+    "cell": "mixtral-8x7b/L-T1-A2",
+    "gr1_us": 221.104003,
+    "grr_us": 215.938002,
+    "d_us": 5.166002
+   },
+   {
+    "cell": "mixtral-8x7b/U-T1",
+    "gr1_us": 219.2,
+    "grr_us": 214.483999,
+    "d_us": 4.716001
+   },
+   {
+    "cell": "mixtral-8x7b/L-T2-A4",
+    "gr1_us": 398.768008,
+    "grr_us": 395.751998,
+    "d_us": 3.01601
+   },
+   {
+    "cell": "mixtral-8x7b/L-T2-A2",
+    "gr1_us": 223.088004,
+    "grr_us": 218.517996,
+    "d_us": 4.570007
+   },
+   {
+    "cell": "mixtral-8x7b/U-T2",
+    "gr1_us": 310.431987,
+    "grr_us": 306.396008,
+    "d_us": 4.03598
+   },
+   {
+    "cell": "mixtral-8x7b/L-T4-A8",
+    "gr1_us": 790.719986,
+    "grr_us": 786.022007,
+    "d_us": 4.697978
+   },
+   {
+    "cell": "mixtral-8x7b/L-T4-A2",
+    "gr1_us": 226.208001,
+    "grr_us": 221.298002,
+    "d_us": 4.91
+   },
+   {
+    "cell": "mixtral-8x7b/U-T4",
+    "gr1_us": 583.808005,
+    "grr_us": 579.405993,
+    "d_us": 4.402012
+   },
+   {
+    "cell": "mixtral-8x7b/L-T8-A8",
+    "gr1_us": 791.455984,
+    "grr_us": 787.640005,
+    "d_us": 3.815979
+   },
+   {
+    "cell": "mixtral-8x7b/L-T8-A2",
+    "gr1_us": 226.400003,
+    "grr_us": 221.818,
+    "d_us": 4.582003
+   },
+   {
+    "cell": "mixtral-8x7b/U-T8",
+    "gr1_us": 790.416002,
+    "grr_us": 786.592007,
+    "d_us": 3.823996
+   },
+   {
+    "cell": "mixtral-8x7b/L-T16-A8",
+    "gr1_us": 793.919981,
+    "grr_us": 789.896011,
+    "d_us": 4.023969
+   },
+   {
+    "cell": "mixtral-8x7b/L-T16-A2",
+    "gr1_us": 226.528004,
+    "grr_us": 222.043999,
+    "d_us": 4.484005
+   },
+   {
+    "cell": "mixtral-8x7b/U-T16",
+    "gr1_us": 793.264002,
+    "grr_us": 789.521992,
+    "d_us": 3.742009
+   },
+   {
+    "cell": "mixtral-8x7b/L-T32-A8",
+    "gr1_us": 798.784018,
+    "grr_us": 794.818014,
+    "d_us": 3.966004
+   },
+   {
+    "cell": "mixtral-8x7b/L-T32-A2",
+    "gr1_us": 366.048008,
+    "grr_us": 361.985996,
+    "d_us": 4.062012
+   },
+   {
+    "cell": "mixtral-8x7b/U-T32",
+    "gr1_us": 799.439996,
+    "grr_us": 795.329988,
+    "d_us": 4.110008
+   },
+   {
+    "cell": "mixtral-8x7b/L-T64-A8",
+    "gr1_us": 788.239986,
+    "grr_us": 785.997987,
+    "d_us": 2.241999
+   },
+   {
+    "cell": "mixtral-8x7b/L-T64-A2",
+    "gr1_us": 393.328011,
+    "grr_us": 392.295986,
+    "d_us": 1.032025
+   },
+   {
+    "cell": "mixtral-8x7b/U-T64",
+    "gr1_us": 789.007992,
+    "grr_us": 786.632001,
+    "d_us": 2.37599
+   },
+   {
+    "cell": "mixtral-8x7b/L-T96-A8",
+    "gr1_us": 828.191996,
+    "grr_us": 824.335992,
+    "d_us": 3.856003
+   },
+   {
+    "cell": "mixtral-8x7b/L-T96-A2",
+    "gr1_us": 473.728001,
+    "grr_us": 466.995999,
+    "d_us": 6.732002
+   },
+   {
+    "cell": "mixtral-8x7b/U-T96",
+    "gr1_us": 828.000009,
+    "grr_us": 824.487984,
+    "d_us": 3.512025
+   },
+   {
+    "cell": "mixtral-8x7b/L-T128-A8",
+    "gr1_us": 818.352014,
+    "grr_us": 814.77201,
+    "d_us": 3.580004
+   },
+   {
+    "cell": "mixtral-8x7b/L-T128-A2",
+    "gr1_us": 364.735991,
+    "grr_us": 363.764003,
+    "d_us": 0.971988
+   },
+   {
+    "cell": "mixtral-8x7b/U-T128",
+    "gr1_us": 819.215983,
+    "grr_us": 815.131992,
+    "d_us": 4.083991
+   }
+  ]
+ },
+ "GD3": {
+  "verdict": "NOT SCORED: no E240 page or no matched cell"
+ },
+ "DECL": {
+  "verdict": "DESCRIPTIVE",
+  "rows": [
+   {
+    "cell": "olmoe-1b-7b/L-T16-A64",
+    "d_us": 183.716007,
+    "pred_d_us": -2.938652,
+    "dead_extra": [
+     -128,
+     -128
+    ],
+    "path_decl": "naive"
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T32-A64",
+    "d_us": -5.553991,
+    "pred_d_us": -4.083038,
+    "dead_extra": [
+     5760,
+     5760
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T64-A64",
+    "d_us": -2.320021,
+    "pred_d_us": 6.635424,
+    "dead_extra": [
+     13888,
+     13888
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T96-A64",
+    "d_us": -11.253998,
+    "pred_d_us": -7.400815,
+    "dead_extra": [
+     7936,
+     7936
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T128-A64",
+    "d_us": 0.496,
+    "pred_d_us": 4.48448,
+    "dead_extra": [
+     8064,
+     8064
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "mixtral-8x7b/L-T16-A8",
+    "d_us": 1.428008,
+    "pred_d_us": -6.698376,
+    "dead_extra": [
+     9856,
+     1408
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "mixtral-8x7b/L-T32-A8",
+    "d_us": 11.577994,
+    "pred_d_us": 7.565944,
+    "dead_extra": [
+     23296,
+     3328
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "mixtral-8x7b/L-T64-A8",
+    "d_us": 3.394008,
+    "pred_d_us": 5.411667,
+    "dead_extra": [
+     27776,
+     3968
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "mixtral-8x7b/L-T96-A8",
+    "d_us": -0.666022,
+    "pred_d_us": -10.406917,
+    "dead_extra": [
+     13888,
+     1984
+    ],
+    "path_decl": "block-scan"
+   },
+   {
+    "cell": "mixtral-8x7b/L-T128-A8",
+    "d_us": -0.580013,
+    "pred_d_us": -9.871058,
+    "dead_extra": [
+     14112,
+     2016
+    ],
+    "path_decl": "block-scan"
+   }
+  ]
+ },
+ "BYTES_D": {
+  "verdict": "DESCRIPTIVE",
+  "rows": [
+   {
+    "cell": "olmoe-1b-7b/native/1/L-T1-A8/w1",
+    "ratio": 0.999893
+   },
+   {
+    "cell": "olmoe-1b-7b/native/1/L-T1-A8/w2",
+    "ratio": 1.000564
+   },
+   {
+    "cell": "olmoe-1b-7b/native/1/U-T1/w1",
+    "ratio": 0.999897
+   },
+   {
+    "cell": "olmoe-1b-7b/native/1/U-T1/w2",
+    "ratio": 1.000557
+   },
+   {
+    "cell": "olmoe-1b-7b/native/2/L-T2-A16/w1",
+    "ratio": 0.999762
+   },
+   {
+    "cell": "olmoe-1b-7b/native/2/L-T2-A16/w2",
+    "ratio": 1.000336
+   },
+   {
+    "cell": "olmoe-1b-7b/native/2/L-T2-A8/w1",
+    "ratio": 1.278952
+   },
+   {
+    "cell": "olmoe-1b-7b/native/2/L-T2-A8/w2",
+    "ratio": 1.023209
+   },
+   {
+    "cell": "olmoe-1b-7b/native/2/U-T2/w1",
+    "ratio": 1.059139
+   },
+   {
+    "cell": "olmoe-1b-7b/native/2/U-T2/w2",
+    "ratio": 1.031754
+   },
+   {
+    "cell": "olmoe-1b-7b/native/4/L-T4-A32/w1",
+    "ratio": 0.999691
+   },
+   {
+    "cell": "olmoe-1b-7b/native/4/L-T4-A32/w2",
+    "ratio": 1.000193
+   },
+   {
+    "cell": "olmoe-1b-7b/native/4/L-T4-A8/w1",
+    "ratio": 0.998618
+   },
+   {
+    "cell": "olmoe-1b-7b/native/4/L-T4-A8/w2",
+    "ratio": 1.000586
+   },
+   {
+    "cell": "olmoe-1b-7b/native/4/U-T4/w1",
+    "ratio": 0.999648
+   },
+   {
+    "cell": "olmoe-1b-7b/native/4/U-T4/w2",
+    "ratio": 1.00023
+   },
+   {
+    "cell": "olmoe-1b-7b/native/8/L-T8-A64/w1",
+    "ratio": 0.999648
+   },
+   {
+    "cell": "olmoe-1b-7b/native/8/L-T8-A64/w2",
+    "ratio": 1.000115
+   },
+   {
+    "cell": "olmoe-1b-7b/native/8/L-T8-A8/w1",
+    "ratio": 0.996937
+   },
+   {
+    "cell": "olmoe-1b-7b/native/8/L-T8-A8/w2",
+    "ratio": 1.000593
+   },
+   {
+    "cell": "olmoe-1b-7b/native/8/U-T8/w1",
+    "ratio": 0.999476
+   },
+   {
+    "cell": "olmoe-1b-7b/native/8/U-T8/w2",
+    "ratio": 1.000173
+   },
+   {
+    "cell": "olmoe-1b-7b/native/16/L-T16-A64/w1",
+    "ratio": 0.999225
+   },
+   {
+    "cell": "olmoe-1b-7b/native/16/L-T16-A64/w2",
+    "ratio": 1.000114
+   },
+   {
+    "cell": "olmoe-1b-7b/native/16/L-T16-A8/w1",
+    "ratio": 0.993562
+   },
+   {
+    "cell": "olmoe-1b-7b/native/16/L-T16-A8/w2",
+    "ratio": 1.000606
+   },
+   {
+    "cell": "olmoe-1b-7b/native/16/U-T16/w1",
+    "ratio": 0.99921
+   },
+   {
+    "cell": "olmoe-1b-7b/native/16/U-T16/w2",
+    "ratio": 1.000125
+   },
+   {
+    "cell": "olmoe-1b-7b/native/32/L-T32-A64/w1",
+    "ratio": 0.998382
+   },
+   {
+    "cell": "olmoe-1b-7b/native/32/L-T32-A64/w2",
+    "ratio": 1.000124
+   },
+   {
+    "cell": "olmoe-1b-7b/native/32/L-T32-A8/w1",
+    "ratio": 0.504495
+   },
+   {
+    "cell": "olmoe-1b-7b/native/32/L-T32-A8/w2",
+    "ratio": 0.504224
+   },
+   {
+    "cell": "olmoe-1b-7b/native/32/U-T32/w1",
+    "ratio": 0.998504
+   },
+   {
+    "cell": "olmoe-1b-7b/native/32/U-T32/w2",
+    "ratio": 1.000125
+   },
+   {
+    "cell": "olmoe-1b-7b/native/64/L-T64-A64/w1",
+    "ratio": 0.996779
+   },
+   {
+    "cell": "olmoe-1b-7b/native/64/L-T64-A64/w2",
+    "ratio": 1.000171
+   },
+   {
+    "cell": "olmoe-1b-7b/native/64/L-T64-A8/w1",
+    "ratio": 0.494422
+   },
+   {
+    "cell": "olmoe-1b-7b/native/64/L-T64-A8/w2",
+    "ratio": 0.508098
+   },
+   {
+    "cell": "olmoe-1b-7b/native/64/U-T64/w1",
+    "ratio": 0.996925
+   },
+   {
+    "cell": "olmoe-1b-7b/native/64/U-T64/w2",
+    "ratio": 1.000176
+   },
+   {
+    "cell": "olmoe-1b-7b/native/96/L-T96-A64/w1",
+    "ratio": 0.995168
+   },
+   {
+    "cell": "olmoe-1b-7b/native/96/L-T96-A64/w2",
+    "ratio": 1.000208
+   },
+   {
+    "cell": "olmoe-1b-7b/native/96/L-T96-A8/w1",
+    "ratio": 0.33027
+   },
+   {
+    "cell": "olmoe-1b-7b/native/96/L-T96-A8/w2",
+    "ratio": 0.343885
+   },
+   {
+    "cell": "olmoe-1b-7b/native/96/U-T96/w1",
+    "ratio": 0.995293
+   },
+   {
+    "cell": "olmoe-1b-7b/native/96/U-T96/w2",
+    "ratio": 1.000199
+   },
+   {
+    "cell": "mixtral-8x7b/native/1/L-T1-A2/w1",
+    "ratio": 1.000073
+   },
+   {
+    "cell": "mixtral-8x7b/native/1/L-T1-A2/w2",
+    "ratio": 1.000117
+   },
+   {
+    "cell": "mixtral-8x7b/native/1/U-T1/w1",
+    "ratio": 1.000078
+   },
+   {
+    "cell": "mixtral-8x7b/native/1/U-T1/w2",
+    "ratio": 1.000119
+   },
+   {
+    "cell": "mixtral-8x7b/native/2/L-T2-A4/w1",
+    "ratio": 1.000062
+   },
+   {
+    "cell": "mixtral-8x7b/native/2/L-T2-A4/w2",
+    "ratio": 1.000077
+   },
+   {
+    "cell": "mixtral-8x7b/native/2/L-T2-A2/w1",
+    "ratio": 1.000089
+   },
+   {
+    "cell": "mixtral-8x7b/native/2/L-T2-A2/w2",
+    "ratio": 1.000117
+   },
+   {
+    "cell": "mixtral-8x7b/native/2/U-T2/w1",
+    "ratio": 1.000084
+   },
+   {
+    "cell": "mixtral-8x7b/native/2/U-T2/w2",
+    "ratio": 1.000096
+   },
+   {
+    "cell": "mixtral-8x7b/native/4/L-T4-A8/w1",
+    "ratio": 1.000044
+   },
+   {
+    "cell": "mixtral-8x7b/native/4/L-T4-A8/w2",
+    "ratio": 1.000227
+   },
+   {
+    "cell": "mixtral-8x7b/native/4/L-T4-A2/w1",
+    "ratio": 1.000153
+   },
+   {
+    "cell": "mixtral-8x7b/native/4/L-T4-A2/w2",
+    "ratio": 1.000171
+   },
+   {
+    "cell": "mixtral-8x7b/native/4/U-T4/w1",
+    "ratio": 1.000069
+   },
+   {
+    "cell": "mixtral-8x7b/native/4/U-T4/w2",
+    "ratio": 1.000266
+   },
+   {
+    "cell": "mixtral-8x7b/native/8/L-T8-A8/w1",
+    "ratio": 1.000054
+   },
+   {
+    "cell": "mixtral-8x7b/native/8/L-T8-A8/w2",
+    "ratio": 1.000422
+   },
+   {
+    "cell": "mixtral-8x7b/native/8/L-T8-A2/w1",
+    "ratio": 1.000161
+   },
+   {
+    "cell": "mixtral-8x7b/native/8/L-T8-A2/w2",
+    "ratio": 1.000176
+   },
+   {
+    "cell": "mixtral-8x7b/native/8/U-T8/w1",
+    "ratio": 1.000061
+   },
+   {
+    "cell": "mixtral-8x7b/native/8/U-T8/w2",
+    "ratio": 1.000362
+   },
+   {
+    "cell": "mixtral-8x7b/native/16/L-T16-A8/w1",
+    "ratio": 1.000078
+   },
+   {
+    "cell": "mixtral-8x7b/native/16/L-T16-A8/w2",
+    "ratio": 1.000811
+   },
+   {
+    "cell": "mixtral-8x7b/native/16/L-T16-A2/w1",
+    "ratio": 1.000414
+   },
+   {
+    "cell": "mixtral-8x7b/native/16/L-T16-A2/w2",
+    "ratio": 1.000195
+   },
+   {
+    "cell": "mixtral-8x7b/native/16/U-T16/w1",
+    "ratio": 1.000116
+   },
+   {
+    "cell": "mixtral-8x7b/native/16/U-T16/w2",
+    "ratio": 1.000746
+   },
+   {
+    "cell": "mixtral-8x7b/native/32/L-T32-A8/w1",
+    "ratio": 1.00008
+   },
+   {
+    "cell": "mixtral-8x7b/native/32/L-T32-A8/w2",
+    "ratio": 1.001549
+   },
+   {
+    "cell": "mixtral-8x7b/native/32/L-T32-A2/w1",
+    "ratio": 1.00057
+   },
+   {
+    "cell": "mixtral-8x7b/native/32/L-T32-A2/w2",
+    "ratio": 0.50424
+   },
+   {
+    "cell": "mixtral-8x7b/native/32/U-T32/w1",
+    "ratio": 1.000124
+   },
+   {
+    "cell": "mixtral-8x7b/native/32/U-T32/w2",
+    "ratio": 1.001541
+   },
+   {
+    "cell": "mixtral-8x7b/native/64/L-T64-A8/w1",
+    "ratio": 1.00024
+   },
+   {
+    "cell": "mixtral-8x7b/native/64/L-T64-A8/w2",
+    "ratio": 1.00226
+   },
+   {
+    "cell": "mixtral-8x7b/native/64/L-T64-A2/w1",
+    "ratio": 0.958695
+   },
+   {
+    "cell": "mixtral-8x7b/native/64/L-T64-A2/w2",
+    "ratio": 0.585835
+   },
+   {
+    "cell": "mixtral-8x7b/native/64/U-T64/w1",
+    "ratio": 1.000265
+   },
+   {
+    "cell": "mixtral-8x7b/native/64/U-T64/w2",
+    "ratio": 1.002451
+   },
+   {
+    "cell": "mixtral-8x7b/native/96/L-T96-A8/w1",
+    "ratio": 1.000555
+   },
+   {
+    "cell": "mixtral-8x7b/native/96/L-T96-A8/w2",
+    "ratio": 1.000196
+   },
+   {
+    "cell": "mixtral-8x7b/native/96/L-T96-A2/w1",
+    "ratio": 0.665318
+   },
+   {
+    "cell": "mixtral-8x7b/native/96/L-T96-A2/w2",
+    "ratio": 0.375765
+   },
+   {
+    "cell": "mixtral-8x7b/native/96/U-T96/w1",
+    "ratio": 1.000685
+   },
+   {
+    "cell": "mixtral-8x7b/native/96/U-T96/w2",
+    "ratio": 1.000353
+   }
+  ],
+  "median_ratio": 1.000117
+ },
+ "STOP": {
+  "verdict": "STOP",
+  "why": [
+   "in-sample E1-DEC on the CAL main pages FAILS at the provisional bars",
+   "G3-D label NOT EQUIVALENT: time is not shown to be a function of counts alone"
+  ]
+ },
+ "addendum": "2026-10-28-decode-addendum2-gh200",
+ "POWER": {
+  "verdict": "READ",
+  "gpu_current_power_limit_w": 700.0,
+  "file": "results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session/session/power-set.txt",
+  "limit_w": 700.0,
+  "tolerance_w": 1.0
+ },
+ "excluded_cells": [
+  "mixtral-8x7b/L-T128-A2",
+  "mixtral-8x7b/L-T32-A2",
+  "mixtral-8x7b/L-T64-A2",
+  "mixtral-8x7b/L-T96-A2",
+  "mixtral-8x7b/L-T96-A4",
+  "mixtral-8x7b/MIN-T64",
+  "olmoe-1b-7b/L-T128-A8",
+  "olmoe-1b-7b/L-T32-A8",
+  "olmoe-1b-7b/L-T64-A8",
+  "olmoe-1b-7b/L-T96-A8",
+  "olmoe-1b-7b/MIN-T64"
+ ],
+ "scope": "Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row.",
+ "REP_ALL_CELLS": {
+  "pairs": 52,
+  "sigma_page": 0.001851,
+  "bars_blind": {
+   "rms_max": 0.015,
+   "max_abs": 0.04,
+   "mean_max": 0.0075,
+   "source": "tightened from the CAL replicate's sigma_page 0.00185"
+  },
+  "label": "DESCRIPTIVE: every replicate pair, the DESCRIPTIVE cells included"
+ },
+ "SIGMA_D": {
+  "verdict": "DESCRIPTIVE",
+  "rows": [
+   {
+    "model": "mixtral-8x7b",
+    "label": "L-T128-A2",
+    "T": 128,
+    "tile": "64x128x64w4s3",
+    "experts_over_BLOCK_M": 2,
+    "meas_ms": 0.363764,
+    "v4d_sigma1_ms": 0.460682,
+    "served_ms": 0.279525,
+    "e_sigma1": 0.266432,
+    "e_served": -0.231576,
+    "served_over_sigma1": 0.606763,
+    "reads_sigma1": 1418723328.0,
+    "reads_served": 714080256.0,
+    "position": 0.534995,
+    "gap_rel": 0.393237,
+    "gap_us": 181.157446,
+    "band": "MIXED"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "L-T32-A2",
+    "T": 32,
+    "tile": "16x64x128w4s4",
+    "experts_over_BLOCK_M": 2,
+    "meas_ms": 0.361986,
+    "v4d_sigma1_ms": 0.420109,
+    "served_ms": 0.264623,
+    "e_sigma1": 0.160567,
+    "e_served": -0.26897,
+    "served_over_sigma1": 0.629891,
+    "reads_sigma1": 1411645440.0,
+    "reads_served": 707002368.0,
+    "position": 0.373814,
+    "gap_rel": 0.370109,
+    "gap_us": 155.486074,
+    "band": "MIXED"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "L-T64-A2",
+    "T": 64,
+    "tile": "32x64x128w4s3",
+    "experts_over_BLOCK_M": 2,
+    "meas_ms": 0.392296,
+    "v4d_sigma1_ms": 0.423686,
+    "served_ms": 0.295132,
+    "e_sigma1": 0.080016,
+    "e_served": -0.24768,
+    "served_over_sigma1": 0.696582,
+    "reads_sigma1": 1414004736.0,
+    "reads_served": 709361664.0,
+    "position": 0.244177,
+    "gap_rel": 0.303418,
+    "gap_us": 128.553872,
+    "band": "FULL-REREAD"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "L-T96-A2",
+    "T": 96,
+    "tile": "32x128x64w4s3",
+    "experts_over_BLOCK_M": 2,
+    "meas_ms": 0.466996,
+    "v4d_sigma1_ms": 0.667456,
+    "served_ms": 0.335497,
+    "e_sigma1": 0.429255,
+    "e_served": -0.281585,
+    "served_over_sigma1": 0.50265,
+    "reads_sigma1": 2121007104.0,
+    "reads_served": 711720960.0,
+    "position": 0.60387,
+    "gap_rel": 0.49735,
+    "gap_us": 331.959197,
+    "band": "MIXED"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "L-T96-A4",
+    "T": 96,
+    "tile": "32x128x64w4s3",
+    "experts_over_BLOCK_M": 4,
+    "meas_ms": 0.660206,
+    "v4d_sigma1_ms": 0.820123,
+    "served_ms": 0.46312,
+    "e_sigma1": 0.242223,
+    "e_served": -0.298522,
+    "served_over_sigma1": 0.564696,
+    "reads_sigma1": 2825650176.0,
+    "reads_served": 1416364032.0,
+    "position": 0.447943,
+    "gap_rel": 0.435304,
+    "gap_us": 357.002939,
+    "band": "MIXED"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "label": "MIN-T64",
+    "T": 64,
+    "tile": "32x64x128w4s3",
+    "experts_over_BLOCK_M": 2,
+    "meas_ms": 0.390692,
+    "v4d_sigma1_ms": 0.423686,
+    "served_ms": 0.295132,
+    "e_sigma1": 0.08445,
+    "e_served": -0.244592,
+    "served_over_sigma1": 0.696582,
+    "reads_sigma1": 1414004736.0,
+    "reads_served": 709361664.0,
+    "position": 0.256654,
+    "gap_rel": 0.303418,
+    "gap_us": 128.553872,
+    "band": "FULL-REREAD"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "L-T128-A8",
+    "T": 128,
+    "tile": "64x128x64w4s3",
+    "experts_over_BLOCK_M": 8,
+    "meas_ms": 0.063205,
+    "v4d_sigma1_ms": 0.077523,
+    "served_ms": 0.049633,
+    "e_sigma1": 0.226523,
+    "e_served": -0.214729,
+    "served_over_sigma1": 0.640242,
+    "reads_sigma1": 207618048.0,
+    "reads_served": 106954752.0,
+    "position": 0.513364,
+    "gap_rel": 0.359758,
+    "gap_us": 27.889453,
+    "band": "MIXED"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "L-T32-A8",
+    "T": 32,
+    "tile": "16x64x128w4s4",
+    "experts_over_BLOCK_M": 8,
+    "meas_ms": 0.072565,
+    "v4d_sigma1_ms": 0.087104,
+    "served_ms": 0.056827,
+    "e_sigma1": 0.200346,
+    "e_served": -0.21688,
+    "served_over_sigma1": 0.652412,
+    "reads_sigma1": 202899456.0,
+    "reads_served": 102236160.0,
+    "position": 0.480186,
+    "gap_rel": 0.347588,
+    "gap_us": 30.276113,
+    "band": "MIXED"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "L-T64-A8",
+    "T": 64,
+    "tile": "32x64x128w4s3",
+    "experts_over_BLOCK_M": 8,
+    "meas_ms": 0.067543,
+    "v4d_sigma1_ms": 0.084368,
+    "served_ms": 0.062194,
+    "e_sigma1": 0.2491,
+    "e_served": -0.079193,
+    "served_over_sigma1": 0.737176,
+    "reads_sigma1": 204472320.0,
+    "reads_served": 103809024.0,
+    "position": 0.758773,
+    "gap_rel": 0.262824,
+    "gap_us": 22.173974,
+    "band": "L2-SERVED"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "L-T96-A8",
+    "T": 96,
+    "tile": "32x128x64w4s3",
+    "experts_over_BLOCK_M": 8,
+    "meas_ms": 0.0815,
+    "v4d_sigma1_ms": 0.114124,
+    "served_ms": 0.061778,
+    "e_sigma1": 0.400283,
+    "e_served": -0.241996,
+    "served_over_sigma1": 0.541322,
+    "reads_sigma1": 306708480.0,
+    "reads_served": 105381888.0,
+    "position": 0.623223,
+    "gap_rel": 0.458678,
+    "gap_us": 52.345975,
+    "band": "MIXED"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "label": "MIN-T64",
+    "T": 64,
+    "tile": "32x64x128w4s3",
+    "experts_over_BLOCK_M": 8,
+    "meas_ms": 0.067538,
+    "v4d_sigma1_ms": 0.084368,
+    "served_ms": 0.062194,
+    "e_sigma1": 0.249199,
+    "e_served": -0.079121,
+    "served_over_sigma1": 0.737176,
+    "reads_sigma1": 204472320.0,
+    "reads_served": 103809024.0,
+    "position": 0.759014,
+    "gap_rel": 0.262824,
+    "gap_us": 22.173974,
+    "band": "L2-SERVED"
+   }
+  ],
+  "per_model": {
+   "mixtral-8x7b": {
+    "cells": 6,
+    "cells_read": 6,
+    "sigma1": {
+     "cells": 6,
+     "rms": 0.242636,
+     "worst": 0.429255,
+     "mean": 0.21049
+    },
+    "served": {
+     "cells": 6,
+     "rms": 0.263169,
+     "worst": -0.298522,
+     "mean": -0.262154
+    },
+    "position_median": 0.410878,
+    "band": "MIXED"
+   },
+   "olmoe-1b-7b": {
+    "cells": 5,
+    "cells_read": 5,
+    "sigma1": {
+     "cells": 5,
+     "rms": 0.274164,
+     "worst": 0.400283,
+     "mean": 0.26509
+    },
+    "served": {
+     "cells": 5,
+     "rms": 0.18124,
+     "worst": -0.241996,
+     "mean": -0.166384
+    },
+    "position_median": 0.623223,
+    "band": "MIXED"
+   }
+  },
+  "constants": "the amended fit's (never refitted on these cells)"
+ },
+ "KNEE_D": {
+  "p 5.75": {
+   "verdict": "FAILS",
+   "stats": {
+    "cells": 92,
+    "rms": 0.046884,
+    "worst": -0.210208,
+    "mean": 0.018443
+   },
+   "bars": {
+    "rms_max": 0.03,
+    "max_abs": 0.08,
+    "mean_max": 0.015
+   },
+   "label": "DESCRIPTIVE (not a bar; constants unchanged)",
+   "shift_by_tile": {
+    "16x64x128w4s4": {
+     "cells": 67,
+     "mean": 0.001351,
+     "max": 0.021995
+    },
+    "32x128x64w4s3": {
+     "cells": 7,
+     "mean": 0.000766,
+     "max": 0.001606
+    },
+    "32x64x128w4s3": {
+     "cells": 8,
+     "mean": 0.007701,
+     "max": 0.010759
+    },
+    "64x128x64w4s3": {
+     "cells": 10,
+     "mean": 0.001114,
+     "max": 0.001948
+    }
+   }
+  },
+  "p 3.75": {
+   "verdict": "FAILS",
+   "stats": {
+    "cells": 92,
+    "rms": 0.049617,
+    "worst": -0.188398,
+    "mean": 0.027226
+   },
+   "bars": {
+    "rms_max": 0.03,
+    "max_abs": 0.08,
+    "mean_max": 0.015
+   },
+   "label": "DESCRIPTIVE (not a bar; constants unchanged)",
+   "shift_by_tile": {
+    "16x64x128w4s4": {
+     "cells": 67,
+     "mean": 0.008403,
+     "max": 0.050217
+    },
+    "32x128x64w4s3": {
+     "cells": 7,
+     "mean": 0.006933,
+     "max": 0.01125
+    },
+    "32x64x128w4s3": {
+     "cells": 8,
+     "mean": 0.03151,
+     "max": 0.038051
+    },
+    "64x128x64w4s3": {
+     "cells": 10,
+     "mean": 0.008982,
+     "max": 0.011804
+    }
+   }
+  }
+ },
+ "BYTES_D2": {
+  "verdict": "DESCRIPTIVE",
+  "rows": [
+   {
+    "cell": "olmoe-1b-7b/L-T32-A8/w1",
+    "counted": 68241152.0,
+    "v4d_reads": 135266304.0,
+    "served_reads": 68157440.0,
+    "vm_v4d_reads": 135266304.0,
+    "counted_over_v4d": 0.504495,
+    "counted_over_served": 1.001228,
+    "share_not_seen": 0.998753
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T32-A8/w2",
+    "counted": 34102272.0,
+    "v4d_reads": 67633152.0,
+    "served_reads": 34078720.0,
+    "vm_v4d_reads": 67633152.0,
+    "counted_over_v4d": 0.504224,
+    "counted_over_served": 1.000691,
+    "share_not_seen": 0.999298
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T64-A8/w1",
+    "counted": 67397120.0,
+    "v4d_reads": 136314880.0,
+    "served_reads": 69206016.0,
+    "vm_v4d_reads": 136314880.0,
+    "counted_over_v4d": 0.494422,
+    "counted_over_served": 0.973862,
+    "share_not_seen": 1.026955
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T64-A8/w2",
+    "counted": 34630656.0,
+    "v4d_reads": 68157440.0,
+    "served_reads": 34603008.0,
+    "vm_v4d_reads": 68157440.0,
+    "counted_over_v4d": 0.508098,
+    "counted_over_served": 1.000799,
+    "share_not_seen": 0.999176
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T96-A8/w1",
+    "counted": 67531008.0,
+    "v4d_reads": 204472320.0,
+    "served_reads": 70254592.0,
+    "vm_v4d_reads": 204472320.0,
+    "counted_over_v4d": 0.33027,
+    "counted_over_served": 0.961233,
+    "share_not_seen": 1.020292
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T96-A8/w2",
+    "counted": 35157504.0,
+    "v4d_reads": 102236160.0,
+    "served_reads": 35127296.0,
+    "vm_v4d_reads": 102236160.0,
+    "counted_over_v4d": 0.343885,
+    "counted_over_served": 1.00086,
+    "share_not_seen": 0.99955
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T128-A8/w1",
+    "counted": 67664896.0,
+    "v4d_reads": 138412032.0,
+    "served_reads": 71303168.0,
+    "vm_v4d_reads": "error: Refused: 64x128x64w4s3: v4 has no F_wg yet (rental A's calibration)",
+    "counted_over_v4d": 0.488866,
+    "counted_over_served": 0.948975,
+    "share_not_seen": 1.054214
+   },
+   {
+    "cell": "olmoe-1b-7b/L-T128-A8/w2",
+    "counted": 35685632.0,
+    "v4d_reads": 69206016.0,
+    "served_reads": 35651584.0,
+    "vm_v4d_reads": "error: Refused: 64x128x64w4s3: v4 has no F_wg yet (rental A's calibration)",
+    "counted_over_v4d": 0.515643,
+    "counted_over_served": 1.000955,
+    "share_not_seen": 0.998985
+   },
+   {
+    "cell": "mixtral-8x7b/L-T32-A2/w1",
+    "counted": 940584192.0,
+    "v4d_reads": 940048384.0,
+    "served_reads": 470286336.0,
+    "vm_v4d_reads": 940048384.0000004,
+    "counted_over_v4d": 1.00057,
+    "counted_over_served": 2.000024,
+    "share_not_seen": -0.001141
+   },
+   {
+    "cell": "mixtral-8x7b/L-T32-A2/w2",
+    "counted": 237797888.0,
+    "v4d_reads": 471597056.0,
+    "served_reads": 236716032.0,
+    "vm_v4d_reads": 471597056.0,
+    "counted_over_v4d": 0.50424,
+    "counted_over_served": 1.00457,
+    "share_not_seen": 0.995394
+   },
+   {
+    "cell": "mixtral-8x7b/L-T64-A2/w1",
+    "counted": 901721856.0,
+    "v4d_reads": 940572672.0,
+    "served_reads": 470810624.0,
+    "vm_v4d_reads": 940572671.9999999,
+    "counted_over_v4d": 0.958695,
+    "counted_over_served": 1.915254,
+    "share_not_seen": 0.082703
+   },
+   {
+    "cell": "mixtral-8x7b/L-T64-A2/w2",
+    "counted": 277352960.0,
+    "v4d_reads": 473432064.0,
+    "served_reads": 238551040.0,
+    "vm_v4d_reads": 473432064.0,
+    "counted_over_v4d": 0.585835,
+    "counted_over_served": 1.162657,
+    "share_not_seen": 0.834802
+   },
+   {
+    "cell": "mixtral-8x7b/L-T96-A2/w1",
+    "counted": 938670336.0,
+    "v4d_reads": 1410859008.0,
+    "served_reads": 471334912.0,
+    "vm_v4d_reads": 1410859008.0,
+    "counted_over_v4d": 0.665318,
+    "counted_over_served": 1.991515,
+    "share_not_seen": 0.502583
+   },
+   {
+    "cell": "mixtral-8x7b/L-T96-A2/w2",
+    "counted": 266848768.0,
+    "v4d_reads": 710148096.0,
+    "served_reads": 240386048.0,
+    "vm_v4d_reads": 710148096.0,
+    "counted_over_v4d": 0.375765,
+    "counted_over_served": 1.110084,
+    "share_not_seen": 0.943668
+   },
+   {
+    "cell": "mixtral-8x7b/L-T128-A2/w1",
+    "counted": 644065024.0,
+    "v4d_reads": 941621248.0,
+    "served_reads": 471859200.0,
+    "vm_v4d_reads": "error: Refused: 64x128x64w4s3: v4 has no F_wg yet (rental A's calibration)",
+    "counted_over_v4d": 0.683996,
+    "counted_over_served": 1.364952,
+    "share_not_seen": 0.633419
+   },
+   {
+    "cell": "mixtral-8x7b/L-T128-A2/w2",
+    "counted": 242621696.0,
+    "v4d_reads": 477102080.0,
+    "served_reads": 242221056.0,
+    "vm_v4d_reads": "error: Refused: 64x128x64w4s3: v4 has no F_wg yet (rental A's calibration)",
+    "counted_over_v4d": 0.508532,
+    "counted_over_served": 1.001654,
+    "share_not_seen": 0.998294
+   }
+  ]
+ },
+ "REGISTERED_READING": {
+  "label": "DESCRIPTIVE: the frozen scorer on every cell (sigma 1 on the second-tile cells)",
+  "STOP": {
+   "verdict": "STOP",
+   "why": [
+    "in-sample E1-DEC on the CAL main pages FAILS at the provisional bars",
+    "G3-D label NOT EQUIVALENT: time is not shown to be a function of counts alone"
+   ]
+  },
+  "E1_CAL_IN_SAMPLE": {
+   "verdict": "FAILS",
+   "stats": {
+    "cells": 103,
+    "rms": 0.089199,
+    "worst": 0.419331,
+    "mean": 0.017185
+   },
+   "bars": {
+    "rms_max": 0.03,
+    "max_abs": 0.08,
+    "mean_max": 0.015
+   },
+   "label": "IN-SAMPLE"
+  },
+  "selected": "scaled",
+  "forms": {
+   "fixed": {
+    "verdict": "FITTED",
+    "T0_GR_ms": 0.011333842482950832,
+    "s_naive_GR_ms": -0.005793930425539879,
+    "s_block_GR_ms": -0.020182279343688943
+   },
+   "scaled": {
+    "verdict": "FITTED",
+    "T0_GR_ms": 0.020196507359046656,
+    "s_naive_GR_ms": -0.003739372917420097,
+    "s_block_GR_ms": -0.015335819713783904
+   }
+  },
+  "G3D": {
+   "shuffle": "EQUIVALENT",
+   "label": "NOT EQUIVALENT",
+   "fill": "NOT EQUIVALENT"
+  }
+ }
+}

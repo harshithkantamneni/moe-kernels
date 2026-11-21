@@ -1,0 +1,5 @@
+jetmoe-floor: jetmoe-8b, docs/registered/README.md (2026-09-30 floor-only sessions), results/published/2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session (ledger rows [42])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6, 9, 10, 11] 360.8 registered 360.4 (+0.12%) all-cell 360.8 HELD
+  floor r3f-g64.json             w2 n=[9, 10, 11] 361.7 registered 355.2 (+1.84%) all-cell 367.2 HELD
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6, 9, 10, 11] 361.9 registered 360.4 (+0.43%) all-cell 361.9 HELD
+  floor r3f-g64-lock1710.json    w2 n=[9, 10, 11] 364.5 registered 355.2 (+2.61%) all-cell 367.8 FALSIFIED

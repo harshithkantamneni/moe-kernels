@@ -1,0 +1,53 @@
+# RENTAL A OF THE TILE STAGE (2026-10-14): calibration at vLLM's two reachable wgmma tiles on the CAL models.
+# One gpu_1x_gh200 at $2.29/h, run by the tile stage's driver (the pinned gh200_model_session.sh plus the tile keys):
+#   bash scripts/vm_run.sh start --ip <ip> --run-id <id> --deadline <epoch s> \
+#     --plan scripts/plans/rentalA-tile-2026-10.plan --driver gh200_tile_session.sh
+# Registrations (all before any page): docs/registered/2026-10-14-tileA-{census,floor,bytes,e1cal,dead,rep}-gh200,
+# and rental B's frozen 2026-10-14-tileB-{e1tile,stop}-gh200. Design: design-tile DESIGN.md corrected by
+# design-tile-review REVIEW.md (the review wins) and the owner's decisions D1 to D10 of 2026-10-14.
+# CAL models only are timed: olmoe-1b-7b, mixtral-8x7b, qwen2-57b-a14b. The census COMPILES (does not time) every
+# config of rentals A and B on every model that runs it, the blind models included, so their occupancy is read.
+# Tiles (D1: prefill now): 128x128x64 w8 s3 (G 1 and G 16) and 64x128x64 w8 s3 (G 1), the two tiles R3's tread
+# rule can reach at vLLM-consistent M; 64x128x64 w4 and 32x128x64 w4 are counter-only floor tests.
+# Line order is the priority. The driver drops the LAST unit first; a drop-group goes together.
+# Drop order, last first: dk (dead lever), ms (mma.sync w4 tile), w4 (wgmma w4 tile), rep (replicate).
+# nodrop (design-tile-review 4, 5 and 8): prelude, calibrate, census, the 128x128 and 64x128 w8 counter pages, every
+# vLLM-G byte page (Qwen2-57B's included) and every E1-CAL timed page (Qwen2-57B's and Mixtral 128 G 1 n 2's
+# included). A SKIPPED or LOST E1-CAL page is a STOP for rental B (tileB-stop; owner decision D6).
+# MINUTES: 147 of units (117 nodrop); about 2 h 25 min wall at rentals 4 to 7's 0.84x with boot and pushes, about
+# $5.6. Guardian cap 170 min of units; deadline launch + 2 h 55 min. Rental B about $5.3: the stage about $11 (D10).
+# Every timed unit: slip-policy=cell, g1-rule=r7-median-run3 (the scorer's rule), declared-copies, histogram pages
+# of scripts/skew_synth_tile.py (SYNTHETIC; one file per (model, tile, G): a byte page and a timed page of one
+# (model, tile, G) read the same file, so their counts are identical).
+- prelude est=3 cap=15
+mixtral-8x7b calibrate label=ta nodrop=1 est=2 cap=30
+# tA-census: compile only, no lock, nothing timed. Rentals A and B's tiles and the four decode tiles (printed for D1).
+- tilecensus label=ta tiles=128x128x64w8s3,64x128x64w8s3,64x128x64w4s3,32x128x64w4s3,16x64x128w4s4,32x64x128w4s3 models=olmoe-1b-7b,mixtral-8x7b,qwen2-57b-a14b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite nodrop=1 est=8 cap=25
+# tA-floor CALIBRATION (CAL-A): 128x128x64 w8 s3 G 64 counter pages, two CAL depths (OLMoE S 32/16, Mixtral S 64/224):
+# c_128, F_wg,w1 and F_wg,w2 jointly, then Z_wg per accounting.
+olmoe-1b-7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=5 cap=20
+mixtral-8x7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=8 cap=25
+# tA-floor TEST (BLIND-CALMODEL, DESCRIPTIVE accounting reading): 64x128x64 w8 s3; F-step against F-cyc read here.
+olmoe-1b-7b bytes label=f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=5 cap=20
+mixtral-8x7b bytes label=f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=8 cap=25
+# tA-bytes: the A key (v3 / CLAMP / ROWKEY60 / ROWKEY30) on uniform, balanced and skewed w1 rows at vLLM's own G.
+olmoe-1b-7b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared byte-groups=1 nodrop=1 est=6 cap=20
+mixtral-8x7b bytes label=b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared byte-groups=1 nodrop=1 est=7 cap=25
+mixtral-8x7b bytes label=b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared byte-groups=16 nodrop=1 est=7 cap=25
+qwen2-57b-a14b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json arms=native,shared byte-groups=1 nodrop=1 est=7 cap=25
+# tA-e1cal (BLIND-CALMODEL in time): v4 as fixed by tA-floor and tA-bytes' registered rules, end to end, one class
+# mean per tile class (64 G 1, 128 G 1, 128 G 16) and a second CAL model at 128 G 1 (the rental-B stop rule).
+olmoe-1b-7b timed label=e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=10 cap=30
+mixtral-8x7b timed label=e128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=14 cap=40
+mixtral-8x7b timed label=e64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=9 cap=30
+qwen2-57b-a14b timed label=e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=12 cap=35
+mixtral-8x7b timed label=e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=6 cap=20
+# tA-rep: the OLMoE E1-CAL page again (sigma_page at the 128 tile; rental 3's 0.18% was R3's tile)
+olmoe-1b-7b timed label=e128g1r block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=rep est=10 cap=30
+# the wgmma w4 floor (vLLM's M 97..128 tile, unreachable by R3 in rental B): counter only, DESCRIPTIVE
+olmoe-1b-7b bytes label=f64w4 block-m=64 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64 drop-group=w4 est=5 cap=20
+# the mma.sync non-default tile (vLLM's M 65..96 tile, num_warps 4): MVA2 on the compiled wavefronts, printed for D1
+olmoe-1b-7b bytes label=f32w4 block-m=32 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64 drop-group=ms est=5 cap=20
+# tA-dead: SHARED at 15 against 9 copies at occupancy 2, OLMoE 128 G 1, tread n 1 (the increment does not move with n)
+olmoe-1b-7b timed label=d9 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=dk est=5 cap=15
+olmoe-1b-7b timed label=d15 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json arms=native,shared declared-copies=15 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=dk est=5 cap=15

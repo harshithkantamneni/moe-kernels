@@ -1,0 +1,42 @@
+# RENTAL 5 (2026-10-07), one gpu_1x_gh200 at $2.29/h, run as
+#   bash scripts/gh200_model_session.sh --plan scripts/plans/rental5-2026-10.plan --deadline <epoch s>
+# From design-r5/DESIGN.md as corrected by design-r5-review (the review's plan order) and the owner's
+# decisions of 2026-10-07. Registrations (docs/registered/2026-10-07-rental5-*): v2 (no unit), skew,
+# c15, stamps2, secondk, bk128 (tp2 CUT by the owner), written by scripts/scoring/rental5/register.py before any page.
+# Line order is the priority. The driver drops the LAST unit first; a drop-group goes together, and a
+# unit with depends=G goes when G goes. Drop order, bottom up: bk (BK 128), k2 (second K),
+# std, stt, st (perturb + stf), c15, skq. rc, skm and sko are never dropped (they lead the file).
+# MINUTES (ledger estimates): 152 of units, about 2.5 h, about $5.8. The tp2 pair was CUT by the owner
+# (2026-10-07); kappa is read from the stamps only.
+# Rentals 3 and 4 ran at 0.75x and 0.66x of estimate.
+# Histogram pages are SYNTHETIC (scripts/skew_synth.py, fitted to the routing logs' statistics, drawn
+# from registered seeds), committed openly under docs/registered/2026-10-07-rental5-skew-hist; no trace-derived count is in the repo or on the VM.
+- prelude est=3 cap=15
+mixtral-8x7b calibrate label=r5 est=2 cap=30
+# regcheck right after calibrate, before any timed unit (owner decision 2): compile only, every variant
+- regcheck label=rc instr-variants=v1,v2,v3 drop-group=rc est=3 cap=10
+# PART 2, SKEW (rental5-skew). Page A: PT PW (NATIVE, SHARED), PW-hotfirst PW-rand1 (NATIVE), uniform
+# (shuffled) and balanced; page B: DW, uniform, balanced; C: the byte leg (counter page) at n <= 9 (+ OLMoE 16 NATIVE)
+mixtral-8x7b timed label=ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 drop-group=skm est=18 cap=45
+mixtral-8x7b timed label=skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8 drop-group=skm est=11 cap=30
+mixtral-8x7b bytes label=skc histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json arms=native,shared byte-groups=8 drop-group=skm est=4 cap=20
+olmoe-1b-7b timed label=ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8 drop-group=sko est=18 cap=45
+olmoe-1b-7b timed label=skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8 drop-group=sko est=11 cap=30
+olmoe-1b-7b bytes label=skc histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json arms=native,shared byte-groups=8 drop-group=sko est=4 cap=20
+qwen1.5-moe-a2.7b timed label=ska histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json arms=native,shared declared-copies=9 timed-groups=8 drop-group=skq est=18 cap=45
+qwen1.5-moe-a2.7b timed label=skb histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json arms=native,shared declared-copies=9 timed-groups=8 drop-group=skq est=11 cap=30
+# the c15 lever (rental5-c15): SHARED at 15 copies on PT PW DW uniform, plus a NATIVE uniform null, n 2 and 4
+olmoe-1b-7b timed label=sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8 drop-group=c15 est=7 cap=25
+# PART 3, TIMESTAMPS v2 (rental5-stamps2). Gate: CTAs/SM identical, median <= 1%, worst <= 2%. Each stamps
+# unit runs the first of its variants (moe.instrumented.R5_VARIANTS, pid mod 17) passing regcheck AND perturb.
+- perturb label=pt instr-variants=v1,v2,v3 drop-group=st depends=rc est=12 cap=30
+mixtral-8x7b stamps label=stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3 drop-group=st est=6 cap=15
+mixtral-8x22b stamps label=stt8x22 stamp-groups=8 stamp-treads=1 stamp-arms=native instr-variants=v1,v2 drop-group=stt depends=st est=3 cap=10
+mixtral-8x7b stamps label=stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2 drop-group=stt depends=st est=2 cap=8
+olmoe-1b-7b stamps label=std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 drop-group=std depends=st est=3 cap=8
+olmoe-1b-7b stamps label=std2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 num-stages=8 drop-group=std depends=st est=2 cap=8
+# PART 4 levers: second K above BK 128 (BK 128's rival SYNC is already excluded by SEEN counters)
+qwen2-57b-a14b-tp8 bytes label=k64s4 byte-groups=64 drop-group=k2 est=3 cap=20
+qwen2-57b-a14b-tp8 bytes label=k32s4 byte-groups=64 block-k=32 num-stages=4 drop-group=k2 est=3 cap=20
+olmoe-1b-7b timed label=bk64 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 num-stages=4 drop-group=bk est=4 cap=15
+olmoe-1b-7b timed label=bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4 drop-group=bk est=4 cap=15

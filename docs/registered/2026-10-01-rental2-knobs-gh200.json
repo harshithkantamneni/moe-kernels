@@ -1,0 +1,1730 @@
+{
+ "registered": "2026-10-01, before any rental-2 page",
+ "name": "2026-10-01-rental2-knobs-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE: no rental-2 page exists when this is committed",
+ "design": "scratchpad design-r2/DESIGN.md section 1 with design-r2-review/REVIEW.md sections 1 and 5.1",
+ "tool": "scripts/scoring/rental2/register.py (this file's numbers); scorer scripts/scoring/rental2/score_knobs.py",
+ "measure": {
+  "s": "scripts/l2_survival.py: s(n) = (B_PRIVATE - B_SHARED) / ((n - 1) W_g), G = 1, n = 2..9, B = per_gemm[g].dram_bytes_read",
+  "P": "npn = N / BLOCK_N (w1 N = 2F, w2 N = H)",
+  "x": "(P - 1) BLOCK_N K b / 60 MiB",
+  "W_c": "page's sm_count x the least of the four recorded occupancy limits, per GEMM (wave_split_bytes.page_window), read off EACH page, never assumed from the knob",
+  "d": "P / W_c",
+  "dd": "d(knob page) - d(same-board base page), each page's own W_c"
+ },
+ "law_L2r": {
+  "form": "past the edge (x >= 0.92): s_knob = s_base exp(-dd / lam(n)); below it: s_knob = s_cap(x, n) + (s_base - s_cap(x, n)) exp(-dd / lam(n)); r(lam) = exp(-dd / lam)",
+  "lambda_by_n_SEEN": {
+   "2": {
+    "lam": 0.211952,
+    "sigma": 0.054674,
+    "rel": 0.257955,
+    "s_tp2_w2": 0.816637,
+    "s_tp4_w1": 0.649655
+   },
+   "3": {
+    "lam": 0.535655,
+    "sigma": 0.442819,
+    "rel": 0.826686,
+    "s_tp2_w2": 0.594455,
+    "s_tp4_w1": 0.543011
+   },
+   "4": {
+    "lam": 0.246051,
+    "sigma": 0.10329,
+    "rel": 0.419792,
+    "s_tp2_w2": 0.571477,
+    "s_tp4_w1": 0.469267
+   },
+   "5": {
+    "lam": 0.186108,
+    "sigma": 0.0606,
+    "rel": 0.325615,
+    "s_tp2_w2": 0.579361,
+    "s_tp4_w1": 0.446485
+   },
+   "6": {
+    "lam": 0.183731,
+    "sigma": 0.063113,
+    "rel": 0.343505,
+    "s_tp2_w2": 0.543321,
+    "s_tp4_w1": 0.417302
+   },
+   "7": {
+    "lam": 0.124143,
+    "sigma": 0.030295,
+    "rel": 0.24403,
+    "s_tp2_w2": 0.561659,
+    "s_tp4_w1": 0.380064
+   },
+   "8": {
+    "lam": 0.131756,
+    "sigma": 0.03431,
+    "rel": 0.260409,
+    "s_tp2_w2": 0.550091,
+    "s_tp4_w1": 0.380731
+   },
+   "9": {
+    "lam": 0.115611,
+    "sigma": 0.027756,
+    "rel": 0.240084,
+    "s_tp2_w2": 0.542368,
+    "s_tp4_w1": 0.356582
+   }
+  },
+  "lambda_source": "rental 1's same-x pair, tp2 w2 (d 0.1212) and tp4 w1 (d 0.1697): lam = (d_b - d_a) / ln(s_a / s_b), SEEN (scripts/scoring/rental1/l2.score.json)",
+  "lambda_band": "per n, lam +- sigma, sigma the +-0.03 noise of each s propagated in quadrature (lambda_by_n_SEEN.rel: 42% at n = 4, 33% at n = 5, 24 to 34% at n = 6..9; the review estimated 46% and 35%); n = 2, 3 printed only",
+  "s_cap_knots_by_n": {
+   "2": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.2166
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ],
+   "3": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.4341
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ],
+   "4": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.5054
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ],
+   "5": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.5219
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ],
+   "6": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.5942
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ],
+   "7": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.6119
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ],
+   "8": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.6477
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ],
+   "9": [
+    [
+     0.286,
+     1.0
+    ],
+    [
+     0.576,
+     0.6706
+    ],
+    [
+     0.92,
+     0.0
+    ]
+   ]
+  },
+  "s_cap_source": "1 at x <= 0.286 (CAL: Qwen2 w2, OLMoE); the 0.576 value per n solved from Qwen2 w1 (CAL, the 2026-10-01 L2 registration's law_params_by_n); 0 at x >= 0.92 (SEEN: rental 1's tp2 w2 sits on 8x7B w2's curve); linear between knots"
+ },
+ "rivals": {
+  "NL": "no lag: s_knob = s_base (H0, H1 or any pure-capacity law); band s_base +- 0.05",
+  "ST": "steep: the registered 2026-10-01 lam(n) (law_params_by_n, CAL but x-confounded) in the same law form; band [0, prediction + 0.03]",
+  "lambda_steep_by_n": {
+   "2": 0.0714,
+   "3": 0.0541,
+   "4": 0.0498,
+   "5": 0.0433,
+   "6": 0.042,
+   "7": 0.041,
+   "8": 0.039,
+   "9": 0.0374
+  },
+  "H2c": "k-steps: s moves with BLOCK_K at fixed W_c",
+  "H3": "address: s moves with slot padding"
+ },
+ "bands": {
+  "L2r": "[min(pred(lam - sigma), pred(lam + sigma)) - 0.03, max(...) + 0.03], pred at lam - sigma <= 0 is the infinitely steep value",
+  "NL": "[s_base - 0.05, s_base + 0.05]",
+  "ST": "[0, pred(lam_steep) + 0.03]",
+  "s_noise": 0.03,
+  "nl_half": 0.05
+ },
+ "cells": {
+  "mixtral-8x7b-tp8 w1": {
+   "P": 56,
+   "x": 0.458333,
+   "W_c_default": 660,
+   "d_default": 0.084848
+  },
+  "mixtral-8x7b-tp8 w2": {
+   "P": 64,
+   "x": 0.229687,
+   "W_c_default": 528,
+   "d_default": 0.121212
+  },
+  "mixtral-8x7b-tp4 w1": {
+   "P": 112,
+   "x": 0.925,
+   "W_c_default": 660,
+   "d_default": 0.169697
+  },
+  "mixtral-8x7b-tp4 w2": {
+   "P": 64,
+   "x": 0.459375,
+   "W_c_default": 528,
+   "d_default": 0.121212
+  },
+  "mixtral-8x7b-tp2 w1": {
+   "P": 224,
+   "x": 1.858333,
+   "W_c_default": 660,
+   "d_default": 0.339394
+  },
+  "mixtral-8x7b-tp2 w2": {
+   "P": 64,
+   "x": 0.91875,
+   "W_c_default": 528,
+   "d_default": 0.121212
+  },
+  "mixtral-8x7b w1": {
+   "P": 448,
+   "x": 3.725,
+   "W_c_default": 660,
+   "d_default": 0.678788
+  },
+  "mixtral-8x7b w2": {
+   "P": 64,
+   "x": 1.8375,
+   "W_c_default": 528,
+   "d_default": 0.121212
+  }
+ },
+ "pages": {
+  "path": "<date>-nvidia_gh200_480gb-<model>-<label>-r3-counters/lock1710/r3c-g<G>.json under the run tree",
+  "base": {
+   "mixtral-8x7b-tp2": "l2base",
+   "mixtral-8x7b-tp4": "l2base",
+   "mixtral-8x7b": "l2base"
+  },
+  "knob": {
+   "l2s8": {
+    "num_stages": 8
+   },
+   "l2s6": {
+    "num_stages": 6
+   },
+   "l2bk32": {
+    "block_k": 32,
+    "num_stages": 4
+   },
+   "l2bk128": {
+    "block_k": 128,
+    "num_stages": 2
+   },
+   "l2pad7": {
+    "slot_pad_rows": 7
+   }
+  },
+  "G": 1
+ },
+ "tests": {
+  "tp2 w2 s8 (PRIMARY)": {
+   "page": [
+    "mixtral-8x7b-tp2",
+    "l2s8"
+   ],
+   "base": "l2base",
+   "gemm": "w2",
+   "hypotheses": [
+    "L2r",
+    "NL",
+    "ST"
+   ],
+   "n": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "need": 4,
+   "rule": "a hypothesis is SELECTED when 4 of n = 4..9 fall in its band and in no other band; FALSIFIED when 4 of 6 fall outside its band; else INCONCLUSIVE. The L2r-vs-ST call is made here."
+  },
+  "tp4 w1 s8 (PRIMARY, NL vs lag)": {
+   "page": [
+    "mixtral-8x7b-tp4",
+    "l2s8"
+   ],
+   "base": "l2base",
+   "gemm": "w1",
+   "hypotheses": [
+    "LAG",
+    "NL"
+   ],
+   "n": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "need": 4,
+   "rule": "NL against LAG, LAG's band the envelope of L2r and ST (ST's band lies inside L2r's here at dd 0.254, so the two are not told apart: the review, section 1)"
+  },
+  "tp2 w2 s6 (secondary, the curve's shape)": {
+   "page": [
+    "mixtral-8x7b-tp2",
+    "l2s6"
+   ],
+   "base": "l2base",
+   "gemm": "w2",
+   "hypotheses": [
+    "L2r",
+    "NL",
+    "ST"
+   ],
+   "n": [
+    6,
+    7,
+    8,
+    9
+   ],
+   "need": 4,
+   "rule": "SELECTED needs all four of n = 6..9 in its band and in no other (L2r's upper edge sits 0.006 to 0.05 under NL's lower edge there)"
+  },
+  "8x7B w2 s8 (x-invariance, tail)": {
+   "page": [
+    "mixtral-8x7b",
+    "l2s8"
+   ],
+   "against": [
+    "mixtral-8x7b-tp2",
+    "l2s8"
+   ],
+   "gemm": "w2",
+   "n": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "rule": "HELD when |s(8x7B w2 s8) - s(tp2 w2 s8)| <= 0.05 at 4 or more of n = 4..9, else FALSIFIED (an x-law puts 8x7B lower)"
+  },
+  "tp4 w2 s8": {
+   "page": [
+    "mixtral-8x7b-tp4",
+    "l2s8"
+   ],
+   "base": "l2base",
+   "gemm": "w2",
+   "rule": "RECORD: below the edge L2r moves it by 0.05 to 0.08, about the noise"
+  },
+  "H2c BLOCK_K at G=1 (tail)": {
+   "pages": [
+    [
+     "mixtral-8x7b-tp2",
+     "l2bk32"
+    ],
+    [
+     "mixtral-8x7b-tp2",
+     "l2bk128"
+    ]
+   ],
+   "base": "l2base",
+   "gemms": [
+    "w1",
+    "w2"
+   ],
+   "rule": "per page and GEMM, centre = s_base when the page's W_c equals the base's, else the L2r central value at the page's dd; NO k-step effect (H2c FALSIFIED) when |s - centre| <= 0.05 at 4 or more of n = 4..9; H2c SELECTED when |s - centre| > 0.05 at 4 or more; else INCONCLUSIVE"
+  },
+  "H3 slot pad 7 (tail)": {
+   "page": [
+    "mixtral-8x7b-tp2",
+    "l2pad7"
+   ],
+   "base": "l2base",
+   "rule": "H3 FALSIFIED (no address effect) when every PRIVATE per-GEMM dram_bytes_read is within 0.3% of the base page's AND |s - s_base| <= 0.03 at 4 or more of n = 4..9 on both GEMMs; H3 SELECTED when |s - s_base| > 0.03 at 4 or more on a GEMM or a PRIVATE byte count moves by more than 1%; else INCONCLUSIVE"
+  }
+ },
+ "controls": {
+  "F_over_Mn": {
+   "rule": "every PRIVATE cell of every knob and base page: F / Mn in [0.50, 0.56]",
+   "band": [
+    0.5,
+    0.56
+   ],
+   "scope": "page",
+   "effect": "a failing page's SELECTED verdicts are demoted to INCONCLUSIVE"
+  },
+  "tp8 w2 s8 negative control": {
+   "page": [
+    "mixtral-8x7b-tp8",
+    "l2s8"
+   ],
+   "gemm": "w2",
+   "rule": "s >= 0.95 at every n = 4..9 (below every edge: L2r's s_cap is 1 at x 0.23)",
+   "scope": "global",
+   "effect": "a failure demotes EVERY part-1 SELECTED verdict to INCONCLUSIVE"
+  },
+  "tp2 w1 on s6 and s8": {
+   "rule": "tp2 w1 (x 1.86, past the edge) at or under the upper edge of its own L2r band at every n = 4..9 (derived from L2r, replacing the fixed 0.08 rental 1 failed at n = 2, 3)",
+   "scope": "page",
+   "effect": "a failure demotes that page's L2r (or LAG) SELECTED verdict to INCONCLUSIVE; an NL or ST selection stands, since the control is L2r's own prediction"
+  },
+  "V6": {
+   "rule": "a page whose V6 gate is not PASS is FLAGGED: its cells are excluded from every count and its verdicts read INCONCLUSIVE (V6 checks the activation-cancels premise of s)",
+   "scope": "page"
+  },
+  "V10": "does not gate any score here (bytes are clock-free)"
+ },
+ "partition_cross_check": {
+  "pages": [
+   [
+    "mixtral-8x7b-tp2",
+    "l2base"
+   ],
+   [
+    "mixtral-8x7b-tp2",
+    "l2s8"
+   ]
+  ],
+  "rule": "per SHARED and PRIVATE cell n = 2..9 and GEMM: direct fabric read hits (lts__t_sectors_srcunit_ltcfabric_op_read_lookup_hit) / (F - (M - Mn)) within 1 +- 0.05",
+  "effect": "an INSTRUMENT check only: no verdict of part 1 reads the far share. When more than 10% of a page's cells fail, the far-share RECORD of that page is printed from the direct count only and the subtraction is flagged",
+  "record": "demote counts and the far share, both ways, per page"
+ },
+ "T5": {
+  "what": "C's separator: rho_BK = f(BK128 / s2) / f(BK32 / s4), PRIVATE w2, tp2 G = 64, n = 9 (n = 8 printed), one board; k-steps 56 against 224 at the same L, bytes and W_c",
+  "pages": {
+   "BK64": [
+    "mixtral-8x7b-tp2",
+    "atbk64"
+   ],
+   "BK32": [
+    "mixtral-8x7b-tp2",
+    "atbk32"
+   ],
+   "BK128": [
+    "mixtral-8x7b-tp2",
+    "atbk128"
+   ],
+   "s8 RECORD": [
+    "mixtral-8x7b-tp2",
+    "ats8"
+   ]
+  },
+  "G": 64,
+  "n": 9,
+  "f": "f = (q - n) 128 / (63 n), q = dram_counter_route.r3_q(page)['private']['w2'][n], the q wave_split_bytes.load_card(page).measured holds",
+  "candidates": {
+   "R0": {
+    "params": {
+     "C_A": 138.48020407774175,
+     "beta_A": 1.2664978352827505,
+     "theta1_A": 1.7147270423859942e-07,
+     "C_B": 72.52141980445369,
+     "beta_B": 1.3239898646683528,
+     "theta1": 0.19674854776229564,
+     "eps1_w1": 1.1265901074698326e-08,
+     "eps1_w2": 0.10273998149024145,
+     "view": "mix",
+     "C_A2": 86.17989278767973,
+     "beta_A2": 1.4761302885910965
+    },
+    "content_a": false,
+    "label": "CAL: the registered 8x7B MIX fit (R0 of the 2026-10-01 registrations)"
+   },
+   "R1": {
+    "params": {
+     "C_A": 159.60783760763826,
+     "beta_A": 1.0533234403818705,
+     "theta1_A": 6.692965408055478e-10,
+     "C_B": 1000000000.0,
+     "beta_B": 1.0,
+     "theta1": 1.0,
+     "eps1_w1": 0.0,
+     "eps1_w2": 0.0,
+     "view": "mix",
+     "C_A2": 0.0,
+     "beta_A2": 0.0
+    },
+    "content_a": true,
+    "label": "CAL: 2026-10-01 atile registration, primary R1"
+   },
+   "R2": {
+    "params": {
+     "C_A": 63.684061982218935,
+     "beta_A": 1.3382472504013925,
+     "theta1_A": 1.928749847963918e-22,
+     "C_B": 1000000000.0,
+     "beta_B": 1.0,
+     "theta1": 1.0,
+     "eps1_w1": 0.0,
+     "eps1_w2": 0.0,
+     "view": "mix",
+     "C_A2": 0.0,
+     "beta_A2": 0.0,
+     "k0_A": 110257.96362021669,
+     "a_A": 379.27629863610105
+    },
+    "content_a": true,
+    "label": "CAL: 2026-10-01 atile registration, primary R2"
+   },
+   "R2h": {
+    "params": {
+     "C_A": 63.684061982218935,
+     "beta_A": 1.3382472504013925,
+     "theta1_A": 1.928749847963918e-22,
+     "C_B": 1000000000.0,
+     "beta_B": 1.0,
+     "theta1": 1.0,
+     "eps1_w1": 0.0,
+     "eps1_w2": 0.0,
+     "view": "mix",
+     "C_A2": 0.0,
+     "beta_A2": 0.0,
+     "k0_A": 110257.96362021669,
+     "a_A": 215.04288160134448
+    },
+    "content_a": true,
+    "m": 0.566982,
+    "label": "SEEN: R2 with a_A x m, m fitted to rental 1's measured rho84 = 1.184 alone"
+   }
+  },
+  "registered_at_default_Wc": {
+   "R0": {
+    "f9": {
+     "32": 0.328186,
+     "64": 0.328186,
+     "128": 0.328186
+    },
+    "rho_BK": 1.0,
+    "sigma_rho": 0.035422,
+    "half_width": 0.070843,
+    "band_at_default_Wc": [
+     0.929157,
+     1.070843
+    ]
+   },
+   "R1": {
+    "f9": {
+     "32": 0.319723,
+     "64": 0.319723,
+     "128": 0.319723
+    },
+    "rho_BK": 1.0,
+    "sigma_rho": 0.036359,
+    "half_width": 0.072718,
+    "band_at_default_Wc": [
+     0.927282,
+     1.072718
+    ]
+   },
+   "R2": {
+    "f9": {
+     "32": 0.321072,
+     "64": 0.461258,
+     "128": 0.537231
+    },
+    "rho_BK": 1.673241,
+    "sigma_rho": 0.049905,
+    "half_width": 0.099811,
+    "band_at_default_Wc": [
+     1.57343,
+     1.773052
+    ]
+   },
+   "R2h": {
+    "f9": {
+     "32": 0.441294,
+     "64": 0.527066,
+     "128": 0.569868
+    },
+    "rho_BK": 1.291357,
+    "sigma_rho": 0.030423,
+    "half_width": 0.060847,
+    "band_at_default_Wc": [
+     1.230511,
+     1.352204
+    ]
+   }
+  },
+  "pricing": "each candidate's f on each page's OWN geometry (wave_split_bytes.page_geometry: its block_k and its W_c), W.Model(geom, content_a).evaluate(params, [('private', 64, 9, 'w2')]); rho = f(BK128 page) / f(BK32 page)",
+  "band": "the re-priced centre +- the half-width registered here at the default W_c (2 sigma_rho, sigma_rho from sigma_q 0.0364 through sigma_f = sigma_q 128 / (63 x 9) on both f in quadrature); the widths stay FIXED when the centres are re-priced",
+  "rule": "a candidate is FALSIFIED when the measured rho_BK lies outside its band, HELD inside; the verdict is on n = 9 alone",
+  "board_check": {
+   "page": "BK64",
+   "f_rental1": 0.5802,
+   "tolerance_rel": 0.028,
+   "rule": "f(BK64, n = 9) within 2.8% of rental 1's 0.5802 (the 09-25 / 09-27 board-to-board PRIVATE w2 reproduction)",
+   "effect": "a failure turns R2h's verdict (its m is rental 1's board's) to INCONCLUSIVE; R0, R1 and R2 stand"
+  },
+  "s8_record_at_Wc264": {
+   "R0": 0.352162,
+   "R1": 0.342925,
+   "R2": 0.494959,
+   "R2h": 0.565532
+  },
+  "labels": {
+   "R0": "CAL",
+   "R1": "CAL",
+   "R2": "CAL",
+   "R2h": "SEEN"
+  }
+ },
+ "illustrations_on_rental1_SEEN_bases": {
+  "mixtral-8x7b-tp2 w2 s8 (W_c 264)": {
+   "dd": 0.121212,
+   "s_base_rental1_SEEN": [
+    0.816637,
+    0.594455,
+    0.571477,
+    0.579361,
+    0.543321,
+    0.561659,
+    0.550091,
+    0.542368
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      0.348277,
+      0.548601
+     ],
+     "NL": [
+      0.766637,
+      0.866637
+     ],
+     "ST": [
+      0.0,
+      0.18018
+     ],
+     "L2r_central": 0.461302
+    },
+    "3": {
+     "L2r": [
+      0.132243,
+      0.555377
+     ],
+     "NL": [
+      0.544455,
+      0.644455
+     ],
+     "ST": [
+      0.0,
+      0.094661
+     ],
+     "L2r_central": 0.47439
+    },
+    "4": {
+     "L2r": [
+      0.215539,
+      0.434472
+     ],
+     "NL": [
+      0.521477,
+      0.621477
+     ],
+     "ST": [
+      0.0,
+      0.081787
+     ],
+     "L2r_central": 0.349896
+    },
+    "5": {
+     "L2r": [
+      0.191731,
+      0.3852
+     ],
+     "NL": [
+      0.529361,
+      0.629361
+     ],
+     "ST": [
+      0.0,
+      0.067035
+     ],
+     "L2r_central": 0.302968
+    },
+    "6": {
+     "L2r": [
+      0.170263,
+      0.363342
+     ],
+     "NL": [
+      0.493321,
+      0.593321
+     ],
+     "ST": [
+      0.0,
+      0.062355
+     ],
+     "L2r_central": 0.281936
+    },
+    "7": {
+     "L2r": [
+      0.125977,
+      0.287429
+     ],
+     "NL": [
+      0.511659,
+      0.611659
+     ],
+     "ST": [
+      0.0,
+      0.061317
+     ],
+     "L2r_central": 0.212945
+    },
+    "8": {
+     "L2r": [
+      0.130245,
+      0.296339
+     ],
+     "NL": [
+      0.500091,
+      0.600091
+     ],
+     "ST": [
+      0.0,
+      0.056832
+     ],
+     "L2r_central": 0.220643
+    },
+    "9": {
+     "L2r": [
+      0.108315,
+      0.26426
+     ],
+     "NL": [
+      0.492368,
+      0.592368
+     ],
+     "ST": [
+      0.0,
+      0.053562
+     ],
+     "L2r_central": 0.191672
+    }
+   }
+  },
+  "mixtral-8x7b-tp2 w2 s6 (W_c 396)": {
+   "dd": 0.040404,
+   "s_base_rental1_SEEN": [
+    0.816637,
+    0.594455,
+    0.571477,
+    0.579361,
+    0.543321,
+    0.561659,
+    0.550091,
+    0.542368
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      0.601805,
+      0.731916
+     ],
+     "NL": [
+      0.766637,
+      0.866637
+     ],
+     "ST": [
+      0.0,
+      0.494074
+     ],
+     "L2r_central": 0.675038
+    },
+    "3": {
+     "L2r": [
+      0.355241,
+      0.600472
+     ],
+     "NL": [
+      0.544455,
+      0.644455
+     ],
+     "ST": [
+      0.0,
+      0.312519
+     ],
+     "L2r_central": 0.551379
+    },
+    "4": {
+     "L2r": [
+      0.401063,
+      0.53926
+     ],
+     "NL": [
+      0.521477,
+      0.621477
+     ],
+     "ST": [
+      0.0,
+      0.284909
+     ],
+     "L2r_central": 0.485212
+    },
+    "5": {
+     "L2r": [
+      0.390416,
+      0.522126
+     ],
+     "NL": [
+      0.529361,
+      0.629361
+     ],
+     "ST": [
+      0.0,
+      0.259027
+     ],
+     "L2r_central": 0.466668
+    },
+    "6": {
+     "L2r": [
+      0.359282,
+      0.491612
+     ],
+     "NL": [
+      0.493321,
+      0.593321
+     ],
+     "ST": [
+      0.0,
+      0.238952
+     ],
+     "L2r_central": 0.436491
+    },
+    "7": {
+     "L2r": [
+      0.33595,
+      0.462879
+     ],
+     "NL": [
+      0.511659,
+      0.611659
+     ],
+     "ST": [
+      0.0,
+      0.241041
+     ],
+     "L2r_central": 0.406243
+    },
+    "8": {
+     "L2r": [
+      0.33418,
+      0.461799
+     ],
+     "NL": [
+      0.500091,
+      0.600091
+     ],
+     "ST": [
+      0.0,
+      0.226729
+     ],
+     "L2r_central": 0.405435
+    },
+    "9": {
+     "L2r": [
+      0.313322,
+      0.439765
+     ],
+     "NL": [
+      0.492368,
+      0.592368
+     ],
+     "ST": [
+      0.0,
+      0.215735
+     ],
+     "L2r_central": 0.383117
+    }
+   }
+  },
+  "mixtral-8x7b-tp4 w1 s8 (W_c 264)": {
+   "dd": 0.254545,
+   "s_base_rental1_SEEN": [
+    0.649655,
+    0.543011,
+    0.469267,
+    0.446485,
+    0.417302,
+    0.380064,
+    0.380731,
+    0.356582
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      0.098766,
+      0.280072
+     ],
+     "NL": [
+      0.599655,
+      0.699655
+     ],
+     "ST": [
+      0.0,
+      0.048382
+     ],
+     "L2r_central": 0.195485
+    },
+    "3": {
+     "L2r": [
+      0.004996,
+      0.448629
+     ],
+     "NL": [
+      0.493011,
+      0.593011
+     ],
+     "ST": [
+      0.0,
+      0.034914
+     ],
+     "L2r_central": 0.337622
+    },
+    "4": {
+     "L2r": [
+      0.048898,
+      0.256451
+     ],
+     "NL": [
+      0.419267,
+      0.519267
+     ],
+     "ST": [
+      0.0,
+      0.032829
+     ],
+     "L2r_central": 0.166775
+    },
+    "5": {
+     "L2r": [
+      0.02875,
+      0.189117
+     ],
+     "NL": [
+      0.396485,
+      0.496485
+     ],
+     "ST": [
+      0.0,
+      0.03125
+     ],
+     "L2r_central": 0.113713
+    },
+    "6": {
+     "L2r": [
+      0.020575,
+      0.178801
+     ],
+     "NL": [
+      0.367302,
+      0.467302
+     ],
+     "ST": [
+      0.0,
+      0.030974
+     ],
+     "L2r_central": 0.104416
+    },
+    "7": {
+     "L2r": [
+      -0.00477,
+      0.103122
+     ],
+     "NL": [
+      0.330064,
+      0.430064
+     ],
+     "ST": [
+      0.0,
+      0.030765
+     ],
+     "L2r_central": 0.048907
+    },
+    "8": {
+     "L2r": [
+      -0.002064,
+      0.112212
+     ],
+     "NL": [
+      0.330731,
+      0.430731
+     ],
+     "ST": [
+      0.0,
+      0.030557
+     ],
+     "L2r_central": 0.055155
+    },
+    "9": {
+     "L2r": [
+      -0.010327,
+      0.090406
+     ],
+     "NL": [
+      0.306582,
+      0.406582
+     ],
+     "ST": [
+      0.0,
+      0.030395
+     ],
+     "L2r_central": 0.039442
+    }
+   }
+  },
+  "mixtral-8x7b-tp2 w1 s8 (W_c 264)": {
+   "dd": 0.509091,
+   "s_base_rental1_SEEN": [
+    0.15639,
+    0.100733,
+    0.058365,
+    0.056444,
+    0.045703,
+    0.038919,
+    0.036859,
+    0.03217
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      -0.023856,
+      0.053173
+     ],
+     "NL": [
+      0.10639,
+      0.20639
+     ],
+     "ST": [
+      0.0,
+      0.030125
+     ],
+     "L2r_central": 0.01416
+    },
+    "3": {
+     "L2r": [
+      -0.029582,
+      0.08987
+     ],
+     "NL": [
+      0.050733,
+      0.150733
+     ],
+     "ST": [
+      0.0,
+      0.030008
+     ],
+     "L2r_central": 0.038942
+    },
+    "4": {
+     "L2r": [
+      -0.02835,
+      0.043591
+     ],
+     "NL": [
+      0.008365,
+      0.108365
+     ],
+     "ST": [
+      0.0,
+      0.030002
+     ],
+     "L2r_central": 0.007372
+    },
+    "5": {
+     "L2r": [
+      -0.029023,
+      0.037169
+     ],
+     "NL": [
+      0.006444,
+      0.106444
+     ],
+     "ST": [
+      0.0,
+      0.03
+     ],
+     "L2r_central": 0.003661
+    },
+    "6": {
+     "L2r": [
+      -0.029329,
+      0.035811
+     ],
+     "NL": [
+      -0.004297,
+      0.095703
+     ],
+     "ST": [
+      0.0,
+      0.03
+     ],
+     "L2r_central": 0.002861
+    },
+    "7": {
+     "L2r": [
+      -0.029828,
+      0.031441
+     ],
+     "NL": [
+      -0.011081,
+      0.088919
+     ],
+     "ST": [
+      0.0,
+      0.03
+     ],
+     "L2r_central": 0.000644
+    },
+    "8": {
+     "L2r": [
+      -0.029802,
+      0.031719
+     ],
+     "NL": [
+      -0.013141,
+      0.086859
+     ],
+     "ST": [
+      0.0,
+      0.03
+     ],
+     "L2r_central": 0.000774
+    },
+    "9": {
+     "L2r": [
+      -0.029902,
+      0.030923
+     ],
+     "NL": [
+      -0.01783,
+      0.08217
+     ],
+     "ST": [
+      0.0,
+      0.03
+     ],
+     "L2r_central": 0.000394
+    }
+   }
+  },
+  "mixtral-8x7b-tp2 w1 s6 (W_c 396)": {
+   "dd": 0.226263,
+   "s_base_rental1_SEEN": [
+    0.15639,
+    0.100733,
+    0.058365,
+    0.056444,
+    0.045703,
+    0.038919,
+    0.036859,
+    0.03217
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      0.007105,
+      0.096936
+     ],
+     "NL": [
+      0.10639,
+      0.20639
+     ],
+     "ST": [
+      0.0,
+      0.036576
+     ],
+     "L2r_central": 0.053776
+    },
+    "3": {
+     "L2r": [
+      -0.021196,
+      0.109937
+     ],
+     "NL": [
+      0.050733,
+      0.150733
+     ],
+     "ST": [
+      0.0,
+      0.031538
+     ],
+     "L2r_central": 0.066027
+    },
+    "4": {
+     "L2r": [
+      -0.018037,
+      0.06054
+     ],
+     "NL": [
+      0.008365,
+      0.108365
+     ],
+     "ST": [
+      0.0,
+      0.030621
+     ],
+     "L2r_central": 0.02327
+    },
+    "5": {
+     "L2r": [
+      -0.020696,
+      0.052559
+     ],
+     "NL": [
+      0.006444,
+      0.106444
+     ],
+     "ST": [
+      0.0,
+      0.030304
+     ],
+     "L2r_central": 0.016735
+    },
+    "6": {
+     "L2r": [
+      -0.022997,
+      0.048275
+     ],
+     "NL": [
+      -0.004297,
+      0.095703
+     ],
+     "ST": [
+      0.0,
+      0.030209
+     ],
+     "L2r_central": 0.013339
+    },
+    "7": {
+     "L2r": [
+      -0.026508,
+      0.038993
+     ],
+     "NL": [
+      -0.011081,
+      0.088919
+     ],
+     "ST": [
+      0.0,
+      0.030156
+     ],
+     "L2r_central": 0.00629
+    },
+    "8": {
+     "L2r": [
+      -0.026385,
+      0.039437
+     ],
+     "NL": [
+      -0.013141,
+      0.086859
+     ],
+     "ST": [
+      0.0,
+      0.030111
+     ],
+     "L2r_central": 0.006618
+    },
+    "9": {
+     "L2r": [
+      -0.027551,
+      0.036638
+     ],
+     "NL": [
+      -0.01783,
+      0.08217
+     ],
+     "ST": [
+      0.0,
+      0.030076
+     ],
+     "L2r_central": 0.004545
+    }
+   }
+  },
+  "mixtral-8x7b-tp8 w2 s8 (W_c 264)": {
+   "dd": 0.121212,
+   "s_base_rental1_SEEN": [
+    0.973414,
+    0.990529,
+    0.999466,
+    0.999859,
+    0.999972,
+    1.000121,
+    1.000172,
+    1.000173
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      0.953126,
+      1.017699
+     ],
+     "NL": [
+      0.923414,
+      1.023414
+     ],
+     "ST": [
+      0.0,
+      1.025132
+     ],
+     "L2r_central": 0.984993
+    },
+    "3": {
+     "L2r": [
+      0.961632,
+      1.027433
+     ],
+     "NL": [
+      0.940529,
+      1.040529
+     ],
+     "ST": [
+      0.0,
+      1.028992
+     ],
+     "L2r_central": 0.992447
+    },
+    "4": {
+     "L2r": [
+      0.969623,
+      1.029772
+     ],
+     "NL": [
+      0.949466,
+      1.049466
+     ],
+     "ST": [
+      0.0,
+      1.029953
+     ],
+     "L2r_central": 0.999674
+    },
+    "5": {
+     "L2r": [
+      0.969914,
+      1.029946
+     ],
+     "NL": [
+      0.949859,
+      1.049859
+     ],
+     "ST": [
+      0.0,
+      1.029991
+     ],
+     "L2r_central": 0.999926
+    },
+    "6": {
+     "L2r": [
+      0.969983,
+      1.02999
+     ],
+     "NL": [
+      0.949972,
+      1.049972
+     ],
+     "ST": [
+      0.0,
+      1.029998
+     ],
+     "L2r_central": 0.999985
+    },
+    "7": {
+     "L2r": [
+      0.970033,
+      1.030055
+     ],
+     "NL": [
+      0.950121,
+      1.050121
+     ],
+     "ST": [
+      0.0,
+      1.030006
+     ],
+     "L2r_central": 1.000046
+    },
+    "8": {
+     "L2r": [
+      0.97005,
+      1.030083
+     ],
+     "NL": [
+      0.950172,
+      1.050172
+     ],
+     "ST": [
+      0.0,
+      1.030008
+     ],
+     "L2r_central": 1.000069
+    },
+    "9": {
+     "L2r": [
+      0.970044,
+      1.030074
+     ],
+     "NL": [
+      0.950173,
+      1.050173
+     ],
+     "ST": [
+      0.0,
+      1.030007
+     ],
+     "L2r_central": 1.000061
+    }
+   }
+  },
+  "mixtral-8x7b-tp4 w2 s8 (W_c 264)": {
+   "dd": 0.121212,
+   "s_base_rental1_SEEN": [
+    0.937618,
+    0.837531,
+    0.858053,
+    0.864448,
+    0.856646,
+    0.897294,
+    0.900199,
+    0.91232
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      0.689489,
+      0.819314
+     ],
+     "NL": [
+      0.887618,
+      0.987618
+     ],
+     "ST": [
+      0.0,
+      0.635987
+     ],
+     "L2r_central": 0.760802
+    },
+    "3": {
+     "L2r": [
+      0.679334,
+      0.847042
+     ],
+     "NL": [
+      0.787531,
+      0.887531
+     ],
+     "ST": [
+      0.0,
+      0.710391
+     ],
+     "L2r_central": 0.801919
+    },
+    "4": {
+     "L2r": [
+      0.740082,
+      0.842978
+     ],
+     "NL": [
+      0.808053,
+      0.908053
+     ],
+     "ST": [
+      0.0,
+      0.747788
+     ],
+     "L2r_central": 0.798248
+    },
+    "5": {
+     "L2r": [
+      0.741379,
+      0.836113
+     ],
+     "NL": [
+      0.814448,
+      0.914448
+     ],
+     "ST": [
+      0.0,
+      0.753315
+     ],
+     "L2r_central": 0.79252
+    },
+    "6": {
+     "L2r": [
+      0.763728,
+      0.848135
+     ],
+     "NL": [
+      0.806646,
+      0.906646
+     ],
+     "ST": [
+      0.0,
+      0.792933
+     ],
+     "L2r_central": 0.808707
+    },
+    "7": {
+     "L2r": [
+      0.773518,
+      0.856969
+     ],
+     "NL": [
+      0.847294,
+      0.947294
+     ],
+     "ST": [
+      0.0,
+      0.804702
+     ],
+     "L2r_central": 0.816686
+    },
+    "8": {
+     "L2r": [
+      0.791324,
+      0.872789
+     ],
+     "NL": [
+      0.850199,
+      0.950199
+     ],
+     "ST": [
+      0.0,
+      0.824332
+     ],
+     "L2r_central": 0.833544
+    },
+    "9": {
+     "L2r": [
+      0.800563,
+      0.879977
+     ],
+     "NL": [
+      0.86232,
+      0.96232
+     ],
+     "ST": [
+      0.0,
+      0.837344
+     ],
+     "L2r_central": 0.84136
+    }
+   }
+  },
+  "mixtral-8x7b w2 s8 (W_c 264)": {
+   "dd": 0.121212,
+   "s_base_rental1_SEEN": [
+    0.722282,
+    0.538654,
+    0.522036,
+    0.531993,
+    0.501428,
+    0.506705,
+    0.489654,
+    0.476815
+   ],
+   "bands": {
+    "2": {
+     "L2r": [
+      0.304196,
+      0.488427
+     ],
+     "NL": [
+      0.672282,
+      0.772282
+     ],
+     "ST": [
+      0.0,
+      0.162259
+     ],
+     "L2r_central": 0.407699
+    },
+    "3": {
+     "L2r": [
+      0.115972,
+      0.505894
+     ],
+     "NL": [
+      0.488654,
+      0.588654
+     ],
+     "ST": [
+      0.0,
+      0.087314
+     ],
+     "L2r_central": 0.429571
+    },
+    "4": {
+     "L2r": [
+      0.193337,
+      0.398988
+     ],
+     "NL": [
+      0.472036,
+      0.572036
+     ],
+     "ST": [
+      0.0,
+      0.075776
+     ],
+     "L2r_central": 0.318973
+    },
+    "5": {
+     "L2r": [
+      0.172524,
+      0.355484
+     ],
+     "NL": [
+      0.481993,
+      0.581993
+     ],
+     "ST": [
+      0.0,
+      0.062371
+     ],
+     "L2r_central": 0.277364
+    },
+    "6": {
+     "L2r": [
+      0.153559,
+      0.336866
+     ],
+     "NL": [
+      0.451428,
+      0.551428
+     ],
+     "ST": [
+      0.0,
+      0.057979
+     ],
+     "L2r_central": 0.259235
+    },
+    "7": {
+     "L2r": [
+      0.109261,
+      0.261151
+     ],
+     "NL": [
+      0.456705,
+      0.556705
+     ],
+     "ST": [
+      0.0,
+      0.056352
+     ],
+     "L2r_central": 0.19086
+    },
+    "8": {
+     "L2r": [
+      0.111148,
+      0.265991
+     ],
+     "NL": [
+      0.439654,
+      0.539654
+     ],
+     "ST": [
+      0.0,
+      0.051883
+     ],
+     "L2r_central": 0.195141
+    },
+    "9": {
+     "L2r": [
+      0.089994,
+      0.234724
+     ],
+     "NL": [
+      0.426815,
+      0.526815
+     ],
+     "ST": [
+      0.0,
+      0.048656
+     ],
+     "L2r_central": 0.167115
+    }
+   }
+  }
+ },
+ "seen_data": [
+  "lam(n) is fitted on rental 1's tp2 w2 and tp4 w1 G = 1 pages (SEEN)",
+  "s_cap = 0 at x >= 0.92 is read off rental 1's tp2 w2 (SEEN)",
+  "R2h's m is fitted on rental 1's rho84 = 1.184 (SEEN)",
+  "the illustrations use rental 1's measured s as s_base; the scores use each knob page's same-board base page"
+ ]
+}

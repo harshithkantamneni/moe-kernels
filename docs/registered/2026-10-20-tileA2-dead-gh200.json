@@ -1,0 +1,230 @@
+{
+ "registered": "2026-10-20, before any tile rental A2 page",
+ "name": "2026-10-20-tileA2-dead-gh200",
+ "status": "REGISTERED BEFORE ANY A2 PAGE: SEEN-REPLICATE (DESCRIPTIVE), NOT A TEST (REVIEW-A2 5 iv)",
+ "design": "design-A2 DESIGN.md (2026-10-20) corrected by design-A2-review REVIEW.md (the review wins: every MAJOR and MINOR fix), the build review (GO-WITH-FIXES) and the owner's decisions of 2026-10-20: A 900 W GPU POWER LIMIT AND THE LOCK LADDER 1710, 1410, 1305 (the first rung whose probe passes is the lock of every later unit; the 900 W limit changes the owner's 2026-09-26 700 W decision for tile rental A2, and rental B2 at the limit A2 held, only); rental B2 at A2's power limit and lock rung; decode uses A2's constants only once A2's floor calibration is scored; the probe strict (one LOST cell fails a rung); every other decision is the design's recommendation as amended by the review: OD3 the byte pages re-run, OD4 sigma_page re-measured, OD5 w4, ms and dk droppable, OD6 CONV-L a registered test, nodrop, not a stop clause (REVIEW 3a: timed at 1710 and at L, a per-cell ratio), OD7 decode stays at 1710 by addendum, OD8 the band [0.975 L, L] (REVIEW 2c: the scaled band a registered fallback), OD9 the calibrate gate under the lowest rung (build review fix 3), OD10 the scorer import order fixed in place, OD11 the probe thresholds of DESIGN 6, OD12 the offline conversion check done before registering, OD13 rental A's timed pages against v4 forbidden",
+ "tool": "scorer scripts/scoring/tileA2/score_dead_a2.py (scripts/scoring/tileA/score_dead.py inside a2common.scoring); tcommon.dead_rule",
+ "what": "the dead-CTA lever at occupancy 2 (design-tile 3.1 step 7, design-tile-review 7): SHARED at 15 against 9 copies on OLMoE 128x128x64 w8 G 1, where the hidden window kappa x occ x S' x c is half R3's",
+ "pages": {
+  "units": [
+   "olmoe-1b-7b timed label=d9 (declared-copies 9)",
+   "olmoe-1b-7b timed label=d15 (declared-copies 15)"
+  ],
+  "files": {
+   "olmoe-1b-7b-dead.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json",
+    "sha256": "12905532ac948505feb8d9a9d5dd905063b0af04935ec3092926d6341ab2eef5",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   }
+  },
+  "drop_group": "dk (dropped first)",
+  "tread": "n 1, uniform and balanced (design-tile-review 7 and 9.12: the increment does not depend on n)"
+ },
+ "statistic": "per (label): delta = [(T_S - T_N) at c15 - (T_S - T_N) at c9] - [(A_S - A_N) at c15 - (A_S - A_N) at c9], the second bracket the align growth read off each page's own align_probe (design-tile-review 9.12); delta is the median over the page's (label) cells",
+ "se": "se(delta) = 2 x sigma_page x mean(T) / sqrt(cells): four timed cells per difference; sigma_page is tA-rep's when it ran, else rental 3's 0.18% (design-tile-review 9.8)",
+ "laws_predicted_us (derived from the v2 forms at the tile)": {
+  "c128 600": {
+   "D": 12.086886,
+   "D2": 11.94816,
+   "SLOT": 24.6888,
+   "kappa 0.15": 12.13104,
+   "kappa 0": 12.13104,
+   "d 1.06": 12.92352
+  },
+  "c128 900": {
+   "D": 7.632333,
+   "D2": 7.901108,
+   "SLOT": 24.6888,
+   "kappa 0.15": 12.13104,
+   "kappa 0": 12.13104,
+   "d 1.06": 9.019693
+  },
+  "c128 1100": {
+   "D": 6.06552,
+   "D2": 6.27888,
+   "SLOT": 24.6888,
+   "kappa 0.15": 12.13104,
+   "kappa 0": 12.13104,
+   "d 1.06": 6.46176
+  }
+ },
+ "rule": {
+  "D against SLOT": "each law's z = (delta - law) / se; EXCLUDED when |z| > 3. D (0.995 ns, kappa 0.325) and SLOT (4.05 ns / occ) differ by 12 to 17 us here (at R3's occupancy they did not separate)",
+  "kappa 0.325 against smaller kappa": "scored only when the measured c_128 >= 900 cycles (below it every kappa hides nothing and the laws coincide); the comparison is D against 'kappa 0.15' and 'kappa 0'",
+  "NOT SEPARABLE (stated before the page)": [
+   "D2 against D (v2): within 0.3 us at every c_128",
+   "kappa 0 against kappa 0.15: identical at every c_128 here"
+  ],
+  "consequence": "none for E1-TILE (NATIVE): the reading informs term (b)'s copies question (D9) and E1-TILE-S"
+ },
+ "labels": {
+  "pages": "BLIND-CALMODEL (OLMoE is CAL-counters for d and kappa: the laws' constants are SEEN-fitted)"
+ },
+ "scorer_ambiguities": {
+  "1 which c is the denominator, and F's units": "c_time = c_card x c_counter(tile) / 344.1 (344.1 the CAL counters' c); F is held in counter cycles and PHI = F / c_counter(tile) in k-steps; at R3's tile v4 is v3 exactly (r3_timing_model_v4.py --check)",
+  "2 F-cyc against F-step": "F-step (v3's form) is registered; F-cyc replaces it only when, on the 64x128 w8 pages, it is nearer the measured F on both GEMMs and F-step misses by more than 3 se on one (tcommon.f_form_rule)",
+  "3 eta_mma": "per clock (Luo Table 11, 0.991), per instruction by Table 9's ratios: 0.983 (m64n128k16, 128x128 w8), 0.965 (m64n64k16, 64x128); H800 PCIe, FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857",
+  "4 tA-floor": "the test statistic is u = S c + F per (model, GEMM), within 3%; cells are the NATIVE and SHARED cells at n 4..9 whose own GEMM reads DRAM at no more than 0.5 x 4022 GB/s; a dropped w4 page changes nothing (printed only); at 128x128 v4cal and v4 are the same model",
+  "5 the NAMED rule's rows, and the default": "every scored w1 row of the G-1 byte pages (uniform, balanced and skewed, NATIVE and SHARED); nothing NAMED gives CLAMP, not v3",
+  "6 E1-TILE's 'each model'": "the three BLIND-TILE models; deepseek-v2-lite is in the pooled bar only (its own bar DESCRIPTIVE, never CERTIFIED); a model left with one page is scored and NOT CERTIFIED",
+  "7 the host cut": "0.40 ms (T + F240), rental 3's registered rule, on the FINALISED v4 prediction",
+  "8 tA-rep dropped": "rental 3's 0.18% feeds the rivals' se, tA-dead's z and the power at finalisation",
+  "9 tA-e1cal 'fails'": "on the CLEAN view: the pooled NATIVE bar, each class mean within 0.75%, the 128 G 1 CAL models within 1%; a SKIPPED, LOST or NOT SCORED E1-CAL page, or a G3 void, is a STOP (tileB-stop)",
+  "10 the OLS rival": "one ridge OLS over every valid NATIVE E1-CAL cell (features waves, bytes / bw, ln(1 + CTAs); lambda 1e-3 x trace(X'X) / 3 on standardised features); NOT SCORED under 12 cells or condition number over 1e6",
+  "11 census against counter occupancy": "integers, exact; a counter page at another occupancy is scored at its recorded one (rental 4's re-key, score_floor: Z_wg at the 128x128 pages' recorded occupancy, each 64x128 page's c at its own); on rental B a (model, tile) at another occupancy than rental A's census is NOT SCORED on every page of that (model, tile), and a missing or refused rental-B census leaves every page NOT SCORED (score_tileB.census_check); a refused rental-A census is a STOP",
+  "12 tA-dead": "tread n 1 (uniform and balanced); align growth = (A_S - A_N) at c15 minus at c9 off each page's align_probe; se = 2 sigma_page mean(T) / sqrt(cells), sigma_page tA-rep's or 0.18%",
+  "13 the 30 MiB row key": "one of the card's two L2 partitions of its measured 60 MiB (rental 4's rulers, CONSISTENT with RRZE's GH200; Hopper's partitioned L2, NVIDIA H100 whitepaper); the 'Fan et al.' attribution is withdrawn",
+  "14 byte pages and timed pages": "one histogram file per (model, tile, G): a byte page and a timed page of the same (model, tile, G) read the same file, so their counts are identical (the files' sha256 above)"
+ },
+ "seen_data": [
+  "d 0.995, kappa 0.325 (v2, CAL)",
+  "D2, SLOT, kappa 0.15, d 1.06 (SEEN readings of rental 7, design-tile 6)"
+ ],
+ "laws at L (A2)": "the v2 forms at the tile under r3_timing_model_v4L.at_lock(L): the hidden window kappa x occ x S' x c reads the converted c, d stays in ns (P1's form); the other form (d x 1710 / L) moves NATIVE's dead term by at most 0.4 us here, so D against SLOT (12 to 17 us apart) does not depend on it",
+ "laws_predicted_us at the fallback rung 1305": {
+  "c128 600": {
+   "D": 11.350648,
+   "D2": 11.333398,
+   "SLOT": 24.6888,
+   "kappa 0.15": 12.13104,
+   "kappa 0": 12.13104,
+   "d 1.06": 12.738008
+  },
+  "c128 900": {
+   "D": 6.537682,
+   "D2": 6.890661,
+   "SLOT": 24.6888,
+   "kappa 0.15": 12.13104,
+   "kappa 0": 12.13104,
+   "d 1.06": 7.925042
+  },
+  "c128 1100": {
+   "D": 5.857168,
+   "D2": 6.27888,
+   "SLOT": 24.6888,
+   "kappa 0.15": 12.13104,
+   "kappa 0": 12.13104,
+   "d 1.06": 6.46176
+  }
+ },
+ "label (A2)": "rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test",
+ "lock": {
+  "decision (owner, 2026-10-20)": "a 900 W GPU power limit (GPU scope, -sc 0) and the lock ladder 1710, 1410, 1305 MHz: the probe tries 1710 first; the first rung whose probe passes is the run's lock",
+  "changes": "the owner's 2026-09-26 decision (the GPU power limit 700 W at the start, -sc 0) FOR TILE RENTAL A2 AND RENTAL B2 ONLY (B2 runs at the limit and the lock rung A2 held, read from A2's score directory); every other rental's driver keeps 700 W",
+  "why (DESIGN-A2 1, REVIEW-A2 1)": "rental A's wgmma pages sagged under the 1710 lock: reason 0x4 (SW power cap) only, 60 C at most; the smi trace went to 1290 MHz on the three heavy 128x128 pages; the inferred cause is the software power cap (GPU or module scope unresolved), so the limit rises to the card's maximum and the lock steps down only when the probe says the cap still bites",
+  "ladder (owner, 2026-10-20)": "1710, then 1410, then 1305 MHz: the lock-hold probe's first rung that holds is A2's lock (tileA2-gates G-PROBE). At 1710 no clock conversion is used (v4L is v4 exactly) and CONV-L does not run; 1410 and 1305 carry the conversion",
+  "conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20)": "the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)",
+  "rules at L": {
+   "at 1710": "rental A's own rules: the band [1640, 1710] (derived at that lock; the fallback band at 1710 is the same), G4 1705, v4 itself",
+   "counter band": "below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)",
+   "fallback band (REVIEW-A2 2c)": "[L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled",
+   "G4": "cell clock >= L - 5 MHz (1705, 1405, 1300)",
+   "dips": "r7-median-run3 at the page's own lock_mhz (a read under L - 15 is dipped: 1395 is not at 1410, 1380 is)",
+   "lock_gate": "lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)",
+   "v4 at L": "r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L"
+  }
+ },
+ "seen (REVIEW-A2 5)": {
+  "label": "SEEN before this registration (REVIEW-A2 5): none of it is a lever, the selection rules are tcommon's pinned functions unchanged (variant_rule, f_form_rule, joint_cF, floor_test); stated so a reader can weigh it",
+  "(i) rental A's out-of-band fits (DESIGN-A2 7d, work/fit.py, DESCRIPTIVE)": "tcommon.joint_cF on rental A's f128 pages with the band removed: c_128 698.67 +- 10.63 cycles, F_w1 2740 +- 615, F_w2 3113 +- 341, 36 cells, rel rms 0.53%, recorded occupancy 2; on the f64w8 pages c_64 459.1 +- 19.4; the cells' clocks 1601 to 1663 MHz",
+  "(ii) the 64x128 accounting outcome": "predictable by interpolation from (i) and tileA-floor's registered table (W and T c_64 at c_128 600 and 750); nobody computed it",
+  "(iii) SEEN-expected": "with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)",
+  "(iv) tA-dead": "rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test",
+  "(v) the A key": "rental A's key test on 19 of 56 rows: v3 5.0254% against CLAMP 5.0253% rms, NOT NAMED (CLAMP): the near tie is known; the 53 rows its band dropped stay unread",
+  "(vi) sigma_page": "rental A's 0.1275% (24 cells, at a sagging 1710 clock); A2 re-measures it, and never copies rental A's in",
+  "(vii) what chose the lock, the probe cells and the gates": "rental A's per-repeat clocks (cells.csv), the in-flight NVML reads, the smi traces (locked-r3/*/smi.csv: clock, power, temperature, reasons) and the calibrate log",
+  "(viii) rental A's times": "rental A's 1710 times of every E1-CAL cell and its counted bytes of every byte row exist (results/published/2026-10-20-nvidia_gh200_480gb-tileA-session) UNREAD against v4: no v4 time is computed against the E1-CAL times, and the 53 band-dropped byte rows are not re-scored, before or after A2 (OD13, a rule of this registration); its rep and dead pages are scored and published ((iv), (vi)); A2's E1-CAL, byte, rep and dead pages read the same histogram files, so their workloads are SEEN while their times on A2's board are not; the per-row workload labels below are tileA's (as of 2026-10-14) and are not updated",
+  "(ix) the offline conversion check (OD12; REVIEW-A2 3b)": "see tileA2-convl 'offline_check (SEEN)': on the 2026-09-27 and R1 pages v3's c-only rule holds on the c-heavy G 4 / G 2 ladders and on the G 1 per-M-tile elasticity, and underpredicts the G 1 per-call clock elasticity"
+ },
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+  "scripts/r3_timing_model_v4L.py": "9a944af2e272035e1d8673e72faf1539fb90f1dbbda16e156a6387f2b7090d63",
+  "scripts/tile_census_a2.py": "1021a1ba5e8820172b62829537703718d8fc7d4488b143364eba51ac13a4cdad",
+  "scripts/gh200_tileA2_session.sh": "77adb07f8ae7d190c3da7c3dcb031e020c1eb4c2040fcfbcaf88ac40a0deed53",
+  "scripts/tileA2_gate.py": "566703b38372677019faf8cbbe62e50f7d5b4e8a857b10e236197289ddc3dbce",
+  "scripts/scoring/tileA/score_floor.py": "4dd8c3cb80c66521cd67eb678e3023965a2529432a75c03c17d87a6c01f82a02",
+  "scripts/scoring/tileA/score_bytes.py": "877b2b284fe4ed85e8d871a36abdcfc95ae934f220e70b756c3172a23f5bd8b2",
+  "scripts/scoring/tileA/score_census.py": "2f2cacefb299f92ace9f17e02809fe7d97e511fb6b018728819a6d2305e445e0",
+  "scripts/scoring/tileA/score_e1cal.py": "7971efc9017ae6e79d68ac42e50b0599bd96ff7feb73ce3f144025d7f21f0864",
+  "scripts/scoring/tileA/score_rep.py": "7e240d1de17e14a731728c890eb5b56c0cefb37d3ac05cbe58452bbc1e2bcb11",
+  "scripts/scoring/tileA/score_dead.py": "d96368ad89b1b81da6876da0ddc565fd3bfbf8bce3569190e4d63b69c7841321",
+  "scripts/scoring/tileA/score_tileB.py": "d7e4409283176e9709475eeb00eaf2399c83153d0896c64e4ad4b09215dd1259",
+  "scripts/scoring/tileA2/a2common.py": "d99eef413cddbae593d5f9115d8bc6db776c4ad4a7a6cb43c0eb7848517a3d9a",
+  "scripts/scoring/tileA2/census_a2.py": "063806f831cbb359ea7b6acbb02ffd64042e11178707062df0f7290856132cb6",
+  "scripts/scoring/tileA2/probe_a2.py": "e3c736c54a06a90f84192366aa1c0dcad6965228971fc1a02a680188ff6cdf51",
+  "scripts/scoring/tileA2/hist_a2.py": "18fc7eaa73e84076a3ee277cfe509876f9dbf80995a13190e1915ece9502b57d",
+  "scripts/scoring/tileA2/conv_offline.py": "413013699bc6fe1e87e99f3bd8fe4912c19c133332db3ea1ced511643453f058",
+  "scripts/scoring/tileA2/regtile_a2.py": "5a3e9cf68e10736dccad188c349b3494b60528f0c1fca70ad1242eda0a33b3f5",
+  "scripts/scoring/tileA2/register_a2.py": "87b2068279a982b080987d328b2da4f7b63ffd88256e39bab0d90a1d16ed176b",
+  "scripts/scoring/tileA2/finalise_a2.py": "c6b18a874bb133212ad7024bb47db02011f016a35f74340446558719bea0d2b2",
+  "scripts/scoring/tileA2/score_census_a2.py": "3218b2a04fb89c6b322afb142d1a90676435a758336a5256e998cfcbcd1c5c1c",
+  "scripts/scoring/tileA2/score_floor_a2.py": "c075802d9067177a73c506a475d772a67cdd03c5dec404854b27daf34e1c7347",
+  "scripts/scoring/tileA2/score_bytes_a2.py": "c9d8c0a6940b8963e72b3d52329e2e08416a4225ffa9c0656a75bd6910ff2dd9",
+  "scripts/scoring/tileA2/score_rep_a2.py": "65b09c83493a28b584df95cf883f786090682e3a099be0b7fa554795221150d5",
+  "scripts/scoring/tileA2/score_e1cal_a2.py": "ffcaa7734bfdeb85c00de1a58cbd05e5fdad5621d5eb61208569447f1846c852",
+  "scripts/scoring/tileA2/score_dead_a2.py": "c480ff65f13b87a2783c76bcd5f8624453b361cc8403bde4f807a5e3dee64736",
+  "scripts/scoring/tileA2/score_convl_a2.py": "72818c239d776680eb9ad80fa4c8fb123d2ff934a170cb5abe4f40fa4ab72fb8",
+  "scripts/scoring/tileA2/score_probe_a2.py": "682965ecf7d0ccc9d40a4d272b55e404264ce338ed1f13b99b3c9893ed5e78f1",
+  "scripts/scoring/tileA2/score_tileB2_a2.py": "8935239e0c16305a23690466370ed75a2e816b33bab4f4ea47f2522b4c37b7e8",
+  "scripts/scoring/tileA2/score_session_a2.py": "6de1caa7b178045d640ee4cdff17238518303878e518d18d693d84542698d129",
+  "scripts/scoring/tileA2/decode_gate_a2.py": "b38d7ce95fede441885cf3c30cd03c4bbc6c7d77dfc5e2f8ab22f055f1402a36"
+ }
+}

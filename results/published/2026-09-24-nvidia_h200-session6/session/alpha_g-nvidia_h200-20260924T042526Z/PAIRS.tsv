@@ -1,0 +1,2 @@
+G	seed	ratio	lo	hi	exit	exit_scope	duty	run_id	rep_n	rep_spread	rep_sd	env_lo	env_hi	joint	clk_native	clk_shared	clk_private	low_cells	eta	eta_lo	eta_hi	band	eta_exit	reads_as
+2	0	0.7516	0.7507	0.7528	CLAIM_FAIL	alone	0.25	nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-n64-pl-ff6f9ed1	none	none	none	none	none	none	1950	1950	1950	0	1.1014	1.0678	1.1497	withheld:INVALID	INVALID	unresolved

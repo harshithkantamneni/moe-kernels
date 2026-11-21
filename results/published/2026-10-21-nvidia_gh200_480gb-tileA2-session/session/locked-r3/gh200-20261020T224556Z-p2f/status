@@ -1,0 +1,12 @@
+2026-10-20T23:39:02Z locked_r3 start: tag gh200-20261020T224556Z-p2f, locks [1410], G [8], R3 args --model mixtral-8x7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --histogram docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g8.json --arms native, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-cvm8/private_weight_reference
+2026-10-20T23:39:02Z card: NVIDIA GH200 480GB, GPU-1a7710b2-11b6-5750-db3b-1265475ab3e3, Enabled, 900.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-10-20T23:39:02Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-10-20T23:39:02Z locked at 1410 MHz: GPU clocks set to "(gpuClkMin 1410, gpuClkMax 1410)" for GPU 00000000:DD:00.0 All done.
+2026-10-20T23:39:02Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 135.81 W, 900.00 W
+2026-10-20T23:39:02Z G=8 start at lock 1410: pid 52130, tag gh200-20261020T224556Z-p2f-lock1410, log r3-g8-lock1410.log
+2026-10-20T23:39:12Z G=8 at lock 1410: R3 named its run directory nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histd5f3a877d1a0a1f3-d9ff2758
+2026-10-20T23:44:03Z G=8 held at lock 1410: R3 exit 0 DONE, cells=72 worst=1410.0 MHz, 300 s, dir nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histd5f3a877d1a0a1f3-d9ff2758
+2026-10-20T23:44:03Z all G held at lock 1410 MHz
+2026-10-20T23:44:03Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1410 MHz lock is released
+2026-10-20T23:44:03Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 109.42 W, 900.00 W
+2026-10-20T23:44:03Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

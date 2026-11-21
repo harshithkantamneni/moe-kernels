@@ -1,0 +1,125 @@
+{
+ "registered": "2026-10-09, before any rental-6 page",
+ "name": "2026-10-09-rental6-secondk-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r6 DESIGN.md corrected by design-r6-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-09 (1-6 accepted; h kept and labelled SEEN-FITTED)",
+ "tool": "scorer scripts/scoring/rental6/score_secondk.py; r4common.page_c; r6common.clock_rule",
+ "pages": {
+  "path": "<date>-<card>-mixtral-8x7b-tp4-<label>-r3-counters/lock1710/r3c-g64.json",
+  "labels": {
+   "k64s4": [
+    64,
+    4
+   ],
+   "k32s4": [
+    32,
+    4
+   ]
+  },
+  "both_new": "BOTH pages run in rental 6 on the same board; the rental-1 k64s4 page is SEEN and is not scored",
+  "design_check": "each page's design (block_k, num_stages) must equal its label's; else NOT SCORED"
+ },
+ "statistic": {
+  "c_page": "per (page, GEMM) c by r4common.page_c with ns = 4..9, F held at CAL (w1 520, w2 979 cycles), max_dram_frac 0.5 (floor-bound cells only: DRAM read rate at most 0.5 x 4022 GB/s), over the cells that pass the clock rule; fewer than 3 cells: NOT SCORED",
+  "r_meas": "u(k32) / u(k64), u = S c + F (cycles)",
+  "e": "r_meas / r_pred(H) - 1"
+ },
+ "inputs": {
+  "c64": {
+   "w1": 346.2,
+   "w2": 344.0
+  },
+  "c32": {
+   "w1": 245.2,
+   "w2": 234.3
+  },
+  "K_olmoe": {
+   "w1": 2048,
+   "w2": 1024
+  },
+  "F_cal": {
+   "w1": 520.0,
+   "w2": 979.0
+  },
+  "ns": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9
+  ],
+  "max_dram_frac": 0.5,
+  "label": "c64 / c32 SEEN (OLMoE rental-4 B'); F CAL"
+ },
+ "hypotheses": {
+  "H_ITER": "the BK 32 excess is per k-step: u(k32) = S32 c32 + F",
+  "H_CTA": "the same excess is per CTA: u(k32) = S32 c64 / 2 + F + dF, dF = (c32 - c64/2) x OLMoE's BK-32 steps"
+ },
+ "predicted_ratio": {
+  "w1": {
+   "K": 4096,
+   "S64": 64,
+   "S32": 128,
+   "H_ITER": 1.406971,
+   "H_CTA": 1.203486,
+   "dF_cycles": 4614.4,
+   "gap_pct": 16.908014,
+   "gap_pct_F_sensitivity": {
+    "F x0.5": 17.070644,
+    "F x1.5": 16.748454
+   }
+  },
+  "w2": {
+   "K": 3584,
+   "S64": 56,
+   "S32": 112,
+   "H_ITER": 1.344692,
+   "H_CTA": 1.098483,
+   "dF_cycles": 1993.6,
+   "gap_pct": 22.413498,
+   "gap_pct_F_sensitivity": {
+    "F x0.5": 22.917998,
+    "F x1.5": 21.930732
+   }
+  }
+ },
+ "rules": {
+  "per_gemm": "within 3% = |r_meas / r_pred(H) - 1| <= 0.03 for the nearer H; that GEMM reads H; both beyond: NEITHER",
+  "verdict": "SELECTED <H> when both GEMMs read the same H; else UNDECIDED (readings printed)",
+  "noise": "counter noise about 0.3% against gaps of 16.9% (w1) and 22.4% (w2)"
+ },
+ "gates": {
+  "V5": "each page's V5 (the slope gate, dram_counter_route) must PASS; the rental-1 k64s4 page passed at 0.9985",
+  "clock": "each page by r6common.clock_rule: lock_gate.check_page PASS (V10, the lock in force, judged by the smi bracket, null kernel and base twin), then each cell in [1640, 1710] MHz (out-of-band cells dropped); this replaces V10's 1705 cut, which the rental-1 page failed at 1659-1676 MHz (w2 fitted 1676, PRIVATE 1659-1663)",
+  "pair_clock": "the two pages' median cell clocks must agree within 1% (cycles are compared across pages), else NOT SCORED",
+  "V7": "V7 (the arm clock match) is not a gate on the cycle ratio; when a page's V7 FAILS, its c is read off its NATIVE cells only (page_c on the native cells, at least 3), so no cross-arm clock mismatch enters the fit; the reading is flagged 'V7: native only'",
+  "views": "rental 2's two views as rental 5's secondk (occlaw.bytes_two_views)"
+ },
+ "missing": "a page missing or out of the view: NOT SCORED; drop-group k2 keeps the pair together",
+ "labels": {
+  "k64s4": "SEEN configuration (rental 1, this model, G 64)",
+  "k32s4": "BLIND"
+ },
+ "seen_data": [
+  "c64, c32 SEEN (OLMoE rental 4)",
+  "F CAL",
+  "the rental-1 k64s4 page SEEN (V5 0.9985; V7 and V10 failed)"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633"
+ }
+}

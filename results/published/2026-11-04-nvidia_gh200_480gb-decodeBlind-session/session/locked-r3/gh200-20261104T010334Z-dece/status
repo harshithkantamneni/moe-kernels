@@ -1,0 +1,12 @@
+2026-11-04T01:58:31Z locked_r3 start: tag gh200-20261104T010334Z-dece, locks [1710], G [1], R3 args --model granite-3.0-3b-a800m --histogram docs/registered/2026-10-14-decode-pages/granite-3.0-3b-a800m-main.json --inst GRR --rot auto --repeats 9 --duty 0.25 --seed 0, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-granite-3.0-3b-a800m-dm/private_weight_reference
+2026-11-04T01:58:31Z card: NVIDIA GH200 480GB, GPU-f906335e-195e-fdef-9c45-799849d01f23, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-11-04T01:58:31Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-11-04T01:58:31Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-11-04T01:58:31Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 132.16 W, 700.00 W
+2026-11-04T01:58:31Z G=1 start at lock 1710: pid 22327, tag gh200-20261104T010334Z-dece-lock1710, log r3-g1-lock1710.log
+2026-11-04T01:58:41Z G=1 at lock 1710: R3 named its run directory nvidia_gh200_480gb-decode-granite-3.0-3b-a800m-GRR-granite-3.0-3b-a800m-main-46721d79
+2026-11-04T02:10:52Z G=1 held at lock 1710: R3 exit 0 DONE, cells=432 worst=1710.0 MHz, 741 s, dir nvidia_gh200_480gb-decode-granite-3.0-3b-a800m-GRR-granite-3.0-3b-a800m-main-46721d79
+2026-11-04T02:10:52Z all G held at lock 1710 MHz
+2026-11-04T02:10:53Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-11-04T02:10:53Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 119.71 W, 700.00 W
+2026-11-04T02:10:53Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

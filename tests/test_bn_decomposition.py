@@ -1,0 +1,3209 @@
+"""BLOCK_SIZE_N is the only knob that moves alpha_a and nothing else.
+
+`scripts/bn_decomposition.py` sweeps BLOCK_SIZE_N at fixed BLOCK_M to split the
+fitted alpha into its weight-side and activation-side parts, and -- the half
+that matters more -- to leave a residual that says whether those parts are all
+of it. Most of that argument is arithmetic, so most of this file checks the
+arithmetic rather than the plumbing.
+
+FIVE GROUPS.
+
+  - THE IDENTITY. `H ceil(2F/BN) + F ceil(H/BN) = W/BN` exactly, which is what
+    makes BN a clean lever; `K = W/(2H+3F)`, which is the study's third term
+    derived rather than borrowed from the up-GEMM's reduction dimension; and
+    the exact and linear forms agreeing where phi is small and disagreeing by a
+    stated amount where it is not.
+  - THE ESTIMATOR. Planted worlds go in and come back out to machine precision,
+    through the SAME `fit_ladder` the study publishes, including the fixed-cost
+    correction. A round trip that only exercised this file's own algebra would
+    prove nothing about the number the study reports.
+  - THE PRECONDITION, which is why the last attempt at this sweep was
+    discarded: a compute reference 43.6x too slow is perfectly proportional and
+    passed the old qualification at 0.2% error. Here it is built and the
+    refusal is asserted, along with the two resource refusals that stop the
+    setting being timed at all.
+  - THE REFUSALS. Too few cells produce no fit rather than a fit with no
+    degrees of freedom; a missing bootstrap produces no chi2 rather than zero;
+    a run id that omits a swept knob is the bug that overwrote a whole arm
+    once already.
+  - THE GATES DISCRIMINATE, end to end through `main`: four planted worlds, and
+    the residual gate has to answer differently in the ones with a missing term.
+
+The script is loaded by path, because `scripts/` is not a package.
+"""
+from __future__ import annotations
+
+import importlib.util
+import json
+import math
+import re
+import statistics
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+PUBLISHED = ROOT / "results" / "published"
+H200_G1_N64 = (PUBLISHED / "2026-09-01-nvidia_h200-alpha-surface-s4"
+               / "mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json")
+A100_BN256 = (PUBLISHED / "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
+              / "qwen2-57b-a14b-bf16-r1024-g1-n256-23a131.report.json")
+
+
+def _load(name: str, filename: str):
+    spec = importlib.util.spec_from_file_location(
+        name, ROOT / "scripts" / filename)
+    module = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: `@dataclass` resolves annotations through
+    # `sys.modules[cls.__module__]`, and a module that is not there yet makes
+    # the decorator fail with an AttributeError naming nothing useful.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+BND = _load("bn_decomposition", "bn_decomposition.py")
+SWEEP = BND.SWEEP
+
+from moe.bench import exit_codes  # noqa: E402
+from moe.spec import MODEL_CONFIGS  # noqa: E402
+
+MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
+QWEN = MODEL_CONFIGS["qwen2-57b-a14b"]
+
+
+def args_for(**over):
+    argv = []
+    for k, v in over.items():
+        argv += [f"--{k.replace('_', '-')}", str(v)]
+    return BND.build_parser().parse_args(argv)
+
+
+# --------------------------------------------------------------------------
+# The identity.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("cfg", [MIXTRAL, QWEN])
+@pytest.mark.parametrize("bn", [16, 32, 64, 128, 256])
+def test_activation_reread_is_exactly_w_over_bn(cfg, bn):
+    """`H ceil(2F/BN) + F ceil(H/BN) - H - F = W/BN - H - F`, no approximation.
+
+    The whole reason BLOCK_SIZE_N is a clean lever: the model's E, F and H
+    cancel against the weight term and what is left is the study's own BM/BN
+    ratio. Checked on both models and every BN on the grid, because a BN that
+    did not divide `2F` or `H` would break the cancellation and the fit would
+    be biased by the rounding rather than refused.
+    """
+    w = BND.weight_elements(cfg)
+    assert cfg.hidden_size % bn == 0 and (2 * cfg.intermediate_size) % bn == 0
+    expected = w / bn - cfg.hidden_size - cfg.intermediate_size
+    assert BND.act_reread_elements(cfg, bn) == pytest.approx(expected)
+
+
+def test_act_once_matches_the_sweeps_own_definition():
+    """This file's read-once count must be the sweep's, in elements.
+
+    A divergence would put the decomposition's `d0` and the published
+    `alpha-corrected` column on two different definitions of the same traffic,
+    and both are printed side by side in the report.
+    """
+    assert (BND.act_once_elements(MIXTRAL)
+            == SWEEP.activation_bytes_per_row(MIXTRAL, 1))
+
+
+def test_effective_k_is_derived_not_the_up_gemm_reduction_dim():
+    """`K = W/(2H+3F)`, which is NOT the hidden size the ai_model uses."""
+    k = BND.effective_k(MIXTRAL)
+    assert k == pytest.approx(3 * 14336 * 4096 / (2 * 4096 + 3 * 14336))
+    assert k == pytest.approx(3440.6, abs=0.1)
+    assert abs(k / MIXTRAL.hidden_size - 1) > 0.15
+
+
+def test_exact_and_linear_agree_where_phi_is_small_and_not_where_it_is_not():
+    """(LIN) is (EXA) linearised, so the gap has to grow with phi.
+
+    Stated as a test because the two forms are printed side by side and a
+    reader has to be able to trust that they are one model: at BM=32, BN=256
+    phi is 0.026 and they agree to 3%, at BM=128, BN=32 phi is 0.6 and they
+    differ by more than 20% -- which is the reason the study's two-point
+    alpha_a and this run's are not the same quantity.
+    """
+    kw = {"alpha_b": 0.61, "alpha_a": 0.14}
+    assert BND.phi(MIXTRAL, 32, 256, 0.14) == pytest.approx(0.026, abs=0.002)
+    assert BND.phi(MIXTRAL, 128, 32, 0.14) == pytest.approx(0.60, abs=0.02)
+    near = abs(BND.alpha_fitted_exact(MIXTRAL, 32, 256, **kw)
+               / BND.alpha_fitted_linear(MIXTRAL, 32, 256, **kw) - 1)
+    far = abs(BND.alpha_fitted_exact(MIXTRAL, 128, 32, **kw)
+              / BND.alpha_fitted_linear(MIXTRAL, 128, 32, **kw) - 1)
+    assert near < 0.03
+    assert far > 0.20
+
+
+def test_the_two_readings_of_the_published_pair_disagree_by_thirty(monkeypatch):
+    """The claim the docstring makes about why two points cannot settle this.
+
+    The H200 G=1 mixtral pair is 0.9327 at BN=64 and 0.8235 at BN=256. Read
+    through (LIN) that is alpha_a = 0.146; read through (EXA) it is above 4,
+    which no miss fraction can be. Recomputed here rather than quoted.
+    """
+    u64, u256 = 0.9327, 0.8235
+    lin = (u64 - u256) / (1.0 - 0.25)
+    assert lin == pytest.approx(0.146, abs=0.005)
+
+    def alpha_b_from(u, bn, aa):
+        return u + BND.phi(MIXTRAL, 64, bn, aa) * (u - 1.0)
+
+    # (EXA) needs the two points to imply ONE alpha_b; they do not until alpha_a
+    # is far outside [0, 1].
+    for aa in (0.10, 0.15, 0.5, 1.0):
+        assert alpha_b_from(u64, 64, aa) - alpha_b_from(u256, 256, aa) > 0.0
+
+
+def test_anchored_ratio_reproduces_three_published_facts():
+    """One measured anchor, three consequences it was not fitted to.
+
+    In the world this study's own G=1 ladders imply, the anchored `B/C` has to
+    put BLOCK_M=64 and 32 memory bound at every tread -- the published arms
+    measure 16 and 33 memory treads -- and BLOCK_M=256 compute bound at tread 1,
+    which is what qualified it as the reference in 22 of 24 published arms.
+    """
+    ab, aa = BND.WORLD_LADDER
+    kw = {"alpha_b": ab, "alpha_a": aa}
+    assert BND.anchored_ratio(MIXTRAL, 128, 64, **kw) == pytest.approx(
+        BND.ANCHOR_RATIO)
+    for bm in (32, 64):
+        assert BND.memory_treads(MIXTRAL, bm, 64, ratio=BND.anchored_ratio(
+            MIXTRAL, bm, 64, **kw), treads=8, **kw) == 8
+    assert BND.memory_treads(
+        MIXTRAL, 256, 64, ratio=BND.anchored_ratio(MIXTRAL, 256, 64, **kw),
+        treads=4, **kw) == 0
+
+
+def test_tread_one_is_memory_bound_iff_ratio_exceeds_alpha_not_one():
+    """The sign rule the whole grid design turns on.
+
+    A ladder can have `B/C` below 1 and still be memory bound everywhere it is
+    swept: what decides tread 1 is `ratio > alpha`, not `ratio > 1`. Getting
+    this backwards is what made the first version of the predicted-cell table
+    disagree with 22 published arms.
+    """
+    kw = {"alpha_b": 0.94, "alpha_a": 0.14}
+    a = BND.alpha_fitted_exact(MIXTRAL, 64, 64, **kw)
+    assert BND.memory_treads(MIXTRAL, 64, 64, ratio=a * 1.05, treads=4,
+                             **kw) >= 1
+    assert BND.memory_treads(MIXTRAL, 64, 64, ratio=a * 0.90, treads=4,
+                             **kw) == 0
+
+
+def test_achieved_rho_is_well_below_the_calibrated_ridge():
+    """The gap the predictions are anchored to avoid.
+
+    A calibrated-ridge B/C says the BLOCK_M=256 reference at BN=64 is memory
+    bound. It measurably is not. The reason is that the kernel reaches only
+    38-64% of peak compute while the memory side reaches more of peak
+    bandwidth, so its own rho is far below the ridge.
+    """
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=0.92, alpha_a=0.146)
+    assert 80.0 < rho < 130.0
+    assert rho < 0.75 * BND.SWEEP.RIDGE_BAND[0]
+
+
+# --------------------------------------------------------------------------
+# The estimator: planted in, planted out, through the study's own fit.
+# --------------------------------------------------------------------------
+
+def planted_cells(alpha_b, alpha_a, *, group_m=16, bns=(32, 64, 128),
+                  subjects=(32, 64, 128), noise=0.0, reps=3, extra=None,
+                  ceiling=712.259):
+    args = args_for(capability="9.0", group_m=group_m, reps=reps)
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=alpha_b, alpha_a=alpha_a)
+    bw = BND.PLANT_COMPUTE_FRACTION * ceiling * 1e3 / rho
+    samples = BND.planted_samples(
+        MIXTRAL, args, alpha_b=alpha_b, alpha_a=alpha_a, ridge=rho,
+        bandwidth_gbps=bw, b=2, block_ns=bns, subjects=subjects, extra=extra,
+        noise=noise, seed=0)
+    base = dict(SWEEP.FIXED, num_stages=args.num_stages,
+                num_warps=args.num_warps, GROUP_SIZE_M=group_m,
+                BLOCK_SIZE_K=args.block_k)
+    base.pop("BLOCK_SIZE_N", None)
+    cells, verdicts, spreads = BND.arm_alphas(
+        samples, MIXTRAL, block_ns=bns, subjects=subjects, ridge=rho,
+        bandwidth_gbps=bw, dtype="bf16", base_pinned=base, capability=(9, 0),
+        ceiling_tflops=ceiling, sm_count=132)
+    return cells, verdicts, spreads
+
+
+def test_planted_world_comes_back_to_machine_precision():
+    """The round trip that makes every other number here readable.
+
+    Planted through `planted_ms`, measured through the STUDY's `fit_ladder` and
+    `compute_reference`, decomposed here. Noiseless, so the only thing that can
+    move the answer is an error in the algebra -- and the tolerance is 1e-6,
+    not a percent, because nothing in the chain is approximate.
+    """
+    cells, verdicts, _ = planted_cells(0.61, 0.14)
+    assert all(v.ok for v in verdicts)
+    fit = BND.decompose(cells, MIXTRAL, "EXA")
+    assert fit.alpha_b == pytest.approx(0.61, abs=1e-6)
+    assert fit.alpha_a == pytest.approx(0.14, abs=1e-6)
+    assert fit.dof >= 1
+    assert max(abs(r) for r in fit.residuals) < 1e-6
+
+
+def test_the_raw_three_parameter_fit_also_recovers_the_fixed_cost():
+    """The cross-check form, which fits `delta` instead of removing it.
+
+    Exact on noiseless data -- which is why it is kept and printed -- and
+    unusable on noisy data, which is why it is never gated. Both halves are
+    asserted, the second in the test below.
+    """
+    cells, _, _ = planted_cells(0.61, 0.14)
+    fit = BND.decompose(cells, MIXTRAL, "EXA3")
+    assert fit.alpha_b == pytest.approx(0.61, abs=1e-5)
+    assert fit.alpha_a == pytest.approx(0.14, abs=1e-5)
+    assert fit.delta is not None and fit.delta > 0
+
+
+def test_the_raw_three_parameter_fit_is_the_one_that_blows_up_under_noise():
+    """Why `alpha_upper` is the primary observable and `delta` is not fitted.
+
+    Its third column is `-alpha`, and alpha varies by only about 10% across
+    this whole grid, so the column is nearly the intercept's. The two-parameter
+    fit on the same noisy timings stays near the planted value while the
+    three-parameter one leaves the physical range entirely.
+    """
+    cells, _, _ = planted_cells(0.61, 0.14, noise=0.004, reps=9)
+    two = BND.decompose(cells, MIXTRAL, "EXA")
+    three = BND.decompose(cells, MIXTRAL, "EXA3")
+    assert two.alpha_b == pytest.approx(0.61, abs=0.05)
+    assert abs(three.alpha_b - 0.61) > 4 * abs(two.alpha_b - 0.61)
+
+
+def test_a_missing_term_shows_up_as_residual_and_a_present_one_does_not():
+    """C2's whole content, at the level of the fit rather than the gate."""
+    clean, _, _ = planted_cells(0.61, 0.14, noise=0.002, reps=5)
+    bent, _, _ = planted_cells(0.61, 0.14, noise=0.002, reps=5,
+                               extra=lambda bm, bn: 0.004 * (bm / bn) ** 2)
+    rms_clean = BND.decompose(clean, MIXTRAL, "EXA").rms
+    rms_bent = BND.decompose(bent, MIXTRAL, "EXA").rms
+    assert rms_bent > 10 * rms_clean
+
+
+def test_structure_is_read_only_when_there_is_a_residual_to_read():
+    """A residual with a shape reports a shape; scatter reports scatter.
+
+    The correlation is not asserted against a high bar, and deliberately: with
+    seven cells and two fitted parameters the fit ABSORBS most of a planted
+    quadratic, so the surviving correlation is moderate even when the term is
+    real. What has to hold is the comparison -- a bent world's worst column
+    beats a clean world's -- and that the reading is suppressed entirely when
+    chi2 says the residual is noise, so a correlation over scatter is never
+    printed as a finding.
+    """
+    clean, _, _ = planted_cells(0.61, 0.14, noise=0.001, reps=5)
+    bent, _, _ = planted_cells(0.61, 0.14, noise=0.001, reps=5,
+                               extra=lambda bm, bn: 0.004 * (bm / bn) ** 2)
+    s_bent = BND.structure_of(BND.decompose(bent, MIXTRAL, "EXA"), bent,
+                              MIXTRAL, chi2=99.0)
+    s_clean = BND.structure_of(BND.decompose(clean, MIXTRAL, "EXA"), clean,
+                               MIXTRAL, chi2=99.0)
+    assert s_bent.read and s_clean.read
+    assert abs(s_bent.worst_value) > abs(s_clean.worst_value)
+    quiet = BND.structure_of(BND.decompose(bent, MIXTRAL, "EXA"), bent,
+                             MIXTRAL, chi2=0.2)
+    assert not quiet.read and "not read" in quiet.line()
+
+
+def test_alpha_b_is_invariant_across_block_m_in_a_planted_world():
+    """P3, at the level of the fit: nothing lets a miss fraction see the tile."""
+    cells, _, _ = planted_cells(0.61, 0.14)
+    per_bm = {bm: BND.decompose(cells, MIXTRAL, "EXA", block_m=bm)
+              for bm in (32, 64)}
+    vals = [f.alpha_b for f in per_bm.values()]
+    assert all(v is not None for v in vals)
+    assert max(vals) - min(vals) < 1e-6
+
+
+# --------------------------------------------------------------------------
+# The precondition: a reference that is proportional and wrong.
+# --------------------------------------------------------------------------
+
+def poisoned_arm(factor: float):
+    """A BLOCK_M=256 ladder `factor` times too slow, and perfectly proportional.
+
+    The A100 BLOCK_N=256 arm, reconstructed: 249.765 ms for one tile against
+    5.724 ms for the identical setting in its BN=64 twin, 43.6x, and it
+    qualified at 0.2% mean error because through-origin residual is scale free.
+    """
+    cells = []
+    for n in range(1, 5):
+        cells.append(SWEEP.make_cell(MIXTRAL, n * 256, 256, 1.03 * factor * n,
+                                     sm_count=132, block_n=64))
+    for n in range(1, 9):
+        cells.append(SWEEP.make_cell(MIXTRAL, n * 128, 128, 0.7 + 0.55 * n,
+                                     sm_count=132, block_n=64))
+    return cells
+
+
+def test_a_proportional_reference_at_the_wrong_level_is_refused():
+    """The failure that cost this study 8 published cells, caught here.
+
+    The candidate is proportional to well under a percent -- the shape test
+    passes -- and is refused on LEVEL. The refusal has to SAY level, because a
+    reader who sees "not identifiable" without it blames the tread count, which
+    is exactly what happened.
+    """
+    verdict = BND.qualify_reference(
+        poisoned_arm(43.6), (128, 256), 64, cfg=MIXTRAL, ridge=162.8,
+        bandwidth_gbps=4374.5, b=2,
+        pinned=dict(SWEEP.FIXED, BLOCK_SIZE_N=64), capability=(9, 0),
+        ceiling_tflops=712.259)
+    assert not verdict.ok
+    assert any("TFLOP/s" in w or "roof" in w or "weight read" in w
+               for w in verdict.refusals), verdict.refusals
+
+
+def test_the_same_reference_at_the_right_level_qualifies():
+    """The other half: the level check must not refuse a sound reference."""
+    verdict = BND.qualify_reference(
+        poisoned_arm(1.0), (128, 256), 64, cfg=MIXTRAL, ridge=162.8,
+        bandwidth_gbps=4374.5, b=2,
+        pinned=dict(SWEEP.FIXED, BLOCK_SIZE_N=64), capability=(9, 0),
+        ceiling_tflops=712.259)
+    assert verdict.ok, verdict.refusals
+    assert BND.REFERENCE_LEVEL_FLOOR <= verdict.fraction <= 1.0
+
+
+def test_a_subject_promoted_to_reference_is_refused():
+    """How the published H200 BN=256 arm lost its BLOCK_M=128 cell in silence.
+
+    With BLOCK_M=256 absent, `compute_reference` takes the next-largest ladder
+    -- the primary subject -- which by assumption has no memory branch and
+    reports no alpha. The arm then prints blanks that look like measurements.
+    """
+    # A ladder that is PROPORTIONAL, so the shape test passes and the refusal
+    # below is reached: the point is the rank of the reference, not its fit.
+    cells = [SWEEP.make_cell(MIXTRAL, n * 128, 128, 0.55 * n, sm_count=132,
+                             block_n=256) for n in range(1, 9)]
+    verdict = BND.qualify_reference(
+        cells, (128,), 256, cfg=MIXTRAL, ridge=162.8, bandwidth_gbps=4374.5,
+        b=2, pinned=dict(SWEEP.FIXED, BLOCK_SIZE_N=256), capability=(9, 0),
+        ceiling_tflops=712.259)
+    assert not verdict.ok
+    assert any("not above the largest subject" in w for w in verdict.refusals)
+
+
+def test_cross_bn_refusal_fires_at_the_failure_it_was_built_for():
+    """43.6x refuses; the occupancy-sized spread the grid really has does not."""
+    def v(bn, rate):
+        return BND.RefVerdict(bn, 256, 1.0, 0.1, rate, 712.259,
+                              rate / 712.259, (), "")
+    bad, spread = BND.cross_bn_refusal([v(32, 8.0), v(64, 349.0)])
+    assert bad and spread > 40
+    ok, spread = BND.cross_bn_refusal([v(32, 240.0), v(64, 349.0)])
+    assert not ok and spread == pytest.approx(349.0 / 240.0)
+
+
+def test_block_n_256_is_refused_by_the_register_bill_before_any_timing():
+    """P6, computed from the pinned constants alone and therefore off GPU.
+
+    `BM x BN / (32 num_warps)` accumulator registers per thread: 256 at
+    BM=BN=256 with num_warps=8, against a hardware maximum of 255. The
+    accumulator alone does not fit, so no compute reference exists in that arm
+    on any card.
+    """
+    res = SWEEP.tile_resources(dict(SWEEP.FIXED, BLOCK_SIZE_N=256), 256, 2,
+                              (9, 0))
+    assert res.acc_registers_per_thread == 256
+    assert res.refusal
+    plan = BND.build_plan(args_for(capability="9.0", block_n_list="64,256"),
+                          MIXTRAL, 2, (9, 0), 162.8, 4374.5)
+    assert plan.block_ns == (64,)
+    assert any(k[0] == 256 for k in plan.refusals)
+
+
+def test_an_a100_at_four_stages_loses_the_reference_and_the_run_refuses():
+    """The shared-memory cliff, and the fix named with the number.
+
+    `num_stages (BM BK + BK BN) b` is 192 KiB at BM=256, BN=128 and 4 stages,
+    against sm_80's 163 KiB ceiling; at 3 stages it is 144 and fits. A run that
+    lost that arm would have two BN values and no residual, so it is refused
+    before the pod is paid for rather than reported afterwards.
+    """
+    plan4 = BND.build_plan(args_for(capability="8.0"), MIXTRAL, 2, (8, 0),
+                           145.8, 1799.4)
+    assert 128 not in plan4.block_ns
+    plan3 = BND.build_plan(args_for(capability="8.0", num_stages=3), MIXTRAL,
+                           2, (8, 0), 145.8, 1799.4)
+    assert plan3.block_ns == (32, 64, 128)
+    assert BND.main(["--dry-run", "--capability", "8.0"]) == 2
+    assert BND.main(["--dry-run", "--capability", "8.0",
+                     "--num-stages", "3"]) == 0
+
+
+# --------------------------------------------------------------------------
+# The import, which is an assumption and has to behave like one.
+# --------------------------------------------------------------------------
+
+def _lender(bn, rate=350.0):
+    return BND.RefVerdict(bn, 256, 1.0, 0.1, rate, 712.259, rate / 712.259,
+                          (), "own")
+
+
+def _refused(bn):
+    return BND.RefVerdict(bn, None, None, 0.0, None, 712.259, None,
+                          ("not proportional",), "refused")
+
+
+def test_a_branch_is_lent_only_when_two_arms_agree():
+    target = _refused(32)
+    assert not BND.import_reference(target, [_lender(64)], MIXTRAL, None).ok
+    ok = BND.import_reference(target, [_lender(64), _lender(128)], MIXTRAL,
+                              None)
+    assert ok.ok and ok.imported and ok.block_m == 256
+    assert "assumption" in ok.import_note
+    apart = BND.import_reference(
+        target, [_lender(64, 350.0), _lender(128, 30.0)], MIXTRAL, None)
+    assert not apart.ok
+
+
+def test_an_imported_branch_prints_no_issue_efficiency():
+    """R2's own-clock fraction is a RATE OVER A ROOF, and on a borrowed branch
+    the two halves come from different ladders at different clocks.
+
+    THE DEFECT, 2026-09-09: `import_reference` copies `load_clock_mhz` from the
+    BORROWER ("the slope is borrowed, the operating point this arm ran at is
+    measured and stays its own") while `implied_tflops` comes from the LENDERS'
+    median slope, fitted on the lenders' ladders. `own_clock_fraction` divided
+    the two and `render()` printed the result under the sentence "the roof at
+    this ladder's own N MHz", which described neither half. It did not bite the
+    2026-09-09 corpus because all three arms qualified OWN; it bites the first
+    rerun where an arm borrows a branch, which is what `import_reference` is
+    for."""
+    lenders = [BND.RefVerdict(64, 256, 1.0, 0.1, 350.0, 712.259,
+                              350.0 / 712.259, (), "own",
+                              load_clock_mhz=1620.0,
+                              reference_clock_mhz=1485.0),
+               BND.RefVerdict(128, 256, 1.0, 0.1, 350.0, 712.259,
+                              350.0 / 712.259, (), "own",
+                              load_clock_mhz=1560.0,
+                              reference_clock_mhz=1485.0)]
+    target = BND.RefVerdict(32, None, None, 0.0, None, 712.259, None,
+                            ("not proportional",), "refused",
+                            load_clock_mhz=1725.0, reference_clock_mhz=1485.0)
+    borrowed = BND.import_reference(target, lenders, MIXTRAL, None)
+    assert borrowed.ok and borrowed.imported
+    # The borrower keeps its OWN measured clock, so the roof at it is a fact.
+    assert borrowed.load_clock_mhz == 1725.0
+    assert borrowed.own_clock_tflops is not None
+    # The FRACTION is not: numerator from the lenders, denominator rescaled to
+    # the borrower.
+    assert borrowed.own_clock_fraction is None
+    text = "\n".join(borrowed.render())
+    assert "no issue efficiency" in text
+    assert "            issue efficiency" not in text, (
+        "the point line's own efficiency segment, not the sentence that says "
+        "there is none")
+    assert "the rate above is the lenders'" in text
+    assert "this ladder's own" not in text
+    # An OWN verdict at the same clock still prints one, so the suppression is
+    # about the basis and not about a missing number.
+    own = BND.RefVerdict(32, 256, 1.0, 0.1, 350.0, 712.259, 350.0 / 712.259,
+                         (), "own", load_clock_mhz=1725.0,
+                         reference_clock_mhz=1485.0)
+    assert own.own_clock_fraction is not None
+    assert "issue efficiency" in "\n".join(own.render())
+    # And the V2 gate line says WHICH arm contributed none rather than leaving
+    # it silently out of the list.
+    gate = BND.gate_reference_level([borrowed, *lenders])
+    assert "no issue efficiency for BN=32" in gate.observed
+    assert "IMPORTED slope" in gate.observed
+
+
+def test_the_normalised_spread_refuses_a_different_set_of_arms():
+    """The page prints the two spreads as "the same spread with each arm
+    rescaled to its own clock". They are only that when the two are computed
+    over the SAME arms: `cross_bn_refusal` admits every verdict with a finite
+    rate, this one also needs both clocks, so one arm with an unreadable
+    reference clock made them two different comparisons under one sentence."""
+    def arm(bn, rate, clock):
+        return BND.RefVerdict(bn, 256, 1.0, 0.1, rate, 712.259,
+                              rate / 712.259, (), "own",
+                              load_clock_mhz=clock,
+                              reference_clock_mhz=1485.0)
+    full = [arm(32, 245.0, 1725.0), arm(64, 365.0, 1620.0),
+            arm(128, 478.0, 1560.0)]
+    assert BND.cross_bn_normalised_spread(full) is not None
+    _, raw = BND.cross_bn_refusal(full)
+    assert raw is not None
+    # Drop ONE arm's clock. The raw spread still spans three arms; the
+    # normalised one could only span two, so it is not computed at all.
+    partial = [*full[:2], arm(128, 478.0, None)]
+    assert BND.cross_bn_refusal(partial)[1] is not None
+    assert BND.cross_bn_normalised_spread(partial) is None
+
+
+def test_an_imported_branch_is_labelled_on_every_cell_it_touches():
+    """A cell resting on another arm's ruler must not read like one that is not."""
+    cells, verdicts, _ = planted_cells(0.61, 0.14, group_m=16)
+    imported = [v.block_n for v in verdicts if v.imported]
+    if not imported:
+        pytest.skip("no arm needed an import in this planted world")
+    for c in cells:
+        if c.block_n in imported and c.usable:
+            assert c.basis.startswith("IMPORTED")
+
+
+# --------------------------------------------------------------------------
+# Refusals rather than defaults.
+# --------------------------------------------------------------------------
+
+def test_too_few_cells_produce_no_fit_rather_than_a_fit_with_no_residual():
+    cells, _, _ = planted_cells(0.61, 0.14, bns=(64,), subjects=(64,))
+    fit = BND.decompose(cells, MIXTRAL, "EXA")
+    assert fit.alpha_a is None and fit.alpha_b is None
+    assert "degrees of freedom" in fit.note
+
+
+def test_chi_square_refuses_rather_than_returning_zero():
+    """A residual divided by an assumed floor would answer with the floor."""
+    cells, _, _ = planted_cells(0.61, 0.14)
+    fit = BND.decompose(cells, MIXTRAL, "EXA")
+    empty = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    chi2, why = BND.chi_square(fit, cells, empty, MIXTRAL)
+    assert chi2 is None and "bootstrap" in why
+
+
+def test_a_bootstrap_needs_two_repeats_and_says_so():
+    args = args_for(capability="9.0", reps=1)
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=0.61, alpha_a=0.14)
+    samples = BND.planted_samples(
+        MIXTRAL, args, alpha_b=0.61, alpha_a=0.14, ridge=rho,
+        bandwidth_gbps=3000.0, b=2, block_ns=(64,), subjects=(64,),
+        noise=0.0, seed=0)
+    boot = BND.run_bootstrap(samples, MIXTRAL, [], draws=10, seed=0,
+                             form="EXA", block_ns=(64,), subjects=(64,),
+                             ridge=rho, bandwidth_gbps=3000.0, b=2,
+                             base_pinned=dict(SWEEP.FIXED), capability=(9, 0),
+                             ceiling_tflops=712.259, sm_count=132)
+    assert boot.alpha_a_sd is None and boot.draws == 0
+    assert "two repeats" in boot.note
+
+
+def test_ladder_rows_refuses_a_model_that_cannot_fill_a_tile_stack():
+    """A nudged row is not a full tile stack, and a fit over one is padding."""
+    with pytest.raises(SystemExit) as exc:
+        BND.ladder_rows(MODEL_CONFIGS["deepseek-v2-lite"], 32, 1024, 8)
+    assert "multiple of" in str(exc.value)
+
+
+def test_the_reference_block_size_may_not_also_be_a_subject():
+    assert BND.main(["--tiles", "64,256", "--dry-run", "--capability",
+                     "9.0"]) == 2
+
+
+def test_non_vacuity_fails_when_a_count_is_zero():
+    assert BND.gate_non_vacuity({"cells": 4, "draws": 0}).passed is False
+    assert BND.gate_non_vacuity({"cells": 4, "draws": 9}).passed is True
+
+
+def test_a_gate_that_could_not_run_reads_unknown_and_never_pass():
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    empty = BND.Decomposition("EXA", None, None, None, None, 0, 2, (), (), (),
+                              "nothing")
+    assert BND.gate_sharpness(boot).passed is None
+    assert BND.gate_alpha_a(empty, boot, sharp=False).passed is None
+    assert BND.gate_residual(empty, None, "no fit",
+                             BND.Structure({}, "", None, False)).passed is None
+    assert BND.gate_tempo(empty, boot, 1).passed is None
+    assert BND.gate_physicality(empty, boot).passed is None
+
+
+def test_physicality_fails_when_alpha_b_leaves_the_unit_interval():
+    """A miss fraction above 1 says an extra tile costs more than a full read."""
+    boot = BND.Bootstrap(50, {}, {}, 0.01, 0.01, None, {}, "x")
+    over = BND.Decomposition("EXA", None, 1.16, 0.14, None, 7, 2, (0.0,),
+                             ("a",), (1.0,), "")
+    inside = BND.Decomposition("EXA", None, 0.61, 0.14, None, 7, 2, (0.0,),
+                               ("a",), (1.0,), "")
+    assert BND.gate_physicality(over, boot).passed is False
+    assert BND.gate_physicality(inside, boot).passed is True
+
+
+# --------------------------------------------------------------------------
+# Identity: the run id and the cache key.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("knob,value", [
+    ("model", "qwen2-57b-a14b"), ("dtype", "fp16"), ("block_n_list", "32,64"),
+    ("tiles", "64,128"), ("r_max", 512), ("max_treads", 6), ("reps", 7),
+    ("group_m", 16), ("block_k", 32), ("num_stages", 3), ("num_warps", 4),
+    ("iters", 25), ("warmup", 10.0), ("cell_budget_ms", 200.0), ("seed", 1),
+    # New to the key on 2026-09-02, and all three set the measured
+    # milliseconds: the warmup is now a DURATION, `--trials` is the number of
+    # queue-deep trials the percentiles are taken over, and `--no-l2-flush`
+    # decides whether every timed iteration starts with a cold L2. The roof was
+    # measured flushed, so a flushed and an unflushed sweep must never share a
+    # directory.
+    ("trials", 5), ("plant_noise", 0.02),
+])
+def test_every_swept_knob_changes_the_run_id(knob, value):
+    """The bug that overwrote a whole arm, once per omitted field.
+
+    A run id that omits a swept knob makes the second run resume into the
+    first's directory, find every timing present, skip all of them, and print
+    the first run's numbers under the second's heading. Nothing looks wrong,
+    because the report renders the arguments from argv rather than from the
+    timings it read.
+    """
+    base = args_for(capability="9.0")
+    other = args_for(capability="9.0", **{knob: value})
+    assert (BND.default_run_id(base, "h200")
+            != BND.default_run_id(other, "h200"))
+
+
+def test_the_card_is_in_the_run_id():
+    """Two cards share a network volume, and every verdict is per-card scored."""
+    a = args_for(capability="9.0")
+    assert BND.default_run_id(a, "a100") != BND.default_run_id(a, "h200")
+
+
+def test_the_triton_cache_key_carries_block_n(tmp_path, monkeypatch):
+    """The sweep's key is BLOCK_M alone, which would collide across BN arms.
+
+    Two BN arms at one BM would share a directory, the second would find it
+    warm, compile nothing, and be scored by V1 as a broken override -- the same
+    class of collision as a run id that omits a swept knob, one level down.
+    """
+    monkeypatch.setenv("TRITON_CACHE_DIR", "")
+    first = BND.arm_cache(tmp_path, 32, 128)
+    second = BND.arm_cache(tmp_path, 64, 128)
+    assert first != second
+    assert first.is_dir() and second.is_dir()
+
+
+def test_results_land_under_a_path_git_reports_on(tmp_path):
+    """`results/*` is ignored except `results/published/`, and this repo has
+    already lost every published figure to a pattern nobody checked."""
+    said = BND.git_visibility(ROOT / "results" / "bn_decomposition")
+    assert "IGNORED" in said or "unverified" in said
+
+
+# --------------------------------------------------------------------------
+# End to end: the gates discriminate.
+# --------------------------------------------------------------------------
+
+def test_self_test_passes_where_the_design_has_power(capsys):
+    """Four planted worlds, and the residual gate answering differently.
+
+    This is the claim that C2 can settle anything: a gate that says the same in
+    a world with a missing term and a world without one is not a test.
+    """
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "9", "--draws", "40", "--plant-noise", "0.004",
+                     "--fail-on-gate"])
+    out = capsys.readouterr().out
+    assert "S2 the residual gate discriminates" in out
+    assert code == 0, out[-3000:]
+
+
+def test_the_design_power_gate_fails_at_the_swizzle_that_cannot_resolve(capsys):
+    """S4 is the reason this script has a recommended --group-m at all.
+
+    At GROUP_SIZE_M=1 the corpus puts alpha near 0.93, the response moves with
+    alpha_a as (1 - alpha_b), and the lever is a fraction of its size at 16. The
+    run still measures alpha_b; it cannot answer P1.
+
+    THE CODE IS 3 AND NOT 1. A VALIDITY gate that did not pass means nothing on
+    the page may be quoted, which is INVALID in `moe.bench.exit_codes`'s table;
+    1 is CLAIM_FAIL, a measured run whose pre-registered claim was refuted, and
+    that is a RESULT rather than a broken instrument. This file used to return 1
+    for both, which is the two-integers-two-meanings defect the shared table is
+    named against.
+    """
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "1",
+                     "--reps", "9", "--draws", "40", "--plant-noise", "0.004",
+                     "--fail-on-gate"])
+    out = capsys.readouterr().out
+    assert code == exit_codes.INVALID
+    assert "S4 the design resolves alpha_a" in out
+    assert "[FAIL] VALIDITY S4" in out
+    assert "RESULT: VALIDITY S4 FAIL" in out
+
+
+def test_dry_run_needs_no_gpu_and_prints_the_predictions(capsys, no_cuda):
+    assert BND.main(["--dry-run", "--capability", "9.0"]) == 0
+    out = capsys.readouterr().out
+    assert "Predictions, registered before anything is measured" in out
+    assert "PREDICTED CELLS" in out
+    assert "TILE RESOURCE BILL" in out
+    # The ridge a laptop uses is a HYPOTHESIS and has to say so, because seven
+    # published A100 reports were scored against an H200 number.
+    assert "HYPOTHESIS" in out
+
+
+def test_the_published_arm_this_run_is_anchored_to_still_says_what_it_said():
+    """The anchor is a measurement in a committed file, so pin the file.
+
+    If the corpus is re-published with different numbers, the predictions in
+    this script are stale and this test is where that surfaces.
+    """
+    doc = json.loads(H200_G1_N64.read_text())
+    assert doc["fixed"]["BLOCK_SIZE_N"] == 64
+    assert doc["fixed"]["GROUP_SIZE_M"] == 1
+    assert doc["compute_reference"]["block_m"] == 256
+    fit64 = doc["ladder"]["64"]
+    assert fit64["memory_points"] == 16
+    assert fit64["alpha"] == pytest.approx(0.9475, abs=0.005)
+    assert BND.PLANTED_ALPHA_B[1] == pytest.approx(
+        fit64["alpha"] + BND.phi(MIXTRAL, 64, 64, 0.14) * (fit64["alpha"] - 1),
+        abs=0.01)
+
+
+def test_the_corrupt_published_reference_is_the_one_the_level_gate_names():
+    """43.6x, from the committed file rather than from memory."""
+    doc = json.loads(A100_BN256.read_text())
+    slope = doc["compute_reference"]["slope_per_tile"]
+    assert doc["compute_reference"]["mean_rel_err"] < 0.01     # proportional
+    rate = BND.implied_tflops(QWEN, 256, slope)
+    assert rate / 262.371 < BND.REFERENCE_LEVEL_FLOOR          # and refused
+    assert math.isfinite(rate)
+
+
+def test_the_payload_is_json_and_keeps_the_import_provenance():
+    """report.json is written after the metered half, so it must not throw.
+
+    And it has to carry what the printout carries: an arm on a borrowed compute
+    branch is a different measurement from one on its own, and a reader working
+    from the file alone must be able to tell.
+    """
+    args = args_for(capability="9.0", group_m=16, reps=3)
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=0.61, alpha_a=0.14)
+    bw = BND.PLANT_COMPUTE_FRACTION * 712.259 * 1e3 / rho
+    samples = BND.planted_samples(
+        MIXTRAL, args, alpha_b=0.61, alpha_a=0.14, ridge=rho,
+        bandwidth_gbps=bw, b=2, block_ns=(32, 64, 128),
+        subjects=(32, 64, 128), noise=0.002, seed=0)
+    base = dict(SWEEP.FIXED, num_stages=args.num_stages,
+                num_warps=args.num_warps, GROUP_SIZE_M=16,
+                BLOCK_SIZE_K=args.block_k)
+    base.pop("BLOCK_SIZE_N", None)
+    compiles = {(bn, bm): 1 for bn in (32, 64, 128)
+                for bm in (32, 64, 128, 256)}
+    _, gates, payload = BND.analyse_run(
+        samples, MIXTRAL, args_for(capability="9.0", group_m=16, reps=3,
+                                   draws=20),
+        ridge=rho, bandwidth_gbps=bw, b=2, ceiling_tflops=712.259,
+        ceiling_source="planted", capability=(9, 0), base_pinned=base,
+        compiles=compiles, executed=dict(compiles), sm_count=132,
+        block_ns=(32, 64, 128), subjects=(32, 64, 128))
+    text = json.dumps(payload, indent=2, default=str)
+    assert len(text) > 2000
+    assert {a["basis"] for a in payload["arms"]} <= {"OWN", "IMPORTED"}
+    assert any(g.kind == "VALIDITY" for g in gates)
+    assert payload["fits"]["pooled_exact"]["alpha_a"] is not None
+
+
+# --------------------------------------------------------------------------
+# THE POWER GUARD ON C2 (audit A9). A gate whose two outcomes cannot both occur
+# is not a gate, and at GROUP_SIZE_M=1 this one's cannot: the planted
+# missing-term world passes it with the same verdict the true world gets.
+# Every test here plants BOTH branches -- the world where the guard fires and
+# the world where it does not -- because a guard that only ever fires is as
+# uninformative as the gate it was written to protect.
+# --------------------------------------------------------------------------
+
+#: The subject heights every planted world below is generated over. IT IS THE
+#: SCRIPT'S OWN AND NOT A COPY: this helper pinned (32, 64, 128) until
+#: 2026-09-10, and on the day BLOCK_M=16 joined the sweep that would have left
+#: fourteen tests scoring a design the pod no longer runs while their docstrings
+#: still called it the design. The numbers they quote move with it, and the ones
+#: that are quoted are re-derived in the docstring that quotes them.
+PLANTED_SUBJECTS = BND.SUBJECT_BLOCK_M
+PLANTED_BLOCK_NS = BND.DEFAULT_BLOCK_N
+
+
+def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
+                 extra=None, probe=True, plant_noise=None):
+    """One planted world scored the way a real run is scored, probe and all."""
+    args = args_for(capability="9.0", group_m=group_m, reps=reps, draws=draws,
+                    power_draws=draws)
+    alpha_b = BND.planted_alpha_b(group_m)
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=alpha_b, alpha_a=alpha_a)
+    bw = BND.PLANT_COMPUTE_FRACTION * 712.259 * 1e3 / rho
+    samples = BND.planted_samples(
+        MIXTRAL, args, alpha_b=alpha_b, alpha_a=alpha_a, ridge=rho,
+        bandwidth_gbps=bw, b=2, block_ns=PLANTED_BLOCK_NS,
+        subjects=PLANTED_SUBJECTS, extra=extra, noise=noise, seed=0)
+    base = dict(SWEEP.FIXED, num_stages=args.num_stages,
+                num_warps=args.num_warps, GROUP_SIZE_M=group_m,
+                BLOCK_SIZE_K=args.block_k)
+    base.pop("BLOCK_SIZE_N", None)
+    compiles = {(bn, bm): 1 for bn in PLANTED_BLOCK_NS
+                for bm in (*PLANTED_SUBJECTS, BND.REFERENCE_BLOCK_M)}
+    lines, gates, payload = BND.analyse_run(
+        samples, MIXTRAL, args, ridge=rho, bandwidth_gbps=bw, b=2,
+        ceiling_tflops=712.259, ceiling_source="planted", capability=(9, 0),
+        base_pinned=base, compiles=compiles, executed=dict(compiles),
+        sm_count=132, block_ns=PLANTED_BLOCK_NS, subjects=PLANTED_SUBJECTS,
+        probe_c2_power=probe, plant_noise=plant_noise)
+    return lines, {g.token: g for g in gates}, payload
+
+
+def test_c2_reads_unknown_where_the_missing_term_world_would_pass():
+    """A9, the blocking finding, in the world it was found in.
+
+    At GROUP_SIZE_M=1 the planted MISSING world PASSES C2, the same verdict
+    TRUTH gets, so a C2 PASS at that swizzle could not have been a FAIL. The
+    gate must say UNKNOWN and say why, and UNKNOWN counts against it.
+
+    THE CHI2 IS NOT QUOTED HERE ANY MORE. This docstring read "chi2 1.78" and
+    that number was the THREE-height design at these settings; the helper's
+    subject set became the script's own on 2026-09-10 and the same world now
+    comes back at 1.09. A number in a docstring that moves with a constant the
+    docstring does not name is the drift this file hunts, so the assertion below
+    reads the probe's own verdict and the figure lives in `c2_power` where it is
+    recomputed.
+    """
+    lines, gates, payload = _planted_run(1, noise=0.008)
+    c2 = gates["C2"]
+    assert c2.passed is None
+    assert "the planted missing-term world passes at this swizzle / noise" \
+        in c2.observed
+    assert c2.result_line().startswith("RESULT: CLAIM C2 UNKNOWN")
+    assert payload["c2_power"]["discriminates"] is False
+    # UNKNOWN is not a soft PASS: the arm cannot exit DONE on it.
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        != exit_codes.DONE
+
+
+def test_c2_keeps_its_own_verdict_where_the_probe_discriminates():
+    """The other branch, and the reason this is a guard and not a muzzle.
+
+    At GROUP_SIZE_M=16 with a quiet pod the missing-term world FAILS C2, so the
+    gate has power and its own verdict stands. A guard that fired everywhere
+    would have made C2 unquotable at every pinning, which is not a fix.
+    """
+    _, gates, payload = _planted_run(16, noise=0.004)
+    assert payload["c2_power"]["discriminates"] is True
+    assert gates["C2"].passed is True
+    assert gates["C2"].result_line().startswith("RESULT: CLAIM C2 PASS")
+
+
+def test_the_guarded_gate_can_still_fail_on_a_real_missing_term():
+    """PASS, FAIL and UNKNOWN are all reachable, which is the whole claim.
+
+    Where the probe discriminates AND the data carry the missing term, C2 must
+    FAIL: the guard decides whether the verdict is readable, never what it is.
+    """
+    _, gates, payload = _planted_run(16, noise=0.004, extra=BND.missing_term)
+    assert payload["c2_power"]["discriminates"] is True
+    assert gates["C2"].passed is False
+    assert gates["C2"].result_line().startswith("RESULT: CLAIM C2 FAIL")
+
+
+def test_the_probe_plants_at_the_runs_own_measured_spread():
+    """"At the measured spread" is the half that makes the guard about THIS pod.
+
+    The audit's second finding was that the driver self-tested at 0.8% while the
+    published H200 spread reaches 1.82% and S4 fails above about 1%. A probe
+    that plants at a constant is a probe about some other pod.
+    """
+    _, _, payload = _planted_run(1, noise=0.017)
+    measured = payload["measured_spread"]
+    assert measured == pytest.approx(0.017, rel=0.35)
+    assert payload["c2_power"]["noise"] == pytest.approx(measured)
+    assert "this run's own repeats" in payload["c2_power"]["noise_source"]
+
+
+def test_an_explicit_plant_noise_overrides_the_measured_one_and_says_so():
+    """The operator may ask a what-if, and the report must name whose number it is."""
+    _, _, payload = _planted_run(1, noise=0.008, plant_noise=0.02)
+    assert payload["c2_power"]["noise"] == pytest.approx(0.02)
+    assert payload["c2_power"]["noise_source"] == "given on the command line"
+
+
+def test_a_probe_that_could_not_run_is_unknown_and_never_pass():
+    """The FAIL branch of the probe itself: a crash establishes nothing.
+
+    `C2Power.ran=False` is what a probe that raised leaves behind, and a gate
+    guarded by a probe that did not run has not been shown to have power. It
+    must not fall through to the unguarded verdict.
+    """
+    dead = BND.C2Power(False, 1, 9, 0.008, "this run's own repeats", 40,
+                       note="RuntimeError: planted grid collapsed")
+    assert dead.discriminates is None
+    struct = BND.Structure({}, "quadratic in BM/BN", None, False)
+    fit = BND.Decomposition("EXA", None, 0.94, 0.14, None, 7, 2,
+                            (0.01,) * 7, ("BN=32 BM=32",) * 7, (0.5,) * 7,
+                            "planted")
+    gate = BND.gate_residual(fit, 0.5, "", struct, dead)
+    assert gate.passed is None
+    assert "could not run" in gate.observed
+    unguarded = BND.gate_residual(fit, 0.5, "", struct, None)
+    assert unguarded.passed is True          # the branch the guard overrides
+
+
+def test_the_self_test_names_the_power_gate_and_exits_nonzero_at_g1(capsys):
+    """The audit's own acceptance command, verbatim.
+
+    `--self-test --capability 9.0 --group-m 1 --reps 17 --plant-noise 0.018
+    --fail-on-gate` must exit non-zero, and S5 must be the gate that says why:
+    the arm the driver schedules at this swizzle cannot establish C2.
+    """
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "1",
+                     "--reps", "17", "--plant-noise", "0.018", "--draws", "40",
+                     "--power-draws", "40", "--fail-on-gate"])
+    out = capsys.readouterr().out
+    assert code != 0
+    assert code == exit_codes.INVALID
+    assert "RESULT: VALIDITY S5 FAIL" in out
+
+
+def test_the_power_gate_passes_where_the_design_has_power(capsys):
+    """S5's other branch, so the gate is a gate."""
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "9", "--draws", "40", "--power-draws", "40",
+                     "--plant-noise", "0.004", "--fail-on-gate"])
+    out = capsys.readouterr().out
+    assert code == exit_codes.DONE
+    assert "RESULT: VALIDITY S5 PASS" in out
+
+
+# --------------------------------------------------------------------------
+# THE DESIGN-POWER LINE IS COMPUTED (audit A9's third clause, and B14).
+# --------------------------------------------------------------------------
+
+def test_no_spread_is_quoted_as_a_literal_in_what_the_run_prints(capsys):
+    """The string that was wrong: "sd 0.11-0.13 ... at any rep count tried".
+
+    The computed value at those settings was 0.176. A number about the
+    estimator's precision that is typed rather than measured is the shape this
+    whole slice exists to remove. Asserted on what the run PRINTS rather than on
+    the source, because the source still names the retired string in the
+    sentence that disowns it, and a reader who deletes that history is the next
+    person to reintroduce it.
+    """
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "1",
+              "--reps", "17", "--power-draws", "40", "--plant-noise", "0.018"])
+    out = capsys.readouterr().out
+    assert "0.11-0.13" not in out
+    assert "at any rep count tried" not in out
+    assert "sd(alpha_a) = 0." in out           # computed, and printed
+
+
+def test_the_plan_prints_a_computed_spread_and_an_mde(capsys):
+    """--dry-run must say what this pinning can resolve, from a bootstrap.
+
+    B14: no arm stated an MDE, and a gate threshold that is a prior rather than
+    a noise-derived limit cannot be argued with. The line names its noise
+    assumption in the same sentence, because an MDE without one is a limit
+    presented as a fact.
+    """
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "9", "--power-draws", "40",
+                     "--plant-noise", "0.008"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "planted TRUTH world at GROUP_SIZE_M=16" in out
+    assert "MDE (alpha_a" in out
+    assert "Assumption: lognormal spread 0.80%" in out
+    assert "cross-arm floor" in out
+
+
+def test_the_design_power_verdict_moves_with_the_swizzle():
+    """The claim the plan makes: G=1 cannot resolve alpha_a and G=16 can.
+
+    Both branches, on planted worlds, so "the lever is the swizzle" is measured
+    here rather than asserted.
+    """
+    common = dict(b=2, ceiling_tflops=712.259, capability=(9, 0),
+                  block_ns=(32, 64, 128), subjects=(32, 64, 128), sm_count=132,
+                  noise=0.004, noise_source="planted", draws=40)
+    hard = BND.design_power(MIXTRAL, args_for(capability="9.0", group_m=1,
+                                              reps=9, draws=40), **common)
+    easy = BND.design_power(MIXTRAL, args_for(capability="9.0", group_m=16,
+                                              reps=9, draws=40), **common)
+    assert hard.resolves is False
+    assert easy.resolves is True
+    assert hard.alpha_a_sd > easy.alpha_a_sd
+
+
+def test_plant_noise_resolves_to_a_measurement_before_a_constant():
+    """`--plant-noise` used to default to 0.008, the middle of the published range.
+
+    S4 passes at 0.008 and fails at 0.015-0.020, so that default decided whether
+    the experiment looked worth paying for while describing a pod quieter than
+    half the corpus. All three branches, in order.
+    """
+    assert BND.resolve_plant_noise(0.02, 0.009, "measured") == (
+        0.02, "given on the command line")
+    assert BND.resolve_plant_noise(None, 0.009, "measured") == (0.009, "measured")
+    value, source = BND.resolve_plant_noise(None, None, "no repeats")
+    assert value == BND.PLANT_NOISE_FALLBACK
+    assert "worst published" in source
+    # And the fallback is the WORST published spread, not the middle one: the
+    # middle is the number the audit found S4 being scored at.
+    assert BND.PLANT_NOISE_FALLBACK > 0.008
+
+
+def test_an_mde_needs_a_spread_and_says_so_when_there_is_none():
+    """A limit computed from no spread is not zero, it is unknown.
+
+    Zero is the value that would make every effect look resolvable, which is why
+    `mde_one_sample` raises and `mde_line` prints UNKNOWN instead.
+    """
+    with pytest.raises(ValueError):
+        BND.mde_one_sample(0.0)
+    said = BND.mde_line(None, what="alpha_a", assumption="none")
+    assert "UNKNOWN" in said and "0.0000" not in said
+    # The convention is the study's own, not a fresh z value typed in here.
+    assert BND.mde_one_sample(0.01) == pytest.approx(
+        (BND.POWER.normal_ppf(0.975) + BND.POWER.normal_ppf(0.80)) * 0.01)
+
+
+# --------------------------------------------------------------------------
+# THE alpha_a BAND'S PROVENANCE (audit finding 32). The band cited four A100
+# two-point slopes that exist in no file under results/published.
+# --------------------------------------------------------------------------
+
+def test_the_phantom_a100_slopes_are_no_longer_the_bands_basis(capsys):
+    """0.106, 0.102, 0.129, 0.119 -- four numbers no committed file contains.
+
+    They were P1's whole stated basis. P1 must now cite the two committed
+    reports instead, and none of the four may appear in the basis it prints. The
+    source still names them once, in the paragraph that says they are in no
+    file, which is the history worth keeping.
+
+    THE WHOLE PAGE IS BACK IN SCOPE, WITH A BOUNDARY. On 2026-09-10 this test
+    was narrowed to P1's block because it had matched the four as bare
+    substrings against the WHOLE page and a planted bootstrap spread of 0.1293
+    contains "0.129": a real false positive, reproduced at that commit, and
+    printing five realisations instead of one made the collision five times
+    likelier. Narrowing threw away the coverage that mattered, since the whole
+    page is where a phantom would actually come back. The match is now on a
+    NUMBER and not on a substring, with no digit on either side, which costs
+    nothing and keeps the page. 0.1293 no longer matches 0.129; a quoted 0.129
+    still does.
+    """
+    BND.main(["--dry-run", "--capability", "9.0", "--power-draws", "20",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    start = out.index("P1  alpha_a")
+    p1_block = out[start:out.index("P2 ", start)]
+    provenance = "\n".join(BND.band_provenance_lines())
+    for phantom in ("0.106", "0.102", "0.129", "0.119"):
+        boundary = re.compile(r"(?<![\d.])" + re.escape(phantom) + r"(?![\d])")
+        assert not boundary.search(out), f"{phantom} is back on the plan page"
+        assert phantom not in p1_block, f"{phantom} is back in P1's basis"
+        assert phantom not in provenance, f"{phantom} is back in the band's basis"
+    assert "d66ad3.report.json" in p1_block and "16cc16.report.json" in p1_block
+
+
+def test_the_band_is_what_the_committed_bn_pair_actually_says():
+    """The pre-registered literal, re-derived from the two files it came from.
+
+    The repo contains exactly one pair of arms differing in BLOCK_SIZE_N and
+    nothing else, and it gives two slopes that disagree: 0.29 at BM=32 and 0.15
+    at BM=64, with two-point sds of 0.086 and 0.043. The band covers both,
+    widened by their own sds.
+    """
+    points = BND.published_two_point_alpha_a()
+    by_bm = {p.block_m: p for p in points}
+    assert set(by_bm) == {32, 64}
+    assert by_bm[32].slope == pytest.approx(0.286, abs=0.01)
+    assert by_bm[64].slope == pytest.approx(0.146, abs=0.01)
+    assert by_bm[32].sd == pytest.approx(0.086, abs=0.005)
+    assert by_bm[64].sd == pytest.approx(0.043, abs=0.005)
+    assert BND.alpha_a_band_from_published(points) == BND.ALPHA_A_BAND
+    # The retired band excluded the larger of its own two inputs, which is how
+    # a measured 0.28 would have printed as "FAIL high".
+    assert not (0.10 <= by_bm[32].slope <= 0.15)
+
+
+def test_the_band_check_refuses_when_the_literal_no_longer_reads_back():
+    """The FAIL branch: a literal that outlives its source is the whole finding."""
+    with pytest.raises(BND.CorpusMissing):
+        BND.check_alpha_a_band((0.10, 0.15))
+    points, lines = BND.check_alpha_a_band()
+    assert points and any("wide against input sds" in line for line in lines)
+
+
+def test_a_pair_that_differs_in_more_than_block_n_is_refused():
+    """Two arms differing in the swizzle too would give a swizzle slope."""
+    pair = (PUBLISHED / "2026-09-01-nvidia_h200-alpha-surface-s4"
+            / "mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json",
+            PUBLISHED / "2026-09-01-nvidia_h200-alpha-surface-s4"
+            / "mixtral-8x7b-bf16-r1024-g16-n64-69f35a.report.json")
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_two_point_alpha_a(pair)
+
+
+def test_a_missing_corpus_file_refuses_rather_than_defaulting(tmp_path):
+    """A band whose provenance cannot be read is a band that cannot be checked."""
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_two_point_alpha_a((tmp_path / "a.json", tmp_path / "b.json"))
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_prior_sd(tmp_path / "NOISE_FLOOR.json")
+
+
+def test_the_band_provenance_and_its_width_reach_the_plan(capsys):
+    """P1 must carry where its band came from and how wide it is against its inputs."""
+    assert BND.main(["--dry-run", "--capability", "9.0", "--power-draws",
+                     "20", "--plant-noise", "0.008"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "mixtral-8x7b-bf16-r1024-g1-n256" in out
+    assert "wide against input sds" in out
+
+
+def test_the_sharpness_ceiling_beats_the_two_point_slope_it_replaces():
+    """0.025 is no longer "half the band width", and the number did not move.
+
+    Widening the band would have carried a half-the-width ceiling to 0.14 and
+    made V6 pass on an estimator six times looser. The bar is instead the
+    sharpest two-point sd in the corpus, which is what a three-point fit has to
+    beat to have replaced anything.
+    """
+    sharpest = min(p.sd for p in BND.published_two_point_alpha_a())
+    assert BND.ALPHA_A_SD_CEILING < sharpest
+    assert BND.ALPHA_A_SD_CEILING < (BND.ALPHA_A_BAND[1]
+                                     - BND.ALPHA_A_BAND[0]) / 2
+
+
+# --------------------------------------------------------------------------
+# THE INSTRUMENT AND ITS COLUMNS (audit A7), AND PROVENANCE (A5).
+# --------------------------------------------------------------------------
+
+def test_nothing_here_calls_the_retired_instrument():
+    """`time_call` timed with per-iteration synchronises and no L2 flush.
+
+    The roof every alpha here is scored against was measured queue-deep, so the
+    two were never comparable: 0.18-0.30 ms of host enqueue inside the measured
+    interval, a per-card bias of 8-16% in the fitted alpha at the smallest
+    cells. The symbol still exists over in the sweep and refuses when called,
+    which is why probing for it would have kept passing while meaning nothing.
+    """
+    source = (ROOT / "scripts" / "bn_decomposition.py").read_text()
+    assert "SWEEP.time_call" not in source.replace(
+        "The private `SWEEP.time_call` this used", "")
+    assert "timing.time_kernel(" in source
+
+
+def test_a_timed_row_keeps_every_instrument_column_through_the_csv(tmp_path):
+    """cells.csv is what outlives the pod, so the instrument travels on the row.
+
+    A row that carries `instrument` can be excluded by a later reader; a row
+    that does not cannot, and the rows this file wrote before 2026-09-02 came
+    from an instrument that is not comparable with the roof.
+    """
+    prov = BND.PV.provenance_block(instrument="queue-deep/test", iters=None)
+    row = BND.Sample(64, 128, 3, 384, 1536, 1, 1.25, 1.2, 0.01, 512,
+                     instrument="queue-deep/test", warmup_ms=300.0, trials=3,
+                     l2_flush=True, sm_clock_load_mhz=1755.0,
+                     clock_level_ok=True, clock_drift_ok=False,
+                     host_bound=False)
+    path = tmp_path / "cells.csv"
+    BND.append_sample(path, row, prov)
+    header = path.read_text().splitlines()[0].split(",")
+    for column in ("instrument", "warmup_ms", "iters", "trials",
+                   "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
+                   "l2_flush"):
+        assert column in header
+    assert "prov_git_sha" in header and "prov_gpu_name" in header
+    _, back = BND.read_samples(path)
+    assert back[0].instrument == "queue-deep/test"
+    assert back[0].warmup_ms == 300.0 and back[0].trials == 3
+    assert back[0].clock_level_ok is True and back[0].clock_drift_ok is False
+    assert back[0].l2_flush is True
+
+
+def test_a_row_from_before_the_instrument_reads_back_as_absent(tmp_path):
+    """Not as a default. Those rows were timed by the retired loop.
+
+    "Flushed" and "level ok" are claims, and a resumed directory whose older
+    half makes them by omission is worse than one that says nothing.
+    """
+    path = tmp_path / "old.csv"
+    path.write_text("block_n,block_m,tiles,rows_per_expert,tokens,rep,ms_p50,"
+                    "ms_min,ms_stdev,iters,status,detail\n"
+                    "64,128,3,384,1536,1,1.25,1.2,0.01,50,ok,\n")
+    _, back = BND.read_samples(path)
+    assert back[0].instrument == ""
+    assert back[0].clock_level_ok is None and back[0].clock_drift_ok is None
+    assert back[0].l2_flush is False
+
+
+def test_a_planted_row_never_claims_the_real_instrument():
+    """"Not measured" is a value in the column, never an absence.
+
+    `instrument` is one of the five keys a publish gate reads at the top of a
+    report, and a planted row carrying TIMING_BASIS would satisfy that gate
+    while describing an instrument no process ran.
+    """
+    args = args_for(capability="9.0", group_m=16, reps=2)
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=0.61, alpha_a=0.14)
+    samples = BND.planted_samples(
+        MIXTRAL, args, alpha_b=0.61, alpha_a=0.14, ridge=rho,
+        bandwidth_gbps=BND.PLANT_COMPUTE_FRACTION * 712.259 * 1e3 / rho, b=2,
+        block_ns=(64,), subjects=(64,), noise=0.002, seed=0)
+    assert {s.instrument for s in samples} == {SWEEP.SYNTHETIC_INSTRUMENT}
+    assert SWEEP.SYNTHETIC_INSTRUMENT != BND.SWEEP.timing_basis()
+
+
+def test_the_run_id_is_the_shared_one_and_refuses_a_missing_card():
+    """Three scripts each re-implemented this rule and each left a knob out."""
+    args = args_for(capability="9.0")
+    assert BND.default_run_id(args, "NVIDIA H200").startswith("nvidia_h200-")
+    with pytest.raises(BND.PV.NoCard):
+        BND.default_run_id(args, "")
+
+
+def test_the_resolved_plant_noise_never_enters_the_run_id():
+    """It is derived from the cells the id names, so it would change mid-sweep.
+
+    An id that depends on its own directory's contents is the resume collision
+    this study has already paid for, arriving from the other direction.
+    """
+    args = args_for(capability="9.0")
+    assert args.plant_noise is None
+    # Two runs that will RESOLVE different noises -- one on a quiet pod, one on
+    # a noisy one -- must still share a directory, or a resume would re-measure
+    # every cell it already had.
+    assert BND.default_run_id(args, "h200") == BND.default_run_id(
+        args_for(capability="9.0"), "h200")
+    # And the operator's own choice is a different experiment's directory.
+    assert BND.default_run_id(args, "h200") != BND.default_run_id(
+        args_for(capability="9.0", plant_noise=0.018), "h200")
+
+
+def test_the_plan_prices_what_the_instrument_charges():
+    """The old estimate multiplied a per-call time by a call count.
+
+    `time_kernel` warms for a DURATION and runs `--trials` trials each sized to
+    `--cell-budget-ms` of kernel time, so a timing costs the same wall clock
+    whatever the kernel's own duration is, and the old one under-priced every
+    fast cell.
+    """
+    args = args_for(capability="9.0", reps=3, trials=2, warmup=100.0,
+                    cell_budget_ms=200.0)
+    plan = BND.build_plan(args, MIXTRAL, 2, (9, 0), 160.3, 4374.5)
+    per_timing_ms = 100.0 + 2 * 200.0
+    assert plan.seconds == pytest.approx(
+        plan.timings * per_timing_ms / 1e3)
+
+
+# --------------------------------------------------------------------------
+# THE EXIT CODES AND THE ONE GREPPABLE LINE (audit A4/A5's contract).
+# --------------------------------------------------------------------------
+
+def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does(capsys):
+    """The driver's summary once grepped free text and matched prose 18 times.
+
+    So: one RESULT line per scored gate, none from anything that is not one, and
+    the code the process returns recomputable from the log it printed.
+    """
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "9", "--draws", "40", "--power-draws", "40",
+                     "--plant-noise", "0.004", "--fail-on-gate"])
+    out = capsys.readouterr().out
+    parsed = exit_codes.parse_result_lines(out)
+    assert [r.name for r in parsed] == ["S1", "S2", "S3", "S4", "S5"]
+    assert out.count("RESULT: ") == len(parsed)
+    assert exit_codes.classify_text(out) == code
+
+
+def test_a_refusal_before_measuring_exits_refused_and_not_one(capsys):
+    """`raise SystemExit("sentence")` exits 1, which is CLAIM_FAIL's code.
+
+    A run that refused before measuring anything then looked to the driver like
+    a measured run whose claim was refuted.
+    """
+    assert BND.main(["--tiles", "32,256", "--capability", "9.0"]) \
+        == exit_codes.REFUSED
+    assert "REFUSED" in capsys.readouterr().out
+
+
+def test_a_claim_that_did_not_pass_is_a_result_without_fail_on_gate():
+    """CLAIM_FAIL is softened to DONE without the flag; INVALID never is.
+
+    C4 is PREDICTED to fail at GROUP_SIZE_M=1, and re-running until it passes is
+    the failure mode the exit table is named against.
+    """
+    args = args_for(capability="9.0")
+    claim_failed = [BND.Gate("VALIDITY", "V0 x", "", "", True, ""),
+                    BND.Gate("CLAIM", "C4 x", "", "", False, "")]
+    invalid = [BND.Gate("VALIDITY", "V0 x", "", "", False, ""),
+               BND.Gate("CLAIM", "C4 x", "", "", True, "")]
+    assert BND._exit_over(claim_failed, args) == exit_codes.DONE
+    assert BND._exit_over(invalid, args) == exit_codes.INVALID
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(claim_failed, strict) == exit_codes.CLAIM_FAIL
+
+
+# --------------------------------------------------------------------------
+# WHAT KIND OF NOISE THE INTERVALS ARE (B14, R5).
+# --------------------------------------------------------------------------
+
+MEASURED_SD = 0.0091
+
+
+def _floor_doc(where, doc):
+    """Each graft in its OWN directory under the real basename.
+
+    Two grafts writing one `tmp_path / "NOISE_FLOOR.json"` means the second
+    silently overwrites the first, which passes only for as long as nobody
+    holds both at once.
+    """
+    where.mkdir(parents=True, exist_ok=True)
+    path = where / "NOISE_FLOOR.json"
+    path.write_text(json.dumps(doc))
+    return path
+
+
+def _measured_floor_file(tmp_path, *, sd=MEASURED_SD, synthetic=False):
+    """The tracked document with a replicate floor grafted into it.
+
+    Built FROM the tracked file so the schema, the declared prior and its
+    source are the real ones, and the only thing under test is which of the two
+    a caller reads.
+    """
+    doc = json.loads((PUBLISHED / "NOISE_FLOOR.json").read_text())
+    doc["replicate_floor"] = {
+        "n_replicates": 5, "cache_mode": "flush", "gpu_name": "NVIDIA H200",
+        "provenance": "simulated part (a), planted by the test suite",
+        "instrument": "queue-deep/l2-flush/clock-under-load/v2",
+        "scope": None, "synthetic": synthetic,
+        "per_field": {"alpha_corrected": {
+            "sd": sd, "df": 8, "upper95": sd * 1.6, "pooled": True,
+            "reason": "planted", "cells": 3, "per_cell": []}},
+    }
+    return _floor_doc(tmp_path / "measured", doc)
+
+
+def _unmeasured_floor_file(tmp_path):
+    """The tracked document with its replicate floor NULLED. The other graft.
+
+    THE STATE, NOT THE CALENDAR, and this is the whole reason it exists. The
+    ASSUMED assertions below used to be taken off the TRACKED file, which reads
+    ASSUMED only because part (a) has not run on a card yet. Those assertions
+    were therefore scheduled to go red at the exact moment the 120-minute arm
+    this slice was written to serve published its result, and the owner would
+    have met them on return from the pod. The declared prior is carried through
+    unchanged, so what is asserted is still the repo's real number.
+    """
+    doc = json.loads((PUBLISHED / "NOISE_FLOOR.json").read_text())
+    doc["replicate_floor"] = None
+    return _floor_doc(tmp_path / "unmeasured", doc)
+
+
+def test_the_report_states_the_bootstrap_scope_and_carries_the_floor(
+        tmp_path, monkeypatch):
+    """Two different kinds of noise, and only one of them is in the bootstrap.
+
+    These resamples are of within-process warm repeats: one process, one
+    allocation, one clock state. Every cross-arm difference this study publishes
+    is a between-process comparison, so an interval from here is a LOWER bound
+    on the uncertainty of one, and the floor carried beside it is the only
+    reading of the other kind the repo has.
+
+    The floor is PLANTED unmeasured rather than read off the tracked file: the
+    declared number this asserts is pinned, but the tracked file's BASIS is not,
+    and asserting the basis off it schedules this test to fail on the day part
+    (a) publishes.
+    """
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _unmeasured_floor_file(tmp_path))
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "WITHIN-PROCESS WARM REPEATS" in text
+    assert "cross-arm floor" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd"] == pytest.approx(
+        BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert "within-process" in payload["bootstrap"]["scope"]
+    assert payload["bootstrap"]["mde_alpha_a"] == pytest.approx(
+        BND.mde_one_sample(payload["bootstrap"]["alpha_a_sd"]))
+
+
+def test_the_published_floor_is_read_from_the_file_not_quoted(tmp_path):
+    """A literal here would silently stop describing a regenerated file."""
+    floor = BND.published_prior_sd(_unmeasured_floor_file(tmp_path))
+    assert floor.sd == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert floor.basis == "ASSUMED"
+    assert "s3-vs-s4" in floor.source
+
+
+# --------------------------------------------------------------------------
+# WHICH SIGMA, AND THE WORD THAT SAYS WHICH (2026-09-03).
+#
+# `published_prior_sd` read `payload["prior_sd"]` out of NOISE_FLOOR.json. That
+# field is the s3/s4 PROXY and stays the proxy after part (a) spends 120
+# minutes of card measuring a real between-replicate spread into
+# `replicate_floor` of the SAME file, so every MDE and every detection-limit
+# verdict this script printed would have gone on being scored against the
+# assumption. Both branches are planted below: a measured floor must arrive
+# MEASURED and move the MDE, an absent one must arrive ASSUMED at the declared
+# number, and the pre-registered band must NOT move under either.
+# --------------------------------------------------------------------------
+
+def test_a_measured_floor_reaches_this_script(tmp_path):
+    """The arm the owner is about to pay 120 minutes for buys this number."""
+    floor = BND.published_prior_sd(_measured_floor_file(tmp_path))
+    assert floor.basis == "MEASURED"
+    assert floor.sd == pytest.approx(MEASURED_SD)
+    assert "simulated part (a)" in floor.source
+
+
+def test_a_rehearsal_floor_is_not_read_as_a_measurement(tmp_path):
+    floor = BND.published_prior_sd(_measured_floor_file(tmp_path,
+                                                        synthetic=True))
+    assert floor.basis == "ASSUMED"
+    assert floor.sd == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+
+
+def test_a_truncated_floor_file_refuses_rather_than_raising_a_decode_error(
+        tmp_path):
+    """`sizing_sigma` parses before its own guards run, so a half written file
+    arrives as a ValueError. On the pod path that is a traceback where a
+    REFUSED belongs."""
+    path = tmp_path / "NOISE_FLOOR.json"
+    path.write_text('{"schema": "moe-kernels/noise-floor/2", "prior_')
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_prior_sd(path)
+
+
+def test_the_report_prints_the_basis_beside_the_floor(tmp_path, monkeypatch):
+    """An operator reads the report, not the JSON, and both states have to be
+    distinguishable there."""
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _measured_floor_file(tmp_path))
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "cross-arm floor 0.0091 MEASURED" in text
+    assert "a between-replicate POINT ESTIMATE" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "MEASURED"
+    assert payload["bootstrap"]["cross_arm_prior_sd"] == pytest.approx(
+        MEASURED_SD)
+
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH",
+                        _unmeasured_floor_file(tmp_path))
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "cross-arm floor 0.0229 ASSUMED" in text
+    assert "the DECLARED upper one and not a measurement" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "ASSUMED"
+
+
+def test_a_measured_floor_is_not_called_an_upper_bound():
+    """The word "upper" was only ever true of the s3/s4 proxy.
+
+    That proxy confounds `num_stages` with rerun noise and so can only
+    overstate; a between-replicate floor measures the quantity wanted and is a
+    point estimate of it. Printing "a MEASURED upper one" produced a
+    self-contradicting sentence on the page: under a planted 0.0091 floor,
+    `--self-test --plant-noise 0.008` said "from sd 0.0098 ... it is a lower
+    bound and the floor is a MEASURED upper one", the named upper number
+    smaller than the named lower one in one clause.
+    `alpha_surface.print_mde` is the sibling printer and never said it, so this
+    was one of the two places that had to agree, fixed at one of them.
+    """
+    measured = BND.CrossArmFloor(0.0091, "MEASURED", "planted part (a)")
+    clause = measured.clause()
+    assert "upper" not in clause
+    assert "POINT ESTIMATE" in clause
+    assert "not a bound on it" in clause
+
+    assumed = BND.CrossArmFloor(0.0229, "ASSUMED", "the s3-vs-s4 proxy")
+    assert "the DECLARED upper one and not a measurement" in assumed.clause()
+
+
+def test_the_band_lines_say_the_sds_are_the_pinned_declared_prior(tmp_path,
+                                                                   monkeypatch):
+    """The band was the ONE sigma-derived quantity on the report with no basis.
+
+    `check_alpha_a_band` prints "alpha_a 0.286 +/- 0.086" and "the band is 0.28
+    wide against input sds of 0.043-0.086", and every one of those sds is the
+    DECLARED prior over `delta_s`. Under a measured floor the same report also
+    prints "cross-arm floor 0.0091 MEASURED" fourteen lines below, and until
+    this clause existed nothing on the page connected the two: an operator sees
+    a 0.0091 measurement beside a 0.043 reading built from a sigma 2.5x larger
+    and reads the C6 bar as stale.
+    """
+    for floor in (_unmeasured_floor_file(tmp_path),
+                  _measured_floor_file(tmp_path)):
+        monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", floor)
+        lines = "\n".join(BND.check_alpha_a_band()[1])
+        assert "+/- 0.086" in lines and "input sds of 0.043-0.086" in lines
+        declared, _ = BND.preregistration_sigma()
+        assert f"the DECLARED prior {declared:.4f}" in lines
+        assert "PINNED to the declared number" in lines
+        # The sentence's arithmetic is the one the +/- was actually built by.
+        for ds, sd in ((0.375, 0.086), (0.750, 0.043)):
+            assert round(declared * math.sqrt(2) / ds, 3) == sd
+    # And C6's own rule text, the second printer of the same pinned sd.
+    boot = BND.Bootstrap(draws=100, per_cell_sd={}, survival=1.0,
+                         alpha_a_sd=0.02, alpha_b_sd=0.01, delta_sd=0.01,
+                         alpha_b_by_bm_sd={}, note="planted")
+    rule = BND.gate_sharpness(boot).rule
+    assert "0.043 sd of the sharpest two-point slope" in rule
+    assert "DECLARED prior over the pair's ds and is PINNED there" in rule
+
+
+def test_a_floor_that_cannot_be_read_is_named_and_not_defaulted(tmp_path,
+                                                                monkeypatch):
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", tmp_path / "absent.json")
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "cross-arm floor UNAVAILABLE" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd"] is None
+    assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "UNAVAILABLE"
+
+
+def test_the_plan_carries_the_basis_to_the_page(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _measured_floor_file(tmp_path))
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--power-draws", "20"]) == exit_codes.DONE
+    assert "cross-arm floor 0.0091 MEASURED" in capsys.readouterr().out
+
+
+def test_the_pre_registered_band_does_not_move_when_the_floor_is_measured(
+        tmp_path, monkeypatch):
+    """THE REASON THERE ARE TWO ACCESSORS.
+
+    The band is the two committed two-point slopes widened by a sigma, and
+    `check_alpha_a_band` REFUSES when the literal and the re-derivation
+    disagree. Widen them by a MEASURED floor of 0.0091 and the band re-derives
+    as (0.12, 0.33): the first pod command after part (a) publishes would refuse
+    with "the pre-registered alpha_a band is not what the committed BN pair now
+    says", having been handed no new BN pair at all. A pre-registration that
+    moves when new information arrives is not one, so the band stays on the
+    DECLARED prior and only what this run can RESOLVE moves.
+    """
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _measured_floor_file(tmp_path))
+    assert BND.preregistration_sigma()[0] == pytest.approx(
+        BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert BND.alpha_a_band_from_published() == BND.ALPHA_A_BAND
+    # And the sharpness ceiling, which is set INSIDE the sharpest two-point sd,
+    # is still a bar the three-point fit has to beat rather than one a measured
+    # floor moved under it.
+    assert BND.ALPHA_A_SD_CEILING < min(
+        p.sd for p in BND.published_two_point_alpha_a())
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--power-draws", "20"]) == exit_codes.DONE
+
+
+def test_the_band_still_refuses_when_the_declared_prior_moves(tmp_path,
+                                                              monkeypatch):
+    """The FAIL branch of the pinning above: pinned is not frozen. Edit the
+    declared prior and the band must stop reading back."""
+    doc = json.loads((PUBLISHED / "NOISE_FLOOR.json").read_text())
+    doc["prior_sd"] = 0.2
+    path = tmp_path / "NOISE_FLOOR.json"
+    path.write_text(json.dumps(doc))
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", path)
+    with pytest.raises(BND.CorpusMissing):
+        BND.check_alpha_a_band()
+    assert BND.main(["--dry-run", "--capability", "9.0",
+                     "--group-m", "16"]) == exit_codes.REFUSED
+
+
+def test_help_renders(capsys):
+    """argparse expands `%` in help text, so a formatted percentage must escape it.
+
+    Caught live: `--plant-noise`'s help gained an f-string percentage while this
+    slice was being written and `--help` died with "unsupported format
+    character ')'". Nothing else in the suite runs the parser's renderer, and a
+    script whose --help raises is a script nobody can find the flag in.
+    """
+    with pytest.raises(SystemExit) as exc:
+        BND.build_parser().parse_args(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "--plant-noise" in out and "--trials" in out
+
+
+# --------------------------------------------------------------------------
+# THE BAND'S PROVENANCE WHERE IT IS ACTUALLY SCORED (review of finding 32).
+# The plan output was corrected and the GATE was not, so `--dry-run` printed
+# the two committed reports while report.txt, report.json and the RESULT line's
+# context went on naming four A100 slopes that are in no file. Everything below
+# scores a planted run rather than grepping a plan, because a plan scores no
+# gates and that is exactly how the surviving copy went untested.
+# --------------------------------------------------------------------------
+
+def _break_the_corpus(monkeypatch):
+    """Make the committed BN pair unreadable, through the REAL refusal path.
+
+    `published_two_point_alpha_a` binds `PUBLISHED_BN_PAIR` as a default at
+    definition time, so patching the constant would silently do nothing and the
+    test would pass by not testing. This re-points the function at two paths
+    that do not exist, so what the callers see is the refusal the real function
+    raises with the real message.
+    """
+    real = BND.published_two_point_alpha_a
+    monkeypatch.setattr(
+        BND, "published_two_point_alpha_a",
+        lambda *a, **k: real((ROOT / "nope-a.json", ROOT / "nope-b.json")))
+
+
+def test_the_scored_c1_gate_carries_the_committed_provenance():
+    """The gate, not the plan: what report.txt and report.json actually say."""
+    _, gates, payload = _planted_run(16, noise=0.004)
+    c1 = gates["C1"]
+    printed = "\n".join(c1.render())
+    assert "d66ad3.report.json" in printed and "16cc16.report.json" in printed
+    assert "alpha_a band [0.10, 0.38]" in printed
+    for phantom in ("0.106", "0.102", "0.129", "0.119", "ai_model.py's 0.143"):
+        assert phantom not in printed, f"{phantom} is back in the gate"
+    # And the same text is what leaves the pod in the JSON.
+    blob = json.dumps(payload, default=str)
+    for phantom in ("0.106", "0.102", "0.129", "0.119"):
+        assert phantom not in blob, f"{phantom} reached report.json"
+
+
+def test_c1_prints_the_band_lines_it_is_handed():
+    """`analyse_run` threads `check_alpha_a_band`'s lines down to the gate.
+
+    The band is re-derived once, before any GPU time, and the gate prints THAT
+    derivation rather than a second one: two copies of a provenance is how the
+    corrected one and the stale one ended up in the same report.
+    """
+    _, band_lines = BND.check_alpha_a_band()
+    empty = BND.Decomposition("EXA", None, None, None, None, 0, 2, (), (), (),
+                              "nothing")
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    gate = BND.gate_alpha_a(empty, boot, sharp=False, band_lines=band_lines)
+    assert gate.lines[:len(band_lines)] == band_lines
+
+
+def test_the_gate_refuses_in_words_when_the_band_cannot_be_re_read(monkeypatch):
+    """The FAIL branch: a corpus that no longer reads back.
+
+    Scoring happens after the pod time is spent, so the gate says so on the page
+    instead of raising the report away -- and it must never fall back to a
+    remembered sentence, which is the whole finding.
+    """
+    _break_the_corpus(monkeypatch)
+    lines = BND.band_provenance_lines()
+    assert len(lines) == 1 and lines[0].startswith("BAND PROVENANCE UNREADABLE")
+    empty = BND.Decomposition("EXA", None, None, None, None, 0, 2, (), (), (),
+                              "nothing")
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    gate = BND.gate_alpha_a(empty, boot, sharp=False)
+    assert any("BAND PROVENANCE UNREADABLE" in ln for ln in gate.lines)
+    assert not any("0.106" in ln for ln in gate.lines)
+
+
+def test_c1_says_why_it_read_unknown_when_the_estimator_is_not_sharp():
+    """UNKNOWN with a fitted number beside it is otherwise unreadable."""
+    fit = BND.Decomposition("EXA", None, 0.9, 0.2, 0.0, 4, 3, (0.001,),
+                            ("BN=64 BM=128",), (0.5,), "planted")
+    boot = BND.Bootstrap(10, {}, {}, 0.4, 0.01, None, {}, "planted")
+    gate = BND.gate_alpha_a(fit, boot, sharp=False)
+    assert gate.passed is None and "C6" in gate.observed
+    assert BND.gate_alpha_a(fit, boot, sharp=True).passed is True
+
+
+# --------------------------------------------------------------------------
+# C6, THE SHARPNESS GATE: THE RULE IT STATES AND THE KIND IT IS.
+# --------------------------------------------------------------------------
+
+def test_the_sharpness_rule_states_the_derivation_the_ceiling_actually_has():
+    """"Half the width of the band" is arithmetically false and was printed.
+
+    Half of the [0.10, 0.38] band is 0.14, five times the 0.025 ceiling, and the
+    constant's own re-justification says the bar is the sharpest two-point sd in
+    the corpus instead. The rule string is what every report quotes, so it is
+    read from the corpus rather than written down.
+    """
+    boot = BND.Bootstrap(10, {}, {}, 0.01, 0.01, None, {}, "planted")
+    gate = BND.gate_sharpness(boot)
+    sharpest, source = BND.sharpest_two_point_sd()
+    assert sharpest == pytest.approx(
+        min(p.sd for p in BND.published_two_point_alpha_a()))
+    assert f"{sharpest:.3f}" in gate.rule and "d66ad3" in "".join(gate.lines)
+    assert "half the width" not in gate.rule.lower()
+    assert source in "".join(gate.lines)
+
+
+def test_the_sharpness_rule_says_so_when_the_corpus_cannot_be_read(monkeypatch):
+    """The FAIL branch of the bar's provenance: no bar quoted from memory."""
+    _break_the_corpus(monkeypatch)
+    sharpest, why = BND.sharpest_two_point_sd()
+    assert sharpest is None and why
+    gate = BND.gate_sharpness(
+        BND.Bootstrap(10, {}, {}, 0.30, 0.01, None, {}, "planted"))
+    assert "cannot be read here" in gate.rule
+    assert gate.passed is False          # it still scores; only the bar's
+    assert "0.043" not in gate.rule      # provenance is missing
+
+
+def test_a_pinning_that_cannot_resolve_alpha_a_is_a_result_not_a_broken_run():
+    """C6 is a CLAIM gate, and a G=1 arm therefore ends CLAIM_FAIL, not INVALID.
+
+    The shortfall is PREDICTED at GROUP_SIZE_M=1 and printed in the plan before
+    the pod is rented. As a VALIDITY gate it made `classify` return 3 INVALID --
+    nothing on the page quotable -- for a run whose alpha_b, C3 and C5 are
+    exactly what that pinning is for, and the session driver re-measured the arm
+    on every pass because 3 is not one of its finished codes.
+    """
+    _, gates, _ = _planted_run(1, noise=0.008)
+    c6 = gates["C6"]
+    assert c6.kind == "CLAIM" and c6.passed is False
+    assert c6.result_line().startswith("RESULT: CLAIM C6 FAIL")
+    assert "C1 ALONE" in c6.invalidates
+    assert all(g.passed is True for g in gates.values() if g.kind == "VALIDITY")
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        == exit_codes.CLAIM_FAIL
+    args = args_for(capability="9.0")
+    assert BND._exit_over(list(gates.values()), args) == exit_codes.DONE
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(list(gates.values()), strict) == exit_codes.CLAIM_FAIL
+
+
+def test_a_real_validity_failure_at_the_same_pinning_is_still_invalid():
+    """The FAIL branch: the softening reaches CLAIM_FAIL and nothing else.
+
+    Planted onto the same G=1 gate list, one broken VALIDITY gate still takes
+    the arm to 3 with the flag off, which is what stops this change from being
+    a way of exiting 0 whatever happened.
+    """
+    _, gates, _ = _planted_run(1, noise=0.008)
+    broken = list(gates.values()) + [
+        BND.Gate("VALIDITY", "V0 planted", "", "", False, "planted failure")]
+    assert exit_codes.classify(g.scored() for g in broken) == exit_codes.INVALID
+    assert BND._exit_over(broken, args_for(capability="9.0")) \
+        == exit_codes.INVALID
+
+
+def test_the_plan_says_which_exit_code_a_g1_arm_is_expected_to_return(capsys):
+    """Predicted before the pod, in the same line that predicts the shortfall."""
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "1",
+              "--power-draws", "20", "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    assert "CANNOT RESOLVE alpha_a" in out
+    assert "1 CLAIM_FAIL" in out and "NOT 3 INVALID" in out
+
+
+# --------------------------------------------------------------------------
+# WHAT AN UNDECIDABLE CLAIM ACTUALLY MAKES THE PROCESS RETURN.
+# The C2 guard's docstrings said an arm whose C2 has no power "exits
+# CLAIM_FAIL"; `_exit_over` reports CLAIM_FAIL as DONE unless --fail-on-gate,
+# and the session driver passes neither. The verdict travels on the RESULT
+# line, not in the exit code, and that is what this pins.
+# --------------------------------------------------------------------------
+
+def test_a_powerless_c2_travels_on_the_result_line_not_the_exit_code():
+    _, gates, _ = _planted_run(1, noise=0.008)
+    assert gates["C2"].passed is None
+    assert gates["C2"].result_line().startswith("RESULT: CLAIM C2 UNKNOWN")
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        == exit_codes.CLAIM_FAIL
+    default = args_for(capability="9.0")
+    assert BND._exit_over(list(gates.values()), default) == exit_codes.DONE
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(list(gates.values()), strict) == exit_codes.CLAIM_FAIL
+
+
+def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
+    """The apparatus breaking must not be filed as one of the arm's outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records the arm as finished, skips it on every resume, leaves
+    RETRY_ARMS at zero and exits the session 0 over an arm that never measured.
+    ERROR (4) is outside FINISHED_CODES so the two can be told apart, and the
+    traceback is printed rather than swallowed because a bare code names
+    nothing to fix. Planted rather than argued: bn_decomposition had no top-level handler
+    until 2026-09-02.
+    """
+    from moe.bench import exit_codes as EX
+
+    def explode(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(BND, "_main", explode)
+    code = BND.main([])
+    err = capsys.readouterr().err
+    assert code == EX.ERROR
+    assert code != EX.CLAIM_FAIL
+    assert code not in EX.FINISHED_CODES, "an apparatus failure must stay retryable"
+    assert EX.ledger_state(code) == "RETRY"
+    assert "planted: the allocator gave up halfway" in err, \
+        "the traceback was swallowed"
+    assert "RuntimeError" in err
+
+
+def test_a_string_refusal_still_exits_REFUSED_and_is_not_relabelled_ERROR(
+        monkeypatch, capsys):
+    """The other branch of the same handler. `raise SystemExit("sentence")` is a
+    precondition not met, which is free and distinct from a crash, so the new
+    `except Exception` must not catch it: `SystemExit` is a `BaseException`.
+    """
+    from moe.bench import exit_codes as EX
+
+    def refuse(argv=None):
+        raise SystemExit("no calibration for the attached device")
+
+    monkeypatch.setattr(BND, "_main", refuse)
+    code = BND.main([])
+    err = capsys.readouterr().err
+    assert code == EX.REFUSED
+    assert err.startswith("REFUSED: no calibration")
+    assert "Traceback" not in err
+
+
+# --------------------------------------------------------------------------
+# retraction (c): 0.307 and the TEMPO 2-4% match are withdrawn, and the
+# printed plan and the C4 gate must say so rather than restate them
+# --------------------------------------------------------------------------
+
+def test_p4_and_c4_state_the_tempo_match_as_withdrawn_not_as_prior_agreement():
+    """The printed plan carried "the study's decomposed 0.307 corroborates
+    TEMPO's b2/b to 2-4%" and C4 explained 0.307 as "a POOLED refit". Both
+    are the retracted claim restated: 0.307 was a (LIN) unit artefact of the
+    estimator, not a pooled measurement, and the 2-4% agreement went with it.
+    Pinned on the rendered text of BOTH sites, because the defect this repo
+    keeps finding is a fix applied at one of two call sites.
+    """
+    plan = BND.predictions_text(MIXTRAL, 2, 160.3, "test", BND.DEFAULT_BLOCK_N,
+                                BND.SUBJECT_BLOCK_M, {}, 1, [])
+    p4 = plan[plan.index("P4"):plan.index("P5")]
+    assert "WITHDRAWN" in p4 and "(LIN)" in p4
+    assert "corroborates TEMPO's b2/b of" not in p4
+    assert "to 2-4%" not in p4.replace("corroborates TEMPO to 2-4%' is WITHDRAWN", "")
+
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    fit = BND.Decomposition("EXA", None, 0.92, 0.14, 0.0, 9, 3, (), (), (),
+                            "planted")
+    gate = BND.gate_tempo(fit, boot, 1)
+    text = "\n".join(gate.render()) if hasattr(gate, "render") else "\n".join(gate.lines)
+    assert gate.passed is False                      # 0.92 is far from 0.311/0.319
+    assert "WITHDRAWN" in text and "unit artefact" in text
+    assert "is a POOLED refit" not in text
+    assert "first number in this study that may be compared with TEMPO" in text
+    # The fitted-world table names the withdrawn reading by what it is.
+    table = "\n".join(BND.cell_table(MIXTRAL, 2, 160.3, BND.DEFAULT_BLOCK_N,
+                                     BND.SUBJECT_BLOCK_M, {}))
+    assert "LIN-ERA (0.307, 0.143)" in table and "POOLED (0.307" not in table
+
+
+# --------------------------------------------------------------------------
+# LEVEL is two-sided since 03df2d4, and this consumer reads the side
+# --------------------------------------------------------------------------
+
+#: A PLANTED WORLD, not a card. These three numbers are the shape the
+#: fifteenth instance of the recurring defect was found on (a memory-shaped
+#: cell boosting above the roof's clock, a hungry one sagging below it), and
+#: the tests below pass all three sides of every ratio, so what they test is
+#: the consumer's arithmetic and not any card's figures.
+#:
+#: THE REFERENCE IS DELIBERATELY A ROUND NUMBER NO CARD PUBLISHES. It read
+#: 1515.0 until 2026-09-09, under a comment calling it "the bf16-GEMM
+#: reference the roof was measured at": that was the H200's committed
+#: calibration until ab61e55 remeasured the card at 1485 MHz under the 700 W
+#: cap on 2026-09-09, so the constant was the superseded live number wearing
+#: the name of the current one, and the file that carried it also defines
+#: `H200_REFERENCE_MHZ = 1485.0` for the card's real figure. A planted world
+#: gets a planted number; a test that needs the card's own clock reads the
+#: committed calibration.
+PLANTED_REFERENCE_MHZ = 1500.0
+#: Well above `PLANTED_REFERENCE_MHZ * timing.LEVEL_HIGH_FRACTION`, the state
+#: of every memory-shaped tread the H200 gaps session measured (1950-1980).
+H200_MEMORY_LOAD_MHZ = 1980.0
+#: Well below `PLANTED_REFERENCE_MHZ * timing.LEVEL_FRACTION`.
+SAGGED_MHZ = 1400.0
+
+
+def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
+    """A `KernelTiming` scored the way `time_kernel` scores one: verdicts from
+    the real `clock_flags`, the side from the real `level_side`, and the
+    reference on the record. Not hand-set booleans: a hand-set side would
+    pass whatever the consumer did with it."""
+    from moe.bench import timing
+    end = load_mhz if drift_to is None else drift_to
+    level, drift = timing.clock_flags(load_mhz, load_mhz, end, reference_mhz)
+    return timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=end,
+        clock_level_ok=level, clock_drift_ok=drift, samples=300,
+        warmup_calls=10, flush_mb=256, clock_samples=9, clock_source="injected",
+        clock_poll_ms=1.0, host_bound=False, host_enqueue_ms=0.01,
+        clock_note="scripted clock",
+        clock_level_side=timing.level_side(load_mhz, reference_mhz) or "",
+        reference_clock_mhz=reference_mhz)
+
+
+def test_the_exclusion_rule_is_drift_alone_and_both_level_sides_are_kept():
+    """THE RULE AS IT STANDS SINCE 2026-09-09: DRIFT excludes, LEVEL records.
+
+    Until then this asserted "LOW or DRIFT excludes, HIGH is kept". The
+    750-cell census of the H200 gaps session showed the LOW side is the steady
+    operating point of a hungry tile under the 700 W cap (BLOCK_M=128 at
+    BLOCK_N=64 held 1380-1410 MHz in every rep of every arm), so excluding it
+    excluded a tile rather than a defect, and removed both of this study's
+    primary tiles from measurability on the card.
+
+    `moe.bench.driver`'s `throttled` assignment is the twin of this rule and
+    moves in the same commit; the truth table below is written out here rather
+    than imported so this file states the rule instead of quoting whatever the
+    driver currently does.
+    """
+    from moe.bench import timing
+    ex = BND.clock_excluded
+    # Neither side is an exclusion when the clock held still.
+    assert ex(False, timing.LEVEL_HIGH, True) is False
+    assert ex(False, timing.LEVEL_HIGH, None) is False
+    assert ex(False, timing.LEVEL_LOW, True) is False
+    assert ex(False, timing.LEVEL_LOW, None) is False
+    # A False that recorded no side is the one-sided era's row: still kept.
+    assert ex(False, "", True) is False
+    # DRIFT excludes whatever LEVEL said, on either side.
+    assert ex(True, "", False) is True
+    assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(False, timing.LEVEL_LOW, False) is True
+    assert ex(None, "", False) is True
+    # Not determined is not an exclusion: one has to be positively established.
+    assert ex(None, "", None) is False
+    assert ex(True, "", True) is False
+    assert ex(True, "", None) is False
+    # The whole table: DRIFT and nothing else.
+    for level in (True, False, None):
+        for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
+            for drift in (True, False, None):
+                assert ex(level, side, drift) is (drift is False), (
+                    level, side, drift)
+
+
+def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
+    """1980 against 1515 is 1.31x, above `LEVEL_HIGH_FRACTION`; 1400 against
+    1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
+    the only thing that tells them apart."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
+    assert high.clock_level_ok is False and low.clock_level_ok is False
+    assert BND.clock_side_of(high) == timing.LEVEL_HIGH
+    assert BND.clock_side_of(low) == timing.LEVEL_LOW
+    assert BND.clock_excluded(high.clock_level_ok, BND.clock_side_of(high),
+                                 high.clock_drift_ok) is False, "HIGH is kept"
+    assert BND.clock_excluded(low.clock_level_ok, BND.clock_side_of(low),
+                                 low.clock_drift_ok) is False, (
+        "since 2026-09-09 a steady LOW is kept and its side recorded")
+    # A record without the field (every fake before 2026-09-03) gets its side
+    # derived from its own numbers, the way driver.py derives it.
+    import dataclasses
+    bare = dataclasses.replace(high, clock_level_side="")
+    assert BND.clock_side_of(bare) == timing.LEVEL_HIGH
+    # And one with neither answers "", which is "no side recorded".
+    blind = dataclasses.replace(bare, reference_clock_mhz=None)
+    assert BND.clock_side_of(blind) == ""
+
+
+def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
+    """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
+    rule and the counting block is a reader that has not learned the side, and
+    that is how the fifteenth instance happened: one producer fixed, thirteen
+    consumers left on the old meaning.
+
+    A NESTED HELPER IS ITS OUTERMOST FUNCTION, since 2026-09-09. The walk
+    attributed a def to its own name whatever it was nested in, so a reader
+    written as a closure inside a disallowed function passed under a name that
+    was not on the list, and a helper factored out of an allowed one failed
+    while doing exactly what the allowed one did. Attributing by ancestor
+    makes the list about the block the code lives in, which is what the rule
+    is about."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "bn_decomposition.py").read_text())
+    owner = {}
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef):
+            for node in ast.walk(top):
+                if isinstance(node, ast.FunctionDef):
+                    owner[node] = top.name
+    readers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Code, not prose: a docstring that names the old test is history.
+            body = "\n".join(ast.unparse(s) for s in node.body
+                             if not (isinstance(s, ast.Expr)
+                                     and isinstance(s.value, ast.Constant)))
+            if "clock_level_ok is False" in body:
+                readers.add(owner.get(node, node.name))
+    allowed = {"clock_excluded", "clock_state"}
+    assert readers <= allowed, (
+        f"{sorted(readers - allowed)} test the LEVEL verdict "
+        "without its side; route them through clock_excluded")
+
+
+def test_a_boosted_tread_travels_through_the_csv_and_is_counted_as_kept(tmp_path):
+    """THE PLANTED HIGH ROW, KEPT, AND THE PLANTED LOW ROW, EXCLUDED, through
+    this file's own row builder, CSV writer and reader, and its clock-state
+    block. Until 2026-09-08 the row had no side column, so a resumed cells.csv
+    from a boosted H200 could not have told the two apart.
+
+    THE FIFTH ROW IS THE ONE NO TEST PLANTED UNTIL 2026-09-09: LEVEL false on
+    the HIGH side AND DRIFT false, in one tread. Every planted world here had
+    its drifting row sitting level, so the counters could filter on the LEVEL
+    verdict alone, count that tread twice and stay green. On the committed
+    session 3 of the 161 HIGH treads and 5 of the 43 level ones were among
+    the 8 drifted."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
+    level = _kernel_timing_at(PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ)
+    drifting = _kernel_timing_at(PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ,
+                                 drift_to=1300.0)
+    high_and_drifting = _kernel_timing_at(H200_MEMORY_LOAD_MHZ,
+                                          PLANTED_REFERENCE_MHZ,
+                                          drift_to=1700.0)
+    assert high_and_drifting.clock_level_ok is False
+    assert high_and_drifting.clock_drift_ok is False
+    prov = BND.PV.provenance_block(instrument="queue-deep/test", iters=None)
+    path = tmp_path / "cells.csv"
+    for n, t in enumerate((high, low, level, drifting, high_and_drifting),
+                          start=1):
+        row = BND.Sample(64, 128, n, 128 * n, 512 * n, 1, t.ms_p50, t.ms_min,
+                         t.ms_std, t.iters, instrument=t.instrument,
+                         sm_clock_load_mhz=t.sm_clock_load_mhz,
+                         clock_level_ok=t.clock_level_ok,
+                         clock_drift_ok=t.clock_drift_ok, host_bound=t.host_bound,
+                         clock_level_side=BND.clock_side_of(t))
+        BND.append_sample(path, row, prov)
+    assert "clock_level_side" in path.read_text().splitlines()[0].split(",")
+    _, back = BND.read_samples(path)
+    assert [s.clock_level_side for s in back] == [
+        timing.LEVEL_HIGH, timing.LEVEL_LOW, "", "", timing.LEVEL_HIGH]
+    assert [s.clock_level_ok for s in back] == [False, False, True, True, False]
+    assert back[3].clock_drift_ok is False
+
+    state = BND.clock_state(back)
+    assert state["timed"] == 5
+    # THE FIVE COUNTS PARTITION THE TIMED TREADS. The drifted HIGH tread is in
+    # `drift` and in `drift_high`, and in neither `high` nor `level`.
+    assert state["high"] == 1 and state["low"] == 1
+    assert state["level"] == 1 and state["drift"] == 2
+    assert state["unknown"] == 0
+    assert (state["level"] + state["low"] + state["high"] + state["unknown"]
+            + state["drift"]) == state["timed"]
+    assert state["drift_high"] == 1 and state["drift_level"] == 1
+    assert state["drift_low"] == 0 and state["drift_unknown"] == 0
+    # NEITHER SIDE IS IN THE EXCLUDED-SHAPED COUNT SINCE 2026-09-09. Only the
+    # drifting treads are: their median load is a blend of two clocks.
+    assert state["excluded_shaped"] == 2
+    text = "\n".join(BND.clock_state_lines(state))
+    assert "1 steady HIGH (kept, side recorded)" in text
+    assert "1 steady LOW (kept, side recorded)" in text
+    assert "2 DRIFT failed (excluded, and not in the three counts before it)" in text
+    assert "the 2 drifted treads by side: 1 level, 0 LOW, 1 HIGH" in text
+    # THE PAGE MUST NOT POINT AT A COLUMN IT DOES NOT WRITE. This block's line
+    # told the reader to read `roof_at_cell_clock` beside the fixed-roof
+    # fraction until 2026-09-09; the only own-clock roof this file computes is
+    # per ARM, from the reference ladder's median clock, and is nowhere here.
+    assert "roof_at_cell_clock" not in text
+
+
+def test_neither_a_high_world_nor_a_low_world_excludes_anything():
+    """A whole ladder at the H200's memory-load clock, and the same ladder at
+    the clock a hungry tile holds, both count ZERO excluded-shaped treads: the
+    session that settled the rule found 148 steady-LOW cells and every one of
+    them was a tile at its own operating point under the power cap."""
+    from moe.bench import timing
+    def ladder(t):
+        return [BND.Sample(64, 128, n, 128 * n, 512 * n, 1, 1.0, 0.9, 0.01, 100,
+                           instrument=t.instrument,
+                           sm_clock_load_mhz=t.sm_clock_load_mhz,
+                           clock_level_ok=t.clock_level_ok,
+                           clock_drift_ok=t.clock_drift_ok,
+                           clock_level_side=BND.clock_side_of(t))
+                for n in range(1, 9)]
+    high_world = BND.clock_state(
+        ladder(_kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)))
+    assert high_world["high"] == 8 and high_world["excluded_shaped"] == 0
+    low_world = BND.clock_state(
+        ladder(_kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)))
+    assert low_world["low"] == 8 and low_world["excluded_shaped"] == 0
+    # And a whole ladder that drifted IS excluded, so the count still moves.
+    drift_world = BND.clock_state(
+        ladder(_kernel_timing_at(PLANTED_REFERENCE_MHZ,
+                                 PLANTED_REFERENCE_MHZ, drift_to=1300.0)))
+    assert drift_world["drift"] == 8 and drift_world["excluded_shaped"] == 8
+    assert high_world["rule"].startswith("DRIFT excludes; BOTH LEVEL sides")
+    assert timing.LEVEL_HIGH == "high" and timing.LEVEL_LOW == "low"
+
+
+def test_a_row_from_before_the_side_column_reads_back_as_no_side(tmp_path):
+    """A False with no side is the one-sided era's meaning, below. The reader
+    must not invent a side for it, and since 2026-09-09 the rule keeps it: a
+    steady clock on either side is an operating point, not an exclusion."""
+    path = tmp_path / "old.csv"
+    path.write_text("block_n,block_m,tiles,rows_per_expert,tokens,rep,ms_p50,"
+                    "ms_min,ms_stdev,iters,status,detail,clock_level_ok\n"
+                    "64,128,3,384,1536,1,1.25,1.2,0.01,50,ok,,0\n")
+    _, back = BND.read_samples(path)
+    assert back[0].clock_level_ok is False and back[0].clock_level_side == ""
+    assert BND.clock_excluded(back[0].clock_level_ok, back[0].clock_level_side,
+                              back[0].clock_drift_ok) is False
+
+
+def test_the_measure_loop_names_both_level_sides_as_kept():
+    """The print branch is the operator's only live warning. It used to fire
+    the exclusion-shaped marker on every boosted tread, then on every sagged
+    one; since 2026-09-09 it fires on DRIFT and host-bound alone and names
+    whichever side the cell sat on as recorded."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "bn_decomposition.py").read_text())
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and any(isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "time_kernel"
+                      for c in ast.walk(n)))
+    body = ast.unparse(fn)
+    assert "clock_excluded(t.clock_level_ok, sample.clock_level_side" in body
+    assert "is recorded, not excluded" in body
+    assert "sample.clock_level_side == timing.LEVEL_HIGH" not in body
+    assert "t.clock_level_ok is False" not in body
+
+
+# --------------------------------------------------------------------------
+# THE 2026-09-09 H200 ARM, REPLAYED. The session measured 204 reference
+# timings, refused all three references and skipped every subject, and the
+# cause was `block_sizes`: the sweep's non-vacuity check scales the compute
+# branch to the SMALLEST SWEPT tile, and both call sites in this file passed
+# only the reference's own tile, which makes the bound 1.675 of one full
+# weight read AT THE ROOF and refuses a kernel running at 100% of peak. These
+# drive the committed cells.csv through the script's own `analyse_run` and
+# pin the numbers the fix has to produce.
+# --------------------------------------------------------------------------
+
+SESSION_CELLS = (ROOT / "results" / "published"
+                 / "2026-09-09-nvidia_h200-gaps-session" / "results"
+                 / "bn_decomposition"
+                 / ("nvidia_h200-bm32_64_128-budget400.0-dtypebf16-flushtrue-"
+                    "g16-iters50-k64-modelmixtral_8x7b-n32_64-b59b409f")
+                 / "cells.csv")
+#: The calibration that session ran against, committed at ab61e55. Passed in
+#: rather than resolved, because this replay runs on a laptop with no card.
+SESSION_RIDGE = 152.8120650229884
+SESSION_BANDWIDTH = 4374.549151491332
+SESSION_CEILING = 668.4838893839521
+SESSION_REFERENCE_MHZ = 1485.0
+
+
+def _session_run():
+    """`analyse_run` over the committed 2026-09-09 rows, in the arm's pinning."""
+    if not SESSION_CELLS.exists():
+        import pytest
+        pytest.skip(f"the 2026-09-09 session rows are not here: {SESSION_CELLS}")
+    cfg = BND.MODEL_CONFIGS["mixtral-8x7b"]
+    base = dict(BND.SWEEP.FIXED, num_stages=4, num_warps=8, GROUP_SIZE_M=16,
+                BLOCK_SIZE_K=64)
+    _, samples = BND.read_samples(SESSION_CELLS)
+    args = BND.build_parser().parse_args(
+        ["--group-m", "16", "--card", "nvidia_h200", "--draws", "200"])
+    lines, gates, payload = BND.analyse_run(
+        samples, cfg, args, ridge=SESSION_RIDGE,
+        bandwidth_gbps=SESSION_BANDWIDTH, b=BND.dtype_bytes("bf16"),
+        ceiling_tflops=SESSION_CEILING,
+        ceiling_source="measured on NVIDIA H200 (measured)", capability=(9, 0),
+        base_pinned=base, compiles={(32, 256): 17, (64, 256): 16, (128, 256): 16},
+        executed={(32, 256): 68, (64, 256): 68, (128, 256): 68},
+        sm_count=132, block_ns=(32, 64, 128), subjects=(32, 64, 128),
+        probe_c2_power=False, reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    return samples, lines, {g.name.split()[0]: g for g in gates}, payload
+
+
+def test_the_session_references_qualify_and_v2_passes():
+    """All three references qualify OWN at 36.7 / 54.6 / 71.6% of the fixed
+    roof. On 2026-09-09 they were refused at vacuity 4.559 / 3.068 / 2.339,
+    which is the ratio scaled to BLOCK_M=256 itself."""
+    _, lines, gates, _ = _session_run()
+    text = "\n".join(lines)
+    assert "BN=32 36.7%; BN=64 54.6%; BN=128 71.6%" in gates["V2"].observed
+    # R2: the fixed-roof fraction is the gate input, the own-clock fraction is
+    # printed beside it on the gate line as well as on every point line.
+    assert ("issue efficiency (record, not the gate input): BN=32 31.6% at "
+            "1725 MHz; BN=64 50.1% at 1620 MHz; BN=128 68.2% at 1560 MHz"
+            ) in gates["V2"].observed
+    assert gates["V2"].scored()[2] == "PASS"
+    for fraction in ("36.7% of 668.5", "54.6% of 668.5", "71.6% of 668.5"):
+        assert fraction in text, fraction
+    assert "REFUSED" not in text
+
+
+def test_the_session_v3_prints_the_raw_spread_and_the_normalised_one():
+    """THE GATE READS THE RAW, FIXED-ROOF SPREAD AND THE BAR STAYS AT 2.0x.
+    The two numbers land on opposite sides of it, 1.95x raw against 2.15x
+    rescaled to each arm's own clock (1725 / 1620 / 1560 MHz), so both are printed
+    and which one gates is pre-registered rather than chosen afterwards."""
+    _, lines, gates, _ = _session_run()
+    assert BND.REFERENCE_CROSS_BN_SPREAD == 2.0
+    assert gates["V3"].scored()[2] == "PASS"
+    assert "1.95x raw (fixed roof, the gate input)" in gates["V3"].observed
+    assert "2.15x normalised" in gates["V3"].observed
+    text = "\n".join(lines)
+    assert "implied rates span 1.95x (gate <= 2.0x" in text
+    assert "rescaled to its own clock is 2.15x" in text
+
+
+def test_the_session_prints_the_issue_efficiency_beside_every_fixed_fraction():
+    """R2: the own-clock fraction on every point line, never a gate input.
+    The three reference ladders held 1725 / 1620 / 1560 MHz under the cap, so
+    the roofs at their own clocks are 776.5 / 729.3 / 702.2 TFLOP/s."""
+    _, lines, _, _ = _session_run()
+    text = "\n".join(lines)
+    for own, clock in (("31.6% of 776.5", "1725 MHz"),
+                       ("50.1% of 729.3", "1620 MHz"),
+                       ("68.2% of 702.2", "1560 MHz")):
+        assert f"issue efficiency  {own} TFLOP/s" in text, own
+        assert clock in text, clock
+    assert text.count("never a gate input") == 3
+
+
+def test_the_session_excludes_the_eight_drifted_treads_and_nothing_else():
+    """204 timed treads: 38 steady level, 0 steady LOW, 158 steady HIGH, 8
+    DRIFT. Under the rule in force until 2026-09-09 this arm also dropped
+    nothing, because its fit reads `status == "ok"`; what the rule change
+    moves is what the page SAYS, and a page that called 158 treads unusable
+    would be describing the wrong card.
+
+    THE STEADY COUNTS ARE NOT THE LEVEL COUNTS. The raw side tallies over all
+    204 rows are 43 level and 161 HIGH, and 5 of the 43 and 3 of the 161 are
+    among the 8 drifted; printing those as "steady ... (kept)" beside "8 DRIFT
+    failed (excluded-shaped)" named eight treads as kept and as excluded in
+    one line and made 43 + 161 come to the whole 204 with the drift on top.
+    That is what this test pinned until 2026-09-09."""
+    samples, lines, _, _ = _session_run()
+    state = BND.clock_state(samples)
+    assert (state["timed"], state["level"], state["low"], state["high"],
+            state["drift"]) == (204, 38, 0, 158, 8)
+    assert state["unknown"] == 0
+    assert (state["level"] + state["low"] + state["high"] + state["unknown"]
+            + state["drift"]) == state["timed"]
+    assert (state["drift_level"], state["drift_low"], state["drift_high"],
+            state["drift_unknown"]) == (5, 0, 3, 0)
+    assert state["excluded_shaped"] == 8
+    text = "\n".join(lines)
+    assert "38 steady level" in text
+    assert "0 steady LOW (kept, side recorded)" in text
+    assert "158 steady HIGH (kept, side recorded)" in text
+    assert "8 DRIFT failed (excluded, and not in the three counts before it)" in text
+    assert "the 8 drifted treads by side: 5 level, 0 LOW, 3 HIGH" in text
+
+
+def test_both_reference_qualification_call_sites_pass_the_swept_tiles():
+    """THE DEFECT WAS ONE OF TWO CALL SITES BEING WRONG, TWICE OVER: the early
+    qualifier in `_main` passed `(REFERENCE_BLOCK_M,)` and `arm_alphas` passed
+    `tuple(sorted(ladders))`, which is the same thing whenever no subject has
+    been measured yet, which, references-first, is always. Checked in the
+    source so a third call site cannot be added on the old shape."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "bn_decomposition.py").read_text())
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and getattr(n.func, "id", "") == "qualify_reference"]
+    assert len(calls) == 2, [ast.unparse(c) for c in calls]
+    shapes = sorted(ast.unparse(c.args[1]) for c in calls)
+    assert shapes == ["(*subjects, REFERENCE_BLOCK_M)",
+                      "tuple(sorted(set(ladders) | set(subjects) | "
+                      "{REFERENCE_BLOCK_M}))"], shapes
+
+
+def test_the_skip_warning_says_the_subjects_are_skipped():
+    """The WARNING said "the subjects are measured anyway" while the loop three
+    lines below skipped every arm without a branch, and the 2026-09-09 log
+    printed both."""
+    source = (ROOT / "scripts" / "bn_decomposition.py").read_text()
+    assert "subjects of the arms WITHOUT one are SKIPPED below" in source
+    # The retired sentence survives only where it is history: in the comment
+    # that says what it used to claim, never in the string that is printed.
+    printed = source[source.index('print(f"\\nWARNING: only'):]
+    assert "subjects are measured anyway" not in printed[:1200]
+
+
+def test_the_reference_clock_is_read_off_the_reference_ladder_only():
+    """The arm's own operating point, from its reference rows, drifted rows
+    left out. On the committed session that is 1725 / 1620 / 1560 MHz."""
+    samples, _, _, _ = _session_run()
+    assert [BND.reference_load_clock(samples, bn) for bn in (32, 64, 128)] == [
+        1725.0, 1620.0, 1560.0]
+    assert BND.reference_load_clock(samples, 256) is None, (
+        "an arm that was never measured has no clock, and None is not 1485")
+
+
+def test_appending_under_a_different_header_refuses(tmp_path):
+    """A cells.csv written before a column existed cannot be resumed into.
+
+    The header goes down once, when the file is new, and every later row is
+    written positionally under it. Four clock-evidence columns joined the row
+    on 2026-09-09, so a resume into an older directory would have appended
+    rows carrying four extra fields in a different order under the old header
+    and silently misaligned the file from that row on. R9's runbook says --new
+    for the booked rerun, so no committed directory is affected; this is what
+    makes the NEXT added column say so."""
+    import csv as _csv
+    prov = BND.PV.provenance_block(instrument="queue-deep/test", iters=None)
+    path = tmp_path / "cells.csv"
+    row = BND.Sample(64, 128, 1, 128, 512, 1, 1.0, 0.9, 0.01, 100)
+    BND.append_sample(path, row, prov)
+    # A second row of the same shape appends cleanly.
+    BND.append_sample(path, BND.Sample(64, 128, 2, 256, 1024, 1, 1.0, 0.9,
+                                       0.01, 100), prov)
+    assert len(path.read_text().splitlines()) == 3
+    # Now age the file: drop the four evidence columns from the header and
+    # the rows, exactly as a pre-2026-09-09 writer left it.
+    stale = tmp_path / "stale.csv"
+    dropped = ("sm_clock_start_mhz", "sm_clock_end_mhz", "clock_samples_mhz",
+               "power_w")
+    with path.open(newline="") as fh:
+        old_rows = list(_csv.DictReader(fh))
+    keep = [c for c in old_rows[0] if c not in dropped]
+    with stale.open("w", newline="") as fh:
+        w = _csv.DictWriter(fh, fieldnames=keep)
+        w.writeheader()
+        for r in old_rows:
+            w.writerow({k: r[k] for k in keep})
+    with pytest.raises(SystemExit) as caught:
+        BND.append_sample(stale, row, prov)
+    said = str(caught.value)
+    assert "different set of columns" in said
+    assert "sm_clock_start_mhz" in said
+    assert "Re-run into a NEW directory" in said
+    # And the file is untouched: the refusal happens before the write.
+    assert len(stale.read_text().splitlines()) == 3
+
+
+def test_the_module_docstring_lists_every_clock_column_the_writer_writes():
+    """The docstring enumerates what each cells.csv row carries. Four columns
+    joined the row on 2026-09-09 and the list was not extended, so the file's
+    own description of its artefact was one call site behind its writer."""
+    doc = BND.__doc__
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in doc, column
+    # And every one of them really is on the row the writer builds.
+    row = BND.asdict(BND.Sample(64, 128, 1, 128, 512, 1, 1.0, 0.9, 0.01, 100))
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in row, column
+
+
+def test_the_new_clock_columns_round_trip_through_the_csv(tmp_path):
+    """R3's evidence columns. `time_kernel` computed the first and last
+    under-load sample and this writer dropped them, so the 135 drifted rows of
+    the 2026-09-09 session say a clock moved and cannot say which way."""
+    t = _kernel_timing_at(1560.0, 1485.0, drift_to=1300.0)
+    columns = BND.clock_samples_of(t)
+    assert columns["sm_clock_start_mhz"] == 1560.0
+    assert columns["sm_clock_end_mhz"] == 1300.0
+    # An instrument that carries neither the sample list nor the draw yet
+    # writes them EMPTY, which is NOT DETERMINED and never zero.
+    assert columns["clock_samples_mhz"] == "" and columns["power_w"] is None
+    path = tmp_path / "cells.csv"
+    BND.append_sample(path, BND.Sample(
+        64, 128, 1, 128, 512, 1, t.ms_p50, t.ms_min, t.ms_std, t.iters,
+        sm_clock_load_mhz=t.sm_clock_load_mhz,
+        clock_level_ok=t.clock_level_ok, clock_drift_ok=t.clock_drift_ok,
+        clock_level_side=BND.clock_side_of(t), **columns))
+    header = path.read_text().splitlines()[0].split(",")
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in header, column
+    _, back = BND.read_samples(path)
+    assert (back[0].sm_clock_start_mhz, back[0].sm_clock_end_mhz) == (1560.0, 1300.0)
+    assert back[0].power_w is None and back[0].clock_samples_mhz == ""
+
+
+def test_an_instrument_that_carries_the_samples_and_the_draw_writes_them():
+    """Forward-compatible on purpose: the two fields land on `KernelTiming`
+    with the settle-on-clock warmup, and this writer must pick them up on the
+    day they do rather than in a later commit."""
+    import dataclasses
+
+    @dataclasses.dataclass
+    class Richer:
+        sm_clock_start_mhz: float = 1470.0
+        sm_clock_end_mhz: float = 1485.0
+        clock_samples_mhz: tuple = (1470.0, 1477.5, 1485.0)
+        power_w: float = 691.4
+
+    columns = BND.clock_samples_of(Richer())
+    assert columns["clock_samples_mhz"] == "1470 1478 1485"
+    assert columns["power_w"] == 691.4
+
+
+def test_report_json_carries_both_roofs_for_every_arm():
+    """THE SECOND CALL SITE OF THE RECORD. `report.json`'s arm block rebuilds
+    RefVerdict field by field to drop the sweep's own dataclass, so a field
+    added to the record and not to the rebuild is written as null while the
+    page prints it. That is how `load_clock_mhz` read null on its first run.
+    """
+    _, _, _, payload = _session_run()
+    arms = {a["block_n"]: a for a in payload["arms"]}
+    assert set(arms) == {32, 64, 128}
+    for bn, clock, roof, own in ((32, 1725.0, 776.5, 0.316),
+                                 (64, 1620.0, 729.3, 0.501),
+                                 (128, 1560.0, 702.2, 0.682)):
+        assert arms[bn]["load_clock_mhz"] == clock
+        assert arms[bn]["reference_clock_mhz"] == SESSION_REFERENCE_MHZ
+        assert abs(arms[bn]["roof_at_cell_clock_tflops"] - roof) < 0.1
+        assert abs(arms[bn]["own_clock_fraction"] - own) < 0.001
+        # The fixed-roof fraction, the gate input, is still the one on the row.
+        assert arms[bn]["ceiling_tflops"] == SESSION_CEILING
+    assert payload["clock_state"]["excluded_shaped"] == 8
+    assert payload["clock_state"]["rule"].startswith("DRIFT excludes")
+
+
+# --------------------------------------------------------------------------
+# THE FOURTH TILE HEIGHT (2026-09-10). The arm swept BLOCK_M 32/64/128 against
+# a 256 reference and BLOCK_M=128 produced NO alpha at ANY BLOCK_N, so a fit
+# registered on three heights was made over TWO, and at two heights the model's
+# activation column is not separable from the `1/BN` column that beats it.
+# BLOCK_M=16 is added because it is the height furthest from its compute branch
+# and therefore the one least likely to lose it, which the same session's
+# tile_cap arm measured.
+#
+# EVERY NUMBER BELOW IS REPRODUCED FROM THE COMMITTED CELLS, not asserted: the
+# run's own calibration is read out of its report rather than pinned, because a
+# test that pins a ridge is stale the next time the card is calibrated.
+# --------------------------------------------------------------------------
+
+GAPS_2026_09_10 = BND.COMMITTED_BN_RUN
+
+
+def _committed_2026_09_10():
+    """The committed arm's rows, its report, and the calibration it ran at."""
+    report = GAPS_2026_09_10 / "report.json"
+    cells_csv = GAPS_2026_09_10 / "cells.csv"
+    if not (report.exists() and cells_csv.exists()):
+        pytest.skip(f"the 2026-09-10 session rows are not here: {GAPS_2026_09_10}")
+    payload = json.loads(report.read_text())
+    _, samples = BND.read_samples(cells_csv)
+    return samples, payload
+
+
+def _replay(subjects=None):
+    """`arm_alphas` over the committed rows, at a given subject set.
+
+    `None` means the set the committed arm actually ran, read out of its own
+    report: a replay that pinned the subject list would stop being a replay the
+    moment this file's default moved, which is exactly what happened here.
+    """
+    samples, payload = _committed_2026_09_10()
+    subjects = tuple(payload["subjects"]) if subjects is None else subjects
+    cells, verdicts, spreads = BND.arm_alphas(
+        samples, MIXTRAL, block_ns=tuple(payload["block_ns"]),
+        subjects=subjects, ridge=payload["ridge"],
+        bandwidth_gbps=payload["bandwidth_gbps"], dtype="bf16",
+        base_pinned=payload["pinned"], capability=(9, 0),
+        ceiling_tflops=payload["ceiling_tflops"], sm_count=132)
+    return cells, verdicts, spreads, payload
+
+
+def test_the_committed_arm_replays_cell_for_cell():
+    """THE ACCEPTANCE FOR THE FOURTH HEIGHT: the change is ADDITIVE.
+
+    Every one of the nine committed cells has to come back bit for bit through
+    this file's own `arm_alphas`, or the replay everything below rests on is a
+    replay of something else. Exact equality, not a tolerance: the same code
+    over the same rows is deterministic, and a tolerance here would hide the
+    membership decision flipping.
+    """
+    cells, _, _, payload = _replay()
+    want = {(c["block_n"], c["block_m"]): c for c in payload["cells"]}
+    assert len(cells) == len(want) == 9
+    for c in cells:
+        w = want[(c.block_n, c.block_m)]
+        assert c.alpha == w["alpha"]
+        assert c.alpha_upper == w["alpha_upper"]
+        assert c.alpha_corrected == w["alpha_corrected"]
+        assert c.memory_points == w["memory_points"]
+        assert c.blank == w["blank"]
+
+
+def test_adding_the_fourth_height_leaves_the_committed_cells_untouched():
+    """The same replay with BLOCK_M=16 in the subject set: same nine cells.
+
+    IT IS NOT OBVIOUS AND IT IS THE THING THAT COULD HAVE GONE WRONG. `subjects`
+    reaches `qualify_reference`, whose non-vacuity check scales the compute
+    branch to the SMALLEST SWEPT block size, so adding a smaller height moves
+    that bound. It moves it DOWN, which is the easy direction, and this asserts
+    it rather than reasoning about it.
+    """
+    before = {(c.block_n, c.block_m): (c.alpha, c.alpha_upper, c.blank)
+              for c in _replay((32, 64, 128))[0]}
+    after = {(c.block_n, c.block_m): (c.alpha, c.alpha_upper, c.blank)
+             for c in _replay((16, 32, 64, 128))[0]
+             if c.block_m != BND.SMALL_TILE_BLOCK_M}
+    assert before == after
+    # And the fourth height contributes nothing to a corpus that never ran it,
+    # which is what makes this a replay of the SAME arm and not a new one.
+    assert not [c for c in _replay((16, 32, 64, 128))[0]
+                if c.block_m == BND.SMALL_TILE_BLOCK_M]
+
+
+def test_the_primary_produced_no_alpha_at_any_block_n():
+    """The measurement the fourth height exists because of.
+
+    P5 registered "2 of 3 BN points" for BLOCK_M=128. It returned zero of three,
+    at all three BLOCK_N, every one of them by the parallel-branch rule.
+    """
+    committed = BND.committed_bn_cells()
+    primary = [(bn, alpha) for bn, bm, alpha in committed
+               if bm == BND.PRIMARY_BLOCK_M]
+    assert sorted(bn for bn, _ in primary) == [32, 64, 128]
+    assert all(alpha is None for _, alpha in primary)
+    heights = {bm for _, bm, alpha in committed if alpha is not None}
+    assert heights == {32, 64}, "the fit was made over two heights, not three"
+
+
+def test_the_a_versus_d_label_is_the_whole_story_of_alpha_upper_above_one():
+    """`alpha_upper > 1` EXACTLY when `D > A`, on the committed cells.
+
+    Four of six, and no others. This is the arithmetic the 2026-09-10 analysis
+    identified behind every unphysical number the study has argued about, and it
+    is reproduced here from the rows rather than quoted from the analysis.
+    """
+    cells = [c for c in _replay((16, 32, 64, 128))[0] if c.usable]
+    assert len(cells) == 6
+    above = {(c.block_n, c.block_m) for c in cells if c.alpha_upper > 1.0}
+    flagged = {(c.block_n, c.block_m) for c in cells
+               if c.unphysical_by_arithmetic}
+    assert above == flagged
+    assert len(above) == 4
+    assert above == {(32, 32), (32, 64), (64, 32), (64, 64)}
+    for c in cells:
+        assert c.ad_label == ("D>A" if c.fixed_cost_exceeds_intercept
+                             else "D<A")
+        # The label is the comparison and not a proxy for it.
+        assert (c.fixed_cost_ms > c.intercept_ms) is c.fixed_cost_exceeds_intercept
+
+
+def test_the_weight_stream_slope_reproduces_the_sessions_own_currency():
+    """`w = B / T_w` on the committed cells, against the figures the analysis
+    of this session published from the same rows.
+
+    The denominator is the card's own measured rate as the run recorded it, so
+    the test does not pin a bandwidth: 2.8186 GB of mixtral bf16 expert weights
+    over the rate in the report is one stream, and every cell's `w` is its
+    memory-branch slope divided by that.
+    """
+    cells, _, _, payload = _replay((16, 32, 64, 128))
+    stream = BND.WEIGHT_STREAM_MS(MIXTRAL, "bf16", payload["bandwidth_gbps"])
+    assert stream == pytest.approx(0.6443, abs=0.0002)
+    got = {(c.block_n, c.block_m): c.weight_streams
+           for c in _replay((16, 32, 64, 128))[0] if c.usable}
+    for key, want in (((32, 32), 1.254), ((32, 64), 1.368),
+                      ((64, 32), 0.863), ((64, 64), 0.897),
+                      ((128, 32), 0.683), ((128, 64), 0.731)):
+        assert got[key] == pytest.approx(want, abs=0.001), key
+    # And it really is B over the stream, with no level anywhere in it.
+    for c in cells:
+        if c.weight_streams is not None:
+            assert c.weight_streams == pytest.approx(
+                c.slope_memory_ms / stream, rel=1e-12)
+
+
+def test_the_weight_stream_estimator_is_the_shared_one_the_day_it_lands():
+    """The recurring defect, guarded from the side it actually failed on.
+
+    This test used to loop over `WEIGHT_STREAM_CANDIDATES`, and if no module in
+    it exported the pair it accepted a `LOCAL PROVISIONAL` source string and
+    passed. That is the same list-of-names dependence the defect itself has:
+    `moe.bench.weights` landed on 2026-09-10 with the shared pair in it, the
+    tuple named `moe.bench.weight_stream` and `moe.bench.ai_model`, nothing
+    resolved, the local copy stayed in service, and this test went green over
+    two estimators of one statistic running side by side.
+
+    So it no longer asks the tuple what to check. It asks the FILE whether it
+    still defines the arithmetic, and it asks the numbers whether they came
+    from the shared module.
+    """
+    import moe.bench.weights as W
+
+    # 1. THE ARITHMETIC IS NOT HERE. Any local `E x 3 F H x b / bandwidth` in
+    #    this script is a second estimator whatever it is named, so the check
+    #    is on the source text and not on one retired pair of names.
+    source = (ROOT / "scripts" / "bn_decomposition.py").read_text()
+    for banned in ("_weight_stream_local", "_streams_per_tile_local"):
+        assert banned not in source, (
+            f"{banned} is back in bn_decomposition.py: the local copy of the "
+            "weight-stream estimator is exactly what moe.bench.weights exists "
+            "to replace")
+    assert "LOCAL PROVISIONAL" not in BND.WEIGHT_STREAM_SOURCE
+    assert not hasattr(BND, "_weight_stream_local")
+    assert not hasattr(BND, "_streams_per_tile_local")
+
+    # 2. THE NAMES THIS FILE USES ARE THE SHARED FUNCTIONS THEMSELVES, not
+    #    wrappers around a private copy: identity, not agreement.
+    assert BND.WEIGHT_STREAM_MS is W.weight_stream_ms
+    assert BND.WEIGHT_STREAMS_PER_TILE is W.weight_streams_per_tile
+    assert BND.WEIGHT_STREAM_SOURCE == "moe.bench.weights.weight_stream_ms"
+
+    # 3. AND THE REGISTRATION POINTS AT THE MODULE THAT SHIPPED IT, so the
+    #    resolver cannot silently miss again.
+    assert any(m == "moe.bench.weights" for m, _, _ in
+               BND.WEIGHT_STREAM_CANDIDATES), BND.WEIGHT_STREAM_CANDIDATES
+
+    # 4. THERE IS NO FALLBACK LEFT TO FALL BACK TO. A resolver that finds
+    #    nothing must raise rather than hand back a copy with a label on it.
+    saved = BND.WEIGHT_STREAM_CANDIDATES
+    try:
+        BND.WEIGHT_STREAM_CANDIDATES = (
+            ("moe.bench.no_such_module_at_all", "weight_stream_ms",
+             "weight_streams_per_tile"),)
+        with pytest.raises(ImportError):
+            BND._load_weight_stream()
+    finally:
+        BND.WEIGHT_STREAM_CANDIDATES = saved
+
+    # 5. And the number is the shared module's, to the last bit, on the pair
+    #    the 2026-09-10 synthesis quotes.
+    rate = 4374.299702465323
+    assert (BND.WEIGHT_STREAM_MS(MIXTRAL, "bf16", rate)
+            == W.weight_stream_ms(MIXTRAL, "bf16", rate))
+
+
+def test_report_json_carries_the_weight_stream_denominator_and_its_estimator():
+    """THE SAME DEFECT FROM THE OTHER SIDE, found 2026-09-10: the page was
+    updated and `report.json` was not.
+
+    The file's own note said the provisional estimator "is used and SAYS SO on
+    the page and in report.json", and two columns were added "to the cell table
+    and to report.json". The page did say so; the payload contained no key with
+    "weight" or "stream" in it at all, so a reader working from the JSON alone
+    saw `weight_streams` as a bare ratio with no denominator and no estimator
+    identity, and could not tell the LOCAL PROVISIONAL copy from the shared one
+    the day it lands. `bootstrap.scope` is the discipline this file states for
+    exactly that case.
+    """
+    samples, payload = _committed_2026_09_10()
+    args = BND.build_parser().parse_args(
+        ["--group-m", "16", "--card", "nvidia_h200", "--draws", "50"])
+    _, _, out = BND.analyse_run(
+        samples, MIXTRAL, args, ridge=payload["ridge"],
+        bandwidth_gbps=payload["bandwidth_gbps"], b=BND.dtype_bytes("bf16"),
+        ceiling_tflops=payload["ceiling_tflops"], ceiling_source="replay",
+        capability=(9, 0), base_pinned=payload["pinned"],
+        compiles={}, executed={}, sm_count=132,
+        block_ns=tuple(payload["block_ns"]),
+        subjects=tuple(payload["subjects"]), draws=50)
+    assert out["weight_stream_ms"] == pytest.approx(0.6443, abs=0.0002)
+    assert out["weight_stream_source"] == BND.WEIGHT_STREAM_SOURCE
+    # The whole payload still serialises, and every cell's w is that stream.
+    json.dumps(out)
+    for cell in out["cells"]:
+        if cell["weight_streams"] is not None:
+            assert cell["weight_streams"] == pytest.approx(
+                cell["slope_memory_ms"] / out["weight_stream_ms"], rel=1e-12)
+
+
+def test_the_plan_page_re_derives_the_committed_arms_yield(capsys):
+    """`committed_bn_cells` had no runtime call site.
+
+    `SESSION_2026_09_10`'s note said the numbers in the `SUBJECT_BLOCK_M`
+    paragraph are re-derived on every plan page by `committed_bn_cells` AND
+    `published_small_tile_branch`. Only the second was ever called: a
+    re-publish that changed which cells the bn arm yielded was caught by this
+    test file and NOT by the page the reader sees. Both are read there now.
+    """
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+              "--power-draws", "20", "--power-seeds", "1",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    committed = BND.committed_bn_cells()
+    primary = [a for _, bm, a in committed if bm == BND.PRIMARY_BLOCK_M]
+    assert (f"yielded {sum(1 for a in primary if a is not None)} of "
+            f"{len(primary)} BLOCK_M={BND.PRIMARY_BLOCK_M} cells") in out
+    assert "was made over 2: [32, 64]" in out
+
+
+def test_the_under_occupied_cell_carries_a_registered_check_on_both_branches(
+        capsys):
+    """The warp bill scoped its warning to the COMPUTE branch and nothing
+    argued the memory branch was untouched.
+
+    Four of eight warps holding no output tile carries fewer outstanding loads
+    as well as fewer issue slots, which inflates B and therefore w and alpha at
+    the ONE cell the whole identification gain rests on: BLOCK_M=16 at BN=64
+    and 128 alone leaves corr(g1, 1/BN) at the two-height value, so the move is
+    the BN=32 cell. The corpus cannot settle it, so the run registers the check
+    it can make.
+    """
+    assert BND.under_occupied_cells(
+        dict(SWEEP.FIXED, num_warps=8), BND.SUBJECT_BLOCK_M,
+        BND.DEFAULT_BLOCK_N) == ((16, 32),)
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+              "--power-draws", "20", "--power-seeds", "1",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    assert "NEITHER of its branches is comparable" in out
+    assert "B, and therefore w and alpha, are overstated" in out
+    assert ("REGISTERED CHECK, BM=16 x BN=32: read its w against the line "
+            "BM=32 and BM=64 set at the SAME BN=32") in out
+
+
+def test_the_registered_warp_check_reads_the_slope_it_was_registered_on():
+    """The check performed, on cells that do and do not carry the height.
+
+    On the committed arm, which never ran BLOCK_M=16, it has to say so rather
+    than print a number. On a grid where the peers are present it reports the
+    excess over the line those peers set at the same BLOCK_N, and the sign is
+    the whole content: above the line is the warp grid, not the tiling.
+    """
+    cells, _, _, payload = _replay((16, 32, 64, 128))
+    pinned = payload["pinned"]
+    said = BND.under_occupied_reading(cells, pinned, (16, 32, 64, 128),
+                                      tuple(payload["block_ns"]))
+    assert said and "no w on this page" in said[0]
+
+    # The same reading with the height present, using the committed w values at
+    # BN=32 (1.254 at BM=32, 1.368 at BM=64) and a planted BLOCK_M=16 cell.
+    by_key = {(c.block_m, c.block_n): c for c in cells}
+    peer32, peer64 = by_key[(32, 32)], by_key[(64, 32)]
+    line = peer32.weight_streams + (
+        peer64.weight_streams - peer32.weight_streams) * (
+            math.log2(16) - math.log2(32)) / (math.log2(64) - math.log2(32))
+    hot = BND.AlphaCell(
+        block_n=32, block_m=16, alpha=None, alpha_upper=None,
+        alpha_corrected=None, memory_points=8, treads=8, spread=None,
+        basis="planted", weight_streams=line * 1.20, slope_memory_ms=1.0)
+    said = BND.under_occupied_reading([*cells, hot], pinned,
+                                      (16, 32, 64, 128),
+                                      tuple(payload["block_ns"]))
+    assert len(said) == 1
+    assert f"against {line:.4f} on the BM=32/64 line at this BN, +20.0%" in \
+        said[0]
+
+
+def test_the_warp_check_is_registered_against_the_peers_it_is_read_against():
+    """THE RECURRING DEFECT, on the one cell the identification gain rests on.
+
+    `under_occupied_watch` registered the check against `peers[0], peers[1]`
+    and `under_occupied_reading` performed it against `peers[0], peers[-1]`.
+    At the default subjects those are BM=32/64 registered and BM=32/128
+    performed, which is a threefold difference in the excess reported at
+    BM=16 x BN=32.
+
+    THE CORPUS CANNOT SEE IT, which is why it survived: every BLOCK_M=128 cell
+    of the committed arm carries `weight_streams is None`, so the reading's own
+    filter leaves two peers and the two expressions agree. This test therefore
+    builds the case the round exists to produce, a THIRD full-grid height
+    carrying a w, and asserts the two name the same pair there.
+    """
+    pinned = dict(SWEEP.FIXED, num_stages=4, num_warps=8, GROUP_SIZE_M=16,
+                  BLOCK_SIZE_K=64)
+    pinned.pop("BLOCK_SIZE_N", None)
+    subjects, bns = (16, 32, 64, 128), (32,)
+    assert BND.under_occupied_cells(pinned, subjects, bns) == ((16, 32),)
+    # Three full-grid peers at this BN, all carrying a w, which the committed
+    # arm does not have and the pod run is expected to.
+    ws = {32: 1.254, 64: 1.368, 128: 1.900}
+    cells = [BND.AlphaCell(block_n=32, block_m=bm, alpha=None,
+                           alpha_upper=None, alpha_corrected=None,
+                           memory_points=8, treads=8, spread=None,
+                           basis="planted", weight_streams=w,
+                           slope_memory_ms=1.0)
+             for bm, w in ws.items()]
+    cells.append(BND.AlphaCell(
+        block_n=32, block_m=16, alpha=None, alpha_upper=None,
+        alpha_corrected=None, memory_points=8, treads=8, spread=None,
+        basis="planted", weight_streams=2.0, slope_memory_ms=1.0))
+
+    registered = "\n".join(BND.under_occupied_watch(pinned, subjects, bns))
+    performed = "\n".join(BND.under_occupied_reading(cells, pinned, subjects,
+                                                     bns))
+    reg = re.search(r"read its w against the line BM=(\d+) and BM=(\d+)",
+                    registered)
+    perf = re.search(r"on the BM=(\d+)/(\d+) line", performed)
+    assert reg and perf, (registered, performed)
+    assert reg.groups() == perf.groups(), (reg.groups(), perf.groups())
+    # And the pair really is a CHOICE here: there are three peers to pick from,
+    # so this is not two expressions agreeing because only one pair exists.
+    assert len(BND._occupied_peers(pinned, subjects, 16, 32)) == 3
+
+    # The excess is read off the pair both of them name, and no other.
+    m0, m1 = (int(g) for g in reg.groups())
+    expect = ws[m0] + (ws[m1] - ws[m0]) * (
+        math.log2(16) - math.log2(m0)) / (math.log2(m1) - math.log2(m0))
+    assert f"against {expect:.4f} on the BM={m0}/{m1} line" in performed
+
+
+def test_the_small_tile_evidence_is_read_from_the_corpus_not_quoted():
+    """BLOCK_M=16 yields a branch, and the file that says so is committed."""
+    branch = BND.published_small_tile_branch()
+    assert branch.block_m == 16
+    assert branch.memory_points == 56
+    assert branch.branch_ratio == pytest.approx(5.46, abs=0.01)
+    # Far outside the band that discarded every BLOCK_M=128 cell.
+    assert abs(branch.branch_ratio - 1.0) > BND.TOLERANCE
+    # Same pinned constants as this sweep, which is what makes it evidence.
+    assert (branch.num_warps, branch.num_stages) == (
+        BND.SWEEP.FIXED["num_warps"], BND.SWEEP.FIXED["num_stages"])
+    assert branch.gates_passed == branch.gates_total == 9
+
+
+def test_a_missing_small_tile_report_refuses_rather_than_defaulting(tmp_path):
+    """A fourth height whose evidence cannot be read is a fourth height on
+    nothing, and this file has shipped a paragraph citing numbers no file
+    contained once already."""
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_small_tile_branch(tmp_path / "gone.json")
+    (tmp_path / "empty.json").write_text(json.dumps({"ladder": {}}))
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_small_tile_branch(tmp_path / "empty.json")
+
+
+def test_the_fourth_height_is_what_separates_the_two_rival_columns():
+    """WHY 16, computed. The model's only BN-dependent column is proportional
+    to BLOCK_M; the rival that fits this session 3.1x better goes as 1/BN and
+    NOT with BLOCK_M. Over the two heights that survived they are collinear.
+
+    AND THE GAIN IS THE BN=32 CELL. BLOCK_M=16 at BN=64 and 128 alone buys
+    nothing, which is why that cell is the one the plan page annotates.
+    """
+    bns = (32, 64, 128)
+    two = BND.design_collinearity(
+        MIXTRAL, [(bm, bn) for bm in (32, 64) for bn in bns])
+    three = BND.design_collinearity(
+        MIXTRAL, [(bm, bn) for bm in (16, 32, 64) for bn in bns])
+    without_bn32 = BND.design_collinearity(
+        MIXTRAL, [(16, 64), (16, 128)]
+        + [(bm, bn) for bm in (32, 64) for bn in bns])
+    assert two == pytest.approx(0.818, abs=0.002)
+    assert three == pytest.approx(0.663, abs=0.002)
+    assert three < two - 0.1
+    assert without_bn32 == pytest.approx(two, abs=0.005)
+
+
+def test_the_plan_prints_four_heights_with_their_bills_and_the_new_cost(capsys):
+    """The acceptance for the plan page, asserted on what it prints."""
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--sm-count", "132", "--ridge", "155.93",
+                     "--bandwidth-gbps", "4374.3", "--power-draws", "20",
+                     "--power-seeds", "2",
+                     "--plant-noise", "0.008"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "subjects     [16, 32, 64, 128]" in out
+    for bm in (16, 32, 64, 128, 256):
+        assert f"BLOCK_M={bm:4d}  smem" in out
+        assert f"BLOCK_M={bm:4d}  output" in out
+    # Every height the card can hold is priced, and the fourth adds treads.
+    assert "BN=  32 BM=  16  treads  8  rows 16..128" in out
+    assert "timings      1836 (108 treads x 17 reps)" in out
+    assert "estimate     2754 s of GPU" in out
+    # The one under-occupied cell is named where it is chosen.
+    assert ("BN=  32  BLOCK_M=  16  output    512 elements of   1024"
+            in out)
+    assert "UNDER-OCCUPIED: 4 of 8 warps hold a tile" in out
+    # And the identification line says what the height was added for.
+    assert "corr(g1, 1/BN) over this design's 12 cells = 0.552" in out
+    assert "without BLOCK_M=16 the same number is 0.663" in out
+    assert "56 of 56 treads memory bound at B/C = 5.46" in out
+
+
+def test_no_height_the_card_cannot_hold_survives_the_bill():
+    """The refusals still bite at the fourth height. BLOCK_M=16 passes both
+    hard bills on an H200 and on an A100; the warp bill is a record and refuses
+    nothing, which is stated here so the two cannot be confused."""
+    for capability in ((9, 0), (8, 0)):
+        pinned = dict(SWEEP.FIXED, BLOCK_SIZE_N=32, num_stages=4, num_warps=8,
+                      BLOCK_SIZE_K=64)
+        res = SWEEP.tile_resources(pinned, 16, 2, capability)
+        assert res.refusal == ""
+        assert res.smem_bytes == 4 * (16 * 64 + 64 * 32) * 2
+        assert res.acc_registers_per_thread == 16 * 32 / (32 * 8)
+    bill = BND.warp_tile_bill(dict(SWEEP.FIXED, BLOCK_SIZE_N=32, num_warps=8),
+                              16)
+    assert bill.occupied is False and bill.warps_with_a_tile == 4
+    assert not hasattr(bill, "refusal")
+    # The two settings that sit exactly ON the boundary have both been run.
+    for bm, bn in ((32, 32), (16, 64)):
+        on_edge = BND.warp_tile_bill(
+            dict(SWEEP.FIXED, BLOCK_SIZE_N=bn, num_warps=8), bm)
+        assert on_edge.elements == on_edge.needed
+        assert on_edge.occupied is True
+
+
+def test_neither_the_band_nor_the_sharpness_bar_moves_with_the_subject_set():
+    """C1's band and C6's bar are properties of the CORPUS, not of the design.
+
+    Both were re-checked against the fourth height on 2026-09-10 and neither
+    needed to move: the band is derived from the one committed pair of arms that
+    differ in BLOCK_SIZE_N, and the bar is the sharpest two-point slope in that
+    same pair. A pre-registration that moved because a future sweep grew a
+    height would not be one.
+    """
+    points = BND.published_two_point_alpha_a()
+    assert BND.alpha_a_band_from_published(points) == BND.ALPHA_A_BAND
+    assert {p.block_m for p in points} == {32, 64}
+    sharpest, _ = BND.sharpest_two_point_sd()
+    assert sharpest == pytest.approx(min(p.sd for p in points))
+    assert BND.ALPHA_A_SD_CEILING < sharpest
+    # And the constants do not read the subject set at all.
+    source = Path(BND.__file__).read_text()
+    band = source[source.index("ALPHA_A_BAND = "):]
+    assert "SUBJECT_BLOCK_M" not in band.split("\n")[0]
+
+
+def test_the_design_power_verdict_is_no_longer_one_seed():
+    """A number that decides whether a pod is rented may not be a property of
+    the seed.
+
+    At the fallback spread the single-seed figure ran 0.0223 to 0.4171 over six
+    consecutive seeds of the THREE-height design, and seed 0 was the only one
+    that cleared the 0.025 bar. The median is reported over several planted
+    realisations and the verdict is scored on the WORST of them.
+    """
+    common = dict(b=2, ceiling_tflops=712.259, capability=(9, 0),
+                  block_ns=(32, 64, 128), subjects=(16, 32, 64, 128),
+                  sm_count=132, noise=0.004, noise_source="planted", draws=40)
+    power = BND.design_power(
+        MIXTRAL, args_for(capability="9.0", group_m=16, reps=9, draws=40,
+                          power_seeds=4), **common)
+    assert len(power.alpha_a_sds) == 4
+    assert power.alpha_a_sd == pytest.approx(
+        statistics.median(power.alpha_a_sds))
+    assert power.worst_alpha_a_sd == max(power.alpha_a_sds)
+    # The verdict is the WORST one's, which is a strictly harder bar than the
+    # single draw it replaces.
+    assert power.resolves is (max(power.alpha_a_sds)
+                              <= BND.ALPHA_A_SD_CEILING)
+    said = "\n".join(power.lines())
+    assert "MEDIAN over 4 planted realisations" in said
+    assert "scored on the WORST" in said
+
+
+def test_one_seed_moves_the_world_and_the_resample_together():
+    """THE RECURRING DEFECT, at one of two call sites, found 2026-09-10.
+
+    `design_power` varies the PLANTED world's seed per realisation. The
+    bootstrap inside `analyse_run` went on resampling at `args.seed`, frozen
+    across every iteration, so the five figures the design-power line reported
+    were not the five seeds its own docstring and `--power-seeds`' help
+    describe, and `--seed k --power-seeds 1` did not reproduce the k-th of
+    them. Measured at that commit, `--dry-run --group-m 16 --power-seeds 5
+    --seed 0` gave 0.1774, 0.0836, 0.0801, 0.0252, 0.2684 while the five single
+    seeds gave 0.1774, 0.0831, 0.1136, 0.0696, 0.1734: only the base seed
+    agreed. This asserts the identity that failed, at every seed and not only
+    at the first.
+    """
+    common = dict(b=BND.dtype_bytes("bf16"), ceiling_tflops=682.1,
+                  capability=(9, 0), block_ns=(32, 64, 128),
+                  subjects=BND.SUBJECT_BLOCK_M, sm_count=132, noise=0.008,
+                  noise_source="planted", draws=20)
+
+    def power(seed, n):
+        return BND.design_power(
+            MIXTRAL, args_for(capability="9.0", group_m=16, seed=seed,
+                              power_seeds=n), **common)
+
+    loop = power(0, 4)
+    assert len(loop.alpha_a_sds) == 4
+    for k, got in enumerate(loop.alpha_a_sds):
+        assert got == power(k, 1).alpha_a_sds[0], (
+            f"realisation {k} of the loop is not what --seed {k} produces")
+    # And a loop that starts elsewhere is the same realisations, shifted.
+    assert power(1, 3).alpha_a_sds == loop.alpha_a_sds[1:]
+
+
+def test_both_spreads_on_the_design_power_record_are_the_same_realisations():
+    """`alpha_a_sd` was the median over the loop and `alpha_b_sd` was whatever
+    the LAST iteration left behind: two statistics over different things on one
+    record. Both are medians over the realisations now."""
+    power = BND.design_power(
+        MIXTRAL, args_for(capability="9.0", group_m=16, power_seeds=4),
+        b=BND.dtype_bytes("bf16"), ceiling_tflops=682.1, capability=(9, 0),
+        block_ns=(32, 64, 128), subjects=BND.SUBJECT_BLOCK_M, sm_count=132,
+        noise=0.008, noise_source="planted", draws=20)
+    assert len(power.alpha_b_sds) == len(power.alpha_a_sds) == 4
+    assert power.alpha_b_sd == pytest.approx(
+        statistics.median(power.alpha_b_sds))
+    assert power.alpha_a_sd == pytest.approx(
+        statistics.median(power.alpha_a_sds))
+    assert power.alpha_b_sd != power.alpha_b_sds[-1] or len(
+        set(power.alpha_b_sds)) == 1
+
+
+#: The ruler the four-height self-test's command line NAMES: ridge 155.93 Op/B
+#: over 4374.3 GB/s, the 2026-09-10 H200 calibration. The ceiling its planted
+#: worlds are built on is planted as their product, the relation a ruler is,
+#: rather than read from whichever machine runs the test.
+FOUR_HEIGHT_RIDGE = 155.93
+FOUR_HEIGHT_BANDWIDTH_GBPS = 4374.3
+
+
+def _plant_the_named_ruler(monkeypatch) -> float:
+    """Build `main`'s planted worlds on the ruler the command line names.
+
+    `main` takes the ceiling from the ATTACHED card's calibration and, with
+    none, from `_hypothesis_ceiling`; `--ridge` and `--bandwidth-gbps` do not
+    reach it. So the same argv planted a different world on every box: 669.6
+    TFLOP/s on session 5's pod, and a transcription of the 2026-09-02
+    calibration (712.259) on a laptop. Both doors are closed here and the
+    ceiling is ridge x bandwidth.
+    """
+    from moe.bench import roofline
+    ceiling = FOUR_HEIGHT_RIDGE * FOUR_HEIGHT_BANDWIDTH_GBPS / 1e3
+    monkeypatch.setattr(roofline, "load_measured", lambda *a, **k: None)
+    monkeypatch.setattr(BND, "_hypothesis_ceiling", lambda dtype: (
+        ceiling, "planted: the ridge x bandwidth this command line names"))
+    return ceiling
+
+
+def test_the_four_height_self_test_still_separates_its_planted_worlds(
+        capsys, monkeypatch, no_cuda):
+    """The design self-test, at the pinning the arm runs and at four heights.
+
+    The claim is unchanged: C2 PASSES in TRUTH and in NO-A and FAILS in the two
+    worlds with a term the model does not contain. Run through `main`, so the
+    subject default is what a pod would get.
+
+    WHAT A POD GETS IS 3 INVALID, AND S4 IS WHY. This asserted DONE until
+    2026-09-23, which held only on a laptop: its worlds were planted on the
+    712.259 transcription, while sessions 4 and 5 planted them on their own
+    calibrations and printed sd(alpha_a) 0.0440 against 0.0076 here, with
+    identical point estimates. Nothing about CUDA differs; the ceiling does,
+    and S4 at this pinning is a STEP in it (the test below). The world is now
+    planted on the ruler this command line names, on every box, and at that
+    ruler, as at every H200 calibration since the one 712.259 transcribes,
+    S4 FAILS and the other four gates PASS.
+    """
+    _plant_the_named_ruler(monkeypatch)
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "17", "--plant-noise", "0.008",
+                     "--sm-count", "132", "--ridge", str(FOUR_HEIGHT_RIDGE),
+                     "--bandwidth-gbps", str(FOUR_HEIGHT_BANDWIDTH_GBPS),
+                     "--draws", "200", "--power-seeds", "2"])
+    out = capsys.readouterr().out
+    verdicts = {r.name: r.verdict for r in exit_codes.parse_result_lines(out)}
+    assert verdicts == {"S1": exit_codes.PASS, "S2": exit_codes.PASS,
+                        "S3": exit_codes.PASS, "S4": exit_codes.FAIL,
+                        "S5": exit_codes.PASS}, verdicts
+    assert code == exit_codes.INVALID
+    assert "TRUTH: C2=True, MISSING: C2=False" in out
+    assert "NO-A: C2=True, BN-DRIFT: C2=False" in out
+    # Four heights are in the planted grid, not three.
+    assert "subjects     [16, 32, 64, 128]" in out
+
+
+def test_the_laptop_ceiling_is_labelled_a_transcription_not_the_repos_ruler(
+        capsys, monkeypatch, no_cuda):
+    """The label said "the 2026-09-01 H200 bf16 calibration in this repo" of a
+    number committed on 2026-09-02 and replaced three times since (the repo's
+    ruler reads 663.0), and that number decides S4 (the test below). What is
+    asserted is the WORDING, never the transcribed value."""
+    from moe.bench import roofline
+    monkeypatch.setattr(roofline, "load_measured", lambda *a, **k: None)
+    BND.main(["--dry-run", "--capability", "9.0"])
+    line = next(ln for ln in capsys.readouterr().out.splitlines()
+                if ln.startswith("ceiling"))
+    assert "TRANSCRIBED" in line and "HYPOTHESIS" in line, line
+    assert "in this repo" not in line, line
+
+
+def test_s4_at_the_four_height_pinning_is_a_step_in_the_ceiling_made_by_one_reference(
+        monkeypatch):
+    """WHY THE POD AND THE LAPTOP DISAGREED, found 2026-09-23 after two sessions
+    recorded it as unexplained.
+
+    The planted bandwidth is `PLANT_COMPUTE_FRACTION x ceiling / rho`, so every
+    planted time scales as 1/ceiling while `--overhead-ms` stays 0.15 ms. At
+    GROUP_SIZE_M=16 the TRUTH world's BLOCK_N=32 reference (BLOCK_M=256) is
+    MEMORY bound, and `compute_reference` refuses it on its through-origin
+    error, which sits at the 5% bound; the arm imports a reference instead. The
+    lower the ceiling, the smaller the fixed cost's share and the closer that
+    error comes to 5%, until some bootstrap draw qualifies the memory-bound
+    ladder as the arm's OWN compute branch. Those draws put alpha_a near -0.5,
+    and one of 200 is enough to move the pstdev from 0.0076 to 0.0440 (seed 0;
+    seed 1 has four such draws and reads 0.0841, against 0.0082 without them).
+    At seed 0 the step lies between 690 and 700 TFLOP/s: the 712.259
+    transcription is above it, and every H200 calibration since the one it
+    transcribes (668.5, 668.9, 682.1, 663.0, 669.6) is below. Both ceilings
+    here are INPUTS, planted, not rulers read.
+    """
+    seen: list[tuple[float, str, float | None]] = []
+    real = BND.arm_alphas
+
+    def spy(samples, cfg, **kw):
+        cells, verdicts, spreads = real(samples, cfg, **kw)
+        if kw.get("rng") is not None:           # a bootstrap draw
+            bn32 = next(v for v in verdicts if v.block_n == 32)
+            seen.append((kw["ceiling_tflops"], bn32.basis,
+                         BND.decompose(cells, cfg, "EXA").alpha_a))
+        return cells, verdicts, spreads
+
+    monkeypatch.setattr(BND, "arm_alphas", spy)
+    args = args_for(capability="9.0", group_m=16, reps=17, draws=200)
+    low = FOUR_HEIGHT_RIDGE * FOUR_HEIGHT_BANDWIDTH_GBPS / 1e3
+    high = 712.259
+    got = {}
+    for ceiling in (low, high):
+        _, pay = BND.planted_world_gates(
+            MIXTRAL, args, alpha_b=BND.planted_alpha_b(16), alpha_a=0.14,
+            extra=None, noise=0.008, b=2, ceiling_tflops=ceiling,
+            capability=(9, 0), block_ns=(32, 64, 128),
+            subjects=BND.SUBJECT_BLOCK_M, sm_count=132, draws=200)
+        got[ceiling] = pay
+    # The same estimate either side of the step: only the spread moved.
+    assert got[low]["fits"]["pooled_exact"]["alpha_a"] == pytest.approx(
+        got[high]["fits"]["pooled_exact"]["alpha_a"], abs=1e-3)
+    sd_low = got[low]["bootstrap"]["alpha_a_sd"]
+    sd_high = got[high]["bootstrap"]["alpha_a_sd"]
+    assert sd_high <= BND.ALPHA_A_SD_CEILING < sd_low
+    # And the whole difference is the draws in which BLOCK_N=32 qualified its
+    # own BLOCK_M=256 ladder: none above the step, some below it, and without
+    # them the spread below the step is the spread above it.
+    own = {c: [a for cc, basis, a in seen if cc == c and basis == "OWN"]
+           for c in (low, high)}
+    assert own[high] == [] and own[low], own
+    rest = [a for c, basis, a in seen if c == low and basis != "OWN"]
+    assert statistics.pstdev(rest) == pytest.approx(sd_high, rel=0.2)
+    assert statistics.pstdev(rest) <= BND.ALPHA_A_SD_CEILING
+
+
+def test_the_fit_carries_the_same_w_the_cell_does():
+    """DEFECT (E) OF THE 2026-09-10 BUILD AUDIT, on this arm, and the
+    de-duplication guard that comes with fixing it.
+
+    `arm_alphas` built its fits as `SWEEP.fit_ladder(pts, bm, verdict.ref,
+    margin)` and passed none of the four keywords that are the weight-stream
+    denominator, so every `LadderFit` here carried `weight_streams is None` and
+    its `w_note` read "w n/a: the caller named no model, dtype and measured
+    bandwidth" on the arm whose w values ARE the session's headline. The cells
+    carried a w all along, computed a second way in this file.
+
+    Both routes are now live, so they are checked against each other: the fit's
+    `weight_streams.streams` and the cell's `weight_streams` are the same slope
+    over the same stream time and must agree to the last bit. Two routes that
+    are allowed to differ is how this study got two of everything.
+    """
+    samples, payload = _committed_2026_09_10()
+    subjects = tuple(payload["subjects"])
+    cells, verdicts, _ = BND.arm_alphas(
+        samples, MIXTRAL, block_ns=tuple(payload["block_ns"]),
+        subjects=subjects, ridge=payload["ridge"],
+        bandwidth_gbps=payload["bandwidth_gbps"], dtype="bf16",
+        base_pinned=payload["pinned"], capability=(9, 0),
+        ceiling_tflops=payload["ceiling_tflops"], sm_count=132)
+    by_bn = {v.block_n: v for v in verdicts}
+    checked = 0
+    for c in cells:
+        verdict = by_bn.get(c.block_n)
+        if verdict is None or not verdict.ok or c.weight_streams is None:
+            continue
+        pts, _ = BND.collapse(samples, c.block_n, c.block_m)
+        margin = max(BND.SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * (c.spread or 0.0))
+        fit = BND.SWEEP.fit_ladder(
+            pts, c.block_m, verdict.ref, margin, model=MIXTRAL, dtype="bf16",
+            bandwidth_gbps=payload["bandwidth_gbps"],
+            bandwidth_source="the run's own calibrated rate")
+        assert fit.weight_streams is not None, (c.block_n, c.block_m)
+        assert fit.weight_streams.streams == pytest.approx(
+            c.weight_streams, rel=1e-12), (c.block_n, c.block_m)
+        # And the rendering carries the rate, which is what makes it a
+        # measurement rather than a ratio.
+        assert "weight-streams/M-tile" in fit.w_note()
+        assert "the run's own calibrated rate" in fit.w_note()
+        checked += 1
+    assert checked >= 6, checked

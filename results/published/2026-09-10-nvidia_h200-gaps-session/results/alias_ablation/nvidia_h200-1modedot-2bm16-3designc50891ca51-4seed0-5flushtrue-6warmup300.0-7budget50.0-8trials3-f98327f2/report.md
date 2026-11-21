@@ -1,0 +1,372 @@
+# alpha by ablation, without the byte model   (981a42f)
+
+card: NVIDIA H200
+output directory: /workspace/results/gaps-nvidia_h200/alias_ablation/nvidia_h200-1modesum-2bm16-3design598d40ee59-4seed0-5flushtrue-6warmup300.0-7budget50.0-8trials3-5d0bc0eb
+Everything below is written there as report.md, beside plan.json and cells.jsonl.
+candidate values: agrees with alpha_refit.py on both rival values
+ceilings: measured_nvidia_h200.yaml, read_stream roof 4613 GB/s, L2 60.0 MiB
+
+## the prediction, before anything runs
+
+  P1  alpha = 0.558, 90% band 0.529-0.588  (today's refit, 10,813 rows)
+      TEMPO arXiv:2608.13057 fits 0.33; this repo's retracted value is 0.10.
+      This ablation runs at GROUP_SIZE_M=1, where the refit's own split reads 0.570,
+      so that is the closer comparison and both are printed.
+
+  P2  alpha is not a scalar: at GROUP_SIZE_M=1 the reuse distance is one pass over
+      one expert's weight block, so alpha should track PER-EXPERT BYTES against L2.
+
+  PASS/FAIL below is against P1's band, and the report names which of the three
+  candidate values the measured band actually supports.
+
+## the design
+
+compute mode sum   BLOCK_M 16   tile {'BLOCK_N': 128, 'BLOCK_K': 64, 'GROUP_M': 1, 'num_warps': 8, 'num_stages': 3}   replicates 9
+
+  model                   E      K      N   MiB/expert  weight GiB  rows/expert   act frac
+  mixtral-8x7b            8   4096  28672       224.0        1.75           16     0.0006
+  mixtral-8x7b            8   4096  28672       224.0        1.75           32     0.0011
+  mixtral-8x7b            8   4096  28672       224.0        1.75           64     0.0022
+  mixtral-8x7b            8   4096  28672       224.0        1.75          128     0.0045
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19           16     0.0031
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19           32     0.0063
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19           64     0.0125
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19          128     0.0250
+  deepseek-v2-lite       64   2048   2816        11.0        0.69           16     0.0057
+  deepseek-v2-lite       64   2048   2816        11.0        0.69           32     0.0114
+  deepseek-v2-lite       64   2048   2816        11.0        0.69           64     0.0227
+  deepseek-v2-lite       64   2048   2816        11.0        0.69          128     0.0455
+  deepseek-v3           256   7168   4096        56.0       14.00           16     0.0039
+  deepseek-v3           256   7168   4096        56.0       14.00           32     0.0078
+  deepseek-v3           256   7168   4096        56.0       14.00           64     0.0156
+  deepseek-v3           256   7168   4096        56.0       14.00          128     0.0312
+  control-l2-resident    32   2048   4096        16.0        0.50           16     0.0039
+  control-l2-resident    32   2048   4096        16.0        0.50           32     0.0078
+  control-l2-resident    32   2048   4096        16.0        0.50           64     0.0156
+  control-l2-resident    32   2048   4096        16.0        0.50          128     0.0312
+
+  L2 on the attached card: 60.0 MiB. P2 says alpha is near 1 above it and near 0 below.
+
+  [PASS] every rung divides exactly, so no mask and no padding
+          N % BLOCK_N, K % BLOCK_K and M-tiles % GROUP_M are all zero
+  [PASS] the ladder has at least three rungs, so D(n) can be shown affine
+          tile ladder [1, 2, 4, 8]; two rungs fit a line through two points and can never contradict the form
+  [PASS] the ladder starts at one tile, which is the only source of W
+          smallest rung is 1 tiles. D(1) is the denominator of every alpha here; without it W has to come from a byte model, which is the thing this experiment exists to avoid
+  [PASS] the activation stream is small against the weight stream
+          worst rung streams 4.55% as many activation bytes as weight bytes (limit 5%). This bounds the L2-capacity confound: the aliased variant frees L2, and what it could free it for is the activation re-stream
+  [PASS] the aliased arm is L2-resident, so it removes traffic and not work
+          extent 'block': the widest aliased footprint is 1.75 MiB against 25% of an L2 of 60.0 MiB (15.00 MiB). An aliased arm that misses is not an ablation of the weight read, it is a second copy of it, and D would be noise around zero
+  [PASS] P2 is testable: the models straddle L2
+          per-expert weight blocks run 11.0 to 224.0 MiB against an L2 of 60.0 MiB
+
+## what this costs
+
+  BOOKING   `alias_ablation.py --run` on one card. These are that RUN's figures,
+            whether or not this invocation is one: a plan is read before there is a card.
+
+  KERNEL    5.0 min   20 rungs x 3 passes x 9 replicates, priced from the byte model at 0.61
+                        of this card's read roof, with time_kernel's ten-iteration floor applied
+                        per rung. The probe adds 0.1 min of that.
+  EXCLUDES              Triton specialisations (one per model per pinning, plus the
+                        constexpr variant), tensor allocation and fill, and the
+                        closed-form correctness reductions. THIS IS NOT A WALL FIGURE.
+  WALL     12.8 min   the KERNEL figure at the one measured wall-over-kernel ratio in
+                        this repository, 2.35x (replicate_noise_floor.py, mixtral_g1:
+                        127 s of wall against a 54 s model), PLUS 1.2 min charged
+                        outright for the probe: 6 distinct specialisations at 12 s each,
+                        with their tensor sets, which that ratio was not measured over
+                        (mixtral_g1 compiled one pinning). BOOK THIS ONE.
+  OF WHICH               10% is the probe, and a probe that clears no pinning
+                        stops the arm having spent only that. It is the cheapest
+                        thing here that can refuse the expensive one.
+
+  The 0.61 is MEASURED, on 2026-09-01, on five geometries; a probe that finds a
+  faster pinning makes both figures over-estimates, which is the right direction.
+
+## what this design can see (MDE)
+
+Effect under test: the three candidates span 0.1 to 0.558, so an interval wider than 0.11 cannot pick one.
+Noise assumption: per-pass timing spread MEASURED over the 26 published reports; median 0.77%, worst 1.82%. Within-cell, so a FLOOR.
+Design: 9 interleaved replicates per rung, ladder topping out at 8 tiles, D(1) held above 25% of a pass by the signal gate.
+
+  at the median spread 0.77%: MDE on alpha 0.040 against the 0.11 limit  resolves the candidates
+  at the worst  spread 1.82%: MDE on alpha 0.095 against the 0.11 limit  resolves the candidates
+
+An MDE above the limit does not make a PASS wrong; it makes a FAIL uninformative, and
+it is the number to raise --replicates against before the box is rented.
+
+## the probe: can any pinning see DRAM at all
+
+  --dot-fallback allow: if no sum-mode pinning clears, the fastest dot-mode one runs
+  the ladder, P1 comes back UNKNOWN and the process exits 1. That 1 is 'not asked',
+  not 'refuted', and the verdict block below says so in words.
+
+  Every pinning below is timed on the SMALLEST model at (1, 2) tiles. The number that
+  decides is the ALIASED ladder's achieved request bandwidth: while it is BELOW the
+  card's DRAM roof, the shared non-DRAM path is the slower one, DRAM has slack in the
+  normal arm, and no ablation of DRAM can move the clock however large alpha is.
+
+  warps  stages  BLOCK_K  compute      aliased GB/s   of roof   note
+      8       3       64  sum               2641     0.573   
+      8       4      128  sum               2869     0.622   
+      4       5      128  sum               5500     1.192   
+      8       4      128  dot               9047     1.961   
+      8       3       64  dot               8815     1.911   
+     16       4      128  dot               6100     1.322   
+
+  measured read roof: 4613 GB/s; a pinning clears at 1.3333333333333333 of it.
+  ADOPTED: {'num_warps': 8, 'num_stages': 4, 'block_k': 128, 'compute': 'dot'} at 9047 GB/s, 1.961 of the roof: no sum-mode pinning cleared, so --dot-fallback allow took the fastest dot-mode one and the answer it produces is a LOWER BOUND, not P1's answer
+
+## the probe changed the COMPUTE MODE: sum -> dot
+
+  READ THIS RUN AS A LOWER BOUND, NOT AS A REFUTATION.
+  
+  P1 is UNKNOWN, not FAIL. dot mode moves the reduction onto the tensor
+  cores, which is what buys the headroom the sum kernel could not reach,
+  and it costs the estimator one copy of the per-tile compute cost. The
+  interval it produces is a bound BELOW alpha and it is not alpha, so no
+  candidate can be refuted from this page and none is.
+  
+  The process exits 1 CLAIM_FAIL because exit_codes.classify counts an
+  UNKNOWN CLAIM against the gate, which is the right rule: DONE requires
+  every gate to say PASS in so many words. But the ledger will latch that
+  1 and not retry, so the arm is FINISHED WITHOUT AN ANSWER TO P1 and the
+  next attempt has to be booked by a human. What it takes is a sum-mode
+  pinning that clears the roof: widen the sum half of PROBE_PINNINGS, or
+  run with --compute sum --no-probe at a pinning found by hand.
+
+## re-pinned by the probe; output directory is now /workspace/results/gaps-nvidia_h200/alias_ablation/nvidia_h200-1modedot-2bm16-3designc50891ca51-4seed0-5flushtrue-6warmup300.0-7budget50.0-8trials3-f98327f2
+
+  [PASS] every rung divides exactly, so no mask and no padding
+          N % BLOCK_N, K % BLOCK_K and M-tiles % GROUP_M are all zero
+  [PASS] the ladder has at least three rungs, so D(n) can be shown affine
+          tile ladder [1, 2, 4, 8]; two rungs fit a line through two points and can never contradict the form
+  [PASS] the ladder starts at one tile, which is the only source of W
+          smallest rung is 1 tiles. D(1) is the denominator of every alpha here; without it W has to come from a byte model, which is the thing this experiment exists to avoid
+  [PASS] the activation stream is small against the weight stream
+          worst rung streams 4.55% as many activation bytes as weight bytes (limit 5%). This bounds the L2-capacity confound: the aliased variant frees L2, and what it could free it for is the activation re-stream
+  [PASS] in dot mode every rung stays below this card's ridge
+          all rungs below 152.8 FLOP/byte (measured_nvidia_h200.yaml: 668.5 TFLOP/s bf16 over 4374.5 GB/s = 152.8 FLOP/byte)
+  [PASS] the aliased arm is L2-resident, so it removes traffic and not work
+          extent 'block': the widest aliased footprint is 1.75 MiB against 25% of an L2 of 60.0 MiB (15.00 MiB). An aliased arm that misses is not an ablation of the weight read, it is a second copy of it, and D would be noise around zero
+  [PASS] P2 is testable: the models straddle L2
+          per-expert weight blocks run 11.0 to 224.0 MiB against an L2 of 60.0 MiB
+
+## measuring: 20 rungs to do, 0 already on disk
+
+  7 rungs moved more than 5% between the two idle-instant SM clock samples of the RETIRED check: ['mixtral-8x7b|t2|bm16', 'qwen2-57b-a14b|t2|bm16', 'mixtral-8x7b|t4|bm16']. That check
+  detects whether the first sample caught the idle boost, not throttling; the under-load
+  DRIFT verdict is clock_drift_ok, and the interleaved order plus the placebo gate are what
+  protect a paired difference from either.
+
+  DRIFT: 16 of 20 rungs had their under-load clock move more than 5% during the trials: ['mixtral-8x7b|t1|bm16', 'qwen2-57b-a14b|t1|bm16', 'deepseek-v3|t1|bm16'].
+  Those samples were not taken at one clock and the rung's median is a blend; re-measure them.
+
+  LEVEL: 1 of 20 rungs ran below 95% of the clock this card's roof was measured at (LEVEL low): ['qwen2-57b-a14b|t4|bm16'].
+  D(n) and D(1) are differences between two ladders, and a sag part way up one moves
+  them by different amounts, so the slope over intercept does not cancel it. Those
+  rungs have to be re-measured before their alpha means anything.
+  LEVEL: 19 of 20 rungs ran ABOVE 105% of the clock this card's roof was measured at (LEVEL high): ['mixtral-8x7b|t1|bm16', 'qwen2-57b-a14b|t1|bm16', 'deepseek-v2-lite|t1|bm16'].
+  That is a boosted memory-bound rung, not a sag: the time is at one clock and alpha is a
+  ratio of such times. Kept. What is not comparable is a fixed-roof fraction, which this
+  arm never forms; a reader who needs one reads roof_at_cell_clock.
+
+## the measurements
+
+  model                  tiles   rows/e     normal    aliased          D    placebo
+  mixtral-8x7b               1       16     0.4366     0.2007     0.2359     0.0001
+  mixtral-8x7b               2       32     0.8559     0.3941     0.4618    -0.0003
+  mixtral-8x7b               4       64     1.7161     0.7814     0.9346    -0.0002
+  mixtral-8x7b               8      128     3.4322     1.5565     1.8756     0.0032
+  qwen2-57b-a14b             1       16     0.5509     0.2529     0.2980    -0.0004
+  qwen2-57b-a14b             2       32     0.8089     0.4894     0.3195    -0.0183
+  qwen2-57b-a14b             4       64     1.3902     0.9832     0.4070    -0.0418
+  qwen2-57b-a14b             8      128     2.5150     2.0257     0.4893     0.0304
+  deepseek-v2-lite           1       16     0.1808     0.0896     0.0912    -0.0001
+  deepseek-v2-lite           2       32     0.2430     0.1719     0.0711    -0.0002
+  deepseek-v2-lite           4       64     0.4053     0.3315     0.0738    -0.0207
+  deepseek-v2-lite           8      128     0.7372     0.6604     0.0768     0.0150
+  deepseek-v3                1       16     3.4077     1.5487     1.8590     0.0012
+  deepseek-v3                2       32     5.6366     3.1463     2.4903    -0.0674
+  deepseek-v3                4       64    10.3352     6.2257     4.1095    -0.0555
+  deepseek-v3                8      128    19.4435    12.6163     6.8272    -0.0463
+  control-l2-resident        1       16     0.1329     0.0663     0.0666     0.0000
+  control-l2-resident        2       32     0.1795     0.1265     0.0530    -0.0002
+  control-l2-resident        4       64     0.2846     0.2453     0.0393     0.0010
+  control-l2-resident        8      128     0.5448     0.4791     0.0657    -0.0096
+
+  D is the ablation difference and is the HBM cost of that rung's weight reads.
+  placebo is a SECOND normal launch minus the first: two identical configurations,
+  so it is the noise floor D has to beat and nothing else.
+
+## the ISA check: did the aliased kernel really issue the loads?
+
+  rung                          variant           PTX      ld.global   cp.async   global loads   mma.sync
+  mixtral-8x7b|t1|bm16          normal           6c62564b6ded          1         46             47         16
+  mixtral-8x7b|t1|bm16          aliased          6c62564b6ded          1         46             47         16
+  mixtral-8x7b|t1|bm16          constexpr-alias  e81513f50450          8         10             18         16
+
+  ld.global ALONE would read zero here: Triton pipelines its global-to-shared copies
+  as cp.async at num_stages > 1, so the gate is on the SUM. normal and aliased are
+  the same compiled kernel driven by three runtime scalars, so equal counts are a
+  property of the design; constexpr-alias is the naive form and is shown folding or not.
+
+## alpha, from the ablation alone, as a bracket
+
+  Two estimators, because exactly one of them is right and which one depends on how
+  L2 service and HBM service compose. DIFFERENCE subtracts the aliased ladder and is
+  exact if the two costs ADD; DIRECT fits the normal ladder with the fixed cost taken
+  from the aliased ladder's own n=0 intercept and is exact if the kernel runs at
+  max(L2, HBM). For any alpha <= 1 they BRACKET the truth, and the bracket is narrow
+  exactly when r, the aliased ladder's per-tile cost over one weight read, is small.
+
+  model                  MiB/expert    W (ms)   fixed  difference  direct       r      R^2
+  mixtral-8x7b               224.0    0.2315  0.0068       1.014   1.008   0.837   1.0000
+  qwen2-57b-a14b              35.0    0.3017 -0.0148       0.093   0.507   0.842   0.9722
+  deepseek-v2-lite            11.0    0.0812  0.0078      -0.013   0.494   1.004   0.1356
+  deepseek-v3                 56.0    1.8537 -0.0389       0.386   0.668   0.852   0.9987
+  control-l2-resident         16.0    0.0549  0.0084       0.009   0.522   1.074   0.0128  (L2-RESIDENT CONTROL)
+
+  model                  bracket           90% interval        per-rung alphas (difference)
+  mixtral-8x7b         1.008 to 1.014       0.941 to 1.034   n=2:0.958  n=4:0.987  n=8:0.993
+  qwen2-57b-a14b       0.093 to 0.507       0.078 to 0.533   n=2:0.072  n=4:0.122  n=8:0.092
+  deepseek-v2-lite     -0.013 to 0.494      -0.030 to 0.520   n=2:-0.220  n=4:-0.064  n=8:-0.023
+  deepseek-v3          0.386 to 0.668       0.370 to 0.687   n=2:0.340  n=4:0.404  n=8:0.382
+  control-l2-resident  0.009 to 0.522      -0.007 to 0.540   n=2:-0.204  n=4:-0.136  n=8:-0.002
+
+  W is the measured time of ONE full pass over every expert's weight block, read off
+  the n=1 rung. Both alphas are a fitted slope over that intercept, so every unit of
+  time cancels and no bandwidth, byte count or ridge enters either number.
+
+  POOLED (median over the non-control models): alpha is in 0.239 to 0.588, 90% interval 0.229 to 0.604
+  against the refit's 0.558 (0.529-0.588) pooled and 0.570 at GROUP_SIZE_M=1.
+
+## P2, reported and deliberately NOT gated
+
+  A step in four points is a pattern, not a test. This study has already retracted one
+  monotone-in-expert-count reading that was an artefact of pooling, so the ordering is
+  printed and left for a design that varies the footprint continuously.
+
+  deepseek-v2-lite         11.0 MiB/expert  below L2   alpha -0.013 to 0.494
+  qwen2-57b-a14b           35.0 MiB/expert  below L2   alpha 0.093 to 0.507
+  deepseek-v3              56.0 MiB/expert  below L2   alpha 0.386 to 0.668
+  mixtral-8x7b            224.0 MiB/expert  above L2   alpha 1.008 to 1.014
+
+## what else differs between aliased and normal
+
+  BOUNDED. L2 capacity. The aliased variant leaves L2 to the activations, whose stream
+  is 4.55% of the weight stream at the worst rung, so the most the freed
+  capacity can be worth is that fraction of D. The output write is identical in both.
+
+  BOUNDED BY MEASUREMENT. TLB, page behaviour and code path. The L2-resident control
+  ran the same ladder on a geometry whose PER-EXPERT block fits in L2, so NORMAL
+  has no HBM re-read to save. Its W is 0.0549 ms and its alpha brackets 0.009 to 0.522.
+  Whatever survives there is not weight traffic.
+
+  BOUNDED BY THE BRACKET, AND GATED. L2 service, and the cache-set distribution that
+  makes it worse. Both variants push n W bytes through L2. At --alias-extent 'block' the aliased arm touches
+  one BLOCK_N x K column block, 1.75 MiB, walked with the normal arm's own
+  sequential K stride over thousands of lines rather than pinned to a handful of
+  slices. Whatever it still costs shows up in the ALIASED ladder's own slope, r, and
+  `bracket` FAILS the page if r exceeds 0.9, above which the two estimators
+  land on the same side of alpha and the interval between them is not a bracket.
+
+  ABSORBED BY CONSTRUCTION. Any cost that scales with the extra-tile count and is not a
+  weight re-read lands in alpha, because (n-1) is the regressor. That is a property of
+  the estimator and no control can remove it.
+
+## what this run could see (MDE, on its own spread)
+
+Effect under test: the three candidates span 0.1 to 0.558, so an interval wider than 0.11 cannot pick one.
+Noise MEASURED IN THIS RUN: pass-to-pass pstdev over p50 across the interleaved replicates.
+The plan's line above used the corpus's WITHIN-cell spread, which is a floor and not this.
+Signal MEASURED IN THIS RUN: D(1) is 50.4% of the weakest one-tile pass, the number
+signal_gate scores, against the 25% floor the plan had to assume.
+Design: 9 interleaved replicates per rung, ladder topping out at 8 tiles.
+
+  at the median spread 0.44%: MDE on alpha 0.011 against the 0.11 limit  resolves the candidates
+  at the worst  spread 3.34%: MDE on alpha 0.087 against the 0.11 limit  resolves the candidates
+
+An MDE above the limit does not make a PASS wrong; it makes a FAIL uninformative. This
+ladder is already spent, so a CANNOT here means the interval below cannot pick a candidate,
+and the lever is --replicates: the signal cleared its floor, so the scatter is what binds.
+
+## gates
+
+RESULT: VALIDITY every-rung-divides-exactly-so-no-mask-and-no-padding PASS N % BLOCK_N, K % BLOCK_K and M-tiles % GROUP_M are all zero
+  [PASS] every rung divides exactly, so no mask and no padding
+          N % BLOCK_N, K % BLOCK_K and M-tiles % GROUP_M are all zero
+RESULT: VALIDITY the-ladder-has-at-least-three-rungs-so-D-n-can-be-shown- PASS tile ladder [1, 2, 4, 8]; two rungs fit a line through two points and can never contradict the form
+  [PASS] the ladder has at least three rungs, so D(n) can be shown affine
+          tile ladder [1, 2, 4, 8]; two rungs fit a line through two points and can never contradict the form
+RESULT: VALIDITY the-ladder-starts-at-one-tile-which-is-the-only-source-o PASS smallest rung is 1 tiles. D(1) is the denominator of every alpha here; without it W has to come from a byte model, which is the thing this experiment exists to
+  [PASS] the ladder starts at one tile, which is the only source of W
+          smallest rung is 1 tiles. D(1) is the denominator of every alpha here; without it W has to come from a byte model, which is the thing this experiment exists to avoid
+RESULT: VALIDITY the-activation-stream-is-small-against-the-weight-stream PASS worst rung streams 4.55% as many activation bytes as weight bytes (limit 5%). This bounds the L2-capacity confound: the aliased variant frees L2, and what it co
+  [PASS] the activation stream is small against the weight stream
+          worst rung streams 4.55% as many activation bytes as weight bytes (limit 5%). This bounds the L2-capacity confound: the aliased variant frees L2, and what it could free it for is the activation re-stream
+RESULT: VALIDITY in-dot-mode-every-rung-stays-below-this-card-s-ridge PASS all rungs below 152.8 FLOP/byte (measured_nvidia_h200.yaml: 668.5 TFLOP/s bf16 over 4374.5 GB/s = 152.8 FLOP/byte)
+  [PASS] in dot mode every rung stays below this card's ridge
+          all rungs below 152.8 FLOP/byte (measured_nvidia_h200.yaml: 668.5 TFLOP/s bf16 over 4374.5 GB/s = 152.8 FLOP/byte)
+RESULT: VALIDITY the-aliased-arm-is-L2-resident-so-it-removes-traffic-and PASS extent 'block': the widest aliased footprint is 1.75 MiB against 25% of an L2 of 60.0 MiB (15.00 MiB). An aliased arm that misses is not an ablation of the weig
+  [PASS] the aliased arm is L2-resident, so it removes traffic and not work
+          extent 'block': the widest aliased footprint is 1.75 MiB against 25% of an L2 of 60.0 MiB (15.00 MiB). An aliased arm that misses is not an ablation of the weight read, it is a second copy of it, and D would be noise around zero
+RESULT: VALIDITY P2-is-testable-the-models-straddle-L2 PASS per-expert weight blocks run 11.0 to 224.0 MiB against an L2 of 60.0 MiB
+  [PASS] P2 is testable: the models straddle L2
+          per-expert weight blocks run 11.0 to 224.0 MiB against an L2 of 60.0 MiB
+RESULT: VALIDITY level-every-rung-ran-at-the-roof-s-measured-clock FAIL 1 of 20 rungs ran BELOW 95% of the clock this card's roof was measured at (LEVEL low), first qwen2-57b-a14b|t4|bm16. alpha is a slope over an intercept of the s
+  [FAIL] level: every rung ran at the roof's measured clock
+          1 of 20 rungs ran BELOW 95% of the clock this card's roof was measured at (LEVEL low), first qwen2-57b-a14b|t4|bm16. alpha is a slope over an intercept of the same difference, so a sag part way up one ladder does not cancel; 19 rung(s) ran ABOVE 105% of it (LEVEL high, first mixtral-8x7b|t1|bm16), which is a boosted memory-bound rung and not a sag: kept, its fixed-roof fraction is not comparable and this arm forms none
+RESULT: VALIDITY ISA-the-aliased-kernel-issued-the-same-global-loads PASS 20 rungs compared. First, mixtral-8x7b|t1|bm16: normal 47 global-load instructions (ld.global 1, cp.async 46); aliased 47 (ld.global 1, cp.async 46). Every rung
+  [PASS] ISA: the aliased kernel issued the same global loads
+          20 rungs compared. First, mixtral-8x7b|t1|bm16: normal 47 global-load instructions (ld.global 1, cp.async 46); aliased 47 (ld.global 1, cp.async 46). Every rung's two launches are ONE compiled kernel. The constexpr-aliased kernel, the naive way to write this, issues 18 and DID fold, which is the hazard happening in front of you
+RESULT: VALIDITY correctness-each-variant-reproduced-its-closed-form PASS 20 checks at relative RMS <= 1e-03; worst 7.11e-06. In dot mode the ALIASED side has no cheap closed form and is UNCHECKED, so nothing here says the aliasing to
+  [PASS] correctness: each variant reproduced its closed form
+          20 checks at relative RMS <= 1e-03; worst 7.11e-06. In dot mode the ALIASED side has no cheap closed form and is UNCHECKED, so nothing here says the aliasing took effect; the normal side is checked against a real matmul on the first, middle and last expert
+RESULT: VALIDITY headroom-the-shared-path-is-faster-than-DRAM-so-DRAM-cou PASS weakest model deepseek-v2-lite: the aliased ladder delivers 9061 GB/s of weight requests against a measured read roof of 4613 GB/s, a ratio of 1.964 (limit 1.33
+  [PASS] headroom: the shared path is faster than DRAM, so DRAM could bind
+          weakest model deepseek-v2-lite: the aliased ladder delivers 9061 GB/s of weight requests against a measured read roof of 4613 GB/s, a ratio of 1.964 (limit 1.3333333333333333). Below 1 the shared non-DRAM path is slower than DRAM, so DRAM had slack in the normal arm and no ablation of it can move the clock however large alpha is
+RESULT: VALIDITY attribution-D-1-reaches-the-card-s-floor-for-the-bytes-i PASS weakest one-tile rung deepseek-v2-lite|t1|bm16: D(1) is 0.0912 ms against a floor of 0.1600 ms for the same bytes at the card's measured read roof, a ratio of 0
+  [PASS] attribution: D(1) reaches the card's floor for the bytes it removes
+          weakest one-tile rung deepseek-v2-lite|t1|bm16: D(1) is 0.0912 ms against a floor of 0.1600 ms for the same bytes at the card's measured read roof, a ratio of 0.570 (limit 0.25). Below 1 the difference is smaller than the fastest this card can move those bytes, so it is not the cost of moving them
+RESULT: VALIDITY placebo-two-identical-launches-differ-by-far-less-than-D FAIL worst rung deepseek-v2-lite|t4|bm16: two identical configurations differ by 0.0207 ms against a D of 0.0738 ms, 28.0% (limit 10%)
+  [FAIL] placebo: two identical launches differ by far less than D
+          worst rung deepseek-v2-lite|t4|bm16: two identical configurations differ by 0.0207 ms against a D of 0.0738 ms, 28.0% (limit 10%)
+RESULT: VALIDITY signal-the-weight-read-is-most-of-what-the-kernel-does PASS weakest one-tile rung deepseek-v2-lite|t1|bm16 has D(1) at 50.4% of its own time (limit 25%). Below that the difference is measuring something the weight-read l
+  [PASS] signal: the weight read is most of what the kernel does
+          weakest one-tile rung deepseek-v2-lite|t1|bm16 has D(1) at 50.4% of its own time (limit 25%). Below that the difference is measuring something the weight-read label does not cover
+RESULT: VALIDITY form-D-n-is-affine-in-n-1-as-W-1-alpha-n-1-requires FAIL worst R^2 0.1356 on deepseek-v2-lite (limit 0.97). Below it the functional form is wrong and slope-over-intercept is not alpha
+  [FAIL] form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires
+          worst R^2 0.1356 on deepseek-v2-lite (limit 0.97). Below it the functional form is wrong and slope-over-intercept is not alpha
+RESULT: VALIDITY control-an-L2-resident-expert-shows-no-extra-tile-cost PASS the control's bracket is 0.009 to 0.522 on a W of 0.0549 ms, against a top end of 0.494 for the weakest real model. It must be consistent with zero to within 0.
+  [PASS] control: an L2-resident expert shows no extra-tile cost
+          the control's bracket is 0.009 to 0.522 on a W of 0.0549 ms, against a top end of 0.494 for the weakest real model. It must be consistent with zero to within 0.15: its re-reads hit L2, so anything it does show is the size of an extra-tile cost that is not weight traffic
+RESULT: VALIDITY bracket-r-1-so-the-two-estimators-sit-on-opposite-sides FAIL worst r is 1.004 on deepseek-v2-lite (limit 0.9). r is the aliased ladder's per-tile cost over one weight read, and the difference estimator is (alpha - r)/(1 -
+  [FAIL] bracket: r < 1, so the two estimators sit on opposite sides
+          worst r is 1.004 on deepseek-v2-lite (limit 0.9). r is the aliased ladder's per-tile cost over one weight read, and the difference estimator is (alpha - r)/(1 - r): above 1 that denominator changes sign, both ends land on the same side of alpha, and the printed interval is not a bracket
+RESULT: VALIDITY resolution-the-interval-can-separate-the-three-candidate UNKNOWN 90% interval is 0.376 wide (limit 0.11). The candidates span 0.1 to 0.558, and an interval wider than half the largest gap between adjacent candidates cannot pi
+  [NOT TESTABLE] resolution: the interval can separate the three candidates
+          90% interval is 0.376 wide (limit 0.11). The candidates span 0.1 to 0.558, and an interval wider than half the largest gap between adjacent candidates cannot pick one. r, the aliased ladder's per-tile cost over one weight read, is 0.837 to 1.004, and r is what sets the bracket's width: the two estimators differ by roughly 2r/(1-r^2), and `bracket` voids the page above r = 0.9. Narrowing it means a cheaper aliased ladder: --alias-extent block spreads the alias over a whole BLOCK_N x K column block instead of one tile, and --probe finds the pinning that delivers requests fastest
+RESULT: CLAIM P1-the-ablation-agrees-with-the-refit-alpha-0-558 UNKNOWN NOT A REFUTATION: dot mode cannot answer P1 at all, so this exit 1 means the question was not asked. It puts alpha at 0.229 or above, a LOWER BOUND biased LOW b
+  [NOT TESTABLE] P1: the ablation agrees with the refit, alpha = 0.558
+          NOT A REFUTATION: dot mode cannot answer P1 at all, so this exit 1 means the question was not asked. It puts alpha at 0.229 or above, a LOWER BOUND biased LOW by one copy of the per-tile compute cost on top of everything the bracket already carries (upper end 0.604). Re-run in sum mode
+
+VERDICT: REFUTED or VOID. 4 gate(s) failed: level: every rung ran at the roof's measured clock; placebo: two identical launches differ by far less than D; form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires; bracket: r < 1, so the two estimators sit on opposite sides
+READ THIS RUN AS A LOWER BOUND, NOT AS A REFUTATION.
+
+P1 is UNKNOWN, not FAIL. dot mode moves the reduction onto the tensor
+cores, which is what buys the headroom the sum kernel could not reach,
+and it costs the estimator one copy of the per-tile compute cost. The
+interval it produces is a bound BELOW alpha and it is not alpha, so no
+candidate can be refuted from this page and none is.
+
+The process exits 1 CLAIM_FAIL because exit_codes.classify counts an
+UNKNOWN CLAIM against the gate, which is the right rule: DONE requires
+every gate to say PASS in so many words. But the ledger will latch that
+1 and not retry, so the arm is FINISHED WITHOUT AN ANSWER TO P1 and the
+next attempt has to be booked by a human. What it takes is a sum-mode
+pinning that clears the roof: widen the sum half of PROBE_PINNINGS, or
+run with --compute sum --no-probe at a pinning found by hand.
+
+EXIT: 3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable

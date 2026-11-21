@@ -1,0 +1,87 @@
+SELF TEST. 13 planted worlds; 8 of them are refusals, because a scorer that
+has only ever seen a clean design has never been shown to refuse one.
+
+  traffic: elasticity 0.05: the measured time is nearly all traffic. RAW-STANDS, so C2 PASSES and the study's raw readings hold.
+    fit 0.0568  interval [0.0379, 0.0747]
+    [PASS] every registered verdict reproduced
+    [PASS] planted 0.05 recovered as 0.0568
+
+  clock-carries: elasticity 0.60: past the upper edge. C2 FAILS, and that FAIL is the finding -- C3's DIRECTION is retracted. THE WORLD THAT MAKES C2'S FAIL BRANCH REACHABLE.
+    fit 0.6068  interval [0.5879, 0.6247]
+    [PASS] every registered verdict reproduced
+    [PASS] planted 0.6 recovered as 0.6068
+
+  unregistered-gap: elasticity 0.32: inside the gap the analysis never stopped in. C1 PASSES -- the design resolved WHICH world -- and C2 FAILS with 'no registered consequence' rather than a sentence written afterwards.
+    fit 0.3268  interval [0.3079, 0.3447]
+    [PASS] every registered verdict reproduced
+    [PASS] planted 0.32 recovered as 0.3268
+
+  straddling: elasticity 0.25 at ten times the noise: the interval crosses the lower edge. C1 FAILS, which is a result about the DESIGN -- and C2's FAIL then reads 'not shown', not 'shown false'. THE WORLD THAT MAKES C1'S FAIL BRANCH REACHABLE.
+    fit 0.2748  interval [0.1570, 0.3922]
+    [PASS] every registered verdict reproduced
+
+  one-clock: A REFUSAL: four duty states that all settled at the same clock. The elasticity is undefined and V1 says so; without this gate the arm would report a slope over nothing.
+    fit None  interval none
+    [PASS] every registered verdict reproduced
+
+  two-tiles: A REFUSAL: one row ran a different BLOCK_M. V2 reads the tile off the rows and fails; a slope across states that ran different kernels compares kernels, not clocks.
+    fit 0.0568  interval [0.0379, 0.0747]
+    [PASS] every registered verdict reproduced
+    [PASS] planted 0.05 recovered as 0.0568
+
+  thin: A REFUSAL: two repeats and three treads. V3 fails on depth; the bootstrap over two repeats has three distinct draws and an interval from it is a decoration.
+    fit 0.05  interval [0.0500, 0.0500]
+    [PASS] every registered verdict reproduced
+
+  drifting: A REFUSAL: a third of the rows drifted. V4 fails; what is left is a subsample the card chose. The DRIFT rows are the ones excluded, and the LEVEL rows beside them are NOT.
+    fit 0.0595  interval [0.0337, 0.0712]
+    [PASS] every registered verdict reproduced
+
+  sagging-burst: A REFUSAL: the clock held BETWEEN bursts and sagged 20% INSIDE them. Every DRIFT verdict passes and the per-call time is still an average over two operating points; V5 is the only gate that can see it.
+    fit 0.0568  interval [0.0379, 0.0747]
+    [PASS] every registered verdict reproduced
+
+  thin-cell-sag: A REFUSAL: one row sagged inside its bursts in a cell DRIFT thinned to 5 of 13 repeats. One crossing row is inside V5_ROW_BUDGET and is not half the cell, but it is half or more of what the cell draws in 11% of the interval's bootstrap draws, so it can set an interval edge while the point estimate stands. THE WORLD THAT MAKES V5's bootstrap share clause reachable: every other V5 refusal fails on the row count or the point-estimate share.
+    fit 0.0671  interval [0.0516, 0.1891]
+    [PASS] every registered verdict reproduced
+
+  memory-clock-moved: A REFUSAL: the HBM clock tracked the duty cycle. V6 fails; a slope fitted across states whose memory clock moved is a blend of issue rate and bandwidth and is not this arm's quantity.
+    fit 0.0568  interval [0.0379, 0.0747]
+    [PASS] every registered verdict reproduced
+
+  level-both-sides: NOT a refusal, and that is the point. One row planted LEVEL HIGH, one LEVEL LOW and one DRIFTING, in one state. Both LEVEL rows are KEPT and the DRIFT row is EXCLUDED; a scorer that filtered on LEVEL would drop the boosted rows, which at a duty cycle below 1.0 are the experiment.
+    fit 0.0568  interval [0.0376, 0.0746]
+    [PASS] every registered verdict reproduced
+    [PASS] planted 0.05 recovered as 0.0568
+
+  slower-at-speed: A REFUSAL, and the one that was scored as the pre-registered PASS until V7 existed: elasticity -0.35, a call that got SLOWER as the clock rose at a byte-identical kernel. RAW-STANDS is OPEN below zero, so C1 and C2 both read PASS and the page would print 'the clock is not what is wrong with alpha' over a run whose clock channel is broken. V7 is the only gate that can see it. THE WORLD THAT MAKES V7'S FAIL BRANCH REACHABLE.
+    fit -0.3432  interval [-0.3621, -0.3253]
+    [PASS] every registered verdict reproduced
+    [PASS] planted -0.35 recovered as -0.3432
+
+RESULT: VALIDITY S1 PASS the scorer reproduces every registered verdict in every planted world | measured every planted row above | gate all rows agree
+VALIDITY S1  PASS     the scorer reproduces every registered verdict in every planted world
+           measured every planted row above
+           gate     all rows agree
+
+RESULT: VALIDITY S2 PASS the estimator RECOVERS the planted elasticity | measured 6 worlds with a planted value | gate within the world's stated tolerance
+VALIDITY S2  PASS     the estimator RECOVERS the planted elasticity
+           measured 6 worlds with a planted value
+           gate     within the world's stated tolerance
+
+RESULT: VALIDITY S3 PASS and a different planted elasticity gives a different answer | measured 4 distinct recovered values over 6 worlds | gate >= 2 distinct values
+VALIDITY S3  PASS     and a different planted elasticity gives a different answer
+           measured 4 distinct recovered values over 6 worlds
+           gate     >= 2 distinct values
+
+RESULT: VALIDITY S4 PASS the design RESOLVES: the interval is inside the registered target on the recovery worlds | measured every recovery world's half-width | gate <= 0.075
+VALIDITY S4  PASS     the design RESOLVES: the interval is inside the registered target on the recovery worlds
+           measured every recovery world's half-width
+           gate     <= 0.075
+
+RESULT: VALIDITY S5 PASS each CLAIM gate FAILS in at least one planted world | measured C1 reached FAIL: True; C2 reached FAIL: True | gate both C1 and C2 reach FAIL somewhere
+VALIDITY S5  PASS     each CLAIM gate FAILS in at least one planted world
+           measured C1 reached FAIL: True; C2 reached FAIL: True
+           gate     both C1 and C2 reach FAIL somewhere
+
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

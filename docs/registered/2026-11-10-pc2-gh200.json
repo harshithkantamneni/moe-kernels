@@ -1,0 +1,3255 @@
+{
+ "build decisions (to design-D6's sketch, before any page)": [
+  "item 1 (the decode tile): PC's own regcheck page (2026-11-06, regcheck-rcp) reads the stamped copy's occupancy equal to the plain kernel's at 16x64x128 s4 (3 = 3, both GEMMs) and s3 (5 = 5), and not at s2 (w2: 8 against 7, which refused PC's whole block D through one variant). PC2 stamps s4 in its own unit (sd, nodrop) and s3 in another (sd3, droppable), and leaves s2 out; the reader refuses any stamped compile whose CTAs per SM are not its tile's registered occupancy, on every compile (the naive specialisation included)",
+  "the plain-kernel limit: every gated cell's plain-kernel event median comes from the perturb unit (PLAIN), printed beside every stamp reading and standing alone where a stamped variant is refused; its limit is stated (no per-CTA life, no c0 split, no kappa). No counter (ncu) unit is planned: no PC2 question needs a counter, PC's published counter page already holds D16 Mixtral T4 and T16, and the counter route has never run a naive cell on a GPU",
+  "item 3: the 4-per-SM tiles' stamped occupancy is unknown until PC2's regcheck (PC never compiled them stamped); a FAIL refuses unit sw's stamps and leaves PLAIN alone for its cells, DESCRIPTIVE",
+  "item 4: the naive cells run at vLLM's T <= 32 tile; each naive cell without followers has an aligned twin (the same active experts and live CTAs), each with followers a naive pair (the same live CTAs, no follower)",
+  "item 5, the optional E 32 block-scan align page, is NOT BUILT: the block-scan path at E 32 declared needs T k >= 1024 (private_weight_reference.align_path), the pinned decode page caps T at 128 (r3_decode.page_from), and no SEEN model with k >= 8 declares 32 experts (Granite-3.0-3B E 40, OLMoE E 64); a synthetic shape cannot enter the pinned counter step. The optional plain-kernel ladders are built in: PLAIN covers every cell at no extra unit",
+  "PC's driver, probe and launcher are pinned by PC's registration (and vm_run.sh lists the drivers it may start), so PC2 runs on copies: scripts/gh200_pc2_session.sh (PC's driver; probe=pc runs scripts/instr_probe_pc2.py), scripts/instr_probe_pc2.py (PC's probe; its rules module is pc2common) and scripts/vm_run_pc2.sh (vm_run.sh; gh200_pc2_session.sh one of its drivers), each changed only on lines marked PC2 and held to its parent by a test",
+  "the regcheck compiles ONE specialisation per tile per variant (the first cell's: on pc2-n, the naive specialisation of 16x64x128 s4; the aligned twins' specialisation is regchecked in pc2-d's variant, not in pc2-n's), as PC's probe does; every other stamped compile is held by the reader's occupancy leg, which FAILS CLOSED: a stamped compile whose CTAs per SM are not its tile's registered occupancy refuses the whole unit (NOT READ), after its GPU time is spent",
+  "PC2's stricter shape guard (pc2common.gemm_guard): no PC2 GEMM, synthetic or SEEN, w1 or w2, has the (N, K) of either GEMM of a reserved model, so the Granite-1B regime is reached without Granite-1B's GEMM dimensions (the guard moved the 64x128x64 G 8 ladder from H 512 to H 256: pcs2-e8-h512-f512's w1 is (1024, 512), Granite-1B's w2)",
+  "EXACT TIME and TIMER: PC's reader quantises every globaltimer stamp to 256 ns (float64 at 1.7e18 ns; the tick is 32 ns), which cost PC A-F7168-G8 and A-TP8-G128 (no resolution) and moves PC's block A median lives by up to 1.6% (median 0.07%, call 0, on PC's published pages; POST-HOC on SEEN pages, a defect noted, PC's pinned reader and its reading unchanged). PC2 rebases each unit's stamps before read_pc.launch and adds the unit's resolution as the timer's last source; PC2's few-CTA short-slab lives (about 3 to 8 us) are where 256 ns would have mattered most",
+  "the probe writes stamps.json, the stamp arrays, the PTX and the regcheck and gate files atomically (PC's code, unchanged); the page generator and the registration write atomically too"
+ ],
+ "cells (COMPUTED)": {
+  "pc2-d": [
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G4",
+    "live": {
+     "w1": 896,
+     "w2": 4
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e8-h128",
+    "slab_bytes": {
+     "w1": 16384,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G8",
+    "live": {
+     "w1": 896,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e8-h256",
+    "slab_bytes": {
+     "w1": 32768,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G16",
+    "live": {
+     "w1": 896,
+     "w2": 16
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e8-h512",
+    "slab_bytes": {
+     "w1": 65536,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G32",
+    "live": {
+     "w1": 896,
+     "w2": 32
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e8-h1024",
+    "slab_bytes": {
+     "w1": 131072,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G64",
+    "live": {
+     "w1": 896,
+     "w2": 64
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e8-h2048",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G128",
+    "live": {
+     "w1": 896,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 3,
+    "T": 24,
+    "c_e": 16,
+    "cell": "D-G192",
+    "live": {
+     "w1": 1344,
+     "w2": 192
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 32,
+    "c_e": 16,
+    "cell": "D-G256",
+    "live": {
+     "w1": 1792,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 5,
+    "T": 40,
+    "c_e": 16,
+    "cell": "D-G320",
+    "live": {
+     "w1": 2240,
+     "w2": 320
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 48,
+    "c_e": 16,
+    "cell": "D-G384",
+    "live": {
+     "w1": 2688,
+     "w2": 384
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 64,
+    "c_e": 16,
+    "cell": "D-G512",
+    "live": {
+     "w1": 3584,
+     "w2": 512
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 16,
+    "T": 128,
+    "c_e": 16,
+    "cell": "D-G1024",
+    "live": {
+     "w1": 7168,
+     "w2": 1024
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "ladder",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G8-F512",
+    "live": {
+     "w1": 32,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 8",
+    "shape": "pcs2-e8-h256-f512",
+    "slab_bytes": {
+     "w1": 32768,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G8-F1024",
+    "live": {
+     "w1": 64,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 8",
+    "shape": "pcs2-e8-h256-f1024",
+    "slab_bytes": {
+     "w1": 32768,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G8-F1792",
+    "live": {
+     "w1": 112,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 8",
+    "shape": "pcs2-e8-h256-f1792",
+    "slab_bytes": {
+     "w1": 32768,
+     "w2": 229376
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G8-F3584",
+    "live": {
+     "w1": 224,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 8",
+    "shape": "pcs2-e8-h256-f3584",
+    "slab_bytes": {
+     "w1": 32768,
+     "w2": 458752
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G8-F7168",
+    "live": {
+     "w1": 448,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 8",
+    "shape": "pcs2-e8-h256-f7168",
+    "slab_bytes": {
+     "w1": 32768,
+     "w2": 917504
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G128-F512",
+    "live": {
+     "w1": 32,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 128",
+    "shape": "pcs2-e32-h4096-f512",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G128-F1024",
+    "live": {
+     "w1": 64,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 128",
+    "shape": "pcs2-e32-h4096-f1024",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G128-F1792",
+    "live": {
+     "w1": 112,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 128",
+    "shape": "pcs2-e32-h4096-f1792",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 229376
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G128-F3584",
+    "live": {
+     "w1": 224,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 128",
+    "shape": "pcs2-e32-h4096-f3584",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 458752
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-G128-F7168",
+    "live": {
+     "w1": 448,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "F ladder G 128",
+    "shape": "pcs2-e32-h4096-f7168",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 917504
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 32,
+    "c_e": 16,
+    "cell": "D-G256-F512",
+    "live": {
+     "w1": 64,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short slab under load",
+    "shape": "pcs2-e32-h4096-f512",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 32,
+    "c_e": 16,
+    "cell": "D-G256-F1024",
+    "live": {
+     "w1": 128,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short slab under load",
+    "shape": "pcs2-e32-h4096-f1024",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 48,
+    "c_e": 16,
+    "cell": "D-G384-F512",
+    "live": {
+     "w1": 96,
+     "w2": 384
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short slab under load",
+    "shape": "pcs2-e32-h4096-f512",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 48,
+    "c_e": 16,
+    "cell": "D-G384-F1024",
+    "live": {
+     "w1": 192,
+     "w2": 384
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short slab under load",
+    "shape": "pcs2-e32-h4096-f1024",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 64,
+    "c_e": 16,
+    "cell": "D-G512-F1024",
+    "live": {
+     "w1": 256,
+     "w2": 512
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short slab under load",
+    "shape": "pcs2-e32-h4096-f1024",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 16,
+    "T": 128,
+    "c_e": 16,
+    "cell": "D-G1024-F3584",
+    "live": {
+     "w1": 1792,
+     "w2": 1024
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short slab under load",
+    "shape": "pcs2-e32-h4096-f3584",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 458752
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D-MX-T16-A2",
+    "live": {
+     "w1": 896,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "anchor (SEEN; PC's D-MX-T16-A2)",
+    "shape": "mixtral-8x7b",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   }
+  ],
+  "pc2-d3": [
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D3-G16",
+    "live": {
+     "w1": 896,
+     "w2": 16
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "factorial s3",
+    "shape": "pcs-e8-h512",
+    "slab_bytes": {
+     "w1": 65536,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "D3-G128",
+    "live": {
+     "w1": 896,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "factorial s3",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 48,
+    "c_e": 16,
+    "cell": "D3-G384",
+    "live": {
+     "w1": 2688,
+     "w2": 384
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "factorial s3",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s3",
+    "twin": null
+   }
+  ],
+  "pc2-n": [
+   {
+    "A": 2,
+    "T": 1,
+    "c_e": 1,
+    "cell": "N-MX-T1",
+    "live": {
+     "w1": 896,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "mixtral-8x7b",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-MX-T2"
+   },
+   {
+    "A": 2,
+    "T": 2,
+    "c_e": 2,
+    "cell": "N-MX-T2",
+    "live": {
+     "w1": 896,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "mixtral-8x7b",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 1,
+    "c_e": 1,
+    "cell": "N-JM-T1",
+    "live": {
+     "w1": 352,
+     "w2": 64
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "jetmoe-8b",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 720896
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-JM-T2"
+   },
+   {
+    "A": 2,
+    "T": 2,
+    "c_e": 2,
+    "cell": "N-JM-T2",
+    "live": {
+     "w1": 352,
+     "w2": 64
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "jetmoe-8b",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 720896
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 1,
+    "c_e": 1,
+    "cell": "N-PH-T1",
+    "live": {
+     "w1": 400,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "phi-3.5-moe",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 819200
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-PH-T3-A2"
+   },
+   {
+    "A": 4,
+    "T": 2,
+    "c_e": 1,
+    "cell": "N-PH-T2-A4",
+    "live": {
+     "w1": 800,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "phi-3.5-moe",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 819200
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-PH-T3-A4"
+   },
+   {
+    "A": 2,
+    "T": 2,
+    "c_e": 2,
+    "cell": "N-PH-T2-A2",
+    "live": {
+     "w1": 800,
+     "w2": 256
+    },
+    "pair": "N-PH-T2-A4",
+    "path": "naive",
+    "role": "naive with followers",
+    "shape": "phi-3.5-moe",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 819200
+    },
+    "slab_once": false,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 3,
+    "c_e": 3,
+    "cell": "N-PH-T3-A2",
+    "live": {
+     "w1": 400,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "phi-3.5-moe",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 819200
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 3,
+    "c_e": 2,
+    "cell": "N-PH-T3-A4",
+    "live": {
+     "w1": 800,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "phi-3.5-moe",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 819200
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 1,
+    "c_e": 1,
+    "cell": "N-G3-T1",
+    "live": {
+     "w1": 128,
+     "w2": 192
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "granite-3.0-3b-a800m",
+    "slab_bytes": {
+     "w1": 196608,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-G3-T2"
+   },
+   {
+    "A": 8,
+    "T": 2,
+    "c_e": 2,
+    "cell": "N-G3-T2",
+    "live": {
+     "w1": 128,
+     "w2": 192
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "granite-3.0-3b-a800m",
+    "slab_bytes": {
+     "w1": 196608,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 1,
+    "c_e": 1,
+    "cell": "N-QW-T1",
+    "live": {
+     "w1": 176,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "qwen1.5-moe-a2.7b",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-QW-T4"
+   },
+   {
+    "A": 8,
+    "T": 2,
+    "c_e": 1,
+    "cell": "N-QW-T2-A8",
+    "live": {
+     "w1": 352,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "qwen1.5-moe-a2.7b",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-QW-T4-A8"
+   },
+   {
+    "A": 4,
+    "T": 2,
+    "c_e": 2,
+    "cell": "N-QW-T2-A4",
+    "live": {
+     "w1": 352,
+     "w2": 256
+    },
+    "pair": "N-QW-T2-A8",
+    "path": "naive",
+    "role": "naive with followers",
+    "shape": "qwen1.5-moe-a2.7b",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": false,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 4,
+    "c_e": 4,
+    "cell": "N-QW-T4",
+    "live": {
+     "w1": 176,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "qwen1.5-moe-a2.7b",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 4,
+    "c_e": 2,
+    "cell": "N-QW-T4-A8",
+    "live": {
+     "w1": 352,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "qwen1.5-moe-a2.7b",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 1,
+    "c_e": 1,
+    "cell": "N-DS-T1",
+    "live": {
+     "w1": 264,
+     "w2": 192
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "deepseek-v2-lite",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-DS-T3"
+   },
+   {
+    "A": 12,
+    "T": 2,
+    "c_e": 1,
+    "cell": "N-DS-T2-A12",
+    "live": {
+     "w1": 528,
+     "w2": 384
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "deepseek-v2-lite",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-DS-T3-A12"
+   },
+   {
+    "A": 6,
+    "T": 2,
+    "c_e": 2,
+    "cell": "N-DS-T2-A6",
+    "live": {
+     "w1": 528,
+     "w2": 384
+    },
+    "pair": "N-DS-T2-A12",
+    "path": "naive",
+    "role": "naive with followers",
+    "shape": "deepseek-v2-lite",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": false,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 3,
+    "c_e": 3,
+    "cell": "N-DS-T3",
+    "live": {
+     "w1": 264,
+     "w2": 192
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "deepseek-v2-lite",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 12,
+    "T": 3,
+    "c_e": 2,
+    "cell": "N-DS-T3-A12",
+    "live": {
+     "w1": 528,
+     "w2": 384
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "deepseek-v2-lite",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 1,
+    "c_e": 1,
+    "cell": "N-K8-T1",
+    "live": {
+     "w1": 352,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "pcs2-e64-h2048-f1408-k8",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-K8-T3"
+   },
+   {
+    "A": 16,
+    "T": 2,
+    "c_e": 1,
+    "cell": "N-K8-T2-A16",
+    "live": {
+     "w1": 704,
+     "w2": 512
+    },
+    "pair": null,
+    "path": "naive",
+    "role": "naive",
+    "shape": "pcs2-e64-h2048-f1408-k8",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": "N-K8-T3-A16"
+   },
+   {
+    "A": 8,
+    "T": 2,
+    "c_e": 2,
+    "cell": "N-K8-T2-A8",
+    "live": {
+     "w1": 704,
+     "w2": 512
+    },
+    "pair": "N-K8-T2-A16",
+    "path": "naive",
+    "role": "naive with followers",
+    "shape": "pcs2-e64-h2048-f1408-k8",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": false,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 3,
+    "c_e": 3,
+    "cell": "N-K8-T3",
+    "live": {
+     "w1": 352,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "pcs2-e64-h2048-f1408-k8",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 16,
+    "T": 3,
+    "c_e": 2,
+    "cell": "N-K8-T3-A16",
+    "live": {
+     "w1": 704,
+     "w2": 512
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "aligned twin",
+    "shape": "pcs2-e64-h2048-f1408-k8",
+    "slab_bytes": {
+     "w1": 262144,
+     "w2": 180224
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   }
+  ],
+  "pc2-r": [
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "R-D-G8",
+    "live": {
+     "w1": 896,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "replicate",
+    "shape": "pcs-e8-h256",
+    "slab_bytes": {
+     "w1": 32768,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 16,
+    "c_e": 16,
+    "cell": "R-D-G128",
+    "live": {
+     "w1": 896,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "replicate",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "16x64x128w4s4",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "R-S-G128-F512",
+    "live": {
+     "w1": 32,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "replicate",
+    "shape": "pcs2-e32-h4096-f512",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   }
+  ],
+  "pc2-s": [
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G8-F256",
+    "live": {
+     "w1": 16,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 8",
+    "shape": "pcs2-e8-h256-f256",
+    "slab_bytes": {
+     "w1": 65536,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G8-F512",
+    "live": {
+     "w1": 32,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 8",
+    "shape": "pcs2-e8-h256-f512",
+    "slab_bytes": {
+     "w1": 65536,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G8-F1024",
+    "live": {
+     "w1": 64,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 8",
+    "shape": "pcs2-e8-h256-f1024",
+    "slab_bytes": {
+     "w1": 65536,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G8-F1792",
+    "live": {
+     "w1": 112,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 8",
+    "shape": "pcs2-e8-h256-f1792",
+    "slab_bytes": {
+     "w1": 65536,
+     "w2": 458752
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G8",
+    "live": {
+     "w1": 896,
+     "w2": 8
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 8 (long anchor)",
+    "shape": "pcs-e8-h256",
+    "slab_bytes": {
+     "w1": 65536,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 64,
+    "c_e": 64,
+    "cell": "S-G32-F256",
+    "live": {
+     "w1": 8,
+     "w2": 32
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 32",
+    "shape": "pcs2-e8-h2048-f256",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 64,
+    "c_e": 64,
+    "cell": "S-G32-F512",
+    "live": {
+     "w1": 16,
+     "w2": 32
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 32",
+    "shape": "pcs2-e8-h2048-f512",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 64,
+    "c_e": 64,
+    "cell": "S-G32-F1024",
+    "live": {
+     "w1": 32,
+     "w2": 32
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 32",
+    "shape": "pcs2-e8-h2048-f1024",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 64,
+    "c_e": 64,
+    "cell": "S-G32-F1792",
+    "live": {
+     "w1": 56,
+     "w2": 32
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 32",
+    "shape": "pcs2-e8-h2048-f1792",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 458752
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 2,
+    "T": 64,
+    "c_e": 64,
+    "cell": "S-G32",
+    "live": {
+     "w1": 448,
+     "w2": 32
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 32 (long anchor)",
+    "shape": "pcs-e8-h2048",
+    "slab_bytes": {
+     "w1": 524288,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G128-F256",
+    "live": {
+     "w1": 16,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 128",
+    "shape": "pcs2-e32-h4096-f256",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G128-F512",
+    "live": {
+     "w1": 32,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 128",
+    "shape": "pcs2-e32-h4096-f512",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G128-F1024",
+    "live": {
+     "w1": 64,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 128",
+    "shape": "pcs2-e32-h4096-f1024",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G128-F1792",
+    "live": {
+     "w1": 112,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 128",
+    "shape": "pcs2-e32-h4096-f1792",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 458752
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 128,
+    "c_e": 64,
+    "cell": "S-G128",
+    "live": {
+     "w1": 896,
+     "w2": 128
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 128 (long anchor)",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 256,
+    "c_e": 64,
+    "cell": "S-G256-F256",
+    "live": {
+     "w1": 32,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 256",
+    "shape": "pcs2-e32-h4096-f256",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 256,
+    "c_e": 64,
+    "cell": "S-G256-F512",
+    "live": {
+     "w1": 64,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 256",
+    "shape": "pcs2-e32-h4096-f512",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 256,
+    "c_e": 64,
+    "cell": "S-G256-F1024",
+    "live": {
+     "w1": 128,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 256",
+    "shape": "pcs2-e32-h4096-f1024",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 256,
+    "c_e": 64,
+    "cell": "S-G256-F1792",
+    "live": {
+     "w1": 224,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 256",
+    "shape": "pcs2-e32-h4096-f1792",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 458752
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 256,
+    "c_e": 64,
+    "cell": "S-G256",
+    "live": {
+     "w1": 1792,
+     "w2": 256
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "short-slab ladder G 256 (long anchor)",
+    "shape": "pcs-e32-h4096",
+    "slab_bytes": {
+     "w1": 1048576,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "64x128x64w4s3",
+    "twin": null
+   }
+  ],
+  "pc2-w": [
+   {
+    "A": 4,
+    "T": 64,
+    "c_e": 32,
+    "cell": "W64-G264",
+    "live": {
+     "w1": 1792,
+     "w2": 264
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 96,
+    "c_e": 32,
+    "cell": "W64-G396",
+    "live": {
+     "w1": 2688,
+     "w2": 396
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 7,
+    "T": 112,
+    "c_e": 32,
+    "cell": "W64-G462",
+    "live": {
+     "w1": 3136,
+     "w2": 462
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 128,
+    "c_e": 32,
+    "cell": "W64-G528",
+    "live": {
+     "w1": 3584,
+     "w2": 528
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 9,
+    "T": 144,
+    "c_e": 32,
+    "cell": "W64-G594",
+    "live": {
+     "w1": 4032,
+     "w2": 594
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 16,
+    "T": 256,
+    "c_e": 32,
+    "cell": "W64-G1056",
+    "live": {
+     "w1": 7168,
+     "w2": 1056
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 1835008
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 3,
+    "T": 48,
+    "c_e": 32,
+    "cell": "W64-G198-F1024",
+    "live": {
+     "w1": 96,
+     "w2": 198
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 64,
+    "c_e": 32,
+    "cell": "W64-G264-F1024",
+    "live": {
+     "w1": 128,
+     "w2": 264
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 96,
+    "c_e": 32,
+    "cell": "W64-G396-F1024",
+    "live": {
+     "w1": 192,
+     "w2": 396
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 128,
+    "c_e": 32,
+    "cell": "W64-G528-F1024",
+    "live": {
+     "w1": 256,
+     "w2": 528
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 3,
+    "T": 48,
+    "c_e": 32,
+    "cell": "W64-G198-F512",
+    "live": {
+     "w1": 48,
+     "w2": 198
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f512",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 4,
+    "T": 64,
+    "c_e": 32,
+    "cell": "W64-G264-F512",
+    "live": {
+     "w1": 64,
+     "w2": 264
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f512",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 96,
+    "c_e": 32,
+    "cell": "W64-G396-F512",
+    "live": {
+     "w1": 96,
+     "w2": 396
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f512",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 128,
+    "c_e": 32,
+    "cell": "W64-G528-F512",
+    "live": {
+     "w1": 128,
+     "w2": 528
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x64x128 short",
+    "shape": "pcs2-e32-h4224-f512",
+    "slab_bytes": {
+     "w1": 540672,
+     "w2": 65536
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x64x128w4s3",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 96,
+    "c_e": 32,
+    "cell": "W128-G198",
+    "live": {
+     "w1": 1344,
+     "w2": 198
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 128,
+    "c_e": 32,
+    "cell": "W128-G264",
+    "live": {
+     "w1": 1792,
+     "w2": 264
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 12,
+    "T": 192,
+    "c_e": 32,
+    "cell": "W128-G396",
+    "live": {
+     "w1": 2688,
+     "w2": 396
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 14,
+    "T": 224,
+    "c_e": 32,
+    "cell": "W128-G462",
+    "live": {
+     "w1": 3136,
+     "w2": 462
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 16,
+    "T": 256,
+    "c_e": 32,
+    "cell": "W128-G528",
+    "live": {
+     "w1": 3584,
+     "w2": 528
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 18,
+    "T": 288,
+    "c_e": 32,
+    "cell": "W128-G594",
+    "live": {
+     "w1": 4032,
+     "w2": 594
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 32,
+    "T": 512,
+    "c_e": 32,
+    "cell": "W128-G1056",
+    "live": {
+     "w1": 7168,
+     "w2": 1056
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64",
+    "shape": "pcs2-e32-h4224",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 3670016
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 5,
+    "T": 80,
+    "c_e": 32,
+    "cell": "W128-G165-F1024",
+    "live": {
+     "w1": 80,
+     "w2": 165
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 96,
+    "c_e": 32,
+    "cell": "W128-G198-F1024",
+    "live": {
+     "w1": 96,
+     "w2": 198
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 128,
+    "c_e": 32,
+    "cell": "W128-G264-F1024",
+    "live": {
+     "w1": 128,
+     "w2": 264
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 12,
+    "T": 192,
+    "c_e": 32,
+    "cell": "W128-G396-F1024",
+    "live": {
+     "w1": 192,
+     "w2": 396
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 16,
+    "T": 256,
+    "c_e": 32,
+    "cell": "W128-G528-F1024",
+    "live": {
+     "w1": 256,
+     "w2": 528
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f1024",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 262144
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 5,
+    "T": 80,
+    "c_e": 32,
+    "cell": "W128-G165-F512",
+    "live": {
+     "w1": 40,
+     "w2": 165
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f512",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 6,
+    "T": 96,
+    "c_e": 32,
+    "cell": "W128-G198-F512",
+    "live": {
+     "w1": 48,
+     "w2": 198
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f512",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   },
+   {
+    "A": 8,
+    "T": 128,
+    "c_e": 32,
+    "cell": "W128-G264-F512",
+    "live": {
+     "w1": 64,
+     "w2": 264
+    },
+    "pair": null,
+    "path": "aligned",
+    "role": "4/SM 32x128x64 short",
+    "shape": "pcs2-e32-h4224-f512",
+    "slab_bytes": {
+     "w1": 1081344,
+     "w2": 131072
+    },
+    "slab_once": true,
+    "stamped_calls": 3,
+    "tile": "32x128x64w4s3",
+    "twin": null
+   }
+  ]
+ },
+ "census and occupancy": {
+  "PC's regcheck on the decode tile (frozen literal, plain against stamped CTAs per SM)": {
+   "16x64x128w4s2": {
+    "w1": [
+     8,
+     8
+    ],
+    "w2": [
+     8,
+     7
+    ]
+   },
+   "16x64x128w4s3": {
+    "w1": [
+     5,
+     5
+    ],
+    "w2": [
+     5,
+     5
+    ]
+   },
+   "16x64x128w4s4": {
+    "w1": [
+     3,
+     3
+    ],
+    "w2": [
+     3,
+     3
+    ]
+   }
+  },
+  "regcheck scope": "one specialisation per tile per variant is regchecked (the probe's rule, PC's); the reader's occupancy leg checks every stamped compile and fails closed",
+  "registered occupancy": {
+   "16x64x128w4s3": 5,
+   "16x64x128w4s4": 3,
+   "32x128x64w4s3": 4,
+   "32x64x128w4s3": 4,
+   "64x128x64w4s3": 3
+  },
+  "rule": "the wave-dependent readings (every X_sat pool, SPAN's single-wave rule, PC2-R3) read only where the census reads the registered occupancy; a missing census or a path mismatch makes them NOT IDENTIFIED; every stamped compile's CTAs per SM must equal the registered occupancy (PC2-R0)",
+  "unit": "unit 2: tile_census_a2.py over PC2's 5 configs on Mixtral-8x7B and Phi-3.5 (compile only)"
+ },
+ "code_pins": {
+  "moe/__init__.py": "a7cb786129ce60d6981c407d974be1dda25c663af886a0a8892e7cf15a925042",
+  "moe/bench/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "moe/bench/ai_model.py": "f915d94133c669249fba3628893effa9f2079cf2e297572240ca152e458eb027",
+  "moe/bench/exit_codes.py": "89c2a3dab3bef3e418e696b263a53b3362e1c2bc416d9809a1f4858e0bdcdd55",
+  "moe/bench/provenance.py": "777a450890ccbca0e16d2d0418940d6f90908c4f878c26479caecca51bae4285",
+  "moe/bench/roofline.py": "301ae87c8a11e34f100f0b258e458d762a0af22cd9a675925be617448731910a",
+  "moe/bench/schema.py": "7fb29c5467f1a897bc2d5bfedf67f3454b6ae954b8d71bb1e465f440214c8cac",
+  "moe/bench/tile_resolve.py": "80578881e3f71fc09a42554190e7a9a8ff14ca0d3295f32dfff777791c139adc",
+  "moe/bench/timing.py": "264b580cb0f38b7b5c09aabee9ced0f41f1787edd3e81c22d55dac1044a0c155",
+  "moe/bench/weights.py": "c54b2e714d39eb530e47dd34a184c304b8dcc3f3ca15d3e53de7c52a38d1e58e",
+  "moe/instrumented/UPSTREAM.json": "02d84a9bda138e4114b3ac48f89532025203c6eeb5a5794ac96d9ff3547e92e7",
+  "moe/instrumented/UPSTREAM_DECODE.json": "098f8999afd2f3b4457df5f2612b85f888971af4480eb82c703da0386bccec2a",
+  "moe/instrumented/__init__.py": "331d8130c6aaee92c0e0cedab7fa7d2f79fc1479c1a5ddfea8cd1b3b44141488",
+  "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+  "moe/instrumented/fused_moe_instr.py": "16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250",
+  "moe/instrumented/upstream_v0.27.1_fused_moe.excerpt": "becf0caadaed1be31578b685649260fcb91757face2eb39d26fe837d5dd19a41",
+  "moe/pipeline.py": "c54b6c27b74486fa103bc46cb9302ce1b00f335bffd2f61fde29c3b4ad432b93",
+  "moe/routing/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "moe/routing/distributions.py": "253476cf178f90cbf2042ee0bbed66d16ed030b3319e478948b996419d631cbf",
+  "moe/spec.py": "58fb9b7fe2fdbd82867e0ab789cfc02bc03705c01722f9cfa0769c40bf6f87de",
+  "moe/stages.py": "38d254d30ded31f50ee682b85d6d68ce81c2b6985c6a7f4189735637a9d86f05",
+  "moe/state.py": "aad96b311d39ae7687870762a85ca4f5cbe7052d09e7abe7fef8fc514d71f8d4",
+  "scripts/block_m_crossing_sweep.py": "54eaffb89a342723b8c214f188273710c1f53891639fd4b3496bccd317f4aaef",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/dram_counter_route_decode.py": "710186fe66e174e1e14a3ef7b2bda7956d5e9b0fee3088d530f3315f0cab366b",
+  "scripts/dram_counter_route_decode3.py": "a5c949c212d983f5d775eccbe9c0a8ae1715ce3438b03238fefbc194e808c32d",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/gh200_cal2_session.sh": "18f5bf2759c572b5f154525cad31d52771df415e98eb978a5a50609269eb8c46",
+  "scripts/gh200_cal3_session.sh": "22047754fb03bb4f167bd5f195e46d5eff72e0f99625eaf2d3b1ca60fe3ce81d",
+  "scripts/gh200_pc2_session.sh": "eaf27eaf1f7d4baac4eecae550da44be08cb8f1320188f75a97141436420b140",
+  "scripts/gh200_pc_session.sh": "ba2e6dc4c3d03a9856e977c347eb8332bd905b546daed9ef3897923f10759dc5",
+  "scripts/instr_probe.py": "a5b421bfd6825da67a8241a9535319c83824620928309633ac3b096ca479a6fe",
+  "scripts/instr_probe_c3.py": "01b13d4516e5bb054c8d8860a566f980539ba5274f37837c31bc1fd898632cc7",
+  "scripts/instr_probe_pc.py": "5cd412ff9a99a80e65aecbb22d12d0446523a650886943db487f0dfaa46a05f1",
+  "scripts/instr_probe_pc2.py": "e469d9dd3bb4115f50e0b46961028b8a81058108a244e2cd31e8554e7512e526",
+  "scripts/launch_floor.py": "ec24465c1bca3f9afe305fcb5b2feac62cfcdc820ddcc5556f0b5569223da16a",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/r3_decode.py": "f043e438d50287162bfb55644b7b1998cfffad8d50d50fcf1dad4afb189c1db8",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/scoring/cal2/read_c2.py": "b57982f7ba784da7c519f76de6018c64503242f78a27d84f630ce6f500b77fde",
+  "scripts/scoring/cal3/read_c3.py": "1474d804c8dc23f2b0f61a524e7217d6c1a26e1cc260faf8b10e67154ab3f3eb",
+  "scripts/scoring/decode/d3common.py": "9f1d53b1050000e700e0b60394a7853862d43a5e0c558cb411e2980754964bc1",
+  "scripts/scoring/decode/ds.readings.json": "ce89289f4dbf383b9dee30da52b9dae6b388ef36d2b02d4c62cb8928fc4252eb",
+  "scripts/scoring/pc/gen_pc_pages.py": "0e706dcbbe87551a679039806cd5ac79a8c96dff9129660fb85d0c9e934490af",
+  "scripts/scoring/pc/pccommon.py": "c92e09650384e3b9461d7a5faf1bf2c26e96e65e519d6891fea78230d8b1b30f",
+  "scripts/scoring/pc/read_pc.py": "01dd10b1f273ff94d9a19fe099d08db0aa7c55ca81f091ab476abd4d35b9e968",
+  "scripts/scoring/pc/register_pc.py": "fbbc451bda950ac50eb2483a630e1a3bc70557c203e1f3ed0264e654293cb90b",
+  "scripts/scoring/pc2/gen_pc2_pages.py": "b95b70d1c3c004e1dea438ea90df312c21d98be29c49611bf5054eb394f2c2a4",
+  "scripts/scoring/pc2/pc2common.py": "d14ac1e9903d02d759a9bae4030fffd4bcdc30b6968e99e1b8a51cd04951e790",
+  "scripts/scoring/pc2/read_pc2.py": "b5d0b9c3b92e4d5b34d708c3a2f5a781088aff6b931434701dd63af535cc795e",
+  "scripts/scoring/pc2/register_pc2.py": "27a430f5aedfb897f124b2c68b28404a84c92387c304ea1e84be4023feabc7ef",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA2/a2common.py": "d99eef413cddbae593d5f9115d8bc6db776c4ad4a7a6cb43c0eb7848517a3d9a",
+  "scripts/scoring/tileA2/score_floor_a2.py": "c075802d9067177a73c506a475d772a67cdd03c5dec404854b27daf34e1c7347",
+  "scripts/scoring/tileB3/b3.predictions.json": "ed3a45cbbc9391d2176e8477a2c9964342b7c3c2105cd64f8496ea3ac8fc5c0d",
+  "scripts/tileA2_gate.py": "566703b38372677019faf8cbbe62e50f7d5b4e8a857b10e236197289ddc3dbce",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/tile_census_a2.py": "1021a1ba5e8820172b62829537703718d8fc7d4488b143364eba51ac13a4cdad",
+  "scripts/vm_run.sh": "713c41ed78e16352880edfcf5981f5495db6fa9678869d0a3b4e089235320d8d",
+  "scripts/vm_run_pc2.sh": "5ec8c412103589d49e143c1f404dcfb6bfa7e0a6b1d0503929cec8a7afbf9a9f"
+ },
+ "constants": {
+  "f_ceiling_mhz": 1980.0,
+  "f_rungs": 4,
+  "kappa_held_within": 0.03,
+  "l2_guard_stages": 3,
+  "l2_latency_ns": 350.0,
+  "min_plateau_ctas": 8,
+  "overhead_median_max": 0.1,
+  "overhead_worst_max": 0.2,
+  "plateau_frac": 0.9,
+  "rate_ceiling_gbps": 4022.0,
+  "sat_within": 0.03,
+  "se_inv_rinf_max": 0.05,
+  "span_min_launches": 2,
+  "spread_max": 0.03,
+  "spread_max_small": 0.05,
+  "spread_small_G": 8,
+  "start_flag": 0.97,
+  "start_min_ctas": 8,
+  "start_window_ns": 50000.0,
+  "timer_unit_min": 10,
+  "x_sat_w1_min_k": 4096,
+  "x_sat_w2_min_k": 14336
+ },
+ "design": "moe-kernels-work 2026-11-09 design-D6/DESIGN.md section 7 (what v6d cannot price, the PC2 sketch), read-only over the repo at 3e3cfe53; built in moe-kernels-work 2026-11-10 build-PC2",
+ "earlier registrations kept byte-identical": [
+  "2026-10-26-cal3-gh200",
+  "2026-11-04-decode-addendum4-gh200",
+  "2026-11-04-decode-addendum5-gh200",
+  "2026-11-04-tileB3-gh200",
+  "2026-11-06-pc-gh200"
+ ],
+ "frozen literals": {
+  "Granite-1B reach per tile (n min, n max, slab min KB, slab max KB; design-D6 reach6.out)": {
+   "16x64x128w4s4": [
+    128,
+    512,
+    66,
+    131
+   ],
+   "32x128x64w4s3": [
+    192,
+    272,
+    131,
+    262
+   ],
+   "32x64x128w4s3": [
+    256,
+    512,
+    66,
+    131
+   ],
+   "64x128x64w4s3": [
+    128,
+    256,
+    131,
+    262
+   ]
+  },
+  "the seen decode blind's naive cells per model (design-D6 rescore_detail.out)": {
+   "deepseek-v2-lite": 7,
+   "granite-3.0-3b-a800m": 2,
+   "jetmoe-8b": 2,
+   "phi-3.5-moe": 6,
+   "qwen1.5-moe-a2.7b": 12
+  }
+ },
+ "instrument": {
+  "copy": "moe/instrumented/fused_moe_instr.py, unchanged (no kernel written or edited; no new stamp point; no hint)",
+  "copy_sha256": "16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250",
+  "per cell": "PC's: the readback (V-BIN, V-ALIGN at the cell's config, the naive path's readback for a naive cell), 3 warm-up calls, then 3 stamped calls (6 where the read GEMM has under 4 live CTAs), each with its buffers reserved, the GPU held ahead and a 240 MiB L2 flush outside the launch event pair",
+  "probe": "scripts/instr_probe_pc2.py: PC's probe with pc2common as its rules module; imports instr_probe_c3.py and instr_probe.py (both byte-identical)",
+  "spec": "stamps=ends,evict_a=none,evict_b=none",
+  "weights": "one NATIVE copy per shape (synthetic or SEEN), private random weights at the shape"
+ },
+ "motivation": "v6d (design-D6, frozen 2026-11-09) cannot price four things its new blind needs (DESIGN.md section 7): the 16x64x128 decode tile (56, 48 and 58 of the three new models' GEMMs; PC's block D was refused), short slabs of 66 to 262 KB at low n (74 of Granite-1B's 92 GEMMs, under PC's shortest single-wave slab of 459 KB; c0 is 19% to 63% of those GEMMs), single waves of 384 to 528 CTAs on the 4-per-SM tiles, and the naive path (v4d''s price; the 29 naive cells of the seen decode blind re-score at 8.17% rms, which fails clause 2)",
+ "name": "2026-11-10-pc2-gh200",
+ "owner_decisions (2026-11-10)": [
+  "run PC2 before building v6d's addendum 6",
+  "v6d stays as frozen, with the duty factor",
+  "Granite-3.0-1B stays in the blind (PC2 reaches its regime with synthetic shapes, never the model)",
+  "measurement only; the owner writes kernels: no GPU kernel is written or edited, the instrumented copy carries only C3's existing stamps (ends), every new line is host-side"
+ ],
+ "page identity and versions": {
+  "major_minor": [
+   "python"
+  ],
+  "pages": "each stamps manifest's source_sha256 equals the registered page's",
+  "versions": {
+   "python": "3.12.16",
+   "torch": "2.13.0",
+   "triton": "3.7.1",
+   "vllm": "0.27.1"
+  }
+ },
+ "pages": {
+  "docs/registered/2026-11-10-pc2-pages/pc2-d.json": {
+   "cells": [
+    "D-G4",
+    "D-G8",
+    "D-G16",
+    "D-G32",
+    "D-G64",
+    "D-G128",
+    "D-G192",
+    "D-G256",
+    "D-G320",
+    "D-G384",
+    "D-G512",
+    "D-G1024",
+    "D-G8-F512",
+    "D-G8-F1024",
+    "D-G8-F1792",
+    "D-G8-F3584",
+    "D-G8-F7168",
+    "D-G128-F512",
+    "D-G128-F1024",
+    "D-G128-F1792",
+    "D-G128-F3584",
+    "D-G128-F7168",
+    "D-G256-F512",
+    "D-G256-F1024",
+    "D-G384-F512",
+    "D-G384-F1024",
+    "D-G512-F1024",
+    "D-G1024-F3584",
+    "D-MX-T16-A2"
+   ],
+   "lock_mhz": 1710,
+   "schema": "moe-kernels/pc2-page/1",
+   "sha256": "1f14efdbcc13dabdf765ac19e23f53e5c2eee895eccaa427ad3c622e9b62e54c"
+  },
+  "docs/registered/2026-11-10-pc2-pages/pc2-d3.json": {
+   "cells": [
+    "D3-G16",
+    "D3-G128",
+    "D3-G384"
+   ],
+   "lock_mhz": 1710,
+   "schema": "moe-kernels/pc2-page/1",
+   "sha256": "f247bfd5c4e1557facc58e06928b31bae4c6926fdc7494206742160a7ac2f19b"
+  },
+  "docs/registered/2026-11-10-pc2-pages/pc2-n.json": {
+   "cells": [
+    "N-MX-T1",
+    "N-MX-T2",
+    "N-JM-T1",
+    "N-JM-T2",
+    "N-PH-T1",
+    "N-PH-T2-A4",
+    "N-PH-T2-A2",
+    "N-PH-T3-A2",
+    "N-PH-T3-A4",
+    "N-G3-T1",
+    "N-G3-T2",
+    "N-QW-T1",
+    "N-QW-T2-A8",
+    "N-QW-T2-A4",
+    "N-QW-T4",
+    "N-QW-T4-A8",
+    "N-DS-T1",
+    "N-DS-T2-A12",
+    "N-DS-T2-A6",
+    "N-DS-T3",
+    "N-DS-T3-A12",
+    "N-K8-T1",
+    "N-K8-T2-A16",
+    "N-K8-T2-A8",
+    "N-K8-T3",
+    "N-K8-T3-A16"
+   ],
+   "lock_mhz": 1710,
+   "schema": "moe-kernels/pc2-page/1",
+   "sha256": "d9b4cc5bac1575b24cb320d7eee4250f608c1e4801fa787ee5ee3c5693486987"
+  },
+  "docs/registered/2026-11-10-pc2-pages/pc2-r.json": {
+   "cells": [
+    "R-D-G8",
+    "R-D-G128",
+    "R-S-G128-F512"
+   ],
+   "lock_mhz": 1710,
+   "schema": "moe-kernels/pc2-page/1",
+   "sha256": "db82441eb4f253d369f169d9af7f73bdae50d3d0e7736a43abbe8b8450d76d1c"
+  },
+  "docs/registered/2026-11-10-pc2-pages/pc2-s.json": {
+   "cells": [
+    "S-G8-F256",
+    "S-G8-F512",
+    "S-G8-F1024",
+    "S-G8-F1792",
+    "S-G8",
+    "S-G32-F256",
+    "S-G32-F512",
+    "S-G32-F1024",
+    "S-G32-F1792",
+    "S-G32",
+    "S-G128-F256",
+    "S-G128-F512",
+    "S-G128-F1024",
+    "S-G128-F1792",
+    "S-G128",
+    "S-G256-F256",
+    "S-G256-F512",
+    "S-G256-F1024",
+    "S-G256-F1792",
+    "S-G256"
+   ],
+   "lock_mhz": 1710,
+   "schema": "moe-kernels/pc2-page/1",
+   "sha256": "828ce2ae6ab6d1daf1c2d6b756d2f9e149c775d6b6bd1e671ec2a970ea0201fe"
+  },
+  "docs/registered/2026-11-10-pc2-pages/pc2-w.json": {
+   "cells": [
+    "W64-G264",
+    "W64-G396",
+    "W64-G462",
+    "W64-G528",
+    "W64-G594",
+    "W64-G1056",
+    "W64-G198-F1024",
+    "W64-G264-F1024",
+    "W64-G396-F1024",
+    "W64-G528-F1024",
+    "W64-G198-F512",
+    "W64-G264-F512",
+    "W64-G396-F512",
+    "W64-G528-F512",
+    "W128-G198",
+    "W128-G264",
+    "W128-G396",
+    "W128-G462",
+    "W128-G528",
+    "W128-G594",
+    "W128-G1056",
+    "W128-G165-F1024",
+    "W128-G198-F1024",
+    "W128-G264-F1024",
+    "W128-G396-F1024",
+    "W128-G528-F1024",
+    "W128-G165-F512",
+    "W128-G198-F512",
+    "W128-G264-F512"
+   ],
+   "lock_mhz": 1710,
+   "schema": "moe-kernels/pc2-page/1",
+   "sha256": "c6a5096d822523ece2b09f3a226176f8a86820bdbdf455d2bd3a2d514b71fd7a"
+  }
+ },
+ "plan": {
+  "boot_setup_min": 25,
+  "cost_at_deadline_usd": 2.86,
+  "cost_at_hard_cap_usd": 3.44,
+  "cost_usd": 2.29,
+  "deadline_after_launch_min": 75,
+  "drop_order_last_first": [
+   "rep",
+   "d3",
+   "w"
+  ],
+  "file": "scripts/plans/rentalPC2-2026-11.plan",
+  "hard_cap_after_launch_min": 90,
+  "nodrop_cost_usd": 1.98,
+  "nodrop_min": 27,
+  "nodrop_wall_min": 52,
+  "rate_usd_per_h": 2.29,
+  "rule": "units x 1 plus 25 min of boot and setup (PC's and C3's rule); deadline launch + wall + the driver's 8 min reserve + 5 min, rounded up to 5 min; the guardian's hard cap 15 min after the deadline",
+  "sha256": "4a83311b8c3ab12e7422dea9ae22a7edeb14a87bae3e7bc33992e29be201ec0e",
+  "units": 10,
+  "units_count": 10,
+  "units_min": 35,
+  "wall_min": 60
+ },
+ "power_and_lock": {
+  "decode_lock_mhz": 1710,
+  "per_cta_clock_band_printed": {
+   "1410": [
+    1352.19,
+    1410.0
+   ],
+   "1710": [
+    1640.0,
+    1710.0
+   ]
+  },
+  "power_limit_w": 700,
+  "session_lock_mhz": 1410
+ },
+ "readings": {
+  "EXACT TIME (read_pc2.time_offset, rebase; PC2's reader rule)": "read_pc.launch casts globaltimer stamps to float64, and an absolute stamp (about 1.7e18 ns) has a float64 step of 256 ns there, so PC's lives and starts are quantised to 256 ns although the timer's tick is 32 ns (found building PC2; PC's pinned reader and its published reading are unchanged). PC2 subtracts ONE offset per unit from both globaltimer columns of every row stamped live or dead before read_pc.launch: the least of those rows' stamps past 2^40 ns, less 2^20 ns (0 when none is past 2^40 ns; a garbled small stamp cannot move it). Every difference is unchanged and exact in float64; a stamp that was zero or negative stays not positive, so ROW SANITY still refuses it. The sanity rule: after the rebase every stamp of a live or dead row must lie under 2^40 ns, else PC2-R0 reads EXACT TIME NOT APPLIED with the reason and the unit is read on its stamps as written (PC's reading); APPLIED or NOT NEEDED otherwise. The status, the offset, the unit's timer reference and the count of launches per timer source are printed in PC2-R0",
+  "PC2-R0 (validity; read_pc.launch unchanged, read_pc2.stamp_unit, read_pc.board)": "PC-R0, unchanged, with PC2's geometry: per launch every row stamped live or dead; the live CTAs exactly the pids under (ntpp / BLOCK_M) x ceil(N / BLOCK_N) and equal to the cell's (aligned: sum over experts of ceil(c_e / BLOCK_M) x ceil(N / BLOCK_N); naive: T k x ceil(N / BLOCK_N), r3_decode.geometry's rule); USE_TD False; no late buffer; the first w2 start after the last w1 end of the call; ROW SANITY. Per unit: the board (C2_POWER_W=700, LOCK_PROBE_1410=held, LOCK_PROBE_1710=held), the variant's regcheck line and the gate's HARD line PASS (a timing FAIL alone reads PERTURBED), the page's label the gate's, the page the registered file (sha256), the versions (python on major.minor; torch, triton, vllm exact), every stamped compile passing C3's SASS legs, the page COMPLETE (a PARTIAL page is REFUSED), the unit's lock and its perturb unit's lock read back after the tool (pc-locks.env), and (PC2's new leg) EVERY stamped compile's CTAs per SM, from the stamps manifest, equal to its tile's registered occupancy: a stamped kernel whose occupancy is not the plain one's is not read (design-D6 section 7 item 1; PC's block D was refused at 7 against 8). A failing launch or unit is NOT READ, never zero",
+  "PC2-R1 the decode tile 16x64x128 w4 s4 (unit sd; read_pc2.r1)": "R1a the rate curve (PC-R1's columns) over D-G4 to D-G1024 and the short-slab rungs; R1b the F ladders at G 8 (D-G8-F512 to F7168 and D-G8) and G 128 (D-G128-F512 to F7168 and D-G128): read_pc.f_ladder (lambda_med = c0 + b / r_inf by OLS over the READ rungs, READ with at least 4 and the standard error of 1 / r_inf at most 5% of it); R1c the L table: per READ single-wave rung of the long-slab ladder (D-G4 to D-G384), Q_B = n_if x 128 x 64 x 2 with n_if off the stamped PTX (required = num_stages - 1 = 3), L = Q_B (lambda_med - c0) / b and N_eff = n Q_B (lambda_med - c0) / lambda_med, c0 the R1b G 128 value when READ, else the table is NOT IDENTIFIED; R1d X_sat on the tile, PC's definition (PC-R7): the median X over READ long-slab w2 rungs (w2 K >= 14336) strictly past one wave (G > 396) and READ flushed w1 launches with at least 396 live CTAs and K >= 4096, read with 2 or more members and the census reading 3 CTAs per SM, the pool's composition printed; R1e SPAN per rung; R1f the s3 factorial (unit sd3): read_pc.beta_q over (s3, s4) at G 16, 128, 384 (2 READ, Q_B off the PTX), DESCRIPTIVE; R1g n_if per tile, every compile agreeing; R1h PLAIN for every D cell; R1i r(D-MX-T16-A2) / r(D-G128) - 1 (same tile, G and F; E 8 against 32), with its per-expert spread (trap 13)",
+  "PC2-R2 short slabs, 66 to 459 KB (unit ss and block D's short rungs; read_pc2.r2)": "R2a c0 and r_inf per G (8, 32, 128, 256) on 64x128x64 w4 s3: read_pc.f_ladder over S-G{G}-F256, F512, F1024, F1792 and S-G{G} (F 14336, the same-board 3.67 MB anchor); R2b the same over the four short rungs alone (66 to 459 KB): whether c0 read on short slabs equals c0 read across to 3.67 MB, printed side by side; R2c SPAN per short-slab cell (kappa at short slabs, on 64x128x64 and on 16x64x128); R2d per cell the life split lambda_med = (lambda_med - b / r_inf) + b / r_inf at its G's R2a r_inf, printed; R2e every READ w1 launch of blocks S and D (short K = H slabs from 32 KB at many n): n, b, lambda_med, t, kappa, printed; R2f PLAIN; PC's c0 (4.704722 us at G 128, PC-R2, board c9f689) printed beside, cross-board, never pooled",
+  "PC2-R3 single waves of 165/198 to 528 CTAs on the 4-per-SM tiles (unit sw; read_pc2.r3)": "per tile (32x64x128 w4 s3 at G 264, 396, 462, 528, 594, 1056 long and 198 to 528 short; 32x128x64 w4 s3 at G 198, 264, 396, 462, 528, 594, 1056 long and 165 to 528 short; F 14336 and the short F 1024 and 512): per rung r, X, n, lambda_med, t, kappa (single-wave rungs), L_gpu = Q_B n / X (Q_B off the PTX), and the median over the rung's valid single-wave launches of the distinct SMs and of the most CTAs on one SM; X_sat on the tile, PC's definition: the median X over READ long-slab w2 rungs (w2 K >= 14336) strictly past one wave (G > 528: 594, 1056) and READ flushed w1 launches with at least 528 live CTAs and K >= 4096, G 528's cell EXCLUDED (it is read against this X_sat), read with 2 or more members and the census reading 4 CTAs per SM, the pool's composition printed; at G 528: SATURATED when |X(528) / X_sat - 1| <= 3% (PC's SAT_WITHIN), else BELOW or ABOVE with the fraction; kappa(528) / kappa(396): HELD when within 3% of 1, else MOVED; NOT IDENTIFIED when either input is unread. A refused sw unit (regcheck or occupancy) leaves R3 NOT READ and R3p (PLAIN) the only reading",
+  "PC2-R4 the naive path (unit sn; read_pc2.r4)": "per naive cell and GEMM (16x64x128 w4 s4, one M-tile per (token, expert) row): t, kappa, the median life, r over plateau CTAs, live CTAs, the slab, PLAIN; leaders and followers (a CTA whose expert sits on an earlier row of its launch is a follower): their median per-CTA rates, printed; the TWIN ratios (naive without followers against its aligned twin: the same shape, tile, active experts and live CTAs): t, PLAIN and the median life, naive over twin; the PAIR ratios (naive with followers against its naive pair: the same live CTAs, no follower, twice the distinct experts): t and PLAIN; each ratio read only when both cells' quantities are read. The SEEN cells' t and PLAIN printed beside the published decode blind's naive cell counts per model",
+  "PC2-R5 replicate": "R-D-G8, R-D-G128, R-S-G128-F512 against D-G8, D-G128, S-G128-F512: r and t ratios - 1, page noise",
+  "PC2-R6 clock at kernel start and placement": "PC-R13 (the median f_c of CTAs starting in the first 50 us over the rest's, at least 8 in each, flagged under 0.97) on every valid launch of a valid unit, and PC-R14 (distinct SMs, the most CTAs on one SM, Spearman's rank of start order against pid) on call 0's w2 launch of every single-wave cell of a valid unit, printed",
+  "PLAIN (read_pc2.plain_of; the plain-kernel event time, its limit stated)": "per (cell, GEMM) of every gated variant, stamped or refused: the perturb unit's plain-kernel median (8 bursts of 10 calls, an L2 flush before each call outside the event pair, alternating with the stamped copy), in us, and the overhead o; printed beside every stamp reading, DESCRIPTIVE. Its limit: an event pair times the whole launch, the launch's fixed cost included; it has no per-CTA life, so it cannot split c0 from the stream or read kappa, and it fills no v6d slot alone. Where a stamped variant is refused (its regcheck or its occupancy leg), PLAIN is all PC2 holds for its cells, read descriptively",
+  "ROW SANITY (read_pc.launch, unchanged)": "every live start and end positive and finite, end after start, clock64 life positive; the per-CTA clock in (0, 1980] MHz; every per-CTA rate at most 4022 GB/s (the HBM3 spec peak) and, where every slab is read by one CTA (pc2common.slab_once: every aligned cell, and a naive cell with no follower), the launch's X too; on such a flushed cell no CTA faster than Q_max / 350 ns, Q_max the tile's in-flight B bytes at s4 (3 tiles: L2-served, the launch is void); a naive cell with followers takes neither the X ceiling nor the L2 guard (its re-reads may be L2-served by design); the overhead finite. Else the launch is NOT READ",
+  "SPAN (read_pc2.span_of; the GEMM's own time, new in PC2)": "per valid launch whose live CTAs are at most its tile's registered wave (132 x occupancy; the census must read it): kappa_l = span / the median life (first start to last end over the median CTA life; o cancels); on every valid launch, single-wave or not: t_l = span / (1 + o) us, the GEMM's own time; per (cell, GEMM): kappa and t the medians over calls, read with at least 2 valid launches and the cell GEMM READ under the common rule, else NOT READ (no t, no kappa). A multi-wave launch reads t only (no kappa: not one wave). Every ratio of t (PC2-R4, R5) reads only where both t are READ. This registers the span reading design-D6 section 10 found unregistered in PC",
+  "TIMER (read_pc2.unit_timer; PC2's change to PC's timer rule)": "PC's rule takes a launch's own globaltimer resolution (the least positive difference of its distinct starts), else its call's w1 launch's; a launch whose live CTAs all start in one tick has none, and on PC's pages two cells were lost that way (A-F7168-G8 call 0, A-TP8-G128 w1 calls 0 and 1: NOT READ; under EXACT TIME those launches do have a resolution, 32 ns: PC's 256 ns ticks were the float64 step). The resolution is the card's (32 ns on 226 of PC's 227 block A launches, exact), so PC2 adds a last source: the UNIT's resolution, the most common own resolution over the unit's launches, read only when at least 10 launches report one and it holds half of them; the clock (f_long) is never taken across launches. The source is recorded per launch (res_from). Registered before any page",
+  "every reading": "DESCRIPTIVE: computed from PC2's pages by the rule below (read_pc2.py), registered before any PC2 page; none is a model term, a constant, a STOP, a bar or a verdict. A reading that does not clear its rule reads NOT IDENTIFIED (or NOT READ) with the reason; nothing falls back and nothing reads 0 by default. Common rule (PC's): a reading is read only when PC2-R0 holds for every launch it uses, the per-call medians' spread is at most 3% (5% at G <= 8), and its own rule holds",
+  "per CTA and per cell (read_pc.launch, read_pc.cell_gemm, unchanged)": "PC's: lambda_c = (e_c - s_c) / (1 + o), o the cell GEMM's overhead median from the perturb unit (the clock64 path where the globaltimer resolution exceeds a tenth of the median life); b_c = K x the CTA's BLOCK_N columns x 2; r_c = b_c / lambda_c; n_c, m_c time averages; plateau CTAs n_c >= 0.9 x the launch's peak; X_l over the steady window x (1 + o); per (cell, GEMM): r = the median r_c over plateau CTAs (NOT READ under 8), the per-call spread at most 3% (5% at G <= 8), NOT READ when |overhead median| > 0.1 or |worst| > 0.2 (C3's OD-1 bound)"
+ },
+ "registered": "2026-11-10, before any PC2 page",
+ "seen": {
+  "Granite-1B's regime": "reached with synthetic shapes only (owner, 2026-11-10): short slabs of 66 to 459 KB at n 8 to 528 on the four tiles Granite-3.0-1B's GEMMs use, never its shape and never its GEMMs",
+  "loaded (all SEEN)": [
+   "mixtral-8x7b",
+   "jetmoe-8b",
+   "phi-3.5-moe",
+   "granite-3.0-3b-a800m",
+   "qwen1.5-moe-a2.7b",
+   "deepseek-v2-lite",
+   "the registered synthetic shapes (PC's pcs- and PC2's pcs2-)"
+  ],
+  "reserved (owner decision, 2026-11-06, kept 2026-11-10)": {
+   "models": [
+    "mixtral-8x22b",
+    "qwen2-57b-a14b",
+    "qwen2-57b-a14b-tp8",
+    "granite-3.0-1b-a400m"
+   ],
+   "rule": "never loaded, never timed, never shaped: the probe refuses a variant, cell or weight build naming one, a shape equal to one, or (PC2's stricter guard, pc2common.gemm_guard) any shape with a GEMM whose (N, K) equals either GEMM of a reserved model; tests/test_instr_probe_pc2.py asserts nothing in the plan loads them"
+  },
+  "statement": "PC2 times none of the three models held for the new decode blind; Granite-3.0-3B runs at the decode tile only, so it stays unseen at prefill tiles",
+  "still unseen at vLLM's prefill tiles (PC's frozen literal, unchanged)": [
+   "granite-3.0-3b-a800m",
+   "granite-3.0-1b-a400m",
+   "mixtral-8x7b-tp4",
+   "mixtral-8x7b-tp8",
+   "qwen2-57b-a14b-tp8",
+   "deepseek-v3",
+   "deepseek-v3-tp4",
+   "deepseek-v3-tp8"
+  ]
+ },
+ "shapes": {
+  "file": "docs/registered/2026-11-10-pc2-shapes.json",
+  "sha256": "0bb47f19fe0867c8a8d71d23e41a6555e03083b7c19c217b2ea016d741213d1e",
+  "shapes": [
+   {
+    "E": 8,
+    "F": 14336,
+    "H": 128,
+    "k": 2,
+    "name": "pcs-e8-h128"
+   },
+   {
+    "E": 8,
+    "F": 14336,
+    "H": 256,
+    "k": 2,
+    "name": "pcs-e8-h256"
+   },
+   {
+    "E": 8,
+    "F": 14336,
+    "H": 512,
+    "k": 2,
+    "name": "pcs-e8-h512"
+   },
+   {
+    "E": 8,
+    "F": 14336,
+    "H": 1024,
+    "k": 2,
+    "name": "pcs-e8-h1024"
+   },
+   {
+    "E": 8,
+    "F": 14336,
+    "H": 2048,
+    "k": 2,
+    "name": "pcs-e8-h2048"
+   },
+   {
+    "E": 32,
+    "F": 14336,
+    "H": 4096,
+    "k": 2,
+    "name": "pcs-e32-h4096"
+   },
+   {
+    "E": 8,
+    "F": 256,
+    "H": 256,
+    "k": 2,
+    "name": "pcs2-e8-h256-f256"
+   },
+   {
+    "E": 8,
+    "F": 512,
+    "H": 256,
+    "k": 2,
+    "name": "pcs2-e8-h256-f512"
+   },
+   {
+    "E": 8,
+    "F": 1024,
+    "H": 256,
+    "k": 2,
+    "name": "pcs2-e8-h256-f1024"
+   },
+   {
+    "E": 8,
+    "F": 1792,
+    "H": 256,
+    "k": 2,
+    "name": "pcs2-e8-h256-f1792"
+   },
+   {
+    "E": 8,
+    "F": 3584,
+    "H": 256,
+    "k": 2,
+    "name": "pcs2-e8-h256-f3584"
+   },
+   {
+    "E": 8,
+    "F": 7168,
+    "H": 256,
+    "k": 2,
+    "name": "pcs2-e8-h256-f7168"
+   },
+   {
+    "E": 32,
+    "F": 256,
+    "H": 4096,
+    "k": 2,
+    "name": "pcs2-e32-h4096-f256"
+   },
+   {
+    "E": 32,
+    "F": 512,
+    "H": 4096,
+    "k": 2,
+    "name": "pcs2-e32-h4096-f512"
+   },
+   {
+    "E": 32,
+    "F": 1024,
+    "H": 4096,
+    "k": 2,
+    "name": "pcs2-e32-h4096-f1024"
+   },
+   {
+    "E": 32,
+    "F": 1792,
+    "H": 4096,
+    "k": 2,
+    "name": "pcs2-e32-h4096-f1792"
+   },
+   {
+    "E": 32,
+    "F": 3584,
+    "H": 4096,
+    "k": 2,
+    "name": "pcs2-e32-h4096-f3584"
+   },
+   {
+    "E": 32,
+    "F": 7168,
+    "H": 4096,
+    "k": 2,
+    "name": "pcs2-e32-h4096-f7168"
+   },
+   {
+    "E": 8,
+    "F": 256,
+    "H": 2048,
+    "k": 2,
+    "name": "pcs2-e8-h2048-f256"
+   },
+   {
+    "E": 8,
+    "F": 512,
+    "H": 2048,
+    "k": 2,
+    "name": "pcs2-e8-h2048-f512"
+   },
+   {
+    "E": 8,
+    "F": 1024,
+    "H": 2048,
+    "k": 2,
+    "name": "pcs2-e8-h2048-f1024"
+   },
+   {
+    "E": 8,
+    "F": 1792,
+    "H": 2048,
+    "k": 2,
+    "name": "pcs2-e8-h2048-f1792"
+   },
+   {
+    "E": 32,
+    "F": 14336,
+    "H": 4224,
+    "k": 2,
+    "name": "pcs2-e32-h4224"
+   },
+   {
+    "E": 32,
+    "F": 512,
+    "H": 4224,
+    "k": 2,
+    "name": "pcs2-e32-h4224-f512"
+   },
+   {
+    "E": 32,
+    "F": 1024,
+    "H": 4224,
+    "k": 2,
+    "name": "pcs2-e32-h4224-f1024"
+   },
+   {
+    "E": 64,
+    "F": 1408,
+    "H": 2048,
+    "k": 8,
+    "name": "pcs2-e64-h2048-f1408-k8"
+   }
+  ]
+ },
+ "status": "MEASUREMENT, DESCRIPTIVE: PC2 certifies nothing, registers no model form, no constant, no bar and no gate on any model, and moves no registered verdict. Every reading is DESCRIPTIVE",
+ "stop rules": {
+  "budget": "the driver drops the LAST droppable unit first: rep, d3, then w; a unit whose estimate no longer fits is SKIPPED; the guardian terminates at the hard cap",
+  "never": "no PC2 reading is a STOP; a reading that does not identify reads NOT IDENTIFIED",
+  "prelude (C3's, unchanged)": "the session STOPS before any page unless the checkout is clean, sudo works, the GPU is idle, 700 W reads back on both enforced.power.limit and -q's GPU-scope Current Power Limit within 1 W (polled up to 30 s; no fallback), persistence is Enabled and the session lock 1410 MHz reads back; the prelude also probes 1710 MHz (lock, read back, reset)",
+  "the gate and the stamps (C3's)": "a stamps unit runs only when its regcheck line and the gate's HARD line (occupancy, the all-off SASS, the upstream file, C3's SASS legs, every cell's readback) read PASS; a timing FAIL alone runs it PERTURBED",
+  "the regcheck drop rule (PC's owner decision 2, kept)": "the probe=pc regcheck (unit 3) exiting anything but 0 or 1 (refused, crashed, stopped at its cap, skipped) or writing no regcheck line for a probe=pc stamps unit drops every probe=pc unit (4 to 10). PC2 has no other measuring unit, so a failed start leaves the census alone (about 30 min of boot, setup, prelude and census, about $1.15). Exit 1 (a variant's occupancy or path FAIL) refuses that variant's stamps unit by its line; its cells keep their PLAIN medians from the perturb unit. A cell failing its readback is excluded alone. The probe exits 4 on any uncaught error, never 0 or 1",
+  "unit locks (PC's, unchanged)": "every perturb and stamps unit carries lock-mhz=1710; it refuses unless the prelude's probe held it; it locks, reads back (two tries) and runs; after the tool the lock is read back again (pc-locks.env); the reader refuses a stamps unit whose own lock, or whose perturb unit's lock, did not read back after its tool"
+ },
+ "tool": "scripts/gh200_pc2_session.sh (PC's pinned driver plus lines marked PC2), scripts/vm_run_pc2.sh (vm_run.sh plus lines marked PC2), scripts/instr_probe_pc2.py (PC's pinned probe plus lines marked PC2), moe/instrumented/fused_moe_instr.py (the copy, unchanged, STAMPS 3), scripts/tile_census_a2.py (the census), scripts/scoring/pc2/read_pc2.py (the reader, over read_pc.py's pinned functions)",
+ "units": {
+  "plan": "scripts/plans/rentalPC2-2026-11.plan",
+  "rows": [
+   {
+    "cap": 15,
+    "depends": null,
+    "drop": "nodrop",
+    "est": 2,
+    "keys": {
+     "lock-mhz": "1410",
+     "power-limit-w": "700"
+    },
+    "label": "",
+    "model": "-",
+    "step": "prelude"
+   },
+   {
+    "cap": 15,
+    "depends": null,
+    "drop": "nodrop",
+    "est": 3,
+    "keys": {
+     "models": "mixtral-8x7b,phi-3.5-moe",
+     "tiles": "16x64x128w4s4,16x64x128w4s3,64x128x64w4s3,32x64x128w4s3,32x128x64w4s3"
+    },
+    "label": "pc2",
+    "model": "-",
+    "step": "tilecensus"
+   },
+   {
+    "cap": 20,
+    "depends": null,
+    "drop": "nodrop",
+    "est": 3,
+    "keys": {
+     "probe": "pc"
+    },
+    "label": "rcp",
+    "model": "-",
+    "step": "regcheck"
+   },
+   {
+    "cap": 25,
+    "depends": null,
+    "drop": "nodrop",
+    "est": 8,
+    "keys": {
+     "gates": "sd,ss,sn,sw,sd3,sr",
+     "lock-mhz": "1710",
+     "probe": "pc"
+    },
+    "label": "pt",
+    "model": "-",
+    "step": "perturb"
+   },
+   {
+    "cap": 15,
+    "depends": null,
+    "drop": "nodrop",
+    "est": 4,
+    "keys": {
+     "lock-mhz": "1710",
+     "page": "docs/registered/2026-11-10-pc2-pages/pc2-d.json",
+     "probe": "pc"
+    },
+    "label": "sd",
+    "model": "-",
+    "step": "stamps"
+   },
+   {
+    "cap": 12,
+    "depends": null,
+    "drop": "nodrop",
+    "est": 3,
+    "keys": {
+     "lock-mhz": "1710",
+     "page": "docs/registered/2026-11-10-pc2-pages/pc2-s.json",
+     "probe": "pc"
+    },
+    "label": "ss",
+    "model": "-",
+    "step": "stamps"
+   },
+   {
+    "cap": 15,
+    "depends": null,
+    "drop": "nodrop",
+    "est": 4,
+    "keys": {
+     "lock-mhz": "1710",
+     "page": "docs/registered/2026-11-10-pc2-pages/pc2-n.json",
+     "probe": "pc"
+    },
+    "label": "sn",
+    "model": "-",
+    "step": "stamps"
+   },
+   {
+    "cap": 15,
+    "depends": null,
+    "drop": "w",
+    "est": 4,
+    "keys": {
+     "lock-mhz": "1710",
+     "page": "docs/registered/2026-11-10-pc2-pages/pc2-w.json",
+     "probe": "pc"
+    },
+    "label": "sw",
+    "model": "-",
+    "step": "stamps"
+   },
+   {
+    "cap": 8,
+    "depends": null,
+    "drop": "d3",
+    "est": 2,
+    "keys": {
+     "lock-mhz": "1710",
+     "page": "docs/registered/2026-11-10-pc2-pages/pc2-d3.json",
+     "probe": "pc"
+    },
+    "label": "sd3",
+    "model": "-",
+    "step": "stamps"
+   },
+   {
+    "cap": 8,
+    "depends": null,
+    "drop": "rep",
+    "est": 2,
+    "keys": {
+     "lock-mhz": "1710",
+     "page": "docs/registered/2026-11-10-pc2-pages/pc2-r.json",
+     "probe": "pc"
+    },
+    "label": "sr",
+    "model": "-",
+    "step": "stamps"
+   }
+  ]
+ },
+ "v6d terms (how each open term will be read off PC2's pages)": {
+  "1 the 16x64x128 law constants (v6d's slots for 16x64x128w4s4: Q_B, the L table, X_sat, kappa, c0)": "Q_B: PC2-R1g's n_if on the stamped s4 PTX x 128 x 64 x 2 (v6d holds 48 KB, n_if 3, off 160 published PTX files). The L table on this tile: PC2-R1c's rows, built as v6d built its 64x128x64 table from PC (design-D6 section 2, the L row). X_sat on this tile: PC2-R1d (v6d holds PC's 64x128x64 level x DS's tile ratio, 3717.9 GB/s). kappa on this tile: PC2-R1e per rung (v6d holds kappa read on 64x128x64). c0 on this tile: PC2-R1b at G 128 (v6d holds PC's 4.70 us, read on 64x128x64). A reading that reads NOT IDENTIFIED leaves its slot as v6d froze it and says so; nothing is filled by a fallback",
+  "2 c0 and the span at short slabs (v6d's slots: c0, a constant; kappa(m), read on 3.67 MB slabs)": "c0 at low load: PC2-R2a per G (8, 32, 128, 256) on 64x128x64 and PC2-R1b (G 8, 128) on 16x64x128; R2b's short-slab-only c0 beside. v6d's c0 slot is one constant: PC2 reports c0(G) as read; a load-dependent c0 would be a form change, not a value, and is the owner's. kappa at short slabs: PC2-R2c per (G, F), against v6d's kappa(m) read at 3.67 MB. The duty factor is v6d's (owner, 2026-11-10) and is not re-read",
+  "3 the big-single-wave behaviour (v6d: Little's law at X_sat past G 384, kappa held at its G 384 value 1.032)": "PC2-R3 per 4-per-SM tile, a registered label (read_pc2.term3): HOLDS when G 528 reads SATURATED (|X(528) / X_sat - 1| <= 3%) and kappa(528) / kappa(396) reads HELD (|ratio - 1| <= 3%); DOES NOT HOLD when both are read and either is not; NOT IDENTIFIED when either is unread. DESCRIPTIVE: the label says whether v6d's assumption holds on PC2's pages, it changes nothing in v6d",
+  "4 the naive-path term (v6d: none; the naive path keeps v4d''s price)": "PC2-R4's t, PLAIN, twin ratios and pair ratios per naive cell. STATED PLAINLY: v6d has no naive-path slot. The naive-path term addendum 6 may take will be CHOSEN AFTER PC2's pages are read, WITH THE SEEN DECODE BLIND IN VIEW (its 29 naive cells re-score at 8.17% rms under v6d, worst JetMoE U-T1 +22.2%, design-D6 section 6.2), and will be DISCLOSED AS SUCH: a choice informed by seen pages, never a blind test of itself. PC2 registers only the readings",
+  "status": "REGISTERED BEFORE ANY PC2 PAGE. v6d stays as frozen, with the duty factor (owner, 2026-11-10); its law, choices D6-1 to D6-17 and FROZEN.txt hashes are not changed by PC2. PC2 registers which reading fills which open slot of v6d's frozen law; it registers no form and no value. Anything addendum 6 does with these readings is chosen after PC2's pages are read, and is disclosed as informed by them",
+  "v6d's frozen values printed beside (never used by a reading)": {
+   "X_sat_64x128x64w4s3_gbps": 3612.42,
+   "X_sat_by_tile_gbps": {
+    "16x64x128w4s4": 3717.9,
+    "32x128x64w4s3": 3694.4,
+    "32x64x128w4s3": 3703.8
+   },
+   "c0_us": 4.704722,
+   "kappa_G384": 1.032,
+   "n_if": {
+    "16x64x128w4s4": 3,
+    "32x128x64w4s3": 2,
+    "32x64x128w4s3": 2,
+    "64x128x64w4s3": 2
+   }
+  }
+ }
+}

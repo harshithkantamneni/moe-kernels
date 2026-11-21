@@ -1,0 +1,10 @@
+step	state	rc	seconds	dirty	log	note
+preflight-r1	DONE	0	1	0	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/preflight-r1.log	log agrees: RESULT lines imply 0
+preflight-r3	DONE	0	3	0	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/preflight-r3.log	log agrees: RESULT lines imply 0
+preconditions	DONE	0	189	1	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/preconditions.log	the driver's own ARMS.tsv carries each arm's second opinion
+counter-probe	INFO	1	4	1	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/counter-probe.log	BLOCKED: ==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM; ncu /usr/local/cuda-13.0/bin/ncu (on PATH) [Version 2025.3.1.0 (build 36398880) (public-release)]; CAP_PERFMON clear, CAP_SYS_ADMIN clear (CapEff 0000000000000000); module flag unread (the parameter is not listed by this driver); informational, gates nothing; /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/COUNTERS
+gpu-tests	DONE	0	36	1	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/gpu-tests.log	pytest exit 0: 37 passed, 1 skipped, 2 warnings in 35.01s
+probe-check	DONE	0	7	1	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/probe-check.log	log agrees: RESULT lines imply 0
+r3-g1-s0	INVALID	3	688	1	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/r3-g1-s0.log	log agrees: RESULT lines imply 3
+r3-g2-s0	INVALID	3	685	1	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/r3-g2-s0.log	log agrees: RESULT lines imply 3
+r3-g4-s0	INVALID	3	697	1	/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/chain-logs/r3-g4-s0.log	log agrees: RESULT lines imply 3

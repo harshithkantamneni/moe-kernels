@@ -1,0 +1,390 @@
+{
+ "C4-R1": {
+  "X_pct": -4.44,
+  "beside (DESCRIPTIVE)": {
+   "X_at_A2_par_pct": -4.68,
+   "X_at_C4_triad_pct": -4.44,
+   "X_with_M4_bytes_pct": -1.84,
+   "X_with_counted_bytes_pct (oracle)": 0.12,
+   "v5''_held_out_pct": -1.61
+  },
+  "cells": [
+   {
+    "e_pct": -5.69,
+    "label": "PT",
+    "meas_ms": 1.05392,
+    "n": 2
+   },
+   {
+    "e_pct": -4.893,
+    "label": "PW",
+    "meas_ms": 1.050944,
+    "n": 2
+   },
+   {
+    "e_pct": -5.696,
+    "label": "PT2",
+    "meas_ms": 1.047136,
+    "n": 2
+   },
+   {
+    "e_pct": -5.238,
+    "label": "PW2",
+    "meas_ms": 1.046464,
+    "n": 2
+   },
+   {
+    "e_pct": -2.591,
+    "label": "uniform",
+    "meas_ms": 0.85376,
+    "n": 2
+   },
+   {
+    "e_pct": -2.562,
+    "label": "balanced",
+    "meas_ms": 0.853504,
+    "n": 2
+   }
+  ],
+  "dropped": [],
+  "page_why": "",
+  "summ": {
+   "mean": -4.44,
+   "n": 6,
+   "rms": 4.65,
+   "worst": -5.7
+  },
+  "unpriced": []
+ },
+ "C4-R2 w1 bytes": {
+  "page_why": "",
+  "w1": {
+   "lambda": 1.5505,
+   "lever": 0.1466,
+   "m4_over_counted_pct": -7.47,
+   "n": 6,
+   "per_cell": [
+    {
+     "counted": 2108685397,
+     "label": "PT",
+     "m4_over_counted_pct": -8.16,
+     "n": 2,
+     "w2_over_counted_pct": -23.81
+    },
+    {
+     "counted": 2020824064,
+     "label": "PW",
+     "m4_over_counted_pct": -10.09,
+     "n": 2,
+     "w2_over_counted_pct": -16.13
+    },
+    {
+     "counted": 2038684586,
+     "label": "PT2",
+     "m4_over_counted_pct": -9.1,
+     "n": 2,
+     "w2_over_counted_pct": -26.03
+    },
+    {
+     "counted": 2109326762,
+     "label": "PW2",
+     "m4_over_counted_pct": -8.19,
+     "n": 2,
+     "w2_over_counted_pct": -25.13
+    },
+    {
+     "counted": 1653434282,
+     "label": "uniform",
+     "m4_over_counted_pct": -3.68,
+     "n": 2,
+     "w2_over_counted_pct": -16.34
+    },
+    {
+     "counted": 1663520341,
+     "label": "balanced",
+     "m4_over_counted_pct": -4.27,
+     "n": 2,
+     "w2_over_counted_pct": -16.85
+    }
+   ],
+   "w2_over_counted_pct": -21.04
+  },
+  "w2": {
+   "lambda": 1.0414,
+   "lever": 0.0504,
+   "m4_over_counted_pct": -0.21,
+   "n": 6,
+   "per_cell": [
+    {
+     "counted": 648427520,
+     "label": "PT",
+     "m4_over_counted_pct": -3.36,
+     "n": 2,
+     "w2_over_counted_pct": -3.78
+    },
+    {
+     "counted": 593605888,
+     "label": "PW",
+     "m4_over_counted_pct": 1.68,
+     "n": 2,
+     "w2_over_counted_pct": -4.9
+    },
+    {
+     "counted": 655199914,
+     "label": "PT2",
+     "m4_over_counted_pct": -6.03,
+     "n": 2,
+     "w2_over_counted_pct": -7.12
+    },
+    {
+     "counted": 627413162,
+     "label": "PW2",
+     "m4_over_counted_pct": -0.1,
+     "n": 2,
+     "w2_over_counted_pct": -5.39
+    },
+    {
+     "counted": 561126570,
+     "label": "uniform",
+     "m4_over_counted_pct": 3.73,
+     "n": 2,
+     "w2_over_counted_pct": -5.28
+    },
+    {
+     "counted": 558600533,
+     "label": "balanced",
+     "m4_over_counted_pct": 4.2,
+     "n": 2,
+     "w2_over_counted_pct": -4.85
+    }
+   ],
+   "w2_over_counted_pct": -5.23
+  }
+ },
+ "C4-S1 x": {
+  "w1 M4": {
+   "max": 0.976,
+   "median": 0.974,
+   "min": 0.916
+  },
+  "w1 W2": {
+   "max": 0.857,
+   "median": 0.833,
+   "min": 0.766
+  },
+  "w2 M4": {
+   "max": 0.71,
+   "median": 0.624,
+   "min": 0.601
+  },
+  "w2 W2": {
+   "max": 0.65,
+   "median": 0.613,
+   "min": 0.563
+  }
+ },
+ "C4-S2 tp2 b128g1 knee": {
+  "K1": {
+   "S0": 2.75,
+   "p": 6.0,
+   "rate_gbps": 3726.2173727263944
+  },
+  "cell sum (w1 + w2), wall": {
+   "mean_pct": -0.98,
+   "n": 6,
+   "rms_pct": 1.21,
+   "worst_pct": -1.95
+  },
+  "rows": 12,
+  "w1": {
+   "cycles": {
+    "mean_pct": 1.99,
+    "n": 6,
+    "rms_pct": 2.06,
+    "worst_pct": 2.6
+   },
+   "wall": {
+    "mean_pct": -0.25,
+    "n": 6,
+    "rms_pct": 0.46,
+    "worst_pct": -0.83
+   },
+   "x_median (counted bytes)": 1.02
+  },
+  "w2": {
+   "cycles": {
+    "mean_pct": -2.88,
+    "n": 6,
+    "rms_pct": 3.25,
+    "worst_pct": -4.71
+   },
+   "wall": {
+    "mean_pct": -2.53,
+    "n": 6,
+    "rms_pct": 2.95,
+    "worst_pct": -4.27
+   },
+   "x_median (counted bytes)": 0.648
+  }
+ },
+ "C4-S3 tp2 sag": {
+  "mean_err_us": -4.69,
+  "n": 24,
+  "own_fit_A_us": 53.82,
+  "own_fit_tau_us": 450.0,
+  "rms_us": 5.19
+ },
+ "C4-S5 census": {
+  "W_c_assumed": 264,
+  "compiled": {
+   "w1": 2,
+   "w2": 2
+  },
+  "priced": {
+   "w1": 2,
+   "w2": 2
+  },
+  "two_per_sm": true,
+  "verdict": "COMPLETE"
+ },
+ "C4-S5 triad": {
+  "A2_gbps": 3726.2,
+  "C4_gbps": 3725.4070995998695,
+  "inside_range": false,
+  "range_15_rentals_gbps": [
+   3725.6,
+   3727.6
+  ]
+ },
+ "F1": {
+  "A2 par": [
+   42.02,
+   425.0
+  ],
+  "A2 per_page": {
+   "mixtral-8x7b": [
+    54.39,
+    550.0
+   ],
+   "olmoe-1b-7b": [
+    29.65,
+    300.0
+   ]
+  },
+  "C2 par": [
+   41.59,
+   412.5
+  ],
+  "C2 per_page": {
+   "mixtral-8x7b": [
+    52.58,
+    500.0
+   ],
+   "olmoe-1b-7b": [
+    30.6,
+    325.0
+   ]
+  },
+  "par": [
+   54.25,
+   587.5
+  ],
+  "per_page": {
+   "mixtral-8x7b": [
+    67.55,
+    650.0
+   ],
+   "olmoe-1b-7b": [
+    40.95,
+    525.0
+   ]
+  }
+ },
+ "board": {
+  "c2_power_env": "C2_POWER_W=700",
+  "g_band": "PASS",
+  "g_band_which": "fallback (registered: the primary band left joint_cF None)",
+  "lock_probe": "LOCK_PROBE_1410=held",
+  "valid": true,
+  "why": ""
+ },
+ "bytes_outcome": {
+  "band": "BEYOND-M4",
+  "means": "more w1 bytes than M4 prices: neither law describes w1 at P 112; the declared round has no measured w1 law at Phi-3.5's distance"
+ },
+ "c4": "results/published/2026-10-27-nvidia_gh200_480gb-cal4-session",
+ "chain_repo": {
+  "modules_checked": 54,
+  "path": "/Users/harshithkantamneni/code/moe-kernels"
+ },
+ "commit": {
+  "checked": true,
+  "files": 74,
+  "sha": "aa5e1b7cc561635dd939fcc1972efa142b3739ca"
+ },
+ "fingerprint": {
+  "equals_registered": true
+ },
+ "joint": {
+  "C4-R1": "LOW-FAR",
+  "C4-R2": "BEYOND-M4",
+  "means": "neither byte law fits at P 112: Phi's stake at risk",
+  "sequence": "C4, then ONE final declared model round (gate: G1 every held-out 128 G 1 mean within 1.0%, Mixtral-8x7B on C2's board as well; G2 estimated P(A) >= 0.5 on the registered cells). If that round fails the B3 gate, iteration stops and the owner chooses between narrowing scope and going blind. B3 is registered only after a declared round passes. If C4 reads NOT READ, the final round runs on the four existing CAL models without tp2, and C4 is not rented again (owner, 2026-10-27)"
+ },
+ "outcome": {
+  "b3": "as LOW, past Qwen2-57B's -1.44: the round-4 model's Phi-3.5 stake is most likely an error large enough to fail E1-TILE's 1% bar on Phi alone. The final declared round must remove the term the joint cell names, and Phi-3.5's stake is reported as at risk in that round's registration",
+  "band": "LOW-FAR"
+ },
+ "pass_estimates": {
+  "A (5 models)": 0.0206,
+  "B (5 models)": 0.0359,
+  "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.0118
+ },
+ "preflight": {
+  "chain_repo_before_pages": "pinned",
+  "round4_pass": {
+   "A (4 models)": 0.3798,
+   "B (4 models)": 0.4998,
+   "D (O, Q, X; 8x7B G1 aside)": 0.4233
+  },
+  "round4_table": {
+   "mixtral-8x22b": 0.24,
+   "mixtral-8x7b": 1.25,
+   "mixtral-8x7b C2": 1.49,
+   "olmoe-1b-7b": 0.48,
+   "qwen2-57b-a14b": -1.44
+  }
+ },
+ "registration": "2026-10-27-cal4-gh200",
+ "status": "CALIBRATION: certifies nothing; every C4 page is SEEN once read",
+ "table": {
+  "max |mean| (five models)": 4.44,
+  "mixtral-8x22b": {
+   "held_out_128g1_mean_pct": 0.24,
+   "source": "round 4 selected (combo4.json, LOMO)"
+  },
+  "mixtral-8x7b": {
+   "held_out_128g1_mean_pct": 1.25,
+   "source": "round 4 selected (combo4.json, LOMO)"
+  },
+  "mixtral-8x7b, C2 board (beside)": {
+   "held_out_128g1_mean_pct": 1.49,
+   "source": "round 4 selected (combo4.json)"
+  },
+  "mixtral-8x7b-tp2": {
+   "held_out_128g1_mean_pct": -4.44,
+   "source": "C4-R1 (this reader)"
+  },
+  "olmoe-1b-7b": {
+   "held_out_128g1_mean_pct": 0.48,
+   "source": "round 4 selected (combo4.json, LOMO)"
+  },
+  "qwen2-57b-a14b": {
+   "held_out_128g1_mean_pct": -1.44,
+   "source": "round 4 selected (combo4.json, LOMO)"
+  },
+  "rms of means": 2.17,
+  "round-4 gate G1 (every mean within 1.0, 8x7B on C2 too; DESCRIPTIVE)": false,
+  "spread": 5.69
+ }
+}

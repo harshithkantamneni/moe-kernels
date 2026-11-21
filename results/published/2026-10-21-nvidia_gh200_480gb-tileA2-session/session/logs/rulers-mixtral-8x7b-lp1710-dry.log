@@ -1,0 +1,6 @@
+RULERS at lock 1710.0 MHz, buffers 4.00 GiB:
+  read2d  torch.sum(a, dim=1), a fp32 [4096, 262144]
+  copy    y.copy_(x), fp32, each the buffer
+  add     torch.add(a, b, out=c), fp32, each the buffer
+  matmul  torch.matmul bf16 8192^3
+DRY RUN: nothing timed (exit 2)

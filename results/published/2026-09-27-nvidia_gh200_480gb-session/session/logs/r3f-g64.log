@@ -1,0 +1,4 @@
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 9b6d01, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [2, 3, 4, 6], 16 profiled launches at --clock-control base; 42 metrics asked, dropped []
+wrote /home/ubuntu/moe/results/2026-09-27-nvidia_gh200_480gb-r3-counters/r3f-g64.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-09-27-nvidia_gh200_480gb-r3-counters/r3f-g64.json: '/home/ubuntu/moe/results/2026-09-27-nvidia_gh200_480gb-r3-counters/r3f-g64.json' is outside repository at '/home/ubuntu/moe/repo')

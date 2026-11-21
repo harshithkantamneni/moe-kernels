@@ -1,0 +1,90 @@
+REGISTERED 2026-10-14, before any tile-stage page: the tile stage, rental B (frozen; finalised mechanically), 2026-10-14-tileB-stop-gh200
+status: REGISTERED BEFORE ANY PAGE (read on rental A's scores)
+design: design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4
+tool: scripts/scoring/tileA/score_e1cal.py (tcommon.stop_rule), on rental A's CLEAN view
+
+A1: tA-e1cal's pooled NATIVE bar HOLDS
+A2: every tile class's mean NATIVE residual (64 G 1, 128 G 1, 128 G 16) within 0.75%
+A3: at 128 G 1, the CAL models' means (OLMoE, Qwen2-57B, Mixtral n 2) within 1% of each other (the model-specific check, design-tile-review 4)
+pages: every E1-CAL page ran and was scored: a SKIPPED, LOST or NOT SCORED E1-CAL page is a STOP
+G3: a G3 void of the E1-CAL cells is a STOP
+census: rental A's census refused (an MMA path mismatch) or missing is a STOP (build-tile-review 9)
+finalise: scripts/scoring/tileA/finalise.py refuses (exit 2, nothing written) unless this rule reads GO
+verdict: GO only when every clause holds; otherwise STOP: rental B does not run (D6), and the owner is told why
+
+rule (D6; design-tile-review 4 and 8; owner fixes 6 and 10):
+  A1: tA-e1cal's pooled NATIVE bar HOLDS
+  A2: every tile class's mean NATIVE residual (64 G 1, 128 G 1, 128 G 16) within 0.75%
+  A3: at 128 G 1, the CAL models' means (OLMoE, Qwen2-57B, Mixtral n 2) within 1% of each other (the model-specific check, design-tile-review 4)
+  pages: every E1-CAL page ran and was scored: a SKIPPED, LOST or NOT SCORED E1-CAL page is a STOP
+  G3: a G3 void of the E1-CAL cells is a STOP
+  census: rental A's census refused (an MMA path mismatch) or missing is a STOP (build-tile-review 9)
+  finalise: scripts/scoring/tileA/finalise.py refuses (exit 2, nothing written) unless this rule reads GO
+  verdict: GO only when every clause holds; otherwise STOP: rental B does not run (D6), and the owner is told why
+power (from tileB-e1tile, CPU float64):
+  common 0 / model-specific 0:
+    P(E1-TILE): 0.96835
+    P(E1-TILE, deepseek in each-model clause): 0.95729
+    P(stop rule A2 passes): 0.92455
+    P(stop rule A2 and A3 pass): 0.8977
+    P(E1-TILE | A2 passes): 0.96836
+    P(E1-TILE | A2 and A3 pass): 0.96834
+  common 0.005 / model-specific 0:
+    P(E1-TILE): 0.89002
+    P(E1-TILE, deepseek in each-model clause): 0.80602
+    P(stop rule A2 passes): 0.48735
+    P(stop rule A2 and A3 pass): 0.47291
+    P(E1-TILE | A2 passes): 0.92566
+    P(E1-TILE | A2 and A3 pass): 0.92569
+  common 0.01 / model-specific 0:
+    P(E1-TILE): 0.62433
+    P(E1-TILE, deepseek in each-model clause): 0.47108
+    P(stop rule A2 passes): 0.14217
+    P(stop rule A2 and A3 pass): 0.13705
+    P(E1-TILE | A2 passes): 0.88345
+    P(E1-TILE | A2 and A3 pass): 0.88526
+  common 0.02 / model-specific 0:
+    P(E1-TILE): 0.2248
+    P(E1-TILE, deepseek in each-model clause): 0.14397
+    P(stop rule A2 passes): 0.02367
+    P(stop rule A2 and A3 pass): 0.02262
+    P(E1-TILE | A2 passes): 0.85467
+    P(E1-TILE | A2 and A3 pass): 0.85853
+  common 0 / model-specific 0.005:
+    P(E1-TILE): 0.86869
+    P(E1-TILE, deepseek in each-model clause): 0.77077
+    P(stop rule A2 passes): 0.48728
+    P(stop rule A2 and A3 pass): 0.4052
+    P(E1-TILE | A2 passes): 0.8683
+    P(E1-TILE | A2 and A3 pass): 0.86745
+  common 0 / model-specific 0.01:
+    P(E1-TILE): 0.47618
+    P(E1-TILE, deepseek in each-model clause): 0.30995
+    P(stop rule A2 passes): 0.1426
+    P(stop rule A2 and A3 pass): 0.08807
+    P(E1-TILE | A2 passes): 0.47518
+    P(E1-TILE | A2 and A3 pass): 0.47366
+  common 0 / model-specific 0.015:
+    P(E1-TILE): 0.17205
+    P(E1-TILE, deepseek in each-model clause): 0.08331
+    P(stop rule A2 passes): 0.05266
+    P(stop rule A2 and A3 pass): 0.02524
+    P(E1-TILE | A2 passes): 0.16977
+    P(E1-TILE | A2 and A3 pass): 0.17496
+  common 0.005 / model-specific 0.005:
+    P(E1-TILE): 0.74621
+    P(E1-TILE, deepseek in each-model clause): 0.60367
+    P(stop rule A2 passes): 0.29035
+    P(stop rule A2 and A3 pass): 0.23551
+    P(E1-TILE | A2 passes): 0.78025
+    P(E1-TILE | A2 and A3 pass): 0.78358
+  common 0.01 / model-specific 0.01:
+    P(E1-TILE): 0.25288
+    P(E1-TILE, deepseek in each-model clause): 0.14239
+    P(stop rule A2 passes): 0.06157
+    P(stop rule A2 and A3 pass): 0.03385
+    P(E1-TILE | A2 passes): 0.32727
+    P(E1-TILE | A2 and A3 pass): 0.33501
+reading: at zero drift the rule stops about 1 rental in 10 for noise alone; at 1% common-mode drift it stops most; the model-specific drift passes it as often as not (no rental-A page sees a blind model's bias)
+seen_data:
+  - the noise model's SEEN inputs (rentals 3 and 7)

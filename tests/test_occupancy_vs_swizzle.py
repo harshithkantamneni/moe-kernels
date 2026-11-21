@@ -1,0 +1,1739 @@
+"""Occupancy against swizzle: does the standard cache predictor transfer here?
+
+`scripts/occupancy_vs_swizzle.py` asks whether the weight re-read fraction is
+set by CONCURRENCY -- how many thread blocks are resident, and therefore how
+much data is in flight through one L2 -- or by PROGRAM ORDER, which is what
+reuse-distance analysis assumes and what `GROUP_SIZE_M` controls. Most of this
+file is about the two things that could make that question unanswerable rather
+than about the answer.
+
+FIVE GROUPS.
+
+  - THE X AXIS. Resident blocks per SM is COMPUTED, and if it is computed wrong
+    the experiment sweeps an axis that does not exist. The ladder is pinned here
+    against hand-worked numbers on both cards, the control property that makes
+    num_warps a control (it must NOT move residency) is asserted rather than
+    assumed, and an unknown card is checked to REFUSE instead of defaulting.
+  - THE TWO MODELS. The concurrent footprint, the LRU caricature and the capped
+    reuse-distance prediction, each checked against arithmetic done by hand.
+  - THE WINDOW. `identifiability_window` says which alphas this ladder can read
+    at all, and it is checked against a brute-force count of memory-bound treads
+    on ladders planted from the law rather than against its own formula. It has
+    a DEAD BAND, and a prediction landing inside it is unmeasurable however
+    clean the timings are; that is a property of the design and it is pinned.
+  - DISCRIMINATION. Three planted worlds must produce three different verdicts.
+    A pipeline that answers CONCURRENCY in a world built from GROUP_SIZE_M alone
+    cannot settle anything, and neither can one that answers NEITHER in both.
+  - THE REFUSALS. A run id that omits a swept knob overwrote a whole arm in this
+    repo once; a residency ladder that did not move would report a flat alpha as
+    evidence; a warp control compared against an occupancy effect that is itself
+    inside the noise passes half the time. Each is checked to fail loudly.
+
+The script is loaded by path, because `scripts/` is not a package.
+"""
+from __future__ import annotations
+
+import collections
+import importlib.util
+import json
+import math
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+PUBLISHED = ROOT / "results" / "published"
+
+
+def _load(name: str, filename: str):
+    spec = importlib.util.spec_from_file_location(
+        name, ROOT / "scripts" / filename)
+    module = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: `@dataclass` resolves annotations through
+    # `sys.modules[cls.__module__]`, and a module that is not there yet makes
+    # the decorator fail with an AttributeError that names nothing useful.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+OVS = _load("occupancy_vs_swizzle", "occupancy_vs_swizzle.py")
+SWEEP = OVS.SWEEP
+
+H200 = (9, 0)
+A100 = (8, 0)
+
+
+def _limits(capability=H200, sm_count=132, l2=50_000_000):
+    return OVS.card_limits(capability, sm_count, l2, "test")
+
+
+def _pinned(stages: int, warps: int = 8, group: int = 1):
+    return OVS.Setting(stages, warps, group, (OVS.ARM_OCCUPANCY,)).pinned(64, 64)
+
+
+# --------------------------------------------------------------------------
+# The x axis. If this is wrong the experiment sweeps nothing.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize(("stages", "expected"),
+                         [(2, 6), (3, 4), (4, 3), (5, 2)])
+def test_h200_residency_ladder(stages, expected):
+    """228 KiB per SM over `stages x 16 KiB + 1 KiB` reserved, worked by hand.
+
+    One CTA at BM=BN=BK=64 in bf16 holds `stages (64x64 + 64x64) x 2` = 16 KiB
+    per stage, plus the driver's 1 KiB per resident block. 233472 // 33792 = 6,
+    // 50176 = 4, // 66560 = 3, // 82944 = 2.
+    """
+    res = OVS.residency(_pinned(stages), 64, 2, _limits())
+    assert res.resident_blocks == expected
+    assert res.smem_per_block == stages * 16384
+    assert res.binding == "smem"
+
+
+@pytest.mark.parametrize(("stages", "expected"),
+                         [(2, 4), (3, 3), (4, 2), (5, 2)])
+def test_a100_residency_ladder(stages, expected):
+    """164 KiB per SM gives a shorter ladder, and the script must use ITS card."""
+    res = OVS.residency(_pinned(stages), 64, 2, _limits(A100, 108, 40_000_000))
+    assert res.resident_blocks == expected
+
+
+def test_residency_ladder_spans_the_gate_on_both_cards():
+    """V2's own bar, checked on the default grid rather than on one setting.
+
+    A grid that computes the same residency at every setting has swept nothing,
+    and its flat alpha would read as evidence for program order. The default
+    stages must clear MIN_RESIDENCY_LEVELS and MIN_RESIDENCY_SPAN on BOTH cards
+    this study owns, or the pod session picks a grid that cannot answer.
+    """
+    for cap, sms, l2 in ((H200, 132, 50_000_000), (A100, 108, 40_000_000)):
+        levels = sorted({OVS.residency(_pinned(s), 64, 2,
+                                       _limits(cap, sms, l2)).resident_blocks
+                         for s in OVS.DEFAULT_STAGES})
+        assert len(levels) >= OVS.MIN_RESIDENCY_LEVELS, (cap, levels)
+        assert max(levels) / min(levels) >= OVS.MIN_RESIDENCY_SPAN, (cap, levels)
+
+
+@pytest.mark.parametrize("stages", OVS.CONTROL_WARP_STAGES)
+def test_num_warps_does_not_move_residency(stages):
+    """THE CONTROL PROPERTY, and the whole design rests on it.
+
+    num_warps is offered as a knob that changes resident WARPS at fixed
+    resident BLOCKS, so the concurrent data footprint is unchanged and P1's
+    mechanism predicts no movement. That is only true while the shared-memory
+    limit binds before the thread-slot limit. If it ever stops being true the
+    control silently becomes a second treatment and P3 stops being a control.
+    """
+    base = OVS.residency(_pinned(stages, OVS.BASE_WARPS), 64, 2, _limits())
+    for warps in OVS.DEFAULT_CONTROL_WARPS:
+        other = OVS.residency(_pinned(stages, warps), 64, 2, _limits())
+        assert other.resident_blocks == base.resident_blocks
+        assert other.binding == "smem"
+
+
+def test_group_size_m_does_not_move_residency():
+    """The swizzle arm has to hold occupancy fixed, or it is not a second axis."""
+    base = OVS.residency(_pinned(3, 8, 1), 64, 2, _limits())
+    for group in OVS.DEFAULT_GROUPS:
+        assert OVS.residency(_pinned(3, 8, group), 64, 2,
+                             _limits()).resident_blocks == base.resident_blocks
+
+
+def test_unknown_capability_refuses_rather_than_defaulting():
+    """Residency is the swept axis; a guessed per-SM limit invents the x axis."""
+    with pytest.raises(OVS.CardUnavailable) as exc:
+        _limits(capability=(6, 1))
+    assert "sm_61" in str(exc.value)
+    assert "not defaulted" in str(exc.value).lower()
+
+
+@pytest.mark.parametrize(("kwargs", "needle"), [
+    ({"capability": None}, "no compute capability"),
+    ({"sm_count": 0}, "no SM count"),
+    ({"l2": 0}, "no L2 capacity"),
+])
+def test_missing_card_facts_refuse(kwargs, needle):
+    with pytest.raises(OVS.CardUnavailable) as exc:
+        _limits(**kwargs)
+    assert needle in str(exc.value)
+
+
+def test_per_sm_and_per_block_tables_are_not_the_same_question():
+    """The two shared-memory tables answer different questions and must differ.
+
+    `SMEM_PER_BLOCK_BYTES` (imported) asks whether ONE CTA fits and is the
+    per-block opt-in ceiling; `SMEM_PER_SM_BYTES` asks how MANY fit. Confusing
+    them silently changes the residency, so every capability this file knows is
+    checked to have a per-SM figure at least as large as its per-block one.
+    """
+    for cap, per_sm in OVS.SMEM_PER_SM_BYTES.items():
+        per_block = SWEEP.SMEM_PER_BLOCK_BYTES.get(cap)
+        assert per_block is not None, cap
+        assert per_sm >= per_block, cap
+        assert cap in OVS.MAX_THREADS_PER_SM and cap in OVS.MAX_BLOCKS_PER_SM
+
+
+# --------------------------------------------------------------------------
+# The two models.
+# --------------------------------------------------------------------------
+
+def test_per_cta_stream_is_weighted_over_both_gemms():
+    """1.31 MiB at mixtral, and the weighting is what makes it that and not 1.
+
+    The up GEMM streams `(BM+BN) H b` = 1 MiB per CTA over `2F/BN` = 448 N-tiles;
+    the down GEMM streams `(BM+BN) F b` = 3.5 MiB over `H/BN` = 64. Quoting only
+    the first understates the concurrent footprint by 31%.
+    """
+    from moe.spec import MODEL_CONFIGS
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    up = (64 + 64) * cfg.hidden_size * 2
+    down = (64 + 64) * cfg.intermediate_size * 2
+    n_up = math.ceil(2 * cfg.intermediate_size / 64)
+    n_down = math.ceil(cfg.hidden_size / 64)
+    want = (n_up * up + n_down * down) / (n_up + n_down)
+    assert OVS.per_cta_stream_bytes(cfg, 64, 64, 2) == pytest.approx(want)
+    assert up < want < down
+
+
+def test_footprint_is_linear_in_residency():
+    from moe.spec import MODEL_CONFIGS
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    one = OVS.concurrent_footprint_bytes(cfg, 64, 64, 2, 1, 132)
+    assert OVS.concurrent_footprint_bytes(cfg, 64, 64, 2, 4, 132) == \
+        pytest.approx(4 * one)
+    # The sentence the module docstring makes: one resident block per SM already
+    # puts more in flight than an H200's L2 holds.
+    assert one > 50_000_000
+
+
+@pytest.mark.parametrize(("footprint", "expected"),
+                         [(0.0, 1.0), (10.0, 0.0), (100.0, 0.9), (50.0, 0.8)])
+def test_alpha_concurrency_is_clamped_and_monotone(footprint, expected):
+    assert OVS.alpha_concurrency(footprint, 10.0) == pytest.approx(expected)
+
+
+def test_alpha_order_caps_at_tiles_per_expert():
+    """Two M-tiles of different experts share no weight block, so the cap is
+    the mechanism and not a concession."""
+    assert OVS.alpha_order(1.0, 64, 1000.0) == pytest.approx(1 / 64)
+    assert OVS.alpha_order(1.0, 64, 8.5) == pytest.approx(1 / 8.5)
+    assert OVS.alpha_order(1.0, 1, 8.5) == pytest.approx(1.0)
+
+
+def test_uncapped_reuse_distance_is_the_forty_fold_gap():
+    """The number the experiment starts from: 1/64 against a measured ~0.67."""
+    assert OVS.alpha_order(1.0, 64, 1e9) == pytest.approx(0.015625)
+    assert 0.67 / OVS.alpha_order(1.0, 64, 1e9) > 40
+
+
+# --------------------------------------------------------------------------
+# The window: which alphas this ladder can read at all.
+# --------------------------------------------------------------------------
+
+def _planted(alpha: float, k: float, treads: int, load: float = 4.0,
+             overhead: float = 0.5):
+    """`t(n) = D + max(L(1 + alpha(n-1)), C n)` with `B/C` set to exactly `k alpha`.
+
+    `C = L alpha / (k alpha) = L / k` and does not depend on alpha, which is the
+    two-line model written so that only the memory branch moves.
+    """
+    c = load / k
+    return c, [(n, overhead + max(load * (1.0 + alpha * (n - 1)), c * n))
+               for n in range(1, treads + 1)]
+
+
+def _memory_treads(alpha: float, k: float, treads: int) -> int:
+    """Brute force: how many treads stand above the compute branch by the margin.
+
+    Counted from planted times against the study's own membership rule, never
+    from `identifiability_window`'s formula, so the formula is checked against
+    something independent of it.
+    """
+    overhead = 0.5
+    c, pts = _planted(alpha, k, treads)
+    k_count = 0
+    for n, ms in pts:
+        if ms <= overhead + c * n * (1.0 + SWEEP.MEMORY_BRANCH_MARGIN):
+            break
+        k_count += 1
+    return k_count
+
+
+def test_window_floor_matches_a_brute_force_tread_count():
+    """The floor is where the memory prefix drops below MIN_MEMORY_TREADS."""
+    ridge, b, bm, treads = 162.8, 2, 64, 16
+    floor, _, _ = OVS.identifiability_window(ridge, b, bm, treads)
+    k = b * ridge / (2 * bm)
+    assert _memory_treads(floor * 1.05, k, treads) >= SWEEP.MIN_MEMORY_TREADS
+    assert _memory_treads(floor * 0.95, k, treads) < SWEEP.MIN_MEMORY_TREADS
+
+
+def test_window_dead_band_is_where_the_fit_discards_the_memory_branch():
+    """Inside the band the two branches are one line and `fit_ladder` says so.
+
+    This is the same rejection that makes BLOCK_M=128 useless for this
+    question, arriving at a different alpha instead of at a different tile. A
+    prediction landing in here is unmeasurable HERE however clean the timings.
+    """
+    ridge, b, bm, treads = 162.8, 2, 64, 16
+    _, lo, hi = OVS.identifiability_window(ridge, b, bm, treads)
+    k = b * ridge / (2 * bm)
+    mid = 0.5 * (lo + hi)
+    for alpha, discarded in ((mid, True), (lo * 0.8, False), (hi * 1.3, False)):
+        c, pts = _planted(alpha, k, treads)
+        ref = SWEEP.ComputeReference(256, 0.5, c * 256 / bm, 0.0, "planted")
+        fit = SWEEP.fit_ladder(pts, bm, ref)
+        assert ("DISCARDED" in fit.basis) is discarded, (alpha, fit.basis)
+
+
+def test_window_is_pinned_on_the_h200():
+    """The three numbers the report prints, so a change to the fit is visible."""
+    floor, lo, hi = OVS.identifiability_window(162.8, 2, 64, 16)
+    assert floor == pytest.approx(0.1015, abs=5e-4)
+    assert (lo, hi) == (pytest.approx(0.334, abs=5e-4),
+                        pytest.approx(0.452, abs=5e-4))
+
+
+def test_reuse_distance_prediction_clears_the_dead_band():
+    """P2 can be settled by the RATIO on this design, and that has to be checked.
+
+    If the capped reuse-distance prediction landed inside the dead band, route
+    one of P2 would be unmeasurable and the whole swizzle arm would rest on the
+    collapse route. It does not -- 0.118 x 0.93 = 0.11 sits under the band and
+    over the floor -- and this test is what would notice if a change to the
+    ladder depth or the ridge moved it in.
+    """
+    floor, lo, _ = OVS.identifiability_window(162.8, 2, 64, 16)
+    predicted = OVS.alpha_order(OVS.CORPUS_ALPHA_AT_G1, 64, 8.5)
+    assert floor < predicted < lo
+
+
+def test_k_of_window_inverts_the_band_exactly():
+    window = OVS.identifiability_window(162.8, 2, 64, 16)
+    assert OVS.k_of_window(window) == pytest.approx(2 * 162.8 / (2 * 64))
+
+
+# --------------------------------------------------------------------------
+# Discrimination: three planted worlds, three verdicts.
+# --------------------------------------------------------------------------
+
+def _plan_and_reg(reps: int = 2, ridge: float = 162.8, bw: float = 4374.5):
+    from moe.spec import MODEL_CONFIGS, dtype_bytes
+    args = OVS.build_parser().parse_args(
+        ["--capability", "9.0", "--sm-count", "132", "--l2-bytes", "50000000",
+         "--reps", str(reps)])
+    cfg = MODEL_CONFIGS[args.model]
+    b = dtype_bytes(args.dtype)
+    limits = _limits()
+    plan = OVS.build_plan(args, cfg, b, limits, alpha=0.9, ridge=ridge,
+                          bandwidth_gbps=bw)
+    reg = OVS.register(cfg, plan.settings, limits, block_n=args.block_n,
+                       block_k=args.block_k, b=b,
+                       subject_rows=plan.subject_rows, ridge=ridge,
+                       l2_source="test")
+    return args, cfg, b, plan, reg, limits
+
+
+def test_planted_worlds_discriminate_verdicts_and_both_controls():
+    """THE CLAIM OF THIS FILE. A pipeline that answers the same in every world
+    cannot settle the experiment, and the whole real code path runs here:
+    planting, the per-setting compute reference, the ladder fit, the contrasts,
+    the gates and the verdict.
+
+    Six worlds since 2026-09-02, not three. The three original ones test the
+    VERDICT; the three added test the two CONTROLS, whose FAIL branches the
+    original set never reached -- the audit found P3's by running the self-test
+    and P6 did not exist. Every S gate must PASS: an S gate is the assertion
+    that the gate under it returned the verdict its world was built to force.
+    """
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    lines, gates = OVS.self_test(args, cfg, plan, reg, b, ridge=162.8,
+                                 bandwidth_gbps=4374.5, noise=0.004, seed=3)
+    assert [g.passed for g in gates] == [True] * 7, "\n".join(lines)
+    names = [g.name for g in gates]
+    assert "S P3_warp_control fail" in names, "P3's FAIL branch is unexercised"
+    assert "S P6_depth_control fail" in names, "P6's FAIL branch is unexercised"
+    assert "S P6_depth_control pass" in names, "P6 can only ever fail"
+
+
+def test_self_test_can_fail_when_a_world_is_planted_wrong():
+    """The self-test's own FAIL branch. `self_test` returning all-PASS is only
+    evidence if it can return something else, so a world is planted with the
+    OPPOSITE expectation and the S gate for it has to notice."""
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    real = OVS.self_test_worlds
+
+    def lying(*a, **kw):
+        worlds = real(*a, **kw)
+        # The concurrency world, told to expect P3 to FAIL. It does not.
+        first = worlds[0]
+        return [OVS.World(first.name, first.alpha_of, first.verdict,
+                          {"P3_warp_control": False}, first.plan, first.reg)]
+
+    OVS.self_test_worlds = lying
+    try:
+        _, gates = OVS.self_test(args, cfg, plan, reg, b, ridge=162.8,
+                                 bandwidth_gbps=4374.5, noise=0.004, seed=3)
+    finally:
+        OVS.self_test_worlds = real
+    assert any(g.passed is False for g in gates)
+    assert OVS.exit_codes.classify(g.scored() for g in gates) == \
+        OVS.exit_codes.INVALID
+
+
+def test_concurrency_world_recovers_the_predicted_direction_and_size():
+    """Not merely 'a swing': the right sign, the right order, the right size."""
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.003, seed=11)
+    _, _, payload = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False)
+    occ = payload["contrasts"]["occupancy"]
+    assert occ["swing"] > reg.occupancy_threshold
+    assert payload["rising_steps"][0] == payload["rising_steps"][1]
+    # The fit reads alpha low by the fixed cost it cannot separate, so the
+    # recovered swing is a fraction of the planted one -- but a fraction, not a
+    # different number. Bounding it both ways is what makes this a check.
+    assert 0.5 * reg.occupancy_swing < occ["swing"] < 1.2 * reg.occupancy_swing
+
+
+def test_swizzle_world_is_not_called_concurrency():
+    """The confusion that would matter most: a pure GROUP_SIZE_M effect must
+    not arrive as an occupancy result."""
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan,
+        lambda st: OVS.alpha_order(0.95, st.group_m, reg.order_cap),
+        ridge=162.8, bandwidth_gbps=4374.5, b=b, noise=0.003, seed=13)
+    _, _, payload = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False)
+    assert payload["verdict"] == OVS.VERDICT_ORDER
+    assert payload["contrasts"]["occupancy"]["swing"] < reg.occupancy_threshold
+
+
+# --------------------------------------------------------------------------
+# Gates that must be able to say no.
+# --------------------------------------------------------------------------
+
+def _result(key: str, stages: int, warps: int, group: int, blocks: int,
+            alpha: float | None, arms, sigma: float | None = 0.002,
+            memory_points: int = 8, refused: bool = False):
+    st = OVS.Setting(stages, warps, group, tuple(arms))
+    res = OVS.Residency(blocks, blocks, 16, 32, stages * 16384, "smem")
+    return OVS.SettingResult(
+        setting=st, residency=res, footprint_bytes=1e9, predicted_alpha=0.9,
+        points=[(n, 1.0 * n) for n in range(1, 9)], reference_points=[],
+        memory_points=memory_points, alpha=alpha, alpha_corrected=alpha,
+        alpha_sigma=sigma, per_rep_alpha=[alpha] if alpha else [],
+        spread=0.001, mean_rel_err=0.01, reference_note="planted",
+        reference_block_m=None if refused else 256, reference_refused=refused,
+        basis="planted")
+
+
+def test_residency_gate_fails_when_the_ladder_did_not_move():
+    """A grid that computes one residency everywhere has swept nothing, and its
+    flat alpha would read as evidence for program order."""
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    flat = [_result(f"s3w8g{g}", 3, 8, g, 4, 0.9, (OVS.ARM_OCCUPANCY,))
+            for g in (1, 8, 16)]
+    gate = OVS.gate_residency_swept(reg, flat)
+    assert gate.passed is False
+    assert gate.kind == OVS.VALIDITY and gate.invalidates
+
+
+def test_warp_control_is_unknown_when_the_occupancy_swing_is_noise():
+    """Comparing two noise measurements passes about half the time, so it must
+    not be allowed to pass at all."""
+    occ = OVS.Contrast("occupancy", "2", "6", 0.900, 0.902, 0.002, 3)
+    warp = OVS.Contrast("warp-control", "w4", "w8", 0.900, 0.901, 0.002, 1)
+    assert OVS.gate_warp_control(warp, occ, 0.05).passed is None
+    big = OVS.Contrast("occupancy", "2", "6", 0.80, 0.90, 0.002, 3)
+    assert OVS.gate_warp_control(warp, big, 0.05).passed is True
+
+
+def test_occupancy_threshold_is_raised_by_noise_and_never_lowered():
+    """`_floor` may only make the claim harder. A measured spread that is small
+    must not be allowed to shrink the registered gate."""
+    quiet = OVS.Contrast("occupancy", "2", "6", 0.8, 0.9, 0.0001, 3)
+    loud = OVS.Contrast("occupancy", "2", "6", 0.8, 0.9, 0.05, 3)
+    assert OVS._floor(quiet, 0.046) == pytest.approx(0.046)
+    assert OVS._floor(loud, 0.046) == pytest.approx(0.15)
+
+
+def test_override_gate_names_the_setting_that_compiled_nothing():
+    """All three knobs are compile-time constants, so a setting that compiled
+    nothing measured the previous setting again."""
+    gate = OVS.gate_override({"s3w8g1": 4, "s3w8g16": 0}, {"s3w8g1": 8})
+    assert gate.passed is False
+    assert "s3w8g16" in gate.observed
+
+
+def test_non_vacuity_gate_fails_on_an_empty_report():
+    gate = OVS.gate_non_vacuity([], [])
+    assert gate.passed is False
+
+
+def test_provenance_gate_fails_when_a_hypothesis_reaches_a_measured_run():
+    limits = OVS.CardLimits(H200, 233472, 2048, 32, 132, 50_000_000,
+                            OVS.HYPOTHESIS_L2_SOURCE)
+    assert OVS.gate_provenance(limits, "read off the device", True).passed \
+        is False
+    good = OVS.CardLimits(H200, 233472, 2048, 32, 132, 50_000_000,
+                          "read off NVIDIA H200")
+    assert OVS.gate_provenance(good, "read off NVIDIA H200", True).passed
+
+
+def test_reference_gate_fails_on_a_refused_reference():
+    """A reference that is proportional but at the wrong level classifies every
+    tread against a branch 40x too steep and prints blanks."""
+    results = [_result("s3w8g1", 3, 8, 1, 4, None, (OVS.ARM_OCCUPANCY,),
+                       refused=True)]
+    gate = OVS.gate_references(results)
+    assert gate.passed is False and "s3w8g1" in gate.observed
+
+
+def test_a_setting_with_a_refused_reference_is_not_usable():
+    assert not _result("x", 3, 8, 1, 4, 0.9, (OVS.ARM_OCCUPANCY,),
+                       refused=True).usable
+    assert not _result("x", 3, 8, 1, 4, 0.9, (OVS.ARM_OCCUPANCY,),
+                       memory_points=2).usable
+    assert _result("x", 3, 8, 1, 4, 0.9, (OVS.ARM_OCCUPANCY,)).usable
+
+
+def test_contrast_averages_settings_that_share_a_residency_level():
+    """Two num_stages can compute to the same resident-block count -- four and
+    five do on an A100 -- and treating them as two rungs would put a pure
+    num_stages effect on an axis that did not move."""
+    results = [
+        _result("s4w8g1", 4, 8, 1, 2, 0.80, (OVS.ARM_OCCUPANCY,)),
+        _result("s5w8g1", 5, 8, 1, 2, 0.84, (OVS.ARM_OCCUPANCY,)),
+        _result("s2w8g1", 2, 8, 1, 6, 0.90, (OVS.ARM_OCCUPANCY,)),
+    ]
+    c = OVS.occupancy_contrast(results)
+    assert c.levels == 2
+    assert c.lo_alpha == pytest.approx(0.82)
+    assert c.swing == pytest.approx(0.08)
+
+
+def test_verdict_covers_all_five_states():
+    def g(passed):
+        return OVS.Gate(OVS.CLAIM, "x", "y", "z", passed, "")
+    assert OVS.verdict_of(g(True), g(False)) == OVS.VERDICT_CONCURRENCY
+    assert OVS.verdict_of(g(False), g(True)) == OVS.VERDICT_ORDER
+    assert OVS.verdict_of(g(True), g(True)) == OVS.VERDICT_BOTH
+    assert OVS.verdict_of(g(False), g(False)) == OVS.VERDICT_NEITHER
+    assert OVS.verdict_of(g(None), g(None)) == OVS.VERDICT_UNREADABLE
+    assert set(OVS.VERDICT_NOTE) == {
+        OVS.VERDICT_CONCURRENCY, OVS.VERDICT_ORDER, OVS.VERDICT_BOTH,
+        OVS.VERDICT_NEITHER, OVS.VERDICT_UNREADABLE}
+
+
+def test_swizzle_collapse_is_the_signature_and_not_a_fallback():
+    """A refused reference is a DIFFERENT state and must not be read as the
+    collapse reuse distance would produce."""
+    good_base = _result("s3w8g1", 3, 8, 1, 4, 0.9, (OVS.ARM_SWIZZLE,))
+    lost = _result("s3w8g64", 3, 8, 64, 4, None, (OVS.ARM_SWIZZLE,),
+                   memory_points=1)
+    assert OVS.swizzle_collapse([good_base, lost]) == ([64], True)
+    broken = _result("s3w8g64", 3, 8, 64, 4, None, (OVS.ARM_SWIZZLE,),
+                     refused=True)
+    assert OVS.swizzle_collapse([good_base, broken]) == ([], True)
+
+
+# --------------------------------------------------------------------------
+# The refusals.
+# --------------------------------------------------------------------------
+
+def test_run_id_carries_every_swept_knob_and_the_card():
+    """A run id that omitted GROUP_SIZE_M overwrote a whole arm in this repo,
+    and one that omitted the CARD reported an H200's timings against an A100's
+    ridge. Both are in here, and so is everything else that is swept."""
+    base = OVS.build_parser().parse_args([])
+    ident = OVS.default_run_id(base, "nvidia_h200")
+    assert OVS.default_run_id(base, "nvidia_a100_sxm4_80gb") != ident
+    for flag, value in (("--stages", "2,3,4"), ("--groups", "1,16"),
+                        ("--control-warps", "2"), ("--control-stages", "3"),
+                        ("--reps", "7"), ("--r-max", "512"),
+                        ("--block-n", "128"), ("--block-k", "32"),
+                        ("--warmup-ms", "9"), ("--trials", "5"),
+                        ("--cell-budget-ms", "111"), ("--seed", "5"),
+                        ("--model", "qwen2-57b-a14b"), ("--dtype", "fp16")):
+        other = OVS.build_parser().parse_args([flag, value])
+        assert OVS.default_run_id(other, "nvidia_h200") != ident, flag
+    # And a knob that only RE-ANALYSES the same timings must not fork the
+    # directory, or a re-report becomes an empty resume.
+    same = OVS.build_parser().parse_args(["--l2-bytes", "40000000"])
+    assert OVS.default_run_id(same, "nvidia_h200") == ident
+    same = OVS.build_parser().parse_args(["--sm-count", "108"])
+    assert OVS.default_run_id(same, "nvidia_h200") == ident, "sm_count is analysis-only"
+    # But --capability PRUNES the residency ladder (it sets smem_per_sm and so
+    # how many blocks fit), so it is a measurement knob and MUST fork. Found in
+    # review 2026-09-02: asserting 8.0 on an sm_90 box dropped the s=5 rung and
+    # the 8-setting run would have resumed into the 9-setting directory.
+    forked = OVS.build_parser().parse_args(["--capability", "8.0"])
+    assert OVS.default_run_id(forked, "nvidia_h200") != ident, "capability prunes the grid"
+
+
+def test_plan_refuses_the_settings_whose_reference_cannot_run():
+    """A spilled or over-subscribed reference is perfectly proportional and 40x
+    too steep, so it has to be dropped on the laptop and not diagnosed on the
+    pod."""
+    from moe.spec import MODEL_CONFIGS
+    args = OVS.build_parser().parse_args(
+        ["--stages", "3,6", "--control-warps", "2", "--control-stages", "3"])
+    plan = OVS.build_plan(args, MODEL_CONFIGS["mixtral-8x7b"], 2, _limits(),
+                          alpha=0.9, ridge=162.8, bandwidth_gbps=4374.5)
+    assert "s6w8g1" in plan.refused
+    assert "shared memory" in plan.refused["s6w8g1"]
+    assert "s3w2g1" in plan.refused
+    assert "registers per thread" in plan.refused["s3w2g1"]
+    assert all(s.key not in plan.refused for s in plan.settings)
+
+
+def test_plan_refuses_an_r_max_that_starves_the_reference():
+    from moe.spec import MODEL_CONFIGS
+    args = OVS.build_parser().parse_args(["--r-max", "512"])
+    with pytest.raises(SystemExit) as exc:
+        OVS.build_plan(args, MODEL_CONFIGS["mixtral-8x7b"], 2, _limits(),
+                       alpha=0.9, ridge=162.8, bandwidth_gbps=4374.5)
+    assert "reference" in str(exc.value) and "768" in str(exc.value)
+
+
+def test_ladder_rows_refuses_a_model_that_cannot_form_a_full_tile_stack():
+    """deepseek-v2-lite at E=64 k=6 needs rows in multiples of 3, and no
+    multiple of 64 is one. Refused, never nudged: a nudged row is not a full
+    tile stack and a fit over partly filled treads is a fit over padding."""
+    from moe.spec import MODEL_CONFIGS
+    with pytest.raises(SystemExit) as exc:
+        OVS.ladder_rows(MODEL_CONFIGS["deepseek-v2-lite"], 64, 1024)
+    assert "multiple of 3" in str(exc.value)
+    assert OVS.ladder_rows(MODEL_CONFIGS["mixtral-8x7b"], 64, 1024)[-1] == 1024
+
+
+def test_settings_share_one_base_rather_than_measuring_it_three_times():
+    settings = OVS.build_settings(OVS.DEFAULT_STAGES, OVS.DEFAULT_CONTROL_WARPS,
+                                  OVS.CONTROL_WARP_STAGES, OVS.DEFAULT_GROUPS)
+    keys = [s.key for s in settings]
+    assert len(keys) == len(set(keys))
+    base = next(s for s in settings if s.key == "s3w8g1")
+    assert set(base.arms) == {OVS.ARM_OCCUPANCY, OVS.ARM_WARPS,
+                              OVS.ARM_SWIZZLE}
+
+
+def test_card_contradiction_is_refused_rather_than_resolved():
+    assert OVS.main(["--card", "nvidia_h200", "--audit"]) == 0
+
+
+def test_replay_without_stored_inputs_refuses(tmp_path):
+    """Re-scoring a run against THIS machine's ridge and L2 is the
+    hybrid-of-two-machines failure this study has already published once."""
+    (tmp_path / "cells.csv").write_text("setting\n")
+    code = OVS.main(["--replay", str(tmp_path), "--capability", "9.0",
+                     "--sm-count", "132", "--l2-bytes", "50000000"])
+    assert code == 2
+
+
+def test_replay_of_a_missing_run_refuses(tmp_path):
+    assert OVS.main(["--replay", str(tmp_path), "--capability", "9.0",
+                     "--sm-count", "132", "--l2-bytes", "50000000"]) == 2
+
+
+def test_git_visibility_knows_the_published_carve_out():
+    assert OVS.git_visibility(ROOT / "results" / "scratch").startswith("IGNORED")
+    assert not OVS.git_visibility(PUBLISHED / "x.json").startswith("IGNORED")
+
+
+# --------------------------------------------------------------------------
+# The published corpus.
+# --------------------------------------------------------------------------
+
+def test_corpus_loads_and_names_every_skip():
+    rows, skipped = OVS.load_corpus(PUBLISHED)
+    assert rows, "no published BLOCK_M=64 alphas found"
+    assert all(0.0 < r.alpha < 2.0 for r in rows)
+    assert all(":" in s for s in skipped), skipped
+
+
+def test_corpus_refutes_reuse_distance_and_says_so():
+    """A1 is the gate that motivates the pod run: the standard predictor misses
+    by roughly the factor this experiment is about."""
+    rows, skipped = OVS.load_corpus(PUBLISHED)
+    lines, gates, payload = OVS.audit_report(rows, skipped, 64, 64, 2, 1024)
+    by = {g.name.split()[0]: g for g in gates}
+    assert by["A0"].passed is True
+    assert by["A1"].passed is False
+    predicted = payload["order_gate"] / OVS.ORDER_RATIO_TOLERANCE
+    # The corpus median is 0.85 against a capped prediction of 0.12 and an
+    # uncapped one of 0.016: seven times and fifty times respectively. Both
+    # bounds are asserted because the CAPPED form is the honest one and is
+    # still refuted, which is the sentence the pod run is built on.
+    assert payload["median_group_ratio"] > 6 * predicted
+    assert payload["median_group_ratio"] > 40 * OVS.alpha_order(1.0, 64, 1e9)
+    assert "\n".join(lines)
+
+
+def test_corpus_cannot_answer_the_occupancy_question_and_reports_unknown():
+    """Every num_stages pair on disk spans two sessions, so it is a prior and
+    never evidence. UNKNOWN, not PASS and not FAIL."""
+    rows, skipped = OVS.load_corpus(PUBLISHED)
+    _, gates, payload = OVS.audit_report(rows, skipped, 64, 64, 2, 1024)
+    a2 = next(g for g in gates if g.name.startswith("A2"))
+    assert a2.passed is None
+    assert payload["stage_contrasts"]
+
+
+def test_corpus_group_contrasts_never_cross_a_session():
+    """Pairing across the two H200 sessions would put a session effect -- and a
+    num_stages difference -- on the swizzle axis."""
+    rows, _ = OVS.load_corpus(PUBLISHED)
+    for label, _lo, _hi, _a, _b in OVS.corpus_group_contrasts(rows):
+        matches = [r for r in rows
+                   if f"{r.card} {r.model} n{r.block_n} w{r.num_warps} "
+                      f"s{r.num_stages}" == label]
+        assert len({r.session for r in matches}) == 1, label
+
+
+def test_audit_card_specs_are_only_used_by_the_audit():
+    """A measured run reads the attached device. The part-specification table
+    exists to score history and must never become a fallback."""
+    src = (ROOT / "scripts" / "occupancy_vs_swizzle.py").read_text()
+    body = src[src.index("def resolve_device"):src.index("def resolve_roofline")]
+    assert "CARD_SPECS" not in body
+
+
+# --------------------------------------------------------------------------
+# V9: the residency model, checked against what Triton actually compiled.
+# --------------------------------------------------------------------------
+
+def test_kernel_probe_reports_rather_than_raises_without_vllm():
+    """It runs inside the metered loop. A probe that threw would cost a pod
+    session to learn nothing."""
+    probe = OVS.KernelProbe()
+    probe.record("s3w8g1")
+    assert probe.by_setting == {}
+    assert probe.note, "a probe that found nothing must say why"
+
+
+FUSED_MOE_MODULE = "vllm.model_executor.layers.fused_moe.fused_moe"
+
+
+def _compiled_kernel(shared: int, n_regs: int = 40, n_spills: int = 0):
+    """What `record` reads off a Triton CompiledKernel: `metadata.shared`,
+    `n_regs`, `n_spills`."""
+    return types.SimpleNamespace(metadata=types.SimpleNamespace(shared=shared),
+                                 n_regs=n_regs, n_spills=n_spills)
+
+
+def _plant_fused_moe_kernel(monkeypatch, **attrs):
+    """A fake `fused_moe_kernel` under vLLM's dotted module path, carrying
+    EXACTLY the attributes given and no other cache attribute.
+    `importlib.import_module` returns whatever `sys.modules` holds, so the
+    probe's own import path is exercised, not bypassed."""
+    fn = types.SimpleNamespace(**attrs)
+    mod = types.ModuleType(FUSED_MOE_MODULE)
+    mod.fused_moe_kernel = fn
+    monkeypatch.setitem(sys.modules, FUSED_MOE_MODULE, mod)
+    return fn
+
+
+@pytest.mark.parametrize("layout", ["triton-3.5+-5-tuple", "triton-3.3-3.4-4-tuple"])
+def test_kernel_probe_reads_triton_3_device_caches_without_a_cache_attribute(
+        monkeypatch, layout):
+    """THE 2026-09-21 REFUSAL. Triton >= 3.3 renamed `JITFunction.cache` to
+    `device_caches` and wrapped each device's kernels in a tuple whose arity
+    has changed since (4 on 3.3-3.4, 5 on >= 3.5, the extra dict holding
+    cache-key STRINGS). The probe required `hasattr(fn, "cache")`, read
+    nothing on vLLM 0.27.1 / Triton 3.7.1, and blockk_diagonal REFUSED all
+    eight cells at plan time. It now reads whichever attribute is there and
+    recognises a compiled kernel by its `metadata`, never by tuple position.
+    """
+    kernels = {"k1": _compiled_kernel(3 * 16384, n_regs=64, n_spills=2)}
+    per_device = ((kernels, {"k1": "a-cache-key-string"}, "target", "backend",
+                   "binder") if layout.startswith("triton-3.5")
+                  else (kernels, "target", "backend", "binder"))
+    _plant_fused_moe_kernel(monkeypatch, device_caches={0: per_device})
+    probe = OVS.KernelProbe()
+    probe.record("s3w8g1")
+    assert probe.by_setting == {
+        "s3w8g1": {"shared": 3 * 16384, "n_regs": 64, "n_spills": 2}}, probe.note
+    assert probe.note == ""
+
+
+def test_kernel_probe_never_indexes_device_caches(monkeypatch):
+    """`device_caches` is a defaultdict whose factory BINDS A DEVICE; indexing
+    a device that never compiled would create an entry as a side effect of
+    looking. The probe iterates `.values()` only."""
+    def factory():
+        raise AssertionError("the probe indexed device_caches by device")
+    caches = collections.defaultdict(factory)
+    caches[0] = ({"k": _compiled_kernel(16384)}, {}, "t", "b", "binder")
+    _plant_fused_moe_kernel(monkeypatch, device_caches=caches)
+    probe = OVS.KernelProbe()
+    probe.record("x")
+    assert probe.by_setting["x"]["shared"] == 16384
+    assert list(caches) == [0]
+
+
+def test_kernel_probe_still_reads_triton_3_2_cache(monkeypatch):
+    """The layout it was written against, kept: `fn.cache` is
+    {device: {key: CompiledKernel}} on Triton <= 3.2."""
+    _plant_fused_moe_kernel(monkeypatch,
+                            cache={0: {"k": _compiled_kernel(2 * 16384)}})
+    probe = OVS.KernelProbe()
+    probe.record("s2")
+    assert probe.by_setting["s2"]["shared"] == 2 * 16384
+    assert probe.note == ""
+
+
+def test_kernel_probe_note_names_what_it_found_when_the_shape_is_unknown(
+        monkeypatch):
+    """A layout the probe does not recognise is REPORTED with what it saw,
+    so the next pod log diagnoses itself instead of saying 'no cache'."""
+    _plant_fused_moe_kernel(monkeypatch, device_caches={0: ({"k": object()}, {},
+                                                            "t", "b", "binder")})
+    probe = OVS.KernelProbe()
+    probe.record("x")
+    assert probe.by_setting == {}
+    assert "holds 1 device entry but no compiled kernel with metadata was " \
+        "recognised in tuple" in probe.note, probe.note
+    # And a kernel object with neither attribute names what it IS.
+    _plant_fused_moe_kernel(monkeypatch, cache_key="abc", run=lambda: None)
+    probe = OVS.KernelProbe()
+    probe.record("y")
+    assert "SimpleNamespace with none of device_caches/cache" in probe.note
+    assert "attributes: cache_key, run" in probe.note
+
+
+def test_compiled_smem_gate_is_unknown_when_nothing_was_probed():
+    """A check that examined nothing also reports zero disagreements."""
+    gate = OVS.gate_compiled_smem({}, "no vLLM", [])
+    assert gate.passed is None
+    assert "UPPER BOUND" in gate.invalidates
+
+
+def test_compiled_smem_gate_catches_a_wrong_residency_model():
+    """If Triton allocates something else, every rung of the ladder is in the
+    wrong place and the report still plots."""
+    results = [_result("s3w8g1", 3, 8, 1, 4, 0.9, (OVS.ARM_OCCUPANCY,))]
+    agree = {"s3w8g1": {"shared": 3 * 16384, "n_regs": 40, "n_spills": 0}}
+    assert OVS.gate_compiled_smem(agree, "", results).passed is True
+    disagree = {"s3w8g1": {"shared": 2 * 16384, "n_regs": 40, "n_spills": 0}}
+    assert OVS.gate_compiled_smem(disagree, "", results).passed is False
+
+
+def test_compiled_smem_gate_fails_on_register_spills():
+    """A spilled kernel's time is not the time of this tiling, and a spilled
+    kernel still fits a straight line."""
+    results = [_result("s3w8g1", 3, 8, 1, 4, 0.9, (OVS.ARM_OCCUPANCY,))]
+    spilled = {"s3w8g1": {"shared": 3 * 16384, "n_regs": 255, "n_spills": 16}}
+    gate = OVS.gate_compiled_smem(spilled, "", results)
+    assert gate.passed is False and "s3w8g1:16" in gate.observed
+
+
+def test_dry_run_and_run_contradict_each_other():
+    assert OVS.main(["--dry-run", "--run"]) == OVS.exit_codes.REFUSED
+
+
+def test_dry_run_works_off_gpu_and_refuses_rather_than_reporting_done(capsys, no_cuda):
+    """The pod session reads this on a laptop before spending anything.
+
+    A PLAN IS NOT A RESULT. It exits REFUSED and prints no RESULT line, so the
+    driver's `classify_text` over the log finds nothing scored -- which is what
+    a refusal looks like from the other side. Before 2026-09-02 it exited 0,
+    indistinguishable from a run that measured and passed every gate.
+    """
+    assert OVS.main(["--dry-run"]) == OVS.exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert "Predictions, registered before anything is measured" in out
+    assert "HYPOTHESIS" in out
+    assert "blk/SM" in out
+    assert "RESULT:" not in out
+    with pytest.raises(OVS.exit_codes.NoGatesScored):
+        OVS.exit_codes.classify_text(out)
+
+
+def test_failed_and_unchecked_validity_gates_print_differently():
+    """A FAILED validity gate says the verdict is wrong; an UNKNOWN one says a
+    specific thing was not checked. Printing the same sentence for both trains
+    a reader to ignore the loud one."""
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.002, seed=5)
+    lines, _, _ = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="read off a device", measured=True)
+    text = "\n".join(lines)
+    assert "NOT CHECKED: V9 compiled shared memory" in text
+    # V10 FAILS on planted cells, which is correct and is not what this test is
+    # about, so the two sentences are compared on the gates each names.
+    assert "READ THIS FIRST: the VALIDITY gates V10 one instrument FAILED" in text
+    assert "V9 compiled shared memory FAILED" not in text
+
+
+# --------------------------------------------------------------------------
+# THE PIPELINE-DEPTH CONFOUND (audit A16). `num_stages` moves residency AND
+# prefetch depth, and `occupancy_contrast` averaged the settings that share a
+# residency level -- which is exactly where the pure depth effect lives. These
+# tests pin the contrast that recovers it, the gate that scores it, and the
+# fact that the confound is UNREMOVABLE on both real cards.
+# --------------------------------------------------------------------------
+
+def _rung(stages: int, blocks: int, alpha: float, *, warps: int = 8,
+          group: int = 1):
+    """One occupancy-arm SettingResult at a given residency, built by hand.
+
+    `_result` above is the general helper; this one exists because the depth
+    tests care about exactly three fields -- num_stages, resident_blocks and
+    alpha -- and spelling the other twelve out at each call site would bury
+    which cells a contrast is supposed to pair.
+    """
+    return _result(f"s{stages}w{warps}g{group}", stages, warps, group, blocks,
+                   alpha, (OVS.ARM_OCCUPANCY,), sigma=0.001)
+
+
+def test_depth_contrast_pairs_two_num_stages_at_one_residency():
+    """The pure pipeline-depth effect: same blocks/SM, same warps, same G."""
+    results = [_rung(4, 2, 0.80), _rung(5, 2, 0.50),
+               _rung(2, 6, 0.95)]
+    dpt = OVS.depth_contrast(results)
+    assert dpt.lo_label.startswith("s4") and dpt.hi_label.startswith("s5")
+    assert dpt.swing == pytest.approx(-0.30)
+
+
+def test_depth_contrast_is_not_formable_when_every_stage_has_its_own_residency():
+    """NOT FORMED is a real answer and must not be a zero.
+
+    A zero swing would read as "depth does not move alpha", which is the
+    opposite of "depth was never varied at fixed residency".
+    """
+    results = [_rung(2, 6, 0.95), _rung(3, 4, 0.90),
+               _rung(4, 3, 0.85), _rung(5, 2, 0.80)]
+    assert OVS.depth_contrast(results).swing is None
+    assert OVS.depth_levels(results) == {2: [5], 3: [4], 4: [3], 6: [2]}
+
+
+def test_occupancy_contrast_averages_exactly_what_the_depth_contrast_recovers():
+    """The averaging is the defect and the depth contrast is the repair.
+
+    Two stages at one residency level enter `occupancy_contrast` as their MEAN,
+    so a 0.30 depth effect leaves a trace of 0.15 in the residency swing and no
+    trace at all of its own size. `depth_contrast` reads the same two cells and
+    returns the 0.30.
+    """
+    results = [_rung(4, 2, 0.80), _rung(5, 2, 0.50),
+               _rung(2, 6, 0.95)]
+    occ = OVS.occupancy_contrast(results)
+    assert occ.lo_alpha == pytest.approx(0.65), "the two depths were averaged"
+    assert occ.swing == pytest.approx(0.30)
+    assert OVS.depth_contrast(results).swing == pytest.approx(-0.30)
+
+
+def test_p6_passes_fails_and_refuses_on_the_three_worlds_it_has():
+    """Every branch of P6, including the two that are not verdicts.
+
+    PASS: depth moves less than residency. FAIL: it moves at least as much, so
+    P1 cannot be read as a footprint effect. UNKNOWN twice: no pair to form,
+    and a P1 that never cleared its own threshold so there is nothing for depth
+    to be smaller than. UNKNOWN counts AGAINST the gate in both cases.
+    """
+    levels = {2: [4, 5], 6: [2]}
+    occ = OVS.Contrast("occupancy", "2 blocks/SM", "6 blocks/SM", 0.60, 0.90,
+                       0.001, 2)
+    small = OVS.Contrast(OVS.ARM_DEPTH, "s4", "s5", 0.60, 0.62, 0.001, 1)
+    large = OVS.Contrast(OVS.ARM_DEPTH, "s4", "s5", 0.60, 0.95, 0.001, 1)
+    none = OVS.Contrast(OVS.ARM_DEPTH, "", "", None, None, None, 0)
+    flat = OVS.Contrast("occupancy", "2 blocks/SM", "6 blocks/SM", 0.60, 0.601,
+                        0.001, 2)
+
+    assert OVS.gate_depth_control(small, occ, 0.046, levels).passed is True
+    assert OVS.gate_depth_control(large, occ, 0.046, levels).passed is False
+    unformed = OVS.gate_depth_control(none, occ, 0.046, levels)
+    assert unformed.passed is None
+    assert "UNREMOVED" in unformed.observed
+    assert OVS.gate_depth_control(small, flat, 0.046, levels).passed is None
+    # UNKNOWN is not a pass anywhere the exit code is computed.
+    assert OVS.exit_codes.classify([unformed.scored()]) == \
+        OVS.exit_codes.CLAIM_FAIL
+
+
+def test_neither_real_card_can_form_the_depth_control():
+    """The finding P6 reports on a pod, pinned so a ladder change is noticed.
+
+    After the BLOCK_M=256 reference prunes the top of the ladder, the H200 runs
+    2/3/4/5 stages at 6/4/3/2 blocks and the A100 runs 2/3/4 at 4/3/2. No two
+    rungs collide on either card, so the pure depth effect cannot be measured
+    by this design at all -- which is why the self-test plants its P6 worlds on
+    a card that does not exist and says so.
+    """
+    from moe.spec import MODEL_CONFIGS, dtype_bytes
+    b = dtype_bytes("bf16")
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    for capability, sm, l2, want in ((H200, 132, 50_000_000, {6: [2], 4: [3],
+                                                              3: [4], 2: [5]}),
+                                     (A100, 108, 40_000_000, {4: [2], 3: [3],
+                                                              2: [4]})):
+        args = OVS.build_parser().parse_args(
+            ["--capability", f"{capability[0]}.{capability[1]}",
+             "--sm-count", str(sm), "--l2-bytes", str(l2)])
+        limits = OVS.card_limits(capability, sm, l2, "test")
+        plan = OVS.build_plan(args, cfg, b, limits, alpha=0.9, ridge=162.8,
+                              bandwidth_gbps=4374.5)
+        results = [
+            _rung(s.num_stages,
+                  OVS.residency(s.pinned(64, 64), 64, b, limits).resident_blocks,
+                  0.9)
+            for s in plan.settings if OVS.ARM_OCCUPANCY in s.arms]
+        assert OVS.depth_levels(results) == want, capability
+        assert OVS.depth_contrast(results).swing is None, capability
+
+
+def test_every_verdict_branch_names_the_pipeline_depth_confound():
+    """A16: the confound was stated once, in the predictions text, about the
+    wrong knob. A verdict quoted without it reads as a footprint result."""
+    for verdict, note in OVS.VERDICT_NOTE.items():
+        assert "P6" in note, verdict
+        assert "prefetch depth" in note or "pipeline depth" in note or \
+            "latency-hiding" in note or "depth" in note, verdict
+
+
+# --------------------------------------------------------------------------
+# THE INSTRUMENT, THE EXIT CODES, THE RUN ID, THE MDE.
+# --------------------------------------------------------------------------
+
+def test_the_retired_timing_loop_is_neither_required_nor_called():
+    """`time_call` raises `RetiredInstrument` now, so requiring it in
+    `_load_sweep` would have passed on a laptop and failed on the pod."""
+    source = (ROOT / "scripts" / "occupancy_vs_swizzle.py").read_text()
+    assert "SWEEP.time_call" not in source
+    assert "SWEEP.scaled_iters" not in source
+    assert '"time_call"' not in source
+
+
+def test_every_timing_column_round_trips_through_the_csv(tmp_path):
+    """A clock that was NOT DETERMINED must not come back as False.
+
+    `csv` writes None as "" and `bool("False")` is True, so both directions are
+    spelled out in `_opt_bool`; a flag read back as a passing False is exactly
+    the reading the column exists to prevent.
+    """
+    path = tmp_path / "cells.csv"
+    rows = [
+        OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01, 200,
+                   instrument="queue-deep/v9", warmup_ms=300.0, trials=3,
+                   sm_clock_load_mhz=1755.0, clock_level_ok=True,
+                   clock_drift_ok=False, l2_flush=True),
+        OVS.Sample("s4w8g1", 4, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01, 200,
+                   instrument="queue-deep/v9", warmup_ms=300.0, trials=3),
+    ]
+    for row in rows:
+        OVS.append_sample(path, row)
+    _, back = OVS.read_samples(path)
+    assert back[0].clock_level_ok is True
+    assert back[0].clock_drift_ok is False
+    assert back[0].sm_clock_load_mhz == 1755.0
+    assert back[0].l2_flush is True
+    assert back[1].clock_level_ok is None, "not determined is not False"
+    assert back[1].sm_clock_load_mhz is None
+
+
+def test_a_cells_csv_from_before_the_instrument_had_a_name_still_replays(tmp_path):
+    """The committed cells have none of these columns. Reading one back must
+    say 'not recorded', not fail to parse and not invent a passing flag."""
+    path = tmp_path / "cells.csv"
+    path.write_text(
+        "setting,num_stages,num_warps,group_m,block_m,tiles,rows_per_expert,"
+        "tokens,rep,ms_p50,ms_min,ms_stdev,iters,status,detail\n"
+        "s3w8g1,3,8,1,64,4,256,1024,1,1.0,0.9,0.01,50,ok,\n")
+    _, back = OVS.read_samples(path)
+    assert back[0].instrument == ""
+    assert back[0].clock_level_ok is None
+    assert back[0].l2_flush is False
+
+
+def test_v10_passes_fails_and_refuses_on_the_instrument_stamp():
+    """Every branch. An unstamped row and a differently-stamped row both FAIL,
+    and they are DIFFERENT states: one is a row from before the instrument had
+    a name, the other is a row from another instrument."""
+    basis = OVS.timing_basis()
+    good = [OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01,
+                       200, instrument=basis)]
+    old = [OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01,
+                      200, instrument="")]
+    other = [OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01,
+                        200, instrument="per-iteration-sync/no-flush")]
+    assert OVS.gate_one_instrument(good).passed is True
+    assert OVS.gate_one_instrument(old).passed is False
+    assert OVS.gate_one_instrument(other).passed is False
+    assert OVS.gate_one_instrument([]).passed is None
+    # A planted world is not a badly timed one and must not be scored as if it
+    # were: UNKNOWN, with the reason.
+    planted = OVS.gate_one_instrument(good, measured=False)
+    assert planted.passed is None
+    assert "GENERATED" in planted.observed
+    # A VALIDITY failure is INVALID, never a downgradeable claim failure.
+    assert OVS.exit_codes.classify([OVS.gate_one_instrument(old).scored()]) == \
+        OVS.exit_codes.INVALID
+
+
+def test_planted_cells_are_stamped_synthetic_and_never_with_the_real_name():
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.0, seed=1)
+    assert {s.instrument for s in samples} == {OVS.SYNTHETIC_INSTRUMENT}
+    assert OVS.SYNTHETIC_INSTRUMENT != OVS.timing_basis()
+
+
+def test_every_gate_prints_exactly_one_parsable_result_line():
+    """`RESULT: ` is the ONE line per gate a reader may grep. A gate whose name
+    carried a space would be dropped by the parser rather than fail loudly.
+
+    It is the contract this file offers. The session driver's regex for this
+    arm still matches verdict-shaped prose instead, which is why the exit code
+    a pod records is checked separately below.
+    """
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.003, seed=7)
+    _, gates, _ = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False)
+    text = "\n".join(line for g in gates for line in g.render())
+    parsed = OVS.exit_codes.parse_result_lines(text)
+    assert len(parsed) == len(gates)
+    assert [p.name for p in parsed] == [g.token for g in gates]
+    assert [p.verdict for p in parsed] == [g.verdict for g in gates]
+    # And the log's implied code agrees with the one the process would return.
+    assert OVS.exit_codes.classify_text(text) == \
+        OVS.exit_codes.classify(g.scored() for g in gates)
+    assert all(" " not in g.token for g in gates)
+
+
+def test_gate_tokens_are_unique_so_two_gates_cannot_share_a_result_line():
+    """Two gates named V9 shipped in this file for one afternoon. The driver
+    would have kept whichever one it read last."""
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.003, seed=7)
+    _, gates, _ = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False)
+    tokens = [g.token for g in gates]
+    assert len(tokens) == len(set(tokens)), tokens
+
+
+def test_exit_for_never_downgrades_a_validity_failure():
+    """CLAIM_FAIL is a result and may be reported as DONE for old callers.
+    INVALID is not: nothing on the page may be quoted, whatever the flag."""
+    claim = [OVS.Gate(OVS.CLAIM, "P1 occupancy", "p", "r", False, "o")]
+    validity = [OVS.Gate(OVS.VALIDITY, "V1 card provenance", "p", "r", False, "o")]
+    assert OVS.exit_for(claim, False) == OVS.exit_codes.DONE
+    assert OVS.exit_for(claim, True) == OVS.exit_codes.CLAIM_FAIL
+    assert OVS.exit_for(validity, False) == OVS.exit_codes.INVALID
+    assert OVS.exit_for(validity, True) == OVS.exit_codes.INVALID
+
+
+def test_run_id_carries_the_instruments_knobs_and_refuses_without_a_card():
+    """`--warmup-ms`, `--trials` and `--l2-flush` each set the measured
+    milliseconds of every cell, so a re-run that changed one and landed in the
+    same directory would print the old numbers under the new label."""
+    base = OVS.build_parser().parse_args([])
+    ident = OVS.default_run_id(base, "nvidia_h200")
+    for argv in (["--warmup-ms", "150"], ["--trials", "5"], ["--no-l2-flush"]):
+        other = OVS.build_parser().parse_args(argv)
+        assert OVS.default_run_id(other, "nvidia_h200") != ident, argv
+    assert ident.startswith("nvidia_h200-")
+    with pytest.raises(OVS.PV.NoCard):
+        OVS.default_run_id(base, "")
+
+
+def test_the_plan_prints_an_mde_from_a_stated_assumption():
+    """B14: no arm in this study stated one. A registered threshold with no
+    MDE beside it cannot be read."""
+    args, cfg, b, plan, reg, _ = _plan_and_reg(reps=5)
+    text = "\n".join(OVS.mde_lines(args, reg))
+    assert "MDE" in text
+    assert f"{OVS.mde(OVS.ASSUMED_ALPHA_SD, 5):.4f}" in text
+    assert "assumed sigma" in text
+    assert "upper bound on same-session rerun noise only" in text
+    assert f"{reg.occupancy_threshold:.3f}" in text
+
+
+def test_the_mde_falls_with_repeats_and_refuses_a_nonsense_sigma():
+    values = [OVS.mde(OVS.ASSUMED_ALPHA_SD, n) for n in range(1, 10)]
+    assert values == sorted(values, reverse=True)
+    with pytest.raises(ValueError):
+        OVS.mde(0.0, 5)
+    with pytest.raises(ValueError):
+        OVS.mde(0.02, 0)
+
+
+def test_the_cost_model_prices_the_instrument_and_not_the_retired_loop():
+    """One cell costs a warmup DURATION plus `trials` trials of the budget, so
+    the total is nearly independent of the per-call time. The retired formula
+    multiplied a per-call time by a call count and, once `--warmup` became
+    milliseconds, added a duration to an iteration count."""
+    from moe.spec import MODEL_CONFIGS, dtype_bytes
+    cfg, b = MODEL_CONFIGS["mixtral-8x7b"], dtype_bytes("bf16")
+    plans = {}
+    for budget in ("200", "400"):
+        args = OVS.build_parser().parse_args(
+            ["--capability", "9.0", "--sm-count", "132",
+             "--l2-bytes", "50000000", "--cell-budget-ms", budget])
+        plans[budget] = OVS.build_plan(args, cfg, b, _limits(), alpha=0.9,
+                                       ridge=162.8, bandwidth_gbps=4374.5)
+    cells = plans["400"].cells
+    lo, hi = plans["200"], plans["400"]
+    # warmup + trials * budget per cell, to within the iteration-count clamp.
+    assert hi.estimated_seconds == pytest.approx(
+        cells * (hi.warmup_ms + hi.trials * hi.cell_budget_ms) / 1e3, rel=0.05)
+    assert lo.estimated_seconds < hi.estimated_seconds
+
+
+def test_replay_re_reports_planted_cells_through_the_exit_code_table(tmp_path):
+    """The whole off-GPU path a pod operator uses to re-score a finished run:
+    cells.csv in, contrasts and gates out, one exit code from the shared table.
+
+    The planted rows carry no instrument, so V10 FAILS and the run is INVALID.
+    That is the correct answer for a cells.csv written before 2026-09-02 and it
+    is what a replay of the committed arms will say.
+    """
+    args, cfg, b, plan, reg, limits = _plan_and_reg(reps=2)
+    out = tmp_path / "run"
+    out.mkdir()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.002, seed=13)
+    for sample in samples:
+        OVS.append_sample(out / "cells.csv", sample)
+    (out / "CARD").write_text("nvidia_h200\n")
+    (out / "inputs.json").write_text(json.dumps(
+        {"ridge": 162.8, "bandwidth_gbps": 4374.5,
+         "roofline_source": "planted", "l2_source": "planted",
+         "device": "NVIDIA H200",
+         "limits": {"capability": list(H200), "smem_per_sm": limits.smem_per_sm,
+                    "max_threads_per_sm": limits.max_threads_per_sm,
+                    "max_blocks_per_sm": limits.max_blocks_per_sm,
+                    "sm_count": limits.sm_count, "l2_bytes": limits.l2_bytes,
+                    "source": "planted"}}))
+    rc = OVS.main(["--replay", str(out), "--capability", "9.0",
+                   "--sm-count", "132", "--l2-bytes", "50000000",
+                   "--reps", "2", "--card", "nvidia_h200"])
+    assert rc == OVS.exit_codes.INVALID
+
+
+def test_replay_refuses_a_directory_with_no_recorded_rulers(tmp_path):
+    """Re-scoring stored timings against THIS machine's ridge is the
+    hybrid-of-two-machines failure this study has already published once."""
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "cells.csv").write_text(
+        "setting,num_stages,num_warps,group_m,block_m,tiles,rows_per_expert,"
+        "tokens,rep,ms_p50,ms_min,ms_stdev,iters,status,detail\n"
+        "s3w8g1,3,8,1,64,4,256,1024,1,1.0,0.9,0.01,50,ok,\n")
+    rc = OVS.main(["--replay", str(out), "--capability", "9.0",
+                   "--sm-count", "132", "--l2-bytes", "50000000"])
+    assert rc == OVS.exit_codes.REFUSED
+
+
+def test_a_claim_fail_arm_exits_zero_unless_argv_asks_for_the_code(capsys):
+    """What a pod's ledger records when a claim gate does not pass, measured.
+
+    The file says in two places that a P6-UNKNOWN run CLASSIFIES as CLAIM_FAIL,
+    and the qualifier is the whole point: `exit_for` prints the CLAIM_FAIL line
+    and then returns DONE without `--fail-on-gate`, for callers that predate
+    the exit-code table, and `scripts/h200_gaps_session.sh` launches this arm
+    without the flag. A reader of the docstrings alone would expect a non-zero
+    exit on a pod and would be wrong; the verdict travels on the RESULT lines,
+    which is why `classify_text` over the log has to disagree with the code.
+
+    `--audit` is the cheapest genuine CLAIM_FAIL available off GPU: A1 fails
+    against the published corpus and A2 is UNKNOWN by construction. Both
+    branches of the flag are exercised, because a downgrade that also fired
+    with `--fail-on-gate` would make the flag decorative.
+    """
+    assert OVS.main(["--audit"]) == OVS.exit_codes.DONE
+    out = capsys.readouterr().out
+    assert f"{OVS.exit_codes.CLAIM_FAIL} CLAIM_FAIL" in out, \
+        "the downgrade must still print the code it would have exited with"
+    assert "--fail-on-gate" in out, "and how to get that code instead"
+    assert OVS.exit_codes.classify_text(out) == OVS.exit_codes.CLAIM_FAIL, \
+        "the log says CLAIM_FAIL where the exit code says DONE"
+    assert OVS.main(["--audit", "--fail-on-gate"]) == OVS.exit_codes.CLAIM_FAIL
+
+
+def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
+    """The apparatus breaking must not be filed as one of the arm's outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records the arm as finished, skips it on every resume, leaves
+    RETRY_ARMS at zero and exits the session 0 over an arm that never measured.
+    ERROR (4) is outside FINISHED_CODES so the two can be told apart, and the
+    traceback is printed rather than swallowed because a bare code names
+    nothing to fix. Planted rather than argued: occupancy_vs_swizzle had no top-level handler
+    until 2026-09-02.
+    """
+    from moe.bench import exit_codes as EX
+
+    def explode(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(OVS, "_main", explode)
+    code = OVS.main([])
+    err = capsys.readouterr().err
+    assert code == EX.ERROR
+    assert code != EX.CLAIM_FAIL
+    assert code not in EX.FINISHED_CODES, "an apparatus failure must stay retryable"
+    assert EX.ledger_state(code) == "RETRY"
+    assert "planted: the allocator gave up halfway" in err, \
+        "the traceback was swallowed"
+    assert "RuntimeError" in err
+
+
+def test_a_string_refusal_still_exits_REFUSED_and_is_not_relabelled_ERROR(
+        monkeypatch, capsys):
+    """The other branch of the same handler. `raise SystemExit("sentence")` is a
+    precondition not met, which is free and distinct from a crash, so the new
+    `except Exception` must not catch it: `SystemExit` is a `BaseException`.
+    """
+    from moe.bench import exit_codes as EX
+
+    def refuse(argv=None):
+        raise SystemExit("no calibration for the attached device")
+
+    monkeypatch.setattr(OVS, "_main", refuse)
+    code = OVS.main([])
+    err = capsys.readouterr().err
+    assert code == EX.REFUSED
+    assert err.startswith("REFUSED: no calibration")
+    assert "Traceback" not in err
+
+
+# --------------------------------------------------------------------------
+# retraction (a): the geometric terms do not cancel exactly out of a contrast
+# --------------------------------------------------------------------------
+
+def test_p5_states_the_exa_attenuation_as_a_bracket_not_a_cancellation():
+    """The printed plan said `alpha_a (BM/BN)` and `BM/K` "cancel exactly out
+    of every contrast". Under (EXA) a contrast is the alpha_b difference
+    scaled by 1/(1 + phi + delta), phi carries the unmeasured alpha_a and
+    delta is per-setting, so the plan has to print the bracket and the word
+    "not". Pinned on the rendered text and on the number behind it, which is
+    recomputed here from ai_model rather than read back from the script.
+    """
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    text = OVS.predictions_text(reg, plan.settings)
+    p5 = text[text.index("P5"):]
+    assert "cancel exactly out" not in p5 and "do NOT cancel exactly" in p5
+    assert "(alpha_b + phi) / (1 + phi + delta)" in p5
+    assert "BRACKET" in p5 and "delta is per-setting" in p5
+    lo_a, hi_a = reg.contrast_attenuation
+    assert f"{hi_a:.2f} to {lo_a:.2f}" in p5
+    # The bracket is what ai_model says it is, at alpha_a = 0 and 1, delta = 0.
+    n, k = 2 * cfg.intermediate_size, cfg.hidden_size
+    expect = tuple(
+        1.0 / (1.0 + OVS.ai_model.phi(n, k, block_m=OVS.SUBJECT_BLOCK_M,
+                                      block_n=args.block_n, alpha_a=a, b=b))
+        for a in (0.0, 1.0))
+    assert reg.contrast_attenuation == pytest.approx(expect)
+    # Attenuation, not amplification, and the alpha_a = 1 end is the smaller.
+    # The pair is in alpha_a order (at 0, at 1), not value order: more
+    # activation re-read means a larger phi and a SMALLER attenuation factor.
+    assert 0.0 < hi_a < lo_a <= 1.0
+    # The V3 gate's rationale says the same thing at its own call site.
+    v3 = OVS.gate_geometry_fixed([], plan)
+    assert "scaled by 1/(1 + phi + delta)" in v3.invalidates
+    assert "those cancel out" not in v3.invalidates
+
+
+# --------------------------------------------------------------------------
+# LEVEL is two-sided since 03df2d4, and this consumer reads the side
+# --------------------------------------------------------------------------
+
+#: A PLANTED WORLD, not a card. These three numbers are the shape the
+#: fifteenth instance of the recurring defect was found on (a memory-shaped
+#: cell boosting above the roof's clock, a hungry one sagging below it), and
+#: the tests below pass all three sides of every ratio, so what they test is
+#: the consumer's arithmetic and not any card's figures.
+#:
+#: THE REFERENCE IS DELIBERATELY A ROUND NUMBER NO CARD PUBLISHES. It read
+#: 1515.0 until 2026-09-09, under a comment calling it "the bf16-GEMM
+#: reference the roof was measured at": that was the H200's committed
+#: calibration until ab61e55 remeasured the card at 1485 MHz under the 700 W
+#: cap on 2026-09-09, so the constant was the superseded live number wearing
+#: the name of the current one, and the file that carried it also defines
+#: `H200_REFERENCE_MHZ = 1485.0` for the card's real figure. A planted world
+#: gets a planted number; a test that needs the card's own clock reads the
+#: committed calibration.
+PLANTED_REFERENCE_MHZ = 1500.0
+#: Well above `PLANTED_REFERENCE_MHZ * timing.LEVEL_HIGH_FRACTION`, the state
+#: of every memory-shaped tread the H200 gaps session measured (1950-1980).
+H200_MEMORY_LOAD_MHZ = 1980.0
+#: Well below `PLANTED_REFERENCE_MHZ * timing.LEVEL_FRACTION`.
+SAGGED_MHZ = 1400.0
+
+
+def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
+    """A `KernelTiming` scored the way `time_kernel` scores one: verdicts from
+    the real `clock_flags`, the side from the real `level_side`, and the
+    reference on the record. Not hand-set booleans: a hand-set side would
+    pass whatever the consumer did with it."""
+    from moe.bench import timing
+    end = load_mhz if drift_to is None else drift_to
+    level, drift = timing.clock_flags(load_mhz, load_mhz, end, reference_mhz)
+    return timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=end,
+        clock_level_ok=level, clock_drift_ok=drift, samples=300,
+        warmup_calls=10, flush_mb=256, clock_samples=9, clock_source="injected",
+        clock_poll_ms=1.0, host_bound=False, host_enqueue_ms=0.01,
+        clock_note="scripted clock",
+        clock_level_side=timing.level_side(load_mhz, reference_mhz) or "",
+        reference_clock_mhz=reference_mhz)
+
+
+def test_the_exclusion_rule_is_drift_alone_and_both_level_sides_are_kept():
+    """THE RULE AS IT STANDS SINCE 2026-09-09: DRIFT excludes, LEVEL records.
+
+    Until then this asserted "LOW or DRIFT excludes, HIGH is kept". The
+    750-cell census of the H200 gaps session showed the LOW side is the steady
+    operating point of a hungry tile under the 700 W cap (BLOCK_M=128 at
+    BLOCK_N=64 held 1380-1410 MHz in every rep of every arm, BLOCK_M=64 at
+    GROUP_SIZE_M=1 1358), so excluding it excluded a tile rather than a
+    defect, and removed both of this study's primary tiles from measurability
+    on the card.
+
+    `moe.bench.driver`'s `throttled` assignment is the twin of this rule and
+    moves in the same commit; the truth table below is written out here rather
+    than imported so this file states the rule instead of quoting whatever the
+    driver currently does.
+    """
+    from moe.bench import timing
+    ex = OVS.clock_excluded
+    # Neither side is an exclusion when the clock held still.
+    assert ex(False, timing.LEVEL_HIGH, True) is False
+    assert ex(False, timing.LEVEL_HIGH, None) is False
+    assert ex(False, timing.LEVEL_LOW, True) is False
+    assert ex(False, timing.LEVEL_LOW, None) is False
+    # A False that recorded no side is the one-sided era's row: still kept.
+    assert ex(False, "", True) is False
+    # DRIFT excludes whatever LEVEL said, on either side.
+    assert ex(True, "", False) is True
+    assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(False, timing.LEVEL_LOW, False) is True
+    assert ex(None, "", False) is True
+    # Not determined is not an exclusion: one has to be positively established.
+    assert ex(None, "", None) is False
+    assert ex(True, "", True) is False
+    assert ex(True, "", None) is False
+    # The whole table: DRIFT and nothing else.
+    for level in (True, False, None):
+        for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
+            for drift in (True, False, None):
+                assert ex(level, side, drift) is (drift is False), (
+                    level, side, drift)
+
+
+def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
+    """1980 against 1515 is 1.31x, above `LEVEL_HIGH_FRACTION`; 1400 against
+    1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
+    the only thing that tells them apart."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
+    assert high.clock_level_ok is False and low.clock_level_ok is False
+    assert OVS.clock_side_of(high) == timing.LEVEL_HIGH
+    assert OVS.clock_side_of(low) == timing.LEVEL_LOW
+    assert OVS.clock_excluded(high.clock_level_ok, OVS.clock_side_of(high),
+                                 high.clock_drift_ok) is False, "HIGH is kept"
+    assert OVS.clock_excluded(low.clock_level_ok, OVS.clock_side_of(low),
+                                 low.clock_drift_ok) is False, (
+        "since 2026-09-09 a steady LOW is kept and its side recorded")
+    # A record without the field (every fake before 2026-09-03) gets its side
+    # derived from its own numbers, the way driver.py derives it.
+    import dataclasses
+    bare = dataclasses.replace(high, clock_level_side="")
+    assert OVS.clock_side_of(bare) == timing.LEVEL_HIGH
+    # And one with neither answers "", which is "no side recorded".
+    blind = dataclasses.replace(bare, reference_clock_mhz=None)
+    assert OVS.clock_side_of(blind) == ""
+
+
+def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
+    """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
+    rule and the counting block is a reader that has not learned the side, and
+    that is how the fifteenth instance happened: one producer fixed, thirteen
+    consumers left on the old meaning.
+
+    A NESTED HELPER IS ITS OUTERMOST FUNCTION, since 2026-09-09. The walk
+    attributed a def to its own name whatever it was nested in, so a reader
+    written as a closure inside a disallowed function passed under a name that
+    was not on the list, and a helper factored out of an allowed one failed
+    while doing exactly what the allowed one did. Attributing by ancestor
+    makes the list about the block the code lives in, which is what the rule
+    is about."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "occupancy_vs_swizzle.py").read_text())
+    owner = {}
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef):
+            for node in ast.walk(top):
+                if isinstance(node, ast.FunctionDef):
+                    owner[node] = top.name
+    readers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Code, not prose: a docstring that names the old test is history.
+            body = "\n".join(ast.unparse(s) for s in node.body
+                             if not (isinstance(s, ast.Expr)
+                                     and isinstance(s.value, ast.Constant)))
+            if "clock_level_ok is False" in body:
+                readers.add(owner.get(node, node.name))
+    allowed = {"clock_excluded", "timing_summary"}
+    assert readers <= allowed, (
+        f"{sorted(readers - allowed)} test the LEVEL verdict "
+        "without its side; route them through clock_excluded")
+
+
+def _sample_from(t, n, setting="s3w8g1"):
+    return OVS.Sample(setting, 3, 8, 1, 64, n, 64 * n, 1024, 1, t.ms_p50,
+                      t.ms_min, t.ms_std, t.iters, instrument=t.instrument,
+                      warmup_ms=t.warmup_ms, trials=t.trials,
+                      sm_clock_load_mhz=t.sm_clock_load_mhz,
+                      clock_level_ok=t.clock_level_ok,
+                      clock_drift_ok=t.clock_drift_ok, l2_flush=t.l2_flush,
+                      clock_level_side=OVS.clock_side_of(t))
+
+
+def test_appending_under_a_different_header_refuses(tmp_path):
+    """A cells.csv written before a column existed cannot be resumed into.
+
+    The header goes down once, when the file is new, and every later row is
+    written positionally under it. `SAMPLE_FIELDS` gained four clock-evidence
+    columns on 2026-09-09, so a resume into an older directory would have
+    appended rows with four extra fields under the old header and silently
+    misaligned the file. R9's runbook says --new for the booked rerun, so no
+    committed directory is affected; this is what makes the NEXT added column
+    say so."""
+    import csv as _csv
+    t = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    path = tmp_path / "cells.csv"
+    OVS.append_sample(path, _sample_from(t, 1))
+    OVS.append_sample(path, _sample_from(t, 2))
+    assert len(path.read_text().splitlines()) == 3
+    dropped = ("sm_clock_start_mhz", "sm_clock_end_mhz", "clock_samples_mhz",
+               "power_w")
+    stale = tmp_path / "stale.csv"
+    with path.open(newline="") as fh:
+        rows = list(_csv.DictReader(fh))
+    keep = [c for c in rows[0] if c not in dropped]
+    with stale.open("w", newline="") as fh:
+        w = _csv.DictWriter(fh, fieldnames=keep)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r[k] for k in keep})
+    with pytest.raises(SystemExit) as caught:
+        OVS.append_sample(stale, _sample_from(t, 3))
+    said = str(caught.value)
+    assert "different set of columns" in said
+    assert "sm_clock_start_mhz" in said
+    assert "Re-run into a NEW directory" in said
+    assert len(stale.read_text().splitlines()) == 3
+
+
+def test_both_level_sides_travel_through_the_csv_and_are_counted_as_kept(tmp_path):
+    """THE PLANTED HIGH ROW AND THE PLANTED LOW ROW, BOTH KEPT AND BOTH
+    RECORDED, through this file's own row, CSV and timing summary.
+    `clock_level_below` used to count both as "below the roof's clock"; then
+    the LOW side was an exclusion; since 2026-09-09 DRIFT is the exclusion and
+    each side is a record of the clock the swizzle's draw produced.
+
+    THE FOURTH ROW IS THE OVERLAPPING ONE: LEVEL false on the HIGH side AND
+    DRIFT false. No planted world in this file had one until 2026-09-09, so
+    the side counters could filter on the LEVEL verdict alone, count that row
+    as a kept HIGH and again as a DRIFT, and stay green while the V10 line
+    named it kept and excluded-shaped in one sentence."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
+    level = _kernel_timing_at(PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ)
+    high_and_drifting = _kernel_timing_at(H200_MEMORY_LOAD_MHZ,
+                                          PLANTED_REFERENCE_MHZ,
+                                          drift_to=1700.0)
+    assert high_and_drifting.clock_level_ok is False
+    assert high_and_drifting.clock_drift_ok is False
+    path = tmp_path / "cells.csv"
+    for n, t in enumerate((high, low, level, high_and_drifting), start=1):
+        OVS.append_sample(path, _sample_from(t, n))
+    _, back = OVS.read_samples(path)
+    assert [s.clock_level_side for s in back] == [
+        timing.LEVEL_HIGH, timing.LEVEL_LOW, "", timing.LEVEL_HIGH]
+    summary = OVS.timing_summary(back)
+    assert summary["clock_level_ok"] == 1
+    assert summary["clock_level_high"] == 1
+    assert summary["clock_level_low"] == 1
+    assert summary["clock_level_unknown"] == 0
+    assert summary["clock_drift_flagged"] == 1
+    assert (summary["clock_level_ok"] + summary["clock_level_low"]
+            + summary["clock_level_high"] + summary["clock_level_unknown"]
+            + summary["clock_drift_flagged"]) == summary["rows_timed"]
+    assert summary["clock_level_high_drifted"] == 1
+    assert summary["clock_level_low_drifted"] == 0
+    assert summary["clock_level_ok_drifted"] == 0
+    assert summary["clock_excluded_shaped"] == 1, "the drift, and neither side"
+    assert "clock_level_below" not in summary, "the one-sided count is gone"
+    # PER-SETTING MEDIANS, because this sweep moves the clock by moving the
+    # swizzle: one median over the whole sweep is the bimodal number R9 bans.
+    assert summary["sm_clock_load_mhz_median_by_setting"].keys() == {"s3w8g1"}
+    gate = OVS.gate_one_instrument(back)
+    said = "\n".join(gate.lines)
+    assert "1 steady below it (LEVEL low, kept, side recorded)" in said
+    assert "1 steady above it (LEVEL high, kept, side recorded)" in said
+    assert "1 drifting within a cell (excluded, and not in the counts before it)" in said
+    assert "the 1 drifted rows by side: 0 level, 0 LOW, 1 HIGH" in said
+    # THE LINE MUST NOT NAME A COLUMN THIS SCRIPT DOES NOT WRITE. It said
+    # "scored against the fixed roof with roof_at_cell_clock printed beside"
+    # until 2026-09-09 and this file computes no such column.
+    assert "roof_at_cell_clock" not in said
+    # A second drifting row IS excluded-shaped, through the same CSV round trip.
+    drifting = _sample_from(_kernel_timing_at(
+        PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ, drift_to=1300.0), 5)
+    OVS.append_sample(path, drifting)
+    _, again = OVS.read_samples(path)
+    assert OVS.timing_summary(again)["clock_excluded_shaped"] == 2
+
+
+def test_neither_a_high_world_nor_a_low_world_excludes_anything():
+    """Every row at the H200's memory-load clock, the ordinary state of a
+    memory-bound tread on a rental: zero excluded-shaped. Every row at the
+    clock a hungry tile holds under the power cap: also zero, since
+    2026-09-09. Every row drifting: all of them."""
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
+    drifting = _kernel_timing_at(PLANTED_REFERENCE_MHZ,
+                                 PLANTED_REFERENCE_MHZ, drift_to=1300.0)
+    high_world = OVS.timing_summary([_sample_from(high, n) for n in range(1, 7)])
+    assert (high_world["clock_level_high"], high_world["clock_excluded_shaped"]) == (6, 0)
+    low_world = OVS.timing_summary([_sample_from(low, n) for n in range(1, 7)])
+    assert (low_world["clock_level_low"], low_world["clock_excluded_shaped"]) == (6, 0)
+    drift_world = OVS.timing_summary([_sample_from(drifting, n)
+                                      for n in range(1, 7)])
+    assert (drift_world["clock_drift_flagged"],
+            drift_world["clock_excluded_shaped"]) == (6, 6)
+
+
+def test_a_cells_csv_without_the_side_column_reads_back_as_no_side(tmp_path):
+    path = tmp_path / "cells.csv"
+    path.write_text(
+        "setting,num_stages,num_warps,group_m,block_m,tiles,rows_per_expert,"
+        "tokens,rep,ms_p50,ms_min,ms_stdev,iters,status,detail,clock_level_ok\n"
+        "s3w8g1,3,8,1,64,4,256,1024,1,1.0,0.9,0.01,50,ok,,0\n")
+    _, back = OVS.read_samples(path)
+    assert back[0].clock_level_ok is False and back[0].clock_level_side == ""
+    assert OVS.timing_summary(back)["clock_level_low"] == 1, (
+        "a False with no side is the one-sided era's below")
+
+
+def test_the_measure_loop_names_both_level_sides_as_kept():
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "occupancy_vs_swizzle.py").read_text())
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and any(isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "time_kernel"
+                      for c in ast.walk(n)))
+    body = ast.unparse(fn)
+    assert "clock_excluded(t.clock_level_ok, sample.clock_level_side" in body
+    assert "is recorded, not excluded" in body
+    assert "sample.clock_level_side == timing.LEVEL_HIGH" not in body
+    assert "t.clock_level_ok is False" not in body
+
+
+def test_the_new_clock_columns_round_trip_through_the_csv(tmp_path):
+    """R3's evidence columns. `time_kernel` computed the first and last
+    under-load sample and this writer dropped them, so every drifted row this
+    sweep has written says a clock moved and cannot say which way."""
+    t = _kernel_timing_at(PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ,
+                          drift_to=1300.0)
+    columns = OVS.clock_samples_of(t)
+    assert columns["sm_clock_start_mhz"] == PLANTED_REFERENCE_MHZ
+    assert columns["sm_clock_end_mhz"] == 1300.0
+    # An instrument without the sample list or the draw writes them EMPTY,
+    # which is NOT DETERMINED and never zero.
+    assert columns["clock_samples_mhz"] == "" and columns["power_w"] is None
+    path = tmp_path / "cells.csv"
+    row = OVS.Sample("s3w8g1", 3, 8, 1, 64, 1, 64, 1024, 1, t.ms_p50, t.ms_min,
+                     t.ms_std, t.iters, sm_clock_load_mhz=t.sm_clock_load_mhz,
+                     clock_level_ok=t.clock_level_ok,
+                     clock_drift_ok=t.clock_drift_ok,
+                     clock_level_side=OVS.clock_side_of(t), **columns)
+    OVS.append_sample(path, row)
+    header = path.read_text().splitlines()[0].split(",")
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in header, column
+    _, back = OVS.read_samples(path)
+    assert (back[0].sm_clock_start_mhz, back[0].sm_clock_end_mhz) == (
+        PLANTED_REFERENCE_MHZ, 1300.0)
+    assert back[0].power_w is None and back[0].clock_samples_mhz == ""
+
+
+def test_every_setting_prints_its_slope_in_weight_streams_with_the_rate():
+    """DEFECT (E) OF THE 2026-09-10 BUILD AUDIT, on this arm.
+
+    `analyse_settings` built its fits as `SWEEP.fit_ladder(sub,
+    SUBJECT_BLOCK_M, ref)` and passed none of the four keywords that are the
+    weight-stream denominator, so every `LadderFit` here carried
+    `weight_streams is None` and its `w_note` read "w n/a: the caller named no
+    model, dtype and measured bandwidth". This arm's nine ladders are where the
+    session's 0.918 to 1.246 comes from, and no page this script writes carried
+    one of them.
+
+    The rate is on the line with the number, because w scales 1:1 in it: a w
+    quoted without its rate is not a measurement.
+    """
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.002, seed=5)
+    lines, _, _ = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False,
+        bandwidth_source="stated by the test")
+    text = "\n".join(lines)
+    assert "the caller named no model, dtype and measured bandwidth" not in text
+    printed = [ln for ln in lines if "weight-streams/M-tile" in ln]
+    assert len(printed) == len(plan.settings), printed
+    for ln in printed:
+        assert "4374.5 GB/s" in ln, ln
+        assert "stated by the test" in ln, ln
+        assert f"{cfg.name} {plan.dtype}" in ln, ln
+    # And the results themselves carry it, so a reader of the objects sees it
+    # too and not only a reader of the text.
+    results = OVS.analyse_settings(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        bandwidth_source="stated by the test")
+    assert all("weight-streams/M-tile" in r.w_note for r in results)

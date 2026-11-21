@@ -1,0 +1,80 @@
+REGISTERED 2026-10-09, before any rental-6 page: rental 6, 2026-10-09-rental6-secondk-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r6 DESIGN.md corrected by design-r6-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-09 (1-6 accepted; h kept and labelled SEEN-FITTED)
+tool: scorer scripts/scoring/rental6/score_secondk.py; r4common.page_c; r6common.clock_rule
+
+predicted u(k32)/u(k64): w1 H_ITER 1.4070 H_CTA 1.2035 (gap 16.9%); w2 H_ITER 1.3447 H_CTA 1.0985 (gap 22.4%)
+
+pages:
+  path: <date>-<card>-mixtral-8x7b-tp4-<label>-r3-counters/lock1710/r3c-g64.json
+  labels:
+    k64s4: [64, 4]
+    k32s4: [32, 4]
+  both_new: BOTH pages run in rental 6 on the same board; the rental-1 k64s4 page is SEEN and is not scored
+  design_check: each page's design (block_k, num_stages) must equal its label's; else NOT SCORED
+statistic:
+  c_page: per (page, GEMM) c by r4common.page_c with ns = 4..9, F held at CAL (w1 520, w2 979 cycles), max_dram_frac 0.5 (floor-bound cells only: DRAM read rate at most 0.5 x 4022 GB/s), over the cells that pass the clock rule; fewer than 3 cells: NOT SCORED
+  r_meas: u(k32) / u(k64), u = S c + F (cycles)
+  e: r_meas / r_pred(H) - 1
+inputs:
+  c64:
+    w1: 346.2
+    w2: 344.0
+  c32:
+    w1: 245.2
+    w2: 234.3
+  K_olmoe:
+    w1: 2048
+    w2: 1024
+  F_cal:
+    w1: 520.0
+    w2: 979.0
+  ns:
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+  max_dram_frac: 0.5
+  label: c64 / c32 SEEN (OLMoE rental-4 B'); F CAL
+hypotheses:
+  H_ITER: the BK 32 excess is per k-step: u(k32) = S32 c32 + F
+  H_CTA: the same excess is per CTA: u(k32) = S32 c64 / 2 + F + dF, dF = (c32 - c64/2) x OLMoE's BK-32 steps
+predicted_ratio:
+  w1:
+    K: 4096
+    S64: 64
+    S32: 128
+    H_ITER: 1.406971
+    H_CTA: 1.203486
+    dF_cycles: 4614.4
+    gap_pct: 16.908014
+    gap_pct_F_sensitivity: {"F x0.5": 17.070644, "F x1.5": 16.748454}
+  w2:
+    K: 3584
+    S64: 56
+    S32: 112
+    H_ITER: 1.344692
+    H_CTA: 1.098483
+    dF_cycles: 1993.6
+    gap_pct: 22.413498
+    gap_pct_F_sensitivity: {"F x0.5": 22.917998, "F x1.5": 21.930732}
+rules:
+  per_gemm: within 3% = |r_meas / r_pred(H) - 1| <= 0.03 for the nearer H; that GEMM reads H; both beyond: NEITHER
+  verdict: SELECTED <H> when both GEMMs read the same H; else UNDECIDED (readings printed)
+  noise: counter noise about 0.3% against gaps of 16.9% (w1) and 22.4% (w2)
+gates:
+  V5: each page's V5 (the slope gate, dram_counter_route) must PASS; the rental-1 k64s4 page passed at 0.9985
+  clock: each page by r6common.clock_rule: lock_gate.check_page PASS (V10, the lock in force, judged by the smi bracket, null kernel and base twin), then each cell in [1640, 1710] MHz (out-of-band cells dropped); this replaces V10's 1705 cut, which the rental-1 page failed at 1659-1676 MHz (w2 fitted 1676, PRIVATE 1659-1663)
+  pair_clock: the two pages' median cell clocks must agree within 1% (cycles are compared across pages), else NOT SCORED
+  V7: V7 (the arm clock match) is not a gate on the cycle ratio; when a page's V7 FAILS, its c is read off its NATIVE cells only (page_c on the native cells, at least 3), so no cross-arm clock mismatch enters the fit; the reading is flagged 'V7: native only'
+  views: rental 2's two views as rental 5's secondk (occlaw.bytes_two_views)
+missing: a page missing or out of the view: NOT SCORED; drop-group k2 keeps the pair together
+labels:
+  k64s4: SEEN configuration (rental 1, this model, G 64)
+  k32s4: BLIND
+seen_data:
+  - c64, c32 SEEN (OLMoE rental 4)
+  - F CAL
+  - the rental-1 k64s4 page SEEN (V5 0.9985; V7 and V10 failed)

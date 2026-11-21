@@ -1,0 +1,300 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      2,
+      "PT"
+    ],
+    [
+      "shared",
+      2,
+      "PT"
+    ],
+    [
+      "native",
+      2,
+      "PW"
+    ],
+    [
+      "shared",
+      2,
+      "PW"
+    ],
+    [
+      "native",
+      2,
+      "uniform"
+    ],
+    [
+      "shared",
+      2,
+      "uniform"
+    ],
+    [
+      "native",
+      2,
+      "balanced"
+    ],
+    [
+      "shared",
+      2,
+      "balanced"
+    ]
+  ],
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 32,
+  "launch_count": 48,
+  "tokens": {
+    "2": 1024
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/2/PT": "a53b9cdcdb4f4b97a56e6092439613bcddbe5b1b856af8e9e21d9b4fb43f62de",
+    "shared/2/PT": "9d34e6d286daadfa430f0ef8651d6d990fbbc32208e182310d309bcd28864f54",
+    "native/2/PW": "ad5b98dd64140f6efbf745aac316ed4542a2fb6d684bb95ce35abeb8f8fc063e",
+    "shared/2/PW": "f7868a47a3698ce600a0198f6150cadcf7a92df9d59238a83f7e725659c4bc91",
+    "native/2/uniform": "87b0422fd03f512b8e2939932761ae30de516cb6c35ec3172ade7035e587937d",
+    "shared/2/uniform": "3d10ca148652340c928f84e34da49b791127467aa054f48c5f55a1761623be77",
+    "native/2/balanced": "c2519307679a38f7118681c76aabb5d2ece77767ebf9badc654bf792cded5e24",
+    "shared/2/balanced": "84894f8b4575e731dfe12f26b41592c189da2d22c484e460bc39588ed1c33a50"
+  },
+  "sorted_ids_len": {
+    "native/2/PT": 3064,
+    "shared/2/PT": 11192,
+    "native/2/PW": 3064,
+    "shared/2/PW": 11192,
+    "native/2/uniform": 3064,
+    "shared/2/uniform": 11192,
+    "native/2/balanced": 3064,
+    "shared/2/balanced": 11192
+  },
+  "grids": {
+    "native/2/PT": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/PT": {
+      "w1": 19712,
+      "w2": 2816
+    },
+    "native/2/PW": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/PW": {
+      "w1": 19712,
+      "w2": 2816
+    },
+    "native/2/uniform": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/uniform": {
+      "w1": 19712,
+      "w2": 2816
+    },
+    "native/2/balanced": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/balanced": {
+      "w1": 19712,
+      "w2": 2816
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/native/g1/n2/PW",
+    "r3/native/g1/n2/PW",
+    "r3/native/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/native/g1/n2/uniform",
+    "r3/native/g1/n2/uniform",
+    "r3/native/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/native/g1/n2/balanced",
+    "r3/native/g1/n2/balanced",
+    "r3/native/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 3,
+    "BLOCK_SIZE_M": 128
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 2818572288,
+    "weight_bytes": 25367150592,
+    "activation_bytes": 209715200,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 25996296192,
+    "device_free_bytes": 100727783424,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 2
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "e2aeaef6-2633-c7cb-e7eb-696be58cc57d"
+  },
+  "histogram": {
+    "file_sha256": "bebb06d6df189f193ec1a72fbdc98cd52549ead35d24742d21429bbed7d08fe3",
+    "page": "mixtral-8x7b-128g1",
+    "shuffle_seed": 20261410,
+    "cells": {
+      "native/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+        "bincount": [
+          227,
+          221,
+          279,
+          175,
+          366,
+          258,
+          229,
+          293
+        ]
+      },
+      "shared/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+        "bincount": [
+          227,
+          221,
+          279,
+          175,
+          366,
+          258,
+          229,
+          293
+        ]
+      },
+      "native/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+        "bincount": [
+          402,
+          287,
+          246,
+          73,
+          267,
+          205,
+          219,
+          349
+        ]
+      },
+      "shared/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+        "bincount": [
+          402,
+          287,
+          246,
+          73,
+          267,
+          205,
+          219,
+          349
+        ]
+      },
+      "native/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "shared/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "native/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      },
+      "shared/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256,
+          256
+        ]
+      }
+    }
+  }
+}

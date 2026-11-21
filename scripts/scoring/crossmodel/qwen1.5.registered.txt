@@ -1,0 +1,15 @@
+qwen1.5: qwen1.5-moe-a2.7b, docs/registered/2026-09-29-qwen1.5-moe-a2.7b-gh200.json, results/published/2026-09-29-nvidia_gh200_480gb-qwen1.5-session (ledger rows [26, 27, 28])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6] 361.0 registered 360.4 (+0.17%) all-cell 361.0 HELD
+  floor r3f-g64.json             w2 n=[2, 3, 4, 6] 385.8 registered 388.6 (-0.73%) all-cell 385.8 HELD
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6] 361.7 registered 360.4 (+0.37%) all-cell 361.7 HELD
+  floor r3f-g64-lock1710.json    w2 n=[2, 3, 4, 6] 385.5 registered 388.6 (-0.81%) all-cell 385.5 HELD
+  time from predicted bytes (printed): 76 cells rms 2.12% worst 5.26% beyond 5% 8
+  G>=8 SHARED slope n=2..6: G=8 0.2156, G=32 0.2154 (registered 0.2159, band None)
+  bytes w1 all arms                                       208 cells rms 6.05% worst 14.24% beyond 5% 80
+  bytes w1 shared+private                                 140 cells rms 5.26% worst 14.24% beyond 5% 40
+  bytes private w1                                         72 cells rms 1.31% worst 3.24% beyond 5% 0
+  bytes private w2                                         72 cells rms 0.53% worst -2.19% beyond 5% 0
+  bytes shared w1                                          68 cells rms 7.43% worst 14.24% beyond 5% 40
+  bytes shared w2                                          68 cells rms 3.90% worst 10.63% beyond 5% 11
+  bytes shared+native w2 G<=16 n<=4                        48 cells rms 2.10% worst 4.21% beyond 5% 0
+  bytes named set (w1 S+P, PRIVATE w2, SHARED w2 G<=16 n<=4)  236 cells rms 4.12% worst 14.24% beyond 5% 40

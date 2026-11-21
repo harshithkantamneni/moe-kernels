@@ -1,0 +1,118 @@
+REGISTERED 2026-10-28, before any decode page: the decode stage (a second addendum), 2026-10-28-decode-addendum2-gh200
+status: REGISTERED BEFORE ANY DECODE PAGE: the decode stage's second addendum; 2026-10-14-decodeC-cal-gh200, 2026-10-14-decodeB-blind-gh200 and 2026-10-20-decode-tilesource-gh200 stay byte-identical (pinned here)
+design: decode-ready READINESS.md (2026-10-28, read-only against 0144010d), recommendation (b) followed exactly, and the owner's decisions of 2026-10-28: D2-1 decision DD6 superseded (decode CAL runs now, tile rental B is not run; decode uses A2's constants through the first addendum, its gate reading GO); D2-2 the cells where an active expert holds a second M-tile are DESCRIPTIVE (out of the fit, the rho selection and every E1 bar; read as SIGMA-D against v4d's sigma-1 price and an L2-served estimate); D2-3 700 W stated and read back from the session's power-set.txt, else NOT SCORED; D2-4 the knee rows (p 5.75, 3.75) DESCRIPTIVE and the two byte units nodrop; D2-5 the rental sequence: CAL, then on GO the mechanical finalisation and the blind rental; and after the build review (build-D2-review REVIEW.md, GO-WITH-FIXES): M1 the certified domain stated verbatim, m9 SIGMA-D's reading bands and NOT READ rule, m3 the blind bars from the kept cells' replicate noise
+tool: scripts/scoring/tileA2/decode_gate_a2.py scripts/scoring/tileA2 (GO), then scripts/scoring/decode/score_cal_d2.py <tree> <out> --tile-scores scripts/scoring/tileA2; on GO finalise_decode_d2.py <out> <finalised.json> --plan-out scripts/plans/rentalD-blind-2026-10.plan; after the blind rental score_blind_d2.py <tree> <finalised.json> <out> (all new; the frozen scorers run inside, unchanged)
+
+Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row.
+cal rental: 106 min of units, about 151 min wall with 25 min of boot and setup: $5.76 at $2.29/h; deadline launch + 165 min; guardian hard cap launch + 180 min ($6.87 at most)
+blind rental: 101 min of units, about 145 min wall with 25 min of boot and setup: $5.53 at $2.29/h; deadline launch + 160 min; guardian hard cap launch + 175 min ($6.68 at most)
+
+DESCRIPTIVE cells (by identity):
+  cal main olmoe-1b-7b: L-T32-A8 (T 32, 16x64x128w4s4, 8 over BM 16, largest 32); L-T64-A8 (T 64, 32x64x128w4s3, 8 over BM 32, largest 64); MIN-T64 (T 64, 32x64x128w4s3, 8 over BM 32, largest 64); L-T96-A8 (T 96, 32x128x64w4s3, 8 over BM 32, largest 96); L-T128-A8 (T 128, 64x128x64w4s3, 8 over BM 64, largest 128)
+  cal main mixtral-8x7b: L-T32-A2 (T 32, 16x64x128w4s4, 2 over BM 16, largest 32); L-T64-A2 (T 64, 32x64x128w4s3, 2 over BM 32, largest 64); MIN-T64 (T 64, 32x64x128w4s3, 2 over BM 32, largest 64); L-T96-A2 (T 96, 32x128x64w4s3, 2 over BM 32, largest 96); L-T96-A4 (T 96, 32x128x64w4s3, 4 over BM 32, largest 48); L-T128-A2 (T 128, 64x128x64w4s3, 2 over BM 64, largest 128)
+  cal ctl olmoe-1b-7b: L-T32-A8 (T 32, 16x64x128w4s4, 8 over BM 16, largest 32); L-T64-A8 (T 64, 32x64x128w4s3, 8 over BM 32, largest 64); L-T96-A8 (T 96, 32x128x64w4s3, 8 over BM 32, largest 96); L-T128-A8 (T 128, 64x128x64w4s3, 8 over BM 64, largest 128)
+  cal ctl mixtral-8x7b: L-T32-A2 (T 32, 16x64x128w4s4, 2 over BM 16, largest 32); L-T64-A2 (T 64, 32x64x128w4s3, 2 over BM 32, largest 64); L-T96-A2 (T 96, 32x128x64w4s3, 2 over BM 32, largest 96); L-T128-A2 (T 128, 64x128x64w4s3, 2 over BM 64, largest 128)
+  blind main phi-3.5-moe: L-T32-A2 (T 32, 16x64x128w4s4, 2 over BM 16, largest 32); L-T64-A2 (T 64, 32x64x128w4s3, 2 over BM 32, largest 64); MIN-T64 (T 64, 32x64x128w4s3, 2 over BM 32, largest 64); L-T96-A2 (T 96, 32x128x64w4s3, 2 over BM 32, largest 96); L-T128-A2 (T 128, 64x128x64w4s3, 2 over BM 64, largest 128)
+  blind main qwen1.5-moe-a2.7b: L-T32-A4 (T 32, 16x64x128w4s4, 4 over BM 16, largest 32); L-T64-A4 (T 64, 32x64x128w4s3, 4 over BM 32, largest 64); MIN-T64 (T 64, 32x64x128w4s3, 4 over BM 32, largest 64); L-T96-A4 (T 96, 32x128x64w4s3, 4 over BM 32, largest 96); L-T128-A4 (T 128, 64x128x64w4s3, 4 over BM 64, largest 128)
+  blind main jetmoe-8b: L-T32-A2 (T 32, 16x64x128w4s4, 2 over BM 16, largest 32); L-T64-A2 (T 64, 32x64x128w4s3, 2 over BM 32, largest 64); MIN-T64 (T 64, 32x64x128w4s3, 2 over BM 32, largest 64); L-T96-A2 (T 96, 32x128x64w4s3, 2 over BM 32, largest 96); L-T96-A4 (T 96, 32x128x64w4s3, 4 over BM 32, largest 48); L-T128-A2 (T 128, 64x128x64w4s3, 2 over BM 64, largest 128)
+  blind main deepseek-v2-lite: L-T32-A6 (T 32, 16x64x128w4s4, 6 over BM 16, largest 32); L-T64-A6 (T 64, 32x64x128w4s3, 6 over BM 32, largest 64); MIN-T64 (T 64, 32x64x128w4s3, 6 over BM 32, largest 64); L-T96-A6 (T 96, 32x128x64w4s3, 6 over BM 32, largest 96); L-T128-A6 (T 128, 64x128x64w4s3, 6 over BM 64, largest 128)
+  blind main granite-3.0-3b-a800m: L-T32-A8 (T 32, 16x64x128w4s4, 8 over BM 16, largest 32); L-T64-A8 (T 64, 32x64x128w4s3, 8 over BM 32, largest 64); MIN-T64 (T 64, 32x64x128w4s3, 8 over BM 32, largest 64); L-T96-A8 (T 96, 32x128x64w4s3, 8 over BM 32, largest 96); L-T96-A19 (T 96, 32x128x64w4s3, 19 over BM 32, largest 41); L-T128-A8 (T 128, 64x128x64w4s3, 8 over BM 64, largest 128)
+  blind ctl qwen1.5-moe-a2.7b: L-T32-A4 (T 32, 16x64x128w4s4, 4 over BM 16, largest 32); L-T64-A4 (T 64, 32x64x128w4s3, 4 over BM 32, largest 64); L-T96-A4 (T 96, 32x128x64w4s3, 4 over BM 32, largest 96); L-T128-A4 (T 128, 64x128x64w4s3, 4 over BM 64, largest 128)
+  blind ctl granite-3.0-3b-a800m: L-T32-A8 (T 32, 16x64x128w4s4, 8 over BM 16, largest 32); L-T64-A8 (T 64, 32x64x128w4s3, 8 over BM 32, largest 64); L-T96-A8 (T 96, 32x128x64w4s3, 8 over BM 32, largest 96); L-T128-A8 (T 128, 64x128x64w4s3, 8 over BM 64, largest 128)
+DESIGN-NOMINAL served / v4d (for scale only): olmoe-1b-7b L-T32-A8 0.621; olmoe-1b-7b L-T64-A8 0.738; olmoe-1b-7b MIN-T64 0.738; olmoe-1b-7b L-T96-A8 0.597; olmoe-1b-7b L-T128-A8 0.663; mixtral-8x7b L-T32-A2 0.620; mixtral-8x7b L-T64-A2 0.664; mixtral-8x7b MIN-T64 0.664; mixtral-8x7b L-T96-A2 0.493; mixtral-8x7b L-T96-A4 0.561; mixtral-8x7b L-T128-A2 0.604; phi-3.5-moe L-T32-A2 0.630; phi-3.5-moe L-T64-A2 0.680; phi-3.5-moe MIN-T64 0.680; phi-3.5-moe L-T96-A2 0.480; phi-3.5-moe L-T128-A2 0.523; qwen1.5-moe-a2.7b L-T32-A4 0.698; qwen1.5-moe-a2.7b L-T64-A4 0.746; qwen1.5-moe-a2.7b MIN-T64 0.746; qwen1.5-moe-a2.7b L-T96-A4 0.537; qwen1.5-moe-a2.7b L-T128-A4 0.646; jetmoe-8b L-T32-A2 0.635; jetmoe-8b L-T64-A2 0.639; jetmoe-8b MIN-T64 0.639; jetmoe-8b L-T96-A2 0.459; jetmoe-8b L-T96-A4 0.515; jetmoe-8b L-T128-A2 0.600; deepseek-v2-lite L-T32-A6 0.607; deepseek-v2-lite L-T64-A6 0.721; deepseek-v2-lite MIN-T64 0.721; deepseek-v2-lite L-T96-A6 0.611; deepseek-v2-lite L-T128-A6 0.649; granite-3.0-3b-a800m L-T32-A8 0.773; granite-3.0-3b-a800m L-T64-A8 0.810; granite-3.0-3b-a800m MIN-T64 0.810; granite-3.0-3b-a800m L-T96-A8 0.643; granite-3.0-3b-a800m L-T96-A19 0.725; granite-3.0-3b-a800m L-T128-A8 0.707
+
+scope (owner, 2026-10-28, review M1): Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row.
+DD6 superseded (owner, 2026-10-28, D2-1): decodeC-cal's DD6 ('decode runs after the tile stage, rented after tile rental B') no longer holds: tile rental B2 never runs (A2 STOP) and B3 is not registered (FINDINGS.md 'Tile stage: scope decision (2026-10-28)'). The decode CAL rental runs now. Its tile source stays the first addendum's: A2's score directory scripts/scoring/tileA2/, read by score_cal.tile_params unchanged, decode_gate_a2.py reading GO
+descriptive cells (owner, 2026-10-28, D2-2):
+  rule: a cell is DESCRIPTIVE when its path is not naive and some active expert holds more than BLOCK_M rows at vLLM's default config for its T (r3_decode.geometry multi_tile_experts > 0): v4d's G 1 schedule gives that expert a second M-tile whose CTAs re-read its weight slab from DRAM (sigma 1, decodeC-cal scorer ambiguity 4). Computed from the registered pages' counts and that rule alone, before any decode page
+  out of: the CAL fit (v4d.fit_constants), the rho selection (sub-wave rms), E1-CAL-IN-SAMPLE, the replicate's E1 row, the rivals' CAL training rows (line, OLS), blind E1-DEC pooled and per model, the certification and the rival exclusions, and the replicate's sigma_page and the tightened blind bars (owner, 2026-10-28, review m3: from the kept cells' pairs only; the every-cell figure printed beside, DESCRIPTIVE)
+  kept in: G3-D shuffle and label (each pair holds the same counts or the same multiset on both sides, so the re-read cancels in d_us; G3-D label's MIN-T64 against L-T64-A<k> pair stays as registered), G3-D fill (BALANCED cells only; no DESCRIPTIVE cell is BALANCED), GD2, GD3 (instrument readings, no model in them), V-ALIGN, GD5, COPIES and G1 (a DESCRIPTIVE cell's refusal is still a STOP: the decode rules are not vLLM's)
+  cal_main: 11
+  cal_main_of: 103
+  blind_main: 27
+  ctl: the CAL ctl pages' second-tile cells are read by BYTES-D2 (the CAL plan's dn counter pages); the blind ctl pages' second-tile cells are listed only: the blind plan has no counter page (review m5). GD2 reads every matched cell on both
+SIGMA-D (DESCRIPTIVE):
+  rows: per valid NATIVE DESCRIPTIVE main cell (CAL at the amended fit's constants and rho, blind at the finalised ones): the measured time, v4d's sigma-1 price, the L2-served estimate, e of each (dcommon.e_dec), served / sigma-1, and position = (v4d - meas) / (v4d - served) (0 at sigma 1, 1 at the served estimate); per model the C5.stats of both e and the median position
+  L2-served estimate: v4d's price of the same cell with every CTA of an expert's second or later M-tile reading no weight slab (its slab served from L2 at zero DRAM bytes; its activation share kept), everything else v4d's unchanged: the same live CTAs and launch order at G 1, the floor, the partial-wave tail under CORES, rho, the dead term, B_other and the constants (d2common.served_price: r3_timing_model.window's G 1 reads, slab removed where pid_m // npn is not the expert's first M-tile)
+  never: fitted, selected, a bar, or a STOP clause
+  reading (owner, 2026-10-28, review m9): position under 0.3333 (1/3) FULL-REREAD (the second-tile re-reads come from DRAM, sigma 1 holds), over 0.6667 (2/3) L2-SERVED (served from L2), between MIXED; per cell, and per model on the median position over its readable cells. NOT READ when the sigma-1 and served prices are under 3 us or 10% of the sigma-1 price apart (a 3% price error, E1's rms bar, then moves position by at most 0.3, about one band); a model with no readable cell is NOT READ. A position below 0 or above 1 keeps its band and is reported as measured: the fit's own error enters position (the build review's synthetic kept-cell defect read 1.24)
+  BYTES-D2: the CAL ctl counter pages' second-tile cells: counted dram__bytes_read per GEMM against v4d's reads and the served reads, both computed on the laptop with A2's tile parameters (the page's own v4d_reads is an error on the wgmma T 128 cells, review m1; kept beside); share_not_seen = (v4d - counted) / (v4d - served)
+power (owner, 2026-10-28, D2-3):
+  limit: 700 W, GPU scope (-sc 0), the owner's 2026-09-26 decision; the pinned decode driver sets it (POWER_LIMIT_W=700, gh200_decode_session.sh) and refuses the prelude unless power.limit reads it
+  check: the scorer wrappers read the session's power-set.txt (nvidia-smi -q -d POWER after -pl, written by the pinned driver and pushed with the session; <tree>/session or <tree>/../session, exactly one): the GPU Power Readings section's Current Power Limit must read 700 W within 1 W; else the decode readings are NOT SCORED (the CAL score is a STOP, the blind score certifies nothing)
+  driver: no driver change: the pinned driver already writes power-set.txt; vm_run.sh and docs/LAMBDA.md are unchanged
+knee rows (owner, 2026-10-28, D2-4, DESCRIPTIVE): v4d with r3_timing_model.P_KNEE 5.75 and 3.75 (the tile stage's p_128 and round 5's p_64) in place of v3's 14, at the same constants, on every E1 cell: e against the provisional bars and the mean and largest price shift per tile, beside the registered prediction; never a bar, a selection or a STOP clause
+byte units (owner, 2026-10-28, D2-4):
+  plan: scripts/plans/rentalD-cal-d2-2026-10.plan
+  plan_sha256: 6bf17829408b4900d713bfbab048debc8f1b67beaa5ce6e7e04af75fe5154b7a
+  change: the two decodebytes (dn) units nodrop=1 in place of drop-group=ncu (d2common.cal_plan_d2 over the frozen generator); every other unit line byte-identical to scripts/plans/rentalD-cal-2026-10.plan; minutes unchanged
+  units:
+    - - prelude est=3 cap=15
+    - mixtral-8x7b calibrate label=dcal nodrop=1 est=2 cap=30
+    - - tilecensus label=dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m nodrop=1 est=6 cap=25
+    - olmoe-1b-7b r3decode label=dm histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=17 cap=51
+    - mixtral-8x7b r3decode label=dm histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=16 cap=48
+    - olmoe-1b-7b r3decode label=dc histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=9 cap=27
+    - mixtral-8x7b r3decode label=dc histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=9 cap=27
+    - mixtral-8x7b r3decode label=de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3 drop-group=e240 est=6 cap=18
+    - olmoe-1b-7b decodebytes label=dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json nodrop=1 est=5 cap=15
+    - mixtral-8x7b decodebytes label=dn histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json nodrop=1 est=6 cap=18
+    - olmoe-1b-7b r3decode label=dd histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 drop-group=decl est=5 cap=15
+    - mixtral-8x7b r3decode label=dd histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 drop-group=decl est=5 cap=15
+    - olmoe-1b-7b r3decode label=dr histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3 drop-group=rep est=17 cap=51
+  drop_order: last first: rep, decl, e240
+  scoring: BYTES-D and BYTES-D2 stay DESCRIPTIVE; the scorer reads decodeC-cal's unit flags, so a lost dn page is not a STOP
+stop rule (as amended, CAL): decodeC-cal's stop rule (dcommon.stop_rule, unchanged) read on the amended score: the fit, E1-CAL-IN-SAMPLE and NOT PRICED without the DESCRIPTIVE cells; G3-D shuffle and label on every valid cell at the amended fit; GD2 on every matched cell; the nodrop units, V-ALIGN, GD5 and COPIES as registered; and a STOP when the power check does not read 700 W. Else GO
+blind rule (as amended): decodeB-blind's rule on the cells left: E1-DEC pooled and per model at the finalised bars, a model CERTIFIED when its own bar and the pooled bar hold; GD2 and G3-D voids as registered, on every cell
+rentals (owner, 2026-10-28, D2-5):
+  sequence: the CAL rental (this plan); if its stop rule as amended reads GO, finalise_decode_d2.py mechanically, then the blind rental (finalise's generated plan); on a STOP the blind rental does not run
+  cal:
+    units_min: 106
+    boot_setup_min: 25
+    wall_min: 151
+    cost_usd: 5.76
+    rate: gpu_1x_gh200 at $2.29/h
+    deadline_after_launch_min: 165
+    hard_cap_after_launch_min: 180
+    cost_at_hard_cap_usd: 6.87
+    rule: units (prelude, calibrate and the CAL census included) x 1/0.84 (rentals 4 to 7) plus 25 min boot and setup; deadline launch + wall + 15 min, rounded to 5 min; the guardian's hard cap 15 min later
+  blind:
+    units_min: 101
+    boot_setup_min: 25
+    wall_min: 145
+    cost_usd: 5.53
+    rate: gpu_1x_gh200 at $2.29/h
+    deadline_after_launch_min: 160
+    hard_cap_after_launch_min: 175
+    cost_at_hard_cap_usd: 6.68
+    rule: units (prelude, calibrate and the CAL census included) x 1/0.84 (rentals 4 to 7) plus 25 min boot and setup; deadline launch + wall + 15 min, rounded to 5 min; the guardian's hard cap 15 min later
+  worst case: the CAL unit caps sum to 355 min (decodeC-cal); the guardian's hard cap ends the rental first
+  operator power step (review m2): each rental: after the prelude's push, fetch the run branch and run `git fetch origin <run-branch> && D=$(mktemp -d) && mkdir -p "$D/session" "$D/results" && git show origin/<run-branch>:vm/session/power-set.txt > "$D/session/power-set.txt" && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/scoring/decode/d2common.py --power "$D/results"` from the repository root; terminate the instance unless it prints READ (exit 0). The pinned driver refuses on power.limit only; this reads the -q GPU scope the scorer reads, before any page is paid for
+power_amended (DESIGN-NOMINAL):
+  cal:
+    the model is the truth: 1.0
+    T0_GR off by +5 us (the riskiest assumption): 0.0
+    T0_GR off by +1 us: 1.0
+    +1% everywhere: 1.0
+    +2% everywhere: 0.0
+    +5% on sub-wave cells: 0.0
+  cal_cells: 92
+  blind:
+    the model is the truth: 1.0
+    T0_GR off by +5 us (the riskiest assumption): 0.0
+    T0_GR off by +1 us: 1.0
+    +1% everywhere: 1.0
+    +2% everywhere: 0.0
+    +5% on sub-wave cells: 0.0
+  blind_cells: 220
+  label: DESIGN-NOMINAL predictions, sigma ASSUMED, the shared-memory occupancy (as decodeC-cal's table, I8); the cells of E1 under this addendum. The constants are held fixed (no refit): the blind rows are the frozen-constant case, but the CAL rows do not model the CAL refit, which absorbs a uniform bias, so '+1%' and '+2% everywhere' overstate the CAL risk (review m7)
+unchanged: the lock 1710 and G4 1705, the instruments, the pages, the bars, the census rule, the tile source, the card constants, every pin of the three earlier decode registrations, and every registered verdict
+notes:
+  - score_cal.py:37 labels the tile source "tile rental A's selections" when given A2's directory (readiness review I6): a cosmetic mislabel left in place because the first addendum registers score_cal.py as frozen and byte-identical; score_cal_d2.py prints the correct label
+  - the plan's tilecensus unit runs the pinned tile_census.py and is expected to exit 3 on deepseek-v2-lite (readiness I7); no decode scorer reads it
+  - moe/spec.py (MODEL_CONFIGS) and moe/bench/tile_resolve.py (default_config), the excluded-cell rule's inputs, were in no earlier decode registration's pins (pre-existing, review m8); this addendum pins them (no frozen file changes)
+  - the blind score carries a DESCRIPTIVE row scoring every rival on every cell (RIVALS_ALL_CELLS) beside the registered rival exclusions on the kept cells
+  - decodeC-cal's power table predates the census and assumes sigma 1 everywhere (I8); power_amended is the same simulation on the amended cell sets, DESIGN-NOMINAL
+seen:
+  - no decode page exists; every published page is SEEN
+  - the readiness review's COMPUTED and INFERENCE readings (decode-ready/work): which cells hold a second M-tile, its served-from-L2 ratios 0.36 to 0.65 at DESIGN-NOMINAL T0_GR 25 us, and the inference that OLMoE's re-reads are served and Mixtral's miss (ROUND5.md, S1 M3, C3-R2): the reason for D2-2; the rule itself reads counts only

@@ -1,0 +1,66 @@
+# TILE RENTAL A2 (2026-10-20): the tile stage's calibration again, at a lock the wgmma tiles hold.
+# One gpu_1x_gh200 at $2.29/h, run by A2's driver (the pinned tile driver plus lines marked A2):
+#   bash scripts/vm_run.sh start --ip <ip> --run-id <id> --deadline <launch + 220 min, epoch s> \
+#     --plan scripts/plans/rentalA2-tile-2026-10.plan --driver gh200_tileA2_session.sh
+# Registrations (all before any page): docs/registered/2026-10-20-tileA2-{census,floor,bytes,e1cal,dead,rep,convl,gates}-gh200,
+# rental B2's frozen 2026-10-20-tileB2-{e1tile,stop}-gh200, the decode addendum 2026-10-20-decode-tilesource-gh200.
+# Design: design-A2 DESIGN.md corrected by design-A2-review REVIEW.md and the build review, and the owner's decisions of
+# 2026-10-20: a 900 W GPU power limit (it changes the 2026-09-26 700 W decision for A2 and rental B2 only) and the lock
+# ladder 1710, 1410, 1305 (the first rung whose probe passes is every later unit's lock; at 1710 no conversion is used).
+# The prelude, and before it the pre-setup dry run, refuse when the card's power.max_limit is under 900 W (no fallback).
+# THE GATES end the rental at once on a FAIL (tileA2-gates): G-CAL after calibrate (settled bf16 GEMM clock under the
+# lowest rung, 1305), G-CEN after the census (stack drift against rental A's census), G-PROBE (the lock-hold probe:
+# 1710, 1410, 1305; each rung the two timed probe pages and the OLMoE f128 counter page in the rung's band, the first
+# failing page ends the rung), G-BAND after f128 Mixtral and G-64 after f64w8 Mixtral (joint_cF None).
+# Line order is the priority. The driver drops the LAST unit first; a drop-group goes together.
+# Drop order, last first: dk, ms, w4, rep.
+# nodrop: the prelude, calibrate, the census, every gate, the lock-hold probe, the f128 and f64w8 counter pages, CONV-L
+# (a registered test, not a stop clause; its six units are skipped by rule when the lock is 1710), every E1-CAL timed
+# page and every byte page.
+# MINUTES: 168 of units estimated (142 nodrop); the estimates are rental A's actual minutes. The probe is 20 per rung
+# (one rung in the estimate, three at most: +40). Wall with about 25 min of boot and setup: about 173 min ($6.6) when
+# 1710 holds (CONV-L skipped, not budgeted); about 207 min ($7.9) at 1410 (the driver drops dk); about 207 min ($7.9)
+# at 1305 (it drops dk, ms, w4 and rep). Deadline launch + 220 min; guardian hard cap launch + 235 min.
+- prelude lock-mhz=1710 power-limit-w=900 est=1 cap=15
+mixtral-8x7b calibrate label=ta2 nodrop=1 est=1 cap=30
+- gate label=gcal gate=calibrate nodrop=1 est=1 cap=5
+# tA2-census: compile only, no lock, nothing timed; tile_census_a2.py (deepseek-v2-lite at tread 3, OLMoE again at n 3).
+- tilecensus label=ta2 tiles=128x128x64w8s3,64x128x64w8s3,64x128x64w4s3,32x128x64w4s3,16x64x128w4s4,32x64x128w4s3 models=olmoe-1b-7b,mixtral-8x7b,qwen2-57b-a14b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite nodrop=1 est=2 cap=25
+- gate label=gcen gate=census nodrop=1 est=1 cap=5
+# The lock-hold probe: Mixtral 128 G 16 at treads 3 and 8 and Qwen2-57B 128 G 1 at tread 2 (216 repeat rows), at each
+# rung of 1710, 1410, 1305 (hw_rulers first), then the OLMoE f128 counter page (P5); the first failing page ends the rung.
+- lockprobe label=lp ladder=1710,1410,1305 probes=mixtral-8x7b:docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json:16:m,qwen2-57b-a14b:docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json:1:q block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 nodrop=1 est=20 cap=70
+# tA2-floor CALIBRATION (CAL-A) at L, then the band gate.
+olmoe-1b-7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=4 cap=20
+mixtral-8x7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=8 cap=25
+- gate label=gband gate=band nodrop=1 est=1 cap=5
+# tA2-floor TEST (BLIND-CALMODEL, DESCRIPTIVE) at L, then the 64x128 gate.
+olmoe-1b-7b bytes label=f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=4 cap=20
+mixtral-8x7b bytes label=f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=7 cap=25
+- gate label=g64 gate=f64w8 nodrop=1 est=1 cap=5
+# tA2-convl (CONV-L): R3's tile (BLOCK_M 32), NATIVE, at L and then at 1710 on this board; scored as a per-cell ratio.
+# Skipped by rule (unless-lock=1710) when the lock is 1710: no conversion to test.
+mixtral-8x7b timed label=cvm1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=3 cap=15
+olmoe-1b-7b timed label=cvo1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=2 cap=15
+mixtral-8x7b timed label=cvm8 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g8.json arms=native declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=5 cap=15
+mixtral-8x7b timed label=cvm1t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=3 cap=15
+olmoe-1b-7b timed label=cvo1t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=2 cap=15
+mixtral-8x7b timed label=cvm8t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g8.json arms=native declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=5 cap=15
+# tA2-e1cal (BLIND-CALMODEL in time) at L: every E1-CAL page re-measured (DESIGN-A2 3.1).
+olmoe-1b-7b timed label=e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=14 cap=30
+mixtral-8x7b timed label=e128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=14 cap=40
+mixtral-8x7b timed label=e64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=10 cap=30
+qwen2-57b-a14b timed label=e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=10 cap=35
+mixtral-8x7b timed label=e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=5 cap=20
+# tA2-bytes at L: the full 56-row key test (OD3).
+olmoe-1b-7b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared byte-groups=1 nodrop=1 est=2 cap=20
+mixtral-8x7b bytes label=b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared byte-groups=1 nodrop=1 est=4 cap=25
+mixtral-8x7b bytes label=b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared byte-groups=16 nodrop=1 est=7 cap=25
+qwen2-57b-a14b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json arms=native,shared byte-groups=1 nodrop=1 est=5 cap=25
+# tA2-rep: sigma_page at L (OD4)
+olmoe-1b-7b timed label=e128g1r block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=rep est=14 cap=30
+olmoe-1b-7b bytes label=f64w4 block-m=64 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64 drop-group=w4 est=3 cap=20
+olmoe-1b-7b bytes label=f32w4 block-m=32 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64 drop-group=ms est=3 cap=20
+# tA2-dead: SEEN-REPLICATE (DESCRIPTIVE)
+olmoe-1b-7b timed label=d9 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=dk est=3 cap=15
+olmoe-1b-7b timed label=d15 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json arms=native,shared declared-copies=15 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=dk est=3 cap=15

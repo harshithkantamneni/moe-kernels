@@ -1,0 +1,164 @@
+# Is the fp8/bf16 crossing shift the DTYPE or the TILE?
+
+run id nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810
+config lookup device `NVIDIA H200`   dtypes bf16,fp8_e4m3   routing uniform (histogram realised exactly balanced)   seed 0
+card `NVIDIA H200`   instrument queue-deep/l2-flush/settled-warmup/clock-under-load/v4
+3 repeats per (arm, dtype), round-robin with dtype innermost; each repeat is one time_kernel call of 3 queue-deep trials sized to 200 ms, after 300 ms of warmup, L2 flushed
+clock reference per dtype family: bf16 1470 MHz; fp8 1380 MHz
+
+EVERYTHING IS SAVED TO  /workspace/results/gaps-nvidia_h200/dtype_tile_confound/nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810
+  git     outside the repo, so git has no opinion about it
+  rows    /workspace/results/gaps-nvidia_h200/dtype_tile_confound/nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810/timings.csv
+  report  /workspace/results/gaps-nvidia_h200/dtype_tile_confound/nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810/report.md
+  plan    /workspace/results/gaps-nvidia_h200/dtype_tile_confound/nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810/plan.json
+Re-run the same command to resume; completed (cell, arm, dtype) triples are skipped.
+
+COST  28 cells x 3 arms x 2 dtypes; 32 distinct Triton specialisations;
+      454 s of timed kernel: 3 repeats x (300 ms warmup + 3 trials x max(200 ms budget, one call)) per (cell, arm, dtype), excluding compiles and allocation.
+
+## The matched arms, and the shared-memory arithmetic behind them
+
+Triton asks for `num_stages x (BM*BK + BK*BN) x element bytes` of pipeline shared memory; the sm_90 limit is 232448 B. Every number below is derived, and the 2026-09-09 H200 run's own `Required:` bytes reproduce it exactly.
+
+  cfg_bf16: pins BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, num_warps, num_stages; pairs at 28 of 28 cells
+  tile_fp8: pins BLOCK_SIZE_M, GROUP_SIZE_M; pairs at 28 of 28 cells
+
+| model | T | full fp8 config | at bf16 | tile_fp8 at bf16 | at fp8 | cfg_bf16 at fp8 |
+|---|---:|---|---:|---:|---:|---:|
+| mixtral-8x7b | 32 | `M64  N256 K128 G32 w4 s5` | 409600 INFEASIBLE | 147456 fits | 204800 fits | 55296 fits |
+| mixtral-8x7b | 64 | `M64  N128 K128 G1  w4 s3` | 147456 fits | 147456 fits | 73728 fits | 61440 fits |
+| mixtral-8x7b | 128 | `M64  N128 K128 G1  w4 s3` | 147456 fits | 196608 fits | 73728 fits | 98304 fits |
+| mixtral-8x7b | 256 | `M128 N256 K128 G32 w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| mixtral-8x7b | 384 | `M128 N256 K128 G32 w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| mixtral-8x7b | 512 | `M128 N256 K128 G32 w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| mixtral-8x7b | 768 | `M128 N256 K128 G32 w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| mixtral-8x7b | 1024 | `M128 N256 K128 G16 w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| mixtral-8x7b | 1536 | `M128 N256 K128 G16 w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| mixtral-8x7b | 2048 | `M128 N256 K128 G32 w8 s3` | 294912 INFEASIBLE | 196608 fits | 147456 fits | 98304 fits |
+| mixtral-8x7b | 3072 | `M128 N256 K128 G32 w8 s3` | 294912 INFEASIBLE | 196608 fits | 147456 fits | 98304 fits |
+| mixtral-8x7b | 4096 | `M128 N256 K128 G16 w8 s3` | 294912 INFEASIBLE | 196608 fits | 147456 fits | 98304 fits |
+| mixtral-8x7b | 6144 | `M128 N256 K128 G16 w8 s3` | 294912 INFEASIBLE | 196608 fits | 147456 fits | 98304 fits |
+| mixtral-8x7b | 8192 | `M128 N256 K128 G16 w8 s3` | 294912 INFEASIBLE | 196608 fits | 147456 fits | 98304 fits |
+| qwen2-57b-a14b | 32 | `M64  N256 K128 G1  w4 s5` | 409600 INFEASIBLE | 163840 fits | 204800 fits | 51200 fits |
+| qwen2-57b-a14b | 64 | `M64  N128 K128 G1  w4 s3` | 147456 fits | 147456 fits | 73728 fits | 55296 fits |
+| qwen2-57b-a14b | 128 | `M64  N128 K128 G1  w4 s3` | 147456 fits | 147456 fits | 73728 fits | 61440 fits |
+| qwen2-57b-a14b | 256 | `M64  N128 K128 G1  w4 s3` | 147456 fits | 49152 fits | 73728 fits | 24576 fits |
+| qwen2-57b-a14b | 384 | `M64  N128 K128 G1  w4 s3` | 147456 fits | 49152 fits | 73728 fits | 24576 fits |
+| qwen2-57b-a14b | 512 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 768 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 1024 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 1536 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 2048 | `M128 N256 K128 G16 w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 3072 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 4096 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 6144 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+| qwen2-57b-a14b | 8192 | `M128 N256 K128 G1  w8 s4` | 393216 INFEASIBLE | 196608 fits | 196608 fits | 98304 fits |
+
+The full fp8 transplant is INFEASIBLE at 22 of 28 cells at bf16's 2 bytes per element and is NOT an arm of this run. It was one on 2026-09-09: it raised OutOfResources inside vLLM's `override_config`, which has no try/finally, and the leaked fp8 config then took 41 further arms.
+
+THE SIGN, stated once so it cannot be misread. Every ratio below is
+
+    r = time(fp8_e4m3) / time(bf16)          at MATCHED model, tokens and arm
+    shift = rm / rc                          memory-region r over compute-region r
+
+r < 1 means fp8 is FASTER, which it must be: it moves half the weight bytes and
+runs tensor cores at 2.03x. shift > 1 means the crossing moves LATER in fp8,
+which is the direction the published 1.149 reports and the direction the
+corrected theory says should not happen. Every shift printed here is followed by
+the words LATER or EARLIER.
+
+## The confound, DERIVED from vLLM's shipped configs before any run
+
+vLLM v0.27.1. `resolve_tile` reproduces `get_config_file_name` +
+the nearest-key lookup + `get_default_config`; nothing below was observed on a GPU.
+
+| model | T | rows/E | bf16 config | fp8_e4m3 config | BLOCK_M | differs in |
+|---|---:|---:|---|---|---|---|
+| mixtral-8x7b | 32 | 8.0 | `M16  N128 K128 G16 w8 s3` | `M64  N256 K128 G32 w4 s5` | DIFFERS | BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M, num_warps, num_stages |
+| mixtral-8x7b | 64 | 16.0 | `M32  N128 K128 G64 w4 s3` | `M64  N128 K128 G1  w4 s3` | DIFFERS | BLOCK_SIZE_M, GROUP_SIZE_M |
+| mixtral-8x7b | 128 | 32.0 | `M64  N128 K128 G1  w8 s4` | `M64  N128 K128 G1  w4 s3` | SAME | num_warps, num_stages |
+| mixtral-8x7b * | 256 | 64.0 | `M128 N256 K64  G1  w8 s4` | `M128 N256 K128 G32 w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| mixtral-8x7b * | 384 | 96.0 | `M128 N256 K64  G1  w8 s4` | `M128 N256 K128 G32 w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| mixtral-8x7b * | 512 | 128.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G32 w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| mixtral-8x7b | 768 | 192.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G32 w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| mixtral-8x7b | 1024 | 256.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G16 w8 s4` | SAME | BLOCK_SIZE_K |
+| mixtral-8x7b | 1536 | 384.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G16 w8 s4` | SAME | BLOCK_SIZE_K |
+| mixtral-8x7b | 2048 | 512.0 | `M128 N256 K64  G32 w8 s4` | `M128 N256 K128 G32 w8 s3` | SAME | BLOCK_SIZE_K, num_stages |
+| mixtral-8x7b | 3072 | 768.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G32 w8 s3` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M, num_stages |
+| mixtral-8x7b | 4096 | 1024.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G16 w8 s3` | SAME | BLOCK_SIZE_K, num_stages |
+| mixtral-8x7b | 6144 | 1536.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G16 w8 s3` | SAME | BLOCK_SIZE_K, num_stages |
+| mixtral-8x7b | 8192 | 2048.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G16 w8 s3` | SAME | BLOCK_SIZE_K, num_stages |
+| qwen2-57b-a14b | 32 | 4.0 | `M16  N64  K128 G1  w4 s5` | `M64  N256 K128 G1  w4 s5` | DIFFERS | BLOCK_SIZE_M, BLOCK_SIZE_N |
+| qwen2-57b-a14b | 64 | 8.0 | `M16  N128 K128 G1  w8 s3` | `M64  N128 K128 G1  w4 s3` | DIFFERS | BLOCK_SIZE_M, num_warps |
+| qwen2-57b-a14b | 128 | 16.0 | `M32  N128 K128 G1  w4 s3` | `M64  N128 K128 G1  w4 s3` | DIFFERS | BLOCK_SIZE_M |
+| qwen2-57b-a14b | 256 | 32.0 | `M64  N64  K64  G1  w4 s3` | `M64  N128 K128 G1  w4 s3` | SAME | BLOCK_SIZE_N, BLOCK_SIZE_K |
+| qwen2-57b-a14b * | 384 | 48.0 | `M64  N64  K64  G1  w4 s3` | `M64  N128 K128 G1  w4 s3` | SAME | BLOCK_SIZE_N, BLOCK_SIZE_K |
+| qwen2-57b-a14b * | 512 | 64.0 | `M128 N256 K64  G1  w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K |
+| qwen2-57b-a14b * | 768 | 96.0 | `M128 N256 K64  G1  w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K |
+| qwen2-57b-a14b * | 1024 | 128.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| qwen2-57b-a14b | 1536 | 192.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| qwen2-57b-a14b | 2048 | 256.0 | `M128 N256 K64  G1  w8 s4` | `M128 N256 K128 G16 w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| qwen2-57b-a14b | 3072 | 384.0 | `M128 N256 K64  G1  w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K |
+| qwen2-57b-a14b | 4096 | 512.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| qwen2-57b-a14b | 6144 | 768.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+| qwen2-57b-a14b | 8192 | 1024.0 | `M128 N256 K64  G16 w8 s4` | `M128 N256 K128 G1  w8 s4` | SAME | BLOCK_SIZE_K, GROUP_SIZE_M |
+
+`*` marks a cell within a factor of 2.0 of that model's published bf16 crossing -- the only cells C1 and C2 read.
+  mixtral-8x7b: BLOCK_SIZE_M agrees in 3/3 bracketing cells and 12/14 over the whole grid; the configs differ somewhere in 14/14
+  qwen2-57b-a14b: BLOCK_SIZE_M agrees in 4/4 bracketing cells and 11/14 over the whole grid; the configs differ somewhere in 14/14
+
+## Predictions, registered before the run
+
+Ceilings read from /workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml
+  measured 2026-09-10 -- measured on this machine by scripts/calibrate_hardware.py
+  bandwidth 4374.3 GB/s
+  bf16 682.1 TFLOP/s  -> ridge 155.9 FLOP/byte
+  fp8  1453.6 TFLOP/s  -> ridge 332.3 FLOP/byte
+  achieved fp8/bf16 = 2.131, so the compute branch scales by rc = 0.469
+     (the DATASHEET relationship is 2.000 exactly; this card measures 2.131, and the difference is 6.6% of the prediction)
+
+PREDICTED TILT -- the median fp8/bf16 time ratio over the lowest third of the
+token grid divided by the median over the highest third, produced by running the
+model's own timings through the SAME reduction the measurement uses. `branches`
+is what the classifier finds on the predicted bf16 curve; `none` there means
+the model says this arm never reaches a compute branch, which is the
+`2*BLOCK_M/(alpha*b) < ridge` ceiling and not a defect of the grid.
+
+| model | arm | tilt, activations bf16 | tilt, activations quantised | branches (mem/comp) | model shift |
+|---|---|---:|---:|---|---:|
+| mixtral-8x7b | native | 1.049 | 1.066 | 6/8 | 1.018 |
+| mixtral-8x7b | cfg_bf16 | 1.049 | 1.066 | 6/8 | 1.016 |
+| mixtral-8x7b | tile_fp8 | 1.049 | 1.066 | 6/8 | 1.018 |
+| qwen2-57b-a14b | native | 0.825 | 0.880 | 7/7 | 0.886 |
+| qwen2-57b-a14b | cfg_bf16 | 0.944 | 1.011 | 7/7 | 0.955 |
+| qwen2-57b-a14b | tile_fp8 | 0.938 | 1.000 | 9/5 | 0.955 |
+
+Read the two tilt columns as a BAND. `moe/spec.py` keeps activations at bf16 in an
+fp8 cell because vLLM's `fused_experts` asserts it, but vLLM quantises them
+internally with `a1_scale=None`, and no timing can separate the two. The band is
+what the model can honestly say.
+
+QUOTED, not measured here: the published confounded ratio is 1.131 +/- 0.095
+over eight measurements from two kernels (docs/FINDINGS.md, from the arms
+2026-08-28-nvidia_h200-h200-fp8-three-kernel and -fp8-refixed). Per model, vLLM:
+  mixtral-8x7b 1.25,  qwen2-57b-a14b 1.10
+
+## What this design can see (MDE)
+
+Effect under test: the confounded tilt sits 0.131 above 1.0 (1.131 +/- 0.095, uniform-only).
+Noise assumption: per-cell timing spread, MEASURED over the 26 published reports; median 0.77%, worst 1.82%.
+Design: 3 round-robin repeats per (arm, dtype), compared as a ratio.
+
+  at the median spread 0.77%:  MDE 0.018   resolves the effect
+  at the worst  spread 1.82%:  MDE 0.042   resolves the effect
+
+An MDE above the effect does not make a PASS wrong; it makes a FAIL uninformative,
+and it is the number to raise --reps against before spending pod minutes.
+
+fp8 preflight OK: silicon has fp8 tensor cores, torch has torch.float8_e4m3fn, vLLM has fp8_w8a8_moe_quant_config
+override hook: vllm.model_executor.layers.fused_moe.override_config
+
+========================================================================
+REFUSED. Nothing was measured.
+  ConfoundRefusal: /workspace/results/gaps-nvidia_h200/dtype_tile_confound/nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810/timings.csv was written under a different schema (70 columns against 74); appending to it would shift every column after the first difference and nothing downstream could tell. Use --fresh to start the file again, or a new --run-id to leave it alone.
+========================================================================

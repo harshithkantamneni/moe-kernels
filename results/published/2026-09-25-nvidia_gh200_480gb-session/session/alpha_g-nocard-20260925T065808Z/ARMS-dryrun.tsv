@@ -1,0 +1,4 @@
+arm	state	rc	seconds	dirty	log	note
+thermal	PLANNED	2	3	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/logs/thermal.log	
+calibrate	PLANNED	2	3	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/logs/calibrate.log	
+pin_probe-n64-g1	NOT_PLANNED	-	0	0	-	no CUDA device: no framework span registers off the GPU box, so the plan would refuse for a reason that is about this laptop and not about the pin.

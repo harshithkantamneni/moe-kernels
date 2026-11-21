@@ -1,0 +1,70 @@
+{
+ "registration": "2026-11-06-pc-gh200",
+ "schema": "moe-kernels/pc-shapes/1",
+ "shapes": [
+  {
+   "E": 8,
+   "F": 14336,
+   "H": 128,
+   "k": 2,
+   "name": "pcs-e8-h128"
+  },
+  {
+   "E": 8,
+   "F": 14336,
+   "H": 256,
+   "k": 2,
+   "name": "pcs-e8-h256"
+  },
+  {
+   "E": 8,
+   "F": 14336,
+   "H": 512,
+   "k": 2,
+   "name": "pcs-e8-h512"
+  },
+  {
+   "E": 8,
+   "F": 1792,
+   "H": 512,
+   "k": 2,
+   "name": "pcs-e8-h512-f1792"
+  },
+  {
+   "E": 8,
+   "F": 3584,
+   "H": 512,
+   "k": 2,
+   "name": "pcs-e8-h512-f3584"
+  },
+  {
+   "E": 8,
+   "F": 7168,
+   "H": 512,
+   "k": 2,
+   "name": "pcs-e8-h512-f7168"
+  },
+  {
+   "E": 8,
+   "F": 14336,
+   "H": 1024,
+   "k": 2,
+   "name": "pcs-e8-h1024"
+  },
+  {
+   "E": 8,
+   "F": 14336,
+   "H": 2048,
+   "k": 2,
+   "name": "pcs-e8-h2048"
+  },
+  {
+   "E": 32,
+   "F": 14336,
+   "H": 4096,
+   "k": 2,
+   "name": "pcs-e32-h4096"
+  }
+ ],
+ "what": "PC's synthetic expert shapes (owner decision 3, 2026-11-06): built in the probe process as moe.spec.MoEConfig, never added to moe/spec.py; k 2, so the least grid is 2 CTAs; no shape equals any MODEL_CONFIGS entry's (E, H, F, k)"
+}

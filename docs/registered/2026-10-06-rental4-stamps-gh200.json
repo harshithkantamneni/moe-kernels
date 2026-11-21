@@ -1,0 +1,266 @@
+{
+ "registered": "2026-10-06, before any rental-4 page",
+ "name": "2026-10-06-rental4-stamps-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "REANALYSIS.md section 4 (the stamps block: F split, Z(BK, occ), rho, d0 and L) with sections 1b, 1c, 1f; owner decision 5 (the instrumented copy, gated by perturb)",
+ "tool": "scripts/instr_probe.py --mode stamps; scorer scripts/scoring/rental4/score_stamps.py; r4common.load_stamps and the readouts there",
+ "instrument": "moe/instrumented/fused_moe_instr.py: clock64 (SM cycles) and globaltimer (ns) per CTA; per-iteration clock64 with stamps=iter. A unit whose perturb gate is not PASS has no page",
+ "prologue_stamp": {
+  "statement": "the prologue stamp sits before the k-loop in the source, which is before the software pipeliner's peeled fill in the compiled kernel; no source point lies after the fill and before iteration 0's first wait without changing the loop's logic, so the fill is NOT separated: it falls inside iteration 0 (the loop phase)",
+  "consequence": "the fill / epilogue split (F_g = prologue + epilogue against CAL F_w1 520, F_w2 979) is WITHDRAWN; F reads only Delta_epi = epilogue(w2) - epilogue(w1), in which the stamps' own stores cancel; K drops the first two marks",
+  "review_fix": "build-r4-review section 1"
+ },
+ "sass_precondition": {
+  "rule": "a unit is scored only when its OWN compiled kernels' SASS (dumped by the stamps unit, cuobjdump -sass) passes moe.instrumented.cubin.sass_checks for its readout: F: a clock read before the first LDG (num_tokens) on both GEMMs and, on w2, a clock read between the loop-exit BAR and the topk_weights LDG; K and T: at least 2 clock reads inside the k-loop; D: a clock read before the first LDG; else NOT SCORED (r4common.sass_precondition)",
+  "review_fix": "build-r4-review section 1 (the bracket check is a scoring precondition, not a print)"
+ },
+ "flush": "an L2 flush before every measured call, outside the stamped launches, as R3 flushes",
+ "pages": "<date>-<card>-instr-<model>-<label>/stamps.json and stamps/*.npy",
+ "F": {
+  "unit": "stf (mixtral-8x7b, G = 8, n 2, 4, 6, NATIVE, stamps=cta)",
+  "readout": "per launch, the median over live CTAs of epilogue = end_clk - epi_clk; Delta_epi = median over n of [epilogue(w2) - epilogue(w1)], cycles",
+  "rivals_cycles_at_1710": {
+   "NEAR": 242.16336,
+   "FAR": 433.28664,
+   "DRAM": 592.36794
+  },
+  "rivals_source": "this rental's gpubench constants (cycles at the lock) when its unit ran and parsed; else the published RRZE GH200 plateaus (SEEN third-party, below)",
+  "reading": "the w2 epilogue's one exposed topk_weights load (REANALYSIS.md 1b: SASS shows it is not hoisted)",
+  "rule": "r4common.nearest (linear): the nearest rival when nearer than half the gap to the next, else BETWEEN",
+  "printed": "per GEMM the median prologue (before the fill), loop (fill included) and epilogue cycles; no F_g split is read (prologue_stamp above)"
+ },
+ "K": {
+  "units": "stk64s4, stk32s4, stk128s4, stk64s8 (olmoe-1b-7b, G = 64, n 4, 6, NATIVE, stamps=iter)",
+  "readout": "T_iter = median over live CTAs and iterations (the first 2 marks and the last 1 dropped) of consecutive top-of-iteration clock64 differences, per (unit, GEMM, n), median over n",
+  "prediction": "T_iter = occ x c_law(BK, stages, occ): in the closed queue each of occ resident CTAs completes a k-step every occ x c",
+  "predicted_T_iter_cycles": {
+   "stk64s4": {
+    "w1": {
+     "occ": 5,
+     "iterations": 32,
+     "T_iter_cycles": {
+      "MVA2": 1696.973602,
+      "LK": 1752.298137,
+      "PS": 1720.5,
+      "LITTLE": 1752.298137,
+      "OCC": 1710.0
+     }
+    },
+    "w2": {
+     "occ": 4,
+     "iterations": 16,
+     "T_iter_cycles": {
+      "MVA2": 1364.670283,
+      "LK": 1401.838509,
+      "PS": 1376.4,
+      "LITTLE": 1401.838509,
+      "OCC": 1408.0
+     }
+    }
+   },
+   "stk32s4": {
+    "w1": {
+     "occ": 5,
+     "iterations": 64,
+     "T_iter_cycles": {
+      "MVA2": 1209.771274,
+      "LK": 1209.56,
+      "PS": 860.25,
+      "LITTLE": 1209.56
+     }
+    },
+    "w2": {
+     "occ": 5,
+     "iterations": 32,
+     "T_iter_cycles": {
+      "MVA2": 1209.771274,
+      "LK": 1209.56,
+      "PS": 860.25,
+      "LITTLE": 1209.56
+     }
+    }
+   },
+   "stk128s4": {
+    "w1": {
+     "occ": 3,
+     "iterations": 16,
+     "T_iter_cycles": {
+      "MVA2": 2034.519231,
+      "LK": 2102.757764,
+      "PS": 2064.6,
+      "LITTLE": 2102.757764
+     }
+    },
+    "w2": {
+     "occ": 3,
+     "iterations": 8,
+     "T_iter_cycles": {
+      "MVA2": 2034.519231,
+      "LK": 2102.757764,
+      "PS": 2064.6,
+      "LITTLE": 2102.757764
+     }
+    }
+   },
+   "stk64s8": {
+    "w1": {
+     "occ": 2,
+     "iterations": 32,
+     "T_iter_cycles": {
+      "MVA2": 786.024626,
+      "LK": 700.919255,
+      "PS": 688.2,
+      "LITTLE": 700.919255,
+      "OCC": 804.0
+     }
+    },
+    "w2": {
+     "occ": 2,
+     "iterations": 16,
+     "T_iter_cycles": {
+      "MVA2": 786.024626,
+      "LK": 700.919255,
+      "PS": 688.2,
+      "LITTLE": 700.919255,
+      "OCC": 804.0
+     }
+    }
+   }
+  },
+  "classes": {
+   "PS": [
+    "PS"
+   ],
+   "LK=LITTLE": [
+    "LK",
+    "LITTLE"
+   ],
+   "MVA2~OCC": [
+    "MVA2",
+    "OCC"
+   ]
+  },
+  "classes_basis": "LK and LITTLE predict identical T_iter on all 8 cells (0.00%); MVA2 and OCC differ by at most 3.08% here and by at most 5.14% at any 32x64 w8 BK 64 config of occupancy 2 to 5 (s2 to s8), under two 3% bands (6%), so no lever cell exists and none is added (build-r4-review section 3, work/k_separation.txt)",
+  "separates": [
+   "PS from the rest (stk32s4, stk64s8)",
+   "LK=LITTLE from MVA2~OCC (stk64s8 only, 10.8 to 12.8%)"
+  ],
+  "does_not_separate": [
+   "MVA2 from OCC",
+   "LK from LITTLE"
+  ],
+  "rule": "a law is consistent on a (unit, GEMM) when |T_meas / T_pred - 1| <= 3% (the stamps' own allowance: the perturb gate bounds the copy at 1% median, 2% worst on the whole kernel); a CLASS is consistent when any of its laws is consistent on every scored (unit, GEMM), FALSIFIED otherwise; a class is SELECTED when it alone is consistent; else UNDECIDED. No single law of MVA2~OCC or LK=LITTLE is ever SELECTED",
+  "one_test": "the K block and B' (occlaw) share configurations: ONE test of the k-step law, reported together",
+  "labels": {
+   "stk64s4": "SEEN (OLMoE G = 64 BK 64 s4 has a published page, 2026-09-29)",
+   "others": "BLIND-CALMODEL",
+   "in_sample": "MVA2 is in-sample at the k32s4, k64s4 and k64s8 configurations"
+  }
+ },
+ "T": {
+  "units": "sttail on mixtral-8x22b (G = 8, n 1, NATIVE and PRIVATE) and on mixtral-8x7b (G = 8, n 1, 2, NATIVE)",
+  "readout": "the TAIL WAVE: with N live CTAs and a wave of 132 x occ, the last N - floor(N / wave) x wave live CTAs in start order (r4common.tail_ctas; none when N is whole waves or under one); T_tail = median of their per-iteration clock64 cycles past the first, in ns at 1710 (review_fix: section 3, the earlier rule read waves 2..n)",
+  "rivals_ns": {
+   "R1": 1070.383275,
+   "R3L": 477.666667,
+   "R3I": 110.333333
+  },
+  "rivals_basis": "one stage (12288 B) per iteration at R1: rho 11.48 GB/s (CORES_RHO, about one stage in flight at loaded latency, REANALYSIS 1c); R3L: three stages in flight at the loaded 1433 ns; R3I: three stages at the idle 331 ns; FS (device share, REANALYSIS 1c): the tail's CTAs share the DRAM ruler, one stage each per iteration, T = stage bytes x N_tail / bw (bw 3598 GB/s, CAL), N_tail read off the launch",
+  "FS_registered": {
+   "mixtral-8x22b n1 w1": {
+    "live": 4096,
+    "wave": 660,
+    "tail_ctas": 136,
+    "FS_ns": 464.471373
+   },
+   "mixtral-8x22b n1 w2": {
+    "live": 768,
+    "wave": 528,
+    "tail_ctas": 240,
+    "FS_ns": 819.655364
+   },
+   "mixtral-8x7b n1 w1": {
+    "live": 3584,
+    "wave": 660,
+    "tail_ctas": 284,
+    "FS_ns": 969.925514
+   },
+   "mixtral-8x7b n1 w2": {
+    "live": 512,
+    "wave": 528,
+    "tail_ctas": 0,
+    "FS_ns": null
+   },
+   "mixtral-8x7b n2 w1": {
+    "live": 7168,
+    "wave": 660,
+    "tail_ctas": 568,
+    "FS_ns": 1939.851028
+   },
+   "mixtral-8x7b n2 w2": {
+    "live": 1024,
+    "wave": 528,
+    "tail_ctas": 496,
+    "FS_ns": 1693.954419
+   }
+  },
+  "occupancy": "w1 5, w2 4 (32x64x64 s4, SEEN cubins)",
+  "rule": "r4common.nearest in log space per (unit, GEMM, arm); the reading is SELECTED on a unit when every (GEMM, arm) selects it"
+ },
+ "D": {
+  "units": "stdead4 (olmoe-1b-7b, G = 8, n 2, 4, NATIVE and SHARED, s4: occupancy 5 / 4) and stdead2 (num_stages 8: occupancy 2 / 2), stamps=cta",
+  "readout_life": "median over dead CTAs (kind 2) of end_clk - start_clk, cycles: the slot a dead CTA holds",
+  "rivals_life_cycles": {
+   "FAST": 150.0,
+   "MIX": 451.0,
+   "DRAM": 667.36794
+  },
+  "rivals_life_basis": "FAST: the 75 instructions to EXIT with no exposed load (REANALYSIS fact 4); MIX: L = 264 ns = 451 clk (REANALYSIS 1f, SEEN-fitted on the dead-CTA ratio); DRAM: one DRAM-latency load plus the 75 instructions",
+  "readout_dispatch": "SHARED cells: only the dead CTAs that START AFTER THE LAST LIVE CTA ENDS (the live drain, the kappa term, out): (max - min of their start globaltimer) / (count - 1), ns per dead CTA (r4common.dead_dispatch_ns; review_fix: section 3)",
+  "timer_resolution_rule": "globaltimer's resolution is the least positive difference between the launch's distinct globaltimer values; the dispatch readout is NOT SCORED unless at least 100 qualifying dead CTAs span at least 20 ticks; the life readout uses clock64 and needs no such rule",
+  "rivals_dispatch_ns": {
+   "5": {
+    "DISP": 0.995,
+    "MIX": 0.93,
+    "SLOT": 0.81
+   },
+   "4": {
+    "DISP": 0.995,
+    "MIX": 1.03,
+    "SLOT": 1.0125
+   },
+   "2": {
+    "DISP": 0.995,
+    "MIX": 1.53,
+    "SLOT": 2.025
+   }
+  },
+  "rivals_dispatch_basis": "DISP: D's d 0.995 ns (CAL); MIX: d0 + L / (SMs occ) with d0 0.53 ns, L 264 ns (REANALYSIS 1f, SEEN-fitted); SLOT: t / occ, t 4.05 ns (CAL refit)",
+  "rule": "r4common.nearest (linear) per (unit, GEMM); the dispatch readout is scored at the GEMM's own occupancy (stdead2 at 2 separates the three by 0.5 ns and more; at 5 and 4 they lie within 0.05 ns of each other and read BETWEEN by design)"
+ },
+ "rrze_gh200": {
+  "near_l2_ns": 141.616,
+  "far_l2_ns": 253.384,
+  "dram_ns": 346.414,
+  "triad_gbps": 3783.0,
+  "read_gbps": 2775.0,
+  "init_gbps": 3944.0,
+  "clock_mhz": 1980.0,
+  "label": "SEEN third-party (RRZE-HPC/gpu-benches master 23e586dd, GH200, 1980 MHz), parsed by gpubench.py's rules"
+ },
+ "missing": "a unit without a PASS gate or with no stamps.json is NOT SCORED; the drop-group st goes together",
+ "seen_data": [
+  "every rival's constant is SEEN (CAL, SEEN-fitted or SEEN third-party, per entry)",
+  "no stamp of this kernel exists; the stk64s4 configuration (and occlaw's k64s4 base) is SEEN on OLMoE's 2026-09-29 G = 64 page, the other units are BLIND-CALMODEL or BLIND"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "dca04983ad613ee1b42ba726e3281ebbfb3277d4f730d770928362e119b2e316",
+  "scripts/instr_probe.py": "d5360a2feec55271e078af5fbc5c3a043e08881043cf2bb1ef1b9b0157c1154b",
+  "scripts/gpubench.py": "591def14403dbaf4e7023ec176f95980a41e93d047226e817604a7da162a1a6c",
+  "scripts/hw_rulers.py": "8615e321ba45ab34ec8a4d7ce650e07a523969f684b3b2d971ca910fc5994415",
+  "moe/instrumented/__init__.py": "655813ac766a2f9258dc09fbc1b6916b51cff8713eba28bfdb09ad63cd90623b",
+  "moe/instrumented/fused_moe_instr.py": "2c0a25f58ab7c7e82c945885c1476d75bda95aafdb5e88b0cfaa2248e37194e8",
+  "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+  "scripts/scoring/rental4/r4common.py": "f2cb03333cce44470855b0633292af135084b755352e10e0334d09a94ff37665"
+ }
+}

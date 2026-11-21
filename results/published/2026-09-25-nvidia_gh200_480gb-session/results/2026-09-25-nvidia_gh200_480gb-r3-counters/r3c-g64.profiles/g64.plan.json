@@ -1,0 +1,92 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "block_m": 32,
+  "block_n": 64,
+  "num_stages": 4,
+  "group_m": 64,
+  "treads": [
+    1,
+    2,
+    3,
+    4,
+    6
+  ],
+  "arms": [
+    "native",
+    "shared",
+    "private"
+  ],
+  "cells": [
+    [
+      "native",
+      1
+    ],
+    [
+      "native",
+      2
+    ],
+    [
+      "native",
+      3
+    ],
+    [
+      "native",
+      4
+    ],
+    [
+      "native",
+      6
+    ],
+    [
+      "shared",
+      1
+    ],
+    [
+      "shared",
+      2
+    ],
+    [
+      "shared",
+      3
+    ],
+    [
+      "shared",
+      4
+    ],
+    [
+      "shared",
+      6
+    ],
+    [
+      "private",
+      1
+    ],
+    [
+      "private",
+      2
+    ],
+    [
+      "private",
+      3
+    ],
+    [
+      "private",
+      4
+    ],
+    [
+      "private",
+      6
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "the ladder's id count runs 256..1536, across the small-batch id bound 1024, and E x n_max = 48 is under the expert bound 64; declaring 9 copies (E x 9 = 72) keeps both ratio arms on the scan kernel at every tread",
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/results/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g64.profiles/g64.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/results/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g64.profiles/g64.triton-cache"
+}

@@ -1,0 +1,66 @@
+== 2026-10-20T22:46:34Z step tilecensus: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 64x128x64w8s3 64x128x64w4s3 32x128x64w4s3 16x64x128w4s4 32x64x128w4s3 on olmoe-1b-7b mixtral-8x7b qwen2-57b-a14b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite; refused on an MMA path mismatch
+TILE CENSUS (A2): compile only, no lock, nothing timed; each model at its smallest whole tread
+tiles   128x128x64w8s3 64x128x64w8s3 64x128x64w4s3 32x128x64w4s3 16x64x128w4s4 32x64x128w4s3
+models  olmoe-1b-7b mixtral-8x7b qwen2-57b-a14b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  64x128x64w8s3: path wgmma, shared 73728 B, design occupancy 3
+  64x128x64w4s3: path wgmma, shared 73728 B, design occupancy 3
+  32x128x64w4s3: path mma.sync, shared 40960 B, design occupancy 5
+  16x64x128w4s4: path mma.sync, shared 61440 B, design occupancy 3
+  32x64x128w4s3: path mma.sync, shared 49152 B, design occupancy 4
+  olmoe-1b-7b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  mixtral-8x7b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  qwen2-57b-a14b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  phi-3.5-moe: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  qwen1.5-moe-a2.7b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  jetmoe-8b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  deepseek-v2-lite: tread 128x128x64w8s3 n 3, 64x128x64w8s3 n 3, 64x128x64w4s3 n 3, 32x128x64w4s3 n 3, 16x64x128w4s4 n 3, 32x64x128w4s3 n 3
+  and olmoe-1b-7b again at n 3 on every tile (the n 1 / n 3 rule for deepseek-v2-lite)
+  128x128x64w8s3 olmoe-1b-7b n 1: 2 configs
+  128x128x64w8s3 mixtral-8x7b n 1: 2 configs
+  128x128x64w8s3 qwen2-57b-a14b n 1: 2 configs
+  128x128x64w8s3 phi-3.5-moe n 1: 2 configs
+  128x128x64w8s3 qwen1.5-moe-a2.7b n 1: 2 configs
+  128x128x64w8s3 jetmoe-8b n 1: 2 configs
+  128x128x64w8s3 deepseek-v2-lite n 3: 2 configs
+  64x128x64w8s3 olmoe-1b-7b n 1: 2 configs
+  64x128x64w8s3 mixtral-8x7b n 1: 2 configs
+  64x128x64w8s3 qwen2-57b-a14b n 1: 2 configs
+  64x128x64w8s3 phi-3.5-moe n 1: 2 configs
+  64x128x64w8s3 qwen1.5-moe-a2.7b n 1: 2 configs
+  64x128x64w8s3 jetmoe-8b n 1: 2 configs
+  64x128x64w8s3 deepseek-v2-lite n 3: 2 configs
+  64x128x64w4s3 olmoe-1b-7b n 1: 2 configs
+  64x128x64w4s3 mixtral-8x7b n 1: 2 configs
+  64x128x64w4s3 qwen2-57b-a14b n 1: 2 configs
+  64x128x64w4s3 phi-3.5-moe n 1: 2 configs
+  64x128x64w4s3 qwen1.5-moe-a2.7b n 1: 2 configs
+  64x128x64w4s3 jetmoe-8b n 1: 2 configs
+  64x128x64w4s3 deepseek-v2-lite n 3: 2 configs
+  32x128x64w4s3 olmoe-1b-7b n 1: 2 configs
+  32x128x64w4s3 mixtral-8x7b n 1: 2 configs
+  32x128x64w4s3 qwen2-57b-a14b n 1: 2 configs
+  32x128x64w4s3 phi-3.5-moe n 1: 2 configs
+  32x128x64w4s3 qwen1.5-moe-a2.7b n 1: 2 configs
+  32x128x64w4s3 jetmoe-8b n 1: 2 configs
+  32x128x64w4s3 deepseek-v2-lite n 3: 2 configs
+  16x64x128w4s4 olmoe-1b-7b n 1: 2 configs
+  16x64x128w4s4 mixtral-8x7b n 1: 2 configs
+  16x64x128w4s4 qwen2-57b-a14b n 1: 2 configs
+  16x64x128w4s4 phi-3.5-moe n 1: 2 configs
+  16x64x128w4s4 qwen1.5-moe-a2.7b n 1: 2 configs
+  16x64x128w4s4 jetmoe-8b n 1: 2 configs
+  16x64x128w4s4 deepseek-v2-lite n 3: 2 configs
+  32x64x128w4s3 olmoe-1b-7b n 1: 2 configs
+  32x64x128w4s3 mixtral-8x7b n 1: 2 configs
+  32x64x128w4s3 qwen2-57b-a14b n 1: 2 configs
+  32x64x128w4s3 phi-3.5-moe n 1: 2 configs
+  32x64x128w4s3 qwen1.5-moe-a2.7b n 1: 2 configs
+  32x64x128w4s3 jetmoe-8b n 1: 2 configs
+  32x64x128w4s3 deepseek-v2-lite n 3: 2 configs
+RESULT: VALIDITY census_path PASS 84 configs, 0 path mismatches, 0 errors
+RESULT: DESCRIPTIVE olmoe_n1_n3 SAME SAME on every (tile, GEMM): deepseek-v2-lite's tread-3 entries are admitted
+2026-10-20T22:46:55Z tilecensus: RESULT: VALIDITY census_path PASS 84 configs, 0 path mismatches, 0 errors
+2026-10-20T22:46:55Z tilecensus: RESULT: DESCRIPTIVE olmoe_n1_n3 SAME SAME on every (tile, GEMM): deepseek-v2-lite's tread-3 entries are admitted
+2026-10-20T22:46:55Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ta2/tile-census.json)

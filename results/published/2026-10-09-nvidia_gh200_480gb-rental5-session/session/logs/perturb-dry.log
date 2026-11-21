@@ -1,0 +1,14 @@
+INSTRUMENTED KERNEL (perturb): 11 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u14-stf-v1       stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none
+  u14-stf-v2       stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u14-stf-v3       stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u15-stt8x22-v1   stamps mixtral-8x22b          BK 64 s4 cells 1 spec stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none
+  u15-stt8x22-v2   stamps mixtral-8x22b          BK 64 s4 cells 1 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u16-stt-v1       stamps mixtral-8x7b           BK 64 s4 cells 2 spec stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none
+  u16-stt-v2       stamps mixtral-8x7b           BK 64 s4 cells 2 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u17-std4-v2      stamps olmoe-1b-7b            BK 64 s4 cells 4 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u17-std4-v3      stamps olmoe-1b-7b            BK 64 s4 cells 4 spec stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u18-std2-v2      stamps olmoe-1b-7b            BK 64 s8 cells 4 spec stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  u18-std2-v3      stamps olmoe-1b-7b            BK 64 s8 cells 4 spec stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none
+  gate (decision 2): median |plain/copy - 1| <= 1%, worst <= 2%, identical occupancy; 8 bursts of 10 calls each way
+DRY RUN: nothing launched (exit 2)

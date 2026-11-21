@@ -1,0 +1,29 @@
+2026-10-21T07:06:22Z the branch's first commit: the VM can push
+2026-10-21T07:08:07Z setup_vm.sh: READY
+2026-10-21T07:08:46Z prelude (unit 1/14 - lock-mhz=1410 power-limit-w=900): exit 0 (1 min)
+2026-10-21T07:10:20Z powerproof (unit 2/14 - pp): exit 0 (2 min)
+2026-10-21T07:11:05Z bytes: G=1 page exit 0
+2026-10-21T07:11:14Z bytes (unit 3/14 olmoe-1b-7b kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json arms=native byte-groups=1): exit 0 (1 min)
+2026-10-21T07:12:11Z bytes: G=1 page exit 0
+2026-10-21T07:12:20Z bytes (unit 4/14 olmoe-1b-7b ar block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json arms=native byte-groups=1 replay=application): exit 0 (1 min)
+2026-10-21T07:13:16Z bytes: G=1 page exit 0
+2026-10-21T07:13:25Z bytes (unit 5/14 qwen2-57b-a14b kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json arms=native byte-groups=1): exit 0 (1 min)
+2026-10-21T07:14:30Z bytes: G=1 page exit 0
+2026-10-21T07:14:40Z bytes (unit 6/14 qwen2-57b-a14b ar block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json arms=native byte-groups=1 replay=application): exit 0 (1 min)
+2026-10-21T07:17:35Z bytes: G=64 page exit 3
+2026-10-21T07:17:46Z bytes (unit 7/14 olmoe-1b-7b f1305 lock-mhz=1305 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-21T07:21:08Z bytes: G=64 page exit 3
+2026-10-21T07:21:18Z bytes (unit 8/14 olmoe-1b-7b f1005 lock-mhz=1005 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (4 min)
+2026-10-21T07:24:08Z bytes: G=64 page exit 3
+2026-10-21T07:24:18Z bytes (unit 9/14 olmoe-1b-7b f1410 lock-mhz=1410 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-21T07:25:31Z bytes: G=1 page exit 0
+2026-10-21T07:25:41Z bytes (unit 10/14 mixtral-8x7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/mixtral-8x7b-128g1-n.json arms=native byte-groups=1): exit 0 (1 min)
+2026-10-21T07:28:05Z bytes: G=16 page exit 3
+2026-10-21T07:28:15Z bytes (unit 11/14 mixtral-8x7b p128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=16 byte-treads=3,4,8): exit 0 (3 min)
+2026-10-21T07:29:16Z bytes: G=1 page exit 3
+2026-10-21T07:29:26Z bytes (unit 12/14 mixtral-8x7b p64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=1 byte-treads=2): exit 0 (1 min)
+2026-10-21T07:31:57Z bytes: G=1 page exit 0
+2026-10-21T07:32:07Z bytes (unit 13/14 qwen2-57b-a14b st block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-n.json arms=native byte-groups=1 stall-metrics=1): exit 0 (3 min)
+2026-10-21T07:33:25Z bytes: G=1 page exit 0
+2026-10-21T07:33:35Z bytes (unit 14/14 olmoe-1b-7b st block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-n.json arms=native byte-groups=1 stall-metrics=1): exit 0 (1 min)
+2026-10-21T07:33:37Z the session ended: driver exit 0

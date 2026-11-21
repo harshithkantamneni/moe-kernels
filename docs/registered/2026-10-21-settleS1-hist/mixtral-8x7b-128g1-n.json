@@ -1,0 +1,98 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "mixtral-8x7b",
+ "page": "mixtral-8x7b-128g1-n",
+ "shuffle_seed": 20261410,
+ "block_m": 128,
+ "group_m": 1,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 2,
+   "counts": [
+    227,
+    221,
+    279,
+    175,
+    366,
+    258,
+    229,
+    293
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 17.404,
+    "seed": 20271430,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.211073,
+     "max_mean": 1.429688,
+     "gini": 0.114868
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 2,
+   "counts": [
+    402,
+    287,
+    246,
+    73,
+    267,
+    205,
+    219,
+    349
+   ],
+   "arms": [
+    "native"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.0,
+    "seed": 20271431,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.36174,
+     "max_mean": 1.570312,
+     "gini": 0.198242
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts": [
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256
+   ],
+   "arms": [
+    "native"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native"
+   ]
+  }
+ ],
+ "synthetic": "COPIED cells (treads 2; labels PT, PW, uniform, balanced; arms narrowed to native) of docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json, sha256 bebb06d6df189f193ec1a72fbdc98cd52549ead35d24742d21429bbed7d08fe3: S1-M3, Mixtral 128 G 1 counted bytes; settle rental S1, scripts/scoring/settleS1/hist_s1.py"
+}

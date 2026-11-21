@@ -1,0 +1,45 @@
+DECODE STAGE, BLIND RENTAL (addendum 3, model v4d'): E1-DEC
+power: READ (700.0 W); 27 descriptive cells out of E1-DEC
+bars {'rms_max': 0.015, 'max_abs': 0.04, 'mean_max': 0.0075}
+  phi-3.5-moe-dm: counted
+  qwen1.5-moe-a2.7b-dm: counted
+  jetmoe-8b-dm: counted
+  deepseek-v2-lite-dm: counted
+  granite-3.0-3b-a800m-dm: counted
+  qwen1.5-moe-a2.7b-dc: counted
+  granite-3.0-3b-a800m-dc: counted
+pooled over deepseek-v2-lite, granite-3.0-3b-a800m, jetmoe-8b, phi-3.5-moe, qwen1.5-moe-a2.7b: FAILS {'cells': 220, 'rms': 0.114018, 'worst': 0.392436, 'mean': 0.059923}
+  phi-3.5-moe: FAILS {'cells': 42, 'rms': 0.095226, 'worst': 0.24403, 'mean': 0.052233} -> NOT CERTIFIED
+    Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.
+  qwen1.5-moe-a2.7b: FAILS {'cells': 52, 'rms': 0.053128, 'worst': 0.155565, 'mean': 0.031498} -> NOT CERTIFIED
+    Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.
+  jetmoe-8b: FAILS {'cells': 41, 'rms': 0.194649, 'worst': 0.392436, 'mean': 0.151129} -> NOT CERTIFIED
+    Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.
+  deepseek-v2-lite: FAILS {'cells': 43, 'rms': 0.023499, 'worst': 0.121691, 'mean': 0.0045} -> NOT CERTIFIED
+    Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.
+  granite-3.0-3b-a800m: FAILS {'cells': 42, 'rms': 0.134094, 'worst': 0.338251, 'mean': 0.070515} -> NOT CERTIFIED
+    Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.
+rival rho other: EXCLUDED
+rival NAIVE-NODEDUP: EXCLUDED
+rival eager: EXCLUDED
+rival roofline: EXCLUDED
+rival line: EXCLUDED
+rival OLS: EXCLUDED
+SIGMA-D deepseek-v2-lite: L2-SERVED (median position 0.76437, 5 of 5 cells read); v4d sigma 1 {'cells': 5, 'rms': 0.318395, 'worst': 0.47975, 'mean': 0.30377}; L2-served {'cells': 5, 'rms': 0.128604, 'worst': -0.166387, 'mean': -0.117392}
+SIGMA-D granite-3.0-3b-a800m: L2-SERVED (median position 0.939357, 6 of 6 cells read); v4d sigma 1 {'cells': 6, 'rms': 0.240012, 'worst': 0.340081, 'mean': 0.218665}; L2-served {'cells': 6, 'rms': 0.117183, 'worst': -0.231475, 'mean': -0.057634}
+SIGMA-D jetmoe-8b: L2-SERVED (median position 0.882165, 6 of 6 cells read); v4d sigma 1 {'cells': 6, 'rms': 0.56499, 'worst': 0.920602, 'mean': 0.529031}; L2-served {'cells': 6, 'rms': 0.067727, 'worst': -0.109292, 'mean': -0.062951}
+SIGMA-D phi-3.5-moe: L2-SERVED (median position 0.807093, 5 of 5 cells read); v4d sigma 1 {'cells': 5, 'rms': 0.4205, 'worst': 0.55961, 'mean': 0.403324}; L2-served {'cells': 5, 'rms': 0.171286, 'worst': -0.326764, 'mean': -0.13942}
+SIGMA-D qwen1.5-moe-a2.7b: L2-SERVED (median position 0.826956, 5 of 5 cells read); v4d sigma 1 {'cells': 5, 'rms': 0.274083, 'worst': 0.384572, 'mean': 0.262333}; L2-served {'cells': 5, 'rms': 0.102346, 'worst': -0.180456, 'mean': -0.084487}
+rival rho other on every cell (DESCRIPTIVE): EXCLUDED
+rival NAIVE-NODEDUP on every cell (DESCRIPTIVE): EXCLUDED
+rival eager on every cell (DESCRIPTIVE): EXCLUDED
+rival roofline on every cell (DESCRIPTIVE): NOT EXCLUDED
+rival line on every cell (DESCRIPTIVE): EXCLUDED
+rival OLS on every cell (DESCRIPTIVE): NOT EXCLUDED
+knee p 5.75 (DESCRIPTIVE): {'cells': 220, 'rms': 0.115149, 'worst': 0.393008, 'mean': 0.062311}
+knee p 3.75 (DESCRIPTIVE): {'cells': 220, 'rms': 0.119438, 'worst': 0.397017, 'mean': 0.071607}
+G3-D label deepseek-v2-lite (DESCRIPTIVE, never a void): EQUIVALENT margin 0.3 us mean -0.020149 us
+G3-D label granite-3.0-3b-a800m (DESCRIPTIVE, never a void): EQUIVALENT margin 0.3 us mean -0.056763 us
+G3-D label jetmoe-8b (DESCRIPTIVE, never a void): EQUIVALENT margin 0.3 us mean -0.066 us
+G3-D label phi-3.5-moe (DESCRIPTIVE, never a void): NOT EQUIVALENT margin 0.4041 us mean 0.439999 us
+G3-D label qwen1.5-moe-a2.7b (DESCRIPTIVE, never a void): EQUIVALENT margin 0.3 us mean -0.101334 us

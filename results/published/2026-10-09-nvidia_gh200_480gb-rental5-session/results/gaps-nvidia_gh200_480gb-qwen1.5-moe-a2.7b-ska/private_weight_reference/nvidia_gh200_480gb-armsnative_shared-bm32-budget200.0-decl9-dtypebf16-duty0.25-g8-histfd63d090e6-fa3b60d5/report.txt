@@ -1,0 +1,40 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histfd63d090e6-fa3b60d5
+model       qwen1.5-moe-a2.7b E=60 k=4  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json (sha256 fd63d090e6b16c51...), page A, 18 cells x arms = 30 timed cells, token-row shuffle seed 20261007; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       174.87 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 651.8 TFLOP/s bf16 over 3727.6 GB/s (triad pattern); calibrated 2026-10-08 at d4d1767e
+experts     native declares E=60; shared declares E x n_decl = 540 at every cell
+            n_decl = 9 against n_max = 8 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 8 against the 8 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261008T233040Z-p2e-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ska/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histfd63d090e6-fa3b60d5
+cells (n, label, arms, path, counts sha256):
+  n=1   PT               native,shared  block-scan   f7d1008ea2b296d0
+  n=1   PW               native,shared  block-scan   6569be967423a57e
+  n=1   PW-hotfirst      native         block-scan   6b535da514d5eb4f
+  n=1   PW-rand1         native         block-scan   e443e5c5b4c9970f
+  n=1   uniform          native,shared  block-scan   6401aa4810588039
+  n=1   balanced         native,shared  block-scan   74234e98afe7498f
+  n=2   PT               native,shared  block-scan   97ecbcb681788528
+  n=2   PW               native,shared  block-scan   9bf417ab44e53e23
+  n=2   PW-hotfirst      native         block-scan   fe088377d370644c
+  n=2   PW-rand1         native         block-scan   b47b3fca48b70272
+  n=2   uniform          native,shared  block-scan   3cd0e70c9cb172f1
+  n=2   balanced         native,shared  block-scan   74234e98afe7498f
+  n=8   PT               native,shared  block-scan   01c335835799b149
+  n=8   PW               native,shared  block-scan   b2eece98422adb94
+  n=8   PW-hotfirst      native         block-scan   6da8d19e1b9c54f1
+  n=8   PW-rand1         native         block-scan   af999480ee32947a
+  n=8   uniform          native,shared  block-scan   ab9b43cb12da3832
+  n=8   balanced         native,shared  block-scan   74234e98afe7498f
+
+HISTOGRAM GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS

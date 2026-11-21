@@ -1,19 +1,39 @@
 """Benchmark matrices, sized to a time budget.
 
-Three profiles. `smoke` exists so the first thing a GPU session does is prove
-the harness works, in about two minutes, before committing to a long sweep.
+`smoke` exists so the first thing a GPU session does is prove the harness works,
+in about two minutes, before committing to a long sweep. `full` is the
+publication sweep the ten published arms came from, and it is frozen: a token
+count added to its grid makes the next arm incomparable to 96,448 existing rows.
 
 Token counts deliberately start at 1. A single token is the decode regime, and
 decode with many experts is the memory-bound weight-loading wall this project
 targets. A sweep that starts at 512 tokens would miss the entire phenomenon.
+
+THREE PROFILES ANSWER FAULTS IN THE MATRIX RATHER THAN IN THE HARDWARE.
+`crossing-uniform` exists because the study's central measurement, the ridge
+crossing, has never been made on a grid that could resolve one, with enough
+replicates to survive one throttled row, or on a timing basis that reports one
+for every span. `deployment` exists because every published cell is TP=1 bf16,
+and TP=1 DeepSeek-V3 is a shape vLLM ships no tuned config for on any device,
+because nobody serves it. `trace-replay` exists because `kind="trace"` is the
+axis this repo calls its differentiator and no profile had ever named one, so a
+captured routing histogram was a file nothing could sweep.
+
+`estimated_hours` prices any of them from the published arms' measured rates, so
+"can we afford this" is answered on the laptop it is written on rather than by
+starting it on a rented box and watching. It prices a CELL and then its timing
+rows, because those two do not scale together and a flat per-row rate mispriced
+every profile that runs one timing mode by about 1.6x.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from ..pipeline import reference_pipeline_names
-from ..spec import MODEL_CONFIGS, BenchSpec, RoutingSpec, sweep
+from ..spec import FP8_WEIGHT_DTYPES, MODEL_CONFIGS, BenchSpec, RoutingSpec, sweep
 from ..stages import BASE_ENV, CANONICAL_STAGES, StageSpan, registry
+from .ridge import crossing_batch
 
 
 @dataclass(frozen=True)
@@ -26,9 +46,23 @@ class Profile:
     seeds: tuple[int, ...] = (0,)
     l2_modes: tuple[bool, ...] = (True, False)
     graph_modes: tuple[bool, ...] = (False, True)
-    warmup: int = 25
     trials: int = 3
-    iters: int | None = None
+    #: Timing knobs IN THE INSTRUMENT'S OWN UNITS, or None to take
+    #: `driver.RunConfig`'s defaults. `warmup_ms` is a DURATION of delivered GPU
+    #: time and `target_ms` is the kernel time one trial should hold, from which
+    #: `timing.iters_for` sizes the iteration count.
+    #:
+    #: THERE IS NO `warmup` COUNT AND NO `iters` HERE, and their absence is the
+    #: point. Until 2026-09-02 a profile could set both, `cli` copied them into
+    #: every `RunConfig`, and `timing.time_kernel` has no such parameters: on the
+    #: instrument path `smoke`'s "warmup=5, iters=10" and `profile-cell`'s "one
+    #: launch" were silently neither. `driver.refuse_dropped_retired_knobs` now
+    #: REFUSES that config rather than dropping it quietly, which turned the two
+    #: profiles that set them into a refusal every documented session command hit
+    #: before it measured anything. A knob the instrument cannot honour is not a
+    #: profile axis, so it is not a field.
+    warmup_ms: float | None = None
+    target_ms: float | None = None
     #: Add an ALL-REFERENCE whole-layer cell per spec: a python loop over every
     #: expert. Measured 7.337 ms against vLLM's 0.588 at mixtral/T=512, so it is
     #: a 12.5x ceiling rather than a target. Real, but slow and about no kernel.
@@ -40,9 +74,47 @@ class Profile:
     notes: str = ""
 
     def specs(self) -> list[BenchSpec]:
-        return list(sweep([MODEL_CONFIGS[n] for n in self.models],
-                          list(self.token_counts), list(self.dtypes),
-                          list(self.routings), list(self.seeds)))
+        return [s for s in sweep([MODEL_CONFIGS[n] for n in self.models],
+                                 list(self.token_counts), list(self.dtypes),
+                                 list(self.routings), list(self.seeds))
+                if trace_belongs_to(s.routing, s.model.name)]
+
+
+def trace_model(trace_id: str) -> str | None:
+    """Which model a trace id names, or None if it names none of them.
+
+    `scripts/capture_traces.py` ids a capture `<model>-<corpus>-<phase>` by
+    default, and `traces.TraceSet` accepts a `@bNlM` slice suffix on top of
+    that. So a default-named trace carries the model it came from, and this
+    reads it back. A hand-supplied `--trace-id` that does not start with a
+    known model name returns None and is nobody's business but the caller's.
+
+    Longest match wins, or `deepseek-v3-tp4-chat-decode` would resolve to
+    `deepseek-v3` and a TP=4 capture would be paired with the unsharded model.
+    """
+    base = trace_id.split("@", 1)[0]
+    named = [n for n in MODEL_CONFIGS if base == n or base.startswith(n + "-")]
+    return max(named, key=len) if named else None
+
+
+def trace_belongs_to(routing: RoutingSpec, model: str) -> bool:
+    """May this routing be replayed on this model?
+
+    THE BUG THIS PREVENTS IS SILENT. `TraceSet.forced_ids` refuses a trace whose
+    expert count differs from the model's, which catches mixtral's 8-expert
+    capture on a 64-expert model. It does NOT catch deepseek-v2-lite's capture
+    replayed on qwen2-57b-a14b, because both have exactly 64 experts: that cell
+    runs, passes correctness, and publishes a row labelled `qwen2-57b-a14b`
+    whose expert load came from a different network. A sweep is a cartesian
+    product, so a profile listing three models and three traces asks for six
+    such cells and only some of them raise.
+
+    Non-trace routings are parametric and belong to every model.
+    """
+    if routing.kind != "trace" or not routing.trace_id:
+        return True
+    named = trace_model(routing.trace_id)
+    return named is None or named == model
 
 
 SKEW_SWEEP = (
@@ -53,6 +125,288 @@ SKEW_SWEEP = (
     RoutingSpec("dirichlet", 0.3),
 )
 
+# --------------------------------------------------------------------------
+# Token grids that can resolve a crossing
+# --------------------------------------------------------------------------
+
+#: Powers of two, decode through prefill. Every published arm ran this, so any
+#: new grid keeps it as a subset or gives up comparability with 96,448 rows.
+COARSE_BACKBONE: tuple[int, ...] = (
+    1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192)
+
+#: THE WITHDRAWN BAND THAT USED TO SIT HERE, named so it cannot come back
+#: unrecognised. `H200_RIDGE_BAND = (160.3, 176.2)` was carried as "the
+#: H200's ridge is a band" until 2026-09-03. Its two ends are two calibrations
+#: of the same card disagreeing about the COMPUTE term by 9.9% while bandwidth
+#: reproduced to 0.06%: 160.3 is calibration md5 `4d84542b` (701.6 TFLOP/s over
+#: 4377.2 GB/s) and 176.2 is 770.9 over 4374.5. That is a measurement of how
+#: badly the compute ceiling reproduces, not the width of any device's ridge,
+#: and it was withdrawn from all 26 published reports on 2026-09-02 by
+#: `scripts/rescore_published_reports.py` (`WITHDRAWN_RIDGE_WHY`). Nothing
+#: here scores against it any more; `calibrated_ridge_band` below is where a
+#: grid gets its ends.
+WITHDRAWN_RIDGE_BAND_WHY = (
+    "160.3-176.2 FLOP/byte is the gap between two H200 calibrations' compute "
+    "terms (md5 4d84542b at the low end), withdrawn 2026-09-02; it is no "
+    "card's ridge and no grid is placed from it")
+
+
+def calibrated_ridge_band(dtype: str = "bf16") -> tuple[float, float]:
+    """The lowest and highest ridge among the COMMITTED calibrations, resolved
+    through `roofline`, or a refusal.
+
+    WHAT IT IS. One card, one ridge: `peak(dtype) / bandwidth` off that card's
+    own `moe/bench/hardware/measured_<card>.yaml`, the file
+    `scripts/calibrate_hardware.py` wrote on that device. A profile is written
+    on a laptop and run on whichever card is rented, so the grid it carries has
+    to bracket the crossing on EVERY card the study has calibrated; the band
+    is therefore the span of those cards' own ridges (A100 145.8 to H200 162.8
+    at bf16 as of 2026-09-03), each end a number with a file behind it.
+
+    WHAT FAILURE IT PREVENTS. The band used to be the constant above, which
+    belonged to no card, and `crossing_grid` defaulted to it, so the profile's
+    dense region was placed from a withdrawn number with nothing in the output
+    saying so. This function reads files, and a card added to `hardware/`
+    moves the band without anyone remembering to edit a literal.
+
+    REFUSES rather than defaults: no calibration with a verified `dtype` peak
+    means no band, and the caller gets a `LookupError` naming the directory
+    instead of a grid placed from a guess.
+    """
+    from . import roofline
+
+    ridges: dict[str, float] = {}
+    for stem in roofline.available_profiles():
+        if not roofline.is_measured_profile(stem):
+            continue
+        try:
+            hw = roofline.load_hardware(stem)
+            ridges[stem] = hw.ridge_point(dtype)
+        except (FileNotFoundError, ValueError, KeyError,
+                roofline.UnverifiedHardware):
+            continue
+    if not ridges:
+        raise LookupError(
+            f"no committed calibration in {roofline.HARDWARE_DIR} carries a "
+            f"verified {dtype} peak, so there is no ridge to place a crossing "
+            "grid from. Run scripts/calibrate_hardware.py on the device and "
+            "commit its measured_*.yaml; nothing here substitutes a constant.")
+    return (min(ridges.values()), max(ridges.values()))
+
+#: How far past the predicted band the dense region runs, as a multiple of the
+#: prediction. Not symmetric, and the asymmetry is measured rather than chosen:
+#: every span in this study crosses EARLY, at 0.45 to 1.13 of prediction (0.452
+#: for a five-stage span against the full byte model, 1.129 for a one-stage span
+#: against `2R/b`), so the interesting side is below. 0.40 clears the lowest
+#: measurement and 1.40 clears the highest.
+CROSSING_WINDOW: tuple[float, float] = (0.40, 1.40)
+
+#: Points per factor of two inside the dense region. Four, and this is the one
+#: number here that a simulation chose rather than an argument.
+#:
+#: DENSIFYING ALONE MAKES THE CROSSING WORSE. `crossing_from_points` reads the
+#: slope between ADJACENT points, so a slope's noise scales as
+#: `1 / log(t1/t0)`: quartering the spacing quadruples every local slope's
+#: error, while the slope DIFFERENCE the crossing interpolates across shrinks by
+#: the same factor. The two cancel, and then the detector's "first pair to
+#: bracket 0.5" rule turns the leftover noise into a downward bias, because a
+#: first-passage statistic over more, noisier slopes fires early.
+#:
+#: MEASURED, against a soft-roofline curve `ms = (a^p + (bT)^p)^(1/p)` fitted to
+#: the published uniform vLLM rows (4.1 to 4.6% rms in log, so the shape is the
+#: real one) whose log-log slope hits 0.5 exactly at `T = a/b`, which makes the
+#: truth a number a grid can be scored against. 3000 draws, one lognormal noise
+#: realisation per run at the 2% per cell the published replicates show, seven
+#: seeds, crossing reported as a ratio to that truth, over all four models:
+#:
+#:     powers of two (today's grid)      median 1.00   5th-95th spans 1.08-1.18x
+#:     this grid read as ONE ladder      median 0.92-0.96      spans 1.38-1.60x
+#:     this grid read as 4 ladders       median 1.00           spans 1.06-1.09x
+#:
+#: At three seeds the same three rows are 1.14-1.26x, 1.66-2.17x at a median of
+#: 0.82-0.91, and 1.09-1.14x. So the dense grid roughly HALVES the crossing's
+#: uncertainty when `octave_ladders` reads it, and roughly doubles it, with a
+#: bias, when anything else does. That is why the two live next to each other.
+POINTS_PER_OCTAVE = 4
+
+#: Two points whose token counts differ by less than this are the same point for
+#: sweeping purposes, and the sweep should not pay for both.
+_GRID_DEDUP_RATIO = 1.02
+
+
+def _merge_grids(*groups: tuple[int, ...]) -> tuple[int, ...]:
+    """Sorted union, with near-duplicates collapsed to the lower point."""
+    out: list[int] = []
+    for t in sorted({int(t) for g in groups for t in g}):
+        if out and t <= out[-1] * _GRID_DEDUP_RATIO:
+            continue
+        out.append(t)
+    return tuple(out)
+
+
+def crossing_grid(models: tuple[str, ...],
+                  ridge_band: tuple[float, float] | None = None,
+                  dtype: str = "bf16",
+                  backbone: tuple[int, ...] = COARSE_BACKBONE,
+                  window: tuple[float, float] = CROSSING_WINDOW,
+                  per_octave: int = POINTS_PER_OCTAVE) -> tuple[int, ...]:
+    """The backbone, plus a `2^(1/per_octave)` ladder over the crossing region.
+
+    Placed from `ridge.crossing_batch` at BOTH ends of `ridge_band` rather
+    than hardcoded, so the grid follows the models and the calibration instead
+    of a table someone has to remember to edit. Change the band or the model set
+    and the extra points move.
+
+    `ridge_band` HAS NO DEFAULT. It used to default to the withdrawn
+    `(160.3, 176.2)` (see `WITHDRAWN_RIDGE_BAND_WHY`), which placed the dense
+    region from a number belonging to no card. A caller states the band, in
+    practice `calibrated_ridge_band()`, and a call with `models` and no band
+    is refused with a `TypeError` naming that function.
+
+    THE TOP OF THE RANGE IS NOT SET BY THE WINDOW. An octave ladder's highest
+    measurable slope sits at its top point over sqrt(2), so the published grid,
+    ending at 8192, has exactly one slope point above DeepSeek-V3's prediction
+    at the H200's own ridge: 5793 against 5210 (`2R/b` at 162.8 FLOP/byte), an
+    11% margin and nothing beyond it. Any crossing above 5793 is invisible to
+    it, and DeepSeek-V3's published one-stage bf16 crossings are 6315 and 6446,
+    above that line, while its fp8 twin has NO crossing at all under any
+    filter, its slope peaking at 0.497 at T=8192. The grid stopped before the
+    transition.
+
+    So the dense region runs past the band rather than to it. The shortest of
+    `per_octave` interleaved ladders tops out a factor
+    `2^((per_octave-1)/per_octave)` below the grid's last point, so a reach of
+    `2^(((per_octave-1)/per_octave) + 1/2)` times the highest prediction gives
+    EVERY ladder a slope above the band. That is then rounded up to a whole
+    power of two, which sounds cosmetic and is not: it is what gives ladder 0 a
+    slope above the whole WINDOW rather than 11% above the prediction, and
+    ladder 0 is the powers-of-two grid the published arms ran and the one a new
+    arm has to stay comparable with. The offset ladders reach further for free,
+    since they end higher; interleaving buys reach as well as precision.
+
+    Anchored on exact powers of two (`2^(k/per_octave)` for integer k), which is
+    what makes residue class 0 the powers-of-two grid itself, so one of the
+    ladders `octave_ladders` returns is bit-for-bit the grid every published arm
+    ran.
+    """
+    if per_octave < 1:
+        raise ValueError(f"per_octave must be at least 1, got {per_octave}")
+    if not models:
+        return _merge_grids(backbone)
+    if ridge_band is None:
+        raise TypeError(
+            "crossing_grid needs a ridge_band to place the dense region from; "
+            "it no longer defaults to the withdrawn (160.3, 176.2). Pass "
+            "calibrated_ridge_band(dtype), which reads the committed "
+            "calibrations, or a band you can name a file for.")
+
+    lo_ridge, hi_ridge = min(ridge_band), max(ridge_band)
+    lowest = min(crossing_batch(m, lo_ridge, dtype) for m in models)
+    highest = max(crossing_batch(m, hi_ridge, dtype) for m in models)
+
+    lo = window[0] * lowest
+    reach = highest * 2.0 ** ((per_octave - 1) / per_octave + 0.5)
+    hi = max(window[1] * highest, reach)
+
+    klo = math.floor(per_octave * math.log2(lo))
+    khi = math.ceil(per_octave * math.log2(hi))
+    khi = per_octave * math.ceil(khi / per_octave)   # end on a power of two
+    dense = tuple(round(2.0 ** (k / per_octave)) for k in range(klo, khi + 1))
+    return _merge_grids(backbone, dense)
+
+
+def octave_ladders(token_counts: tuple[int, ...],
+                   per_octave: int = POINTS_PER_OCTAVE
+                   ) -> tuple[tuple[int, ...], ...]:
+    """Split a dense grid into `per_octave` interleaved FULL-OCTAVE ladders.
+
+    THE READ THE DENSE GRID EXISTS FOR, and the only one that improves on the
+    powers-of-two grid it replaced. Each returned ladder steps by a factor of
+    two, so every local slope keeps the widest baseline the token range allows
+    and none of the noise amplification described on `POINTS_PER_OCTAVE`
+    happens. The `per_octave` crossings they produce are near-independent, so
+    their median is sharper than any single ladder's and their SPREAD is a
+    same-run empirical error bar rather than a bootstrapped one -- which is what
+    `crossing.crossing_interval` has to synthesise today because no run ever
+    carried two ladders.
+
+    Derived from the token counts alone, with no reference to the ridge, the
+    band or the model. That is deliberate: the ladders have to be recoverable
+    from a published CSV months later by whoever is reading it, and a rule that
+    needed the calibration that produced the grid would not be.
+
+    Coarse points -- those already a full octave from both neighbours -- go into
+    EVERY ladder. They sit below the crossing on a flat part of the curve, so
+    sharing them correlates the ladders only where the slope is far from the
+    threshold, and the alternative is ladders too short to have two slopes.
+
+    Raises rather than returning a ladder with a sub-octave step, which would be
+    a ladder with the very defect this function exists to avoid.
+    """
+    if per_octave < 1:
+        raise ValueError(f"per_octave must be at least 1, got {per_octave}")
+    points = sorted({int(t) for t in token_counts if t > 0})
+    if not points:
+        return tuple(() for _ in range(per_octave))
+
+    octave = 2.0 / _GRID_DEDUP_RATIO
+    coarse, dense = [], []
+    for i, t in enumerate(points):
+        below = t / points[i - 1] if i else math.inf
+        above = points[i + 1] / t if i + 1 < len(points) else math.inf
+        (coarse if min(below, above) >= octave else dense).append(t)
+
+    ladders = []
+    for j in range(per_octave):
+        members = [t for t in dense
+                   if round(per_octave * math.log2(t)) % per_octave == j]
+        ladder = tuple(sorted(set(coarse) | set(members)))
+        for a, b in zip(ladder, ladder[1:], strict=False):
+            if b / a < octave:
+                raise ValueError(
+                    f"ladder {j} steps {a} -> {b}, under an octave; "
+                    f"{sorted(points)} is not a 2^(k/{per_octave}) grid and "
+                    "splitting it by residue does not produce octave ladders")
+        ladders.append(ladder)
+    return tuple(ladders)
+
+
+#: Token grid for the `crossing-uniform` profile, built at import so the cost is
+#: visible in a dry run rather than discovered on a rented box.
+#:
+#: THE BAND IS READ FROM THE COMMITTED CALIBRATIONS AT IMPORT, through
+#: `roofline`, and the import REFUSES if none carries a bf16 peak. That is
+#: deliberate: the alternative was a literal, and the literal this replaced
+#: belonged to no card. The two files behind it today are
+#: `measured_nvidia_a100_sxm4_80gb.yaml` (145.8) and `measured_nvidia_h200.yaml`
+#: (162.8); the grid brackets the crossing at both, and a card outside that
+#: span is not bracketed until its own calibration is committed.
+CROSSING_MODELS: tuple[str, ...] = (
+    "mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite", "deepseek-v3")
+CROSSING_RIDGE_BAND: tuple[float, float] = calibrated_ridge_band("bf16")
+CROSSING_TOKENS: tuple[int, ...] = crossing_grid(
+    CROSSING_MODELS, ridge_band=CROSSING_RIDGE_BAND)
+
+#: Shapes that actually get served, each paired with the TP=1 control it is a
+#: shard of. The controls are not padding: the whole question is whether moving
+#: to the width vLLM tunes for changes the tile, the block count and therefore
+#: the timing, and a shard measured without its own unsharded twin in the same
+#: session answers nothing.
+DEPLOYMENT_MODELS: tuple[str, ...] = (
+    "deepseek-v3", "deepseek-v3-tp4", "deepseek-v3-tp8",
+    "mixtral-8x7b", "mixtral-8x7b-tp8",
+    "qwen2-57b-a14b", "qwen2-57b-a14b-tp8")
+
+#: The three models `scripts/capture_traces.py` can capture on ONE H200, with
+#: the trace id that script writes by default for a chat/decode capture.
+#: DeepSeek-V3 is absent and cannot be added: 1,369 GB of bf16 weights needs
+#: five cards, so its routing has never been captured and this repo must not
+#: imply otherwise. Decode is the phase worth replaying, since single-token
+#: steps across many experts are the regime the whole study is about.
+CAPTURED_ROUTINGS: tuple[RoutingSpec, ...] = tuple(
+    RoutingSpec("trace", trace_id=f"{m}-chat-decode")
+    for m in ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite"))
+
 PROFILES: dict[str, Profile] = {
     "smoke": Profile(
         name="smoke",
@@ -62,9 +416,13 @@ PROFILES: dict[str, Profile] = {
         routings=(RoutingSpec("uniform"), RoutingSpec("zipf", 1.2)),
         l2_modes=(True,),
         graph_modes=(False,),
-        warmup=5,
         trials=1,
-        iters=10,
+        # Quick, said in the units the instrument reads. 25 ms of sustained
+        # warmup and a 25 ms trial target is the "about two minutes" this
+        # profile is for; the retired `warmup=5, iters=10` asked for a call
+        # count `time_kernel` has no parameter for.
+        warmup_ms=25.0,
+        target_ms=25.0,
         notes="shakedown: proves correctness and the plumbing, not performance",
     ),
     "standard": Profile(
@@ -105,10 +463,19 @@ PROFILES: dict[str, Profile] = {
         routings=(RoutingSpec("uniform"),),
         l2_modes=(True,),
         graph_modes=(False,),
-        warmup=5,
         trials=1,
-        iters=1,
-        notes="one cell, one launch: the shape ncu can read a counter off",
+        # ONE LAUNCH IS NOT EXPRESSIBLE ON THE INSTRUMENT, and asking for it
+        # anyway is what this profile used to do. `time_kernel` sizes its
+        # iteration count with `timing.iters_for`, whose floor is 10, so the
+        # smallest honest ask is one trial of that floor: `target_ms=1.0` is
+        # below any real cell's per-call time and therefore always floors.
+        # What `ncu --launch-count 1` actually needs is unchanged and is what
+        # the axes below give it -- ONE cell, ONE routing, ONE timing mode, so
+        # the first launch in the process is the kernel the question is about.
+        warmup_ms=25.0,
+        target_ms=1.0,
+        notes=("one cell, one timing mode, and the instrument's floor of ten "
+               "iterations: the shape ncu can read a counter off"),
     ),
     "full": Profile(
         name="full",
@@ -130,7 +497,428 @@ PROFILES: dict[str, Profile] = {
         include_framework_pipeline=True,
         notes="publication sweep; hours, not minutes",
     ),
+    # The crossing is the study's central measurement and it has never been
+    # measured well. Four faults, all of them in the matrix rather than in the
+    # hardware, and this profile fixes all four at once because fixing one at a
+    # time costs four rentals.
+    #
+    # 1. THE GRID. Powers of two interpolate a crossing across a 2x gap, and the
+    #    grid ends at 8192 so no crossing above 5793 can be reported at all --
+    #    which is where DeepSeek-V3's measured one-stage crossings are.
+    #    `crossing_grid` densifies to 2^(1/4) over the predicted band and runs to
+    #    16384 so every interleaved ladder reaches past it.
+    # 2. THE REPLICATES. Three seeds is not enough: qwen2's crossing moves 1.39x
+    #    across the three (593 / 779 / 824), traced to a SINGLE point at T=512
+    #    where the `throttled` flag (the legacy idle-boost catch, see 4 below)
+    #    dropped one of two replicate rows. Seven seeds survive the 33%
+    #    exclusion that arm saw near the crossing with four or five rows still
+    #    standing, which is more than the current profile starts with.
+    # 3. THE POOLING. `2R/b` describes uniform routing; under skew the busy
+    #    experts are compute-bound while the quiet ones are still memory-bound AT
+    #    THE SAME BATCH, so there is no single crossing to find. Pooling the
+    #    seven regimes is invalid rather than noisy, and moves the answer by up
+    #    to 4.3x. Uniform only, so no report can pool by accident.
+    #
+    # 4. THE BASIS. ONE TIMING MODE, not four. The sweep measures four and
+    #    `crossing_report` medians across all of them by default, mixing L2-warm
+    #    and graph-replay rows into a number reported as one basis. Dropping
+    #    three of the four removes that confound; what it saves is smaller than
+    #    it looks, see `estimated_hours`.
+    #
+    #    The one mode kept is L2-WARM eager, not the L2-cold eager basis every
+    #    crossing in docs/FINDINGS.md is quoted on, and that is a correction
+    #    rather than a preference. On the canonical bf16 pool, under uniform
+    #    routing, eager only, how many of the sixteen (model x implementation)
+    #    cells report a crossing at all (a MEASURED crossing is where the slope
+    #    passes 0.5, so this count does not depend on the ridge: it reads the
+    #    same at the H200's own 162.8 as it did at the withdrawn 160.3 it was
+    #    first counted at, checked 2026-09-03):
+    #
+    #        basis        five-stage spans   one-stage spans
+    #        L2-cold           6 of 8             3 of 8
+    #        L2-warm           8 of 8             8 of 8
+    #
+    #    Five of eight one-stage crossings DO NOT EXIST on the cold basis --
+    #    including every DeepSeek-V3 one, which is the model the whole grid
+    #    extension was built for. A profile that runs cold only would rent a box
+    #    to produce the emptier of the two tables.
+    #
+    #    THE CAUSE IS NOT CACHE, AND IT IS NOT THROTTLING EITHER. The flush is
+    #    a 256 MB read run between every pair of timed iterations, thousands of
+    #    times per row, and that is sustained load: it pulls the SM clock from
+    #    its idle boost to its loaded level and holds it there. The `throttled`
+    #    column those rows carry is the legacy `T.clock_drift` flag: two
+    #    idle-instant samples, one before and one after the cell, fired on a
+    #    >5% DROP. What it detected was the START sample catching the idle
+    #    boost before the flush load settled the clock, not a card throttling
+    #    (`timing.py`, "CLOCKS ARE READ UNDER LOAD": flagged and unflagged
+    #    replicates of one cell timed at ratio 0.998 with identical end
+    #    clocks). `time_kernel` now samples the clock under load and sets
+    #    LEVEL against the calibration's reference clock and DRIFT in both
+    #    directions; nothing in this profile reads the old flag. But
+    #    `crossing.timed_rows` did, and dropped exactly the replicates that
+    #    bracket the crossing. Same pool, same slice, share of eager rows
+    #    carrying `throttled`:
+    #
+    #        T=2048   cold 48% (29/60)   warm  8% (5/60)
+    #        T=4096   cold 62% (50/81)   warm  6% (5/81)
+    #        T=8192   cold 75% (45/60)   warm  5% (3/60)
+    #
+    #    And the deletions, not the cache, are what move the answer: switching
+    #    basis moves a five-stage crossing by 3-13% (mixtral vLLM 290 -> 315,
+    #    qwen2 vLLM 700 -> 732) but moves the one-stage ones by 2.3-2.4x (qwen2
+    #    `torch_grouped_mm_up` 687 -> 1577, mixtral 333 -> 787). An L2 effect
+    #    cannot be twenty times larger for a span covering one stage than for a
+    #    span covering five of the same stages on the same rows; a filter that
+    #    removes a span's top points can, because a one-stage span reaches 0.5
+    #    later and its crossing lives where the flag fires most.
+    #
+    #    Reproduce both tables with:
+    #      python scripts/crossing_report.py <the four canonical arms> \
+    #        --ridge 162.8 --routing uniform --cuda-graph false --l2-flush true
+    #    and again with --l2-flush false. 162.8 is the H200's own ridge off
+    #    `measured_nvidia_h200.yaml`; the count is the same at any ridge, and
+    #    the withdrawn 160.3 this line used to carry belonged to no card.
+    "crossing-uniform": Profile(
+        name="crossing-uniform",
+        models=CROSSING_MODELS,
+        token_counts=CROSSING_TOKENS,
+        dtypes=("bf16",),
+        routings=(RoutingSpec("uniform"),),
+        seeds=(0, 1, 2, 3, 4, 5, 6),
+        l2_modes=(False,),
+        graph_modes=(False,),
+        include_pipeline_scope=False,
+        include_framework_pipeline=False,
+        notes=("uniform only, 7 seeds, 2^(1/4) grid over the calibrated "
+               "cards' own ridges, L2-WARM eager: the cold basis loses 5 of 8 "
+               "one-stage crossings to the legacy idle-boost `throttled` flag. "
+               "READ IT WITH octave_ladders: fed whole "
+               "to crossing_from_points this grid is biased 4-18% LOW and twice "
+               "as wide as the powers-of-two grid it extends, half as wide "
+               "read properly"),
+    ),
+    # Shapes that actually get served. Every published cell is TP=1 bf16, and
+    # `E=256,N=2048` -- unsharded DeepSeek-V3 -- is a shape no vLLM config ships
+    # for on ANY device at v0.27.1, because it is 1.3 TB of weights and nobody
+    # runs it.
+    # What ships is `E=256,N=256` and `E=256,N=512`, the TP=8 and TP=4 widths.
+    # So the study's headline model has been measured on the hardcoded fallback
+    # tile ladder throughout, and that is a limitation of the study rather than
+    # a gap in vLLM.
+    #
+    # Both dtypes, because the shard changes what each one resolves to and they
+    # do not move together. In bf16 the mixtral and qwen2 shards hit tuned H200
+    # configs and the DeepSeek-V3 shards still do not. In fp8 the DeepSeek-V3
+    # shards have tuned files but only under `block_shape=[128,128]`, and this
+    # harness quantises one scale per expert, so it will miss them until
+    # `_framework_config` learns block-wise scales.
+    #
+    # Uniform only, for the same reason `crossing-uniform` is: the question here
+    # is which kernel a shard resolves to, which is a function of M, and pooling
+    # routings would put a crossing on top of it that means nothing.
+    "deployment": Profile(
+        name="deployment",
+        models=DEPLOYMENT_MODELS,
+        token_counts=COARSE_BACKBONE,
+        dtypes=("bf16", "fp8_e4m3"),
+        routings=(RoutingSpec("uniform"),),
+        seeds=(0, 1, 2),
+        l2_modes=(True,),
+        graph_modes=(False,),
+        include_pipeline_scope=False,
+        include_framework_pipeline=False,
+        notes=("TP=4 and TP=8 shard widths against their TP=1 controls, on the "
+               "published powers-of-two grid so the controls line up with every "
+               "existing arm"),
+    ),
+    # THE AXIS THE REPO CALLS ITS DIFFERENTIATOR AND HAS NEVER SWEPT. `traces/`
+    # holds a `.gitkeep` and nothing else, `RoutingSpec` has supported
+    # `kind="trace"` since the beginning, and no profile has ever named one --
+    # so a capture made on the pod is a .npz that nothing in the matrix can
+    # consume. Every published row is parametric routing, and "zipf 1.2 stands
+    # in for a real decode layer" is an assumption this study has asserted and
+    # never tested.
+    #
+    # What it tests is that assumption and only that: each captured model
+    # against `uniform` and the two parametric shapes closest to a real decode
+    # histogram, same grid, same seeds, same session. The parametric routings
+    # are the controls and are not padding -- a trace measured without them is a
+    # number with nothing to be different from.
+    #
+    # ONE MODEL PER TRACE, enforced by `trace_belongs_to` rather than by
+    # spelling out three single-model profiles, because the same rule then
+    # protects `--routings trace:...` typed at 3am on a rented box.
+    #
+    # `--models` and `--routings` are how this profile gets pointed at a capture
+    # it does not name: the ids here are what `capture_traces.py` writes by
+    # default, and a `--trace-id` or a `@bNlM` slice needs no edit to this file.
+    # Editing it on the pod would stamp `git_dirty` on every row of the run.
+    #
+    # Seeds pick the (batch, layer) slice, so three seeds replay three REAL
+    # layers rather than averaging them. Averaging skewed layers with different
+    # hot experts produces a histogram flatter than any layer that ever ran,
+    # which would answer the question backwards.
+    #
+    # L2-warm eager, for the reason `crossing-uniform` is: the flush is
+    # sustained load, the legacy `clock_drift` flag read its start sample off
+    # the idle boost and marked 48-75% of large-T rows `throttled` (an
+    # idle-boost catch, not throttling), and the analysis then deleted them.
+    "trace-replay": Profile(
+        name="trace-replay",
+        models=("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite"),
+        token_counts=COARSE_BACKBONE,
+        dtypes=("bf16",),
+        routings=(RoutingSpec("uniform"), RoutingSpec("zipf", 1.2),
+                  RoutingSpec("dirichlet", 0.3)) + CAPTURED_ROUTINGS,
+        seeds=(0, 1, 2),
+        l2_modes=(False,),
+        graph_modes=(False,),
+        include_pipeline_scope=False,
+        include_framework_pipeline=False,
+        notes=("captured decode routing against the parametric shapes standing "
+               "in for it. NEEDS traces/: run scripts/capture_traces.py first, "
+               "and --dry-run will name any that are missing"),
+    ),
 }
+
+# --------------------------------------------------------------------------
+# What a profile costs in wall clock
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CellCost:
+    """What one cell of the matrix costs, split by what actually spends the time.
+
+    THE THREE PARTS DO NOT SCALE TOGETHER, and a flat seconds-per-row rate says
+    they do. `prologue` is paid ONCE per cell however many timing modes run
+    after it: weight allocation, the forced routing, the fp32 python-loop oracle
+    and the correctness compare, the tile observation, the load columns. `eager`
+    and `graph` are then paid once per timing row of that kind.
+
+    So halving the mode count does not halve a cell. A one-eager-mode profile
+    keeps 38-42% of a four-mode cell, not 25%: `(prologue + eager)` over
+    `(prologue + 2*eager + 2*graph)` is 0.382 for the base env in bf16, 0.394
+    for vLLM and 0.416 for SGLang. The old flat rate said 0.25 and under-priced
+    `crossing-uniform` and `deployment` by about 1.6x each.
+    """
+
+    prologue: float     # seconds per CELL, paid before any mode is timed
+    eager: float        # seconds per PLANNED eager timing row
+    graph: float        # seconds per PLANNED graph timing row
+
+
+#: Measured from `results/published/*/run_*.csv`, per `(env, dtype family)`.
+#:
+#: HOW, because a timestamp cannot do it alone. All four of a cell's rows are
+#: built in `driver.run_cell` before the prologue runs and share one timestamp,
+#: so a consecutive-timestamp gap prices the CELL and can never price a mode.
+#: The mode split comes from the columns instead: every timed row records
+#: `ms_p50`, `iters`, `trials` and `warmup`, and the timers spend
+#: `(warmup + 2) * ms` before the loop and `trials * iters * (ms + flush)`
+#: inside it, with `flush` a 256 MiB read at the arm's own measured bandwidth
+#: and a further `3 * ms` of side-stream warmup on the graph path. Summing that
+#: over an arm's rows accounts for 82-94% of its wall clock, and `prologue` is
+#: the per-cell remainder. It never goes negative on any arm, which is the check
+#: that the model is not over-claiming.
+#:
+#: PER SPAN AND NOT PER FILE, which is the correction that made these numbers
+#: usable at all. The base env's file average is 0.779 s/row, and a third of the
+#: rows behind it are the all-reference whole-layer cell, which is 3.2x a real
+#: span per eager row. Averaging them over-estimates any profile with the
+#: reference layer switched off -- which every profile now is.
+#:
+#: fp8 is a separate column, and the decomposition says its extra cost is NOT
+#: where the flat rate implied. An fp8 eager row is CHEAPER than a bf16 one
+#: (0.555 against 0.608 for vLLM): halving the weight bytes makes the kernel
+#: faster and `calibrate_iters` targets a fixed 200 ms either way. The cost
+#: shows up in the prologue, which carries quantisation and scale plumbing, and
+#: in the graph column, because `should_time_graph` compares launch overhead
+#: against a roofline minimum computed from compulsory BYTES: halve the bytes
+#: and the launch share doubles, so the cost policy skips 16% of fp8 graph rows
+#: against 61% of vLLM's bf16 ones. Per CELL an fp8 vLLM cell still costs 1.30x
+#: a bf16 one, which is the "about 30% more" the flat rate recorded.
+#:
+#: The `graph` column is therefore per PLANNED graph row with the skip policy
+#: already inside it, not per row that was actually timed. Every arm timed a
+#: graph row at 0.657-0.674 s regardless of env or dtype; the spread in this
+#: column is the skip rate and nothing else.
+MEASURED_CELL_COST: dict[tuple[str, str], CellCost] = {
+    ("base", "bf16"): CellCost(0.322, 0.653, 0.463),    # 3,206 cells
+    ("base", "fp8"): CellCost(0.522, 0.615, 0.553),     # 2,351 cells
+    ("vllm", "bf16"): CellCost(0.129, 0.608, 0.262),    # 2,662 cells
+    ("vllm", "fp8"): CellCost(0.202, 0.555, 0.560),     # 1,258 cells
+    ("sglang", "bf16"): CellCost(0.144, 0.657, 0.233),  # 1,486 cells
+    ("sglang", "fp8"): CellCost(0.140, 0.564, 0.546),   # 1,175 cells
+}
+
+#: The all-reference whole-layer cell, `include_pipeline_scope`. 1,487 cells.
+#: 2.096 s per eager row against a real span's 0.653, and `should_time_graph`
+#: skipped its graph rows in 100% of them, so it is 3.2x a span where it is
+#: measured and free where it is not. It times a python loop over every expert
+#: and measures no kernel, which is why it is off in every profile.
+REFERENCE_PIPELINE_COST = CellCost(0.587, 2.096, 0.000)
+
+#: Framework spans that register per environment, COUNTED FROM THE PUBLISHED ARMS
+#: rather than read out of the registry. On a laptop neither vLLM nor SGLang
+#: imports, so `candidate_impls("vllm")` is empty and any estimate built on it
+#: reports zero hours for the environment that costs the most -- which is exactly
+#: the failure mode a pre-rental estimate exists to prevent.
+#:
+#: base is 2 in both dtypes: `torch_grouped_mm` up and down in bf16, their
+#: `torch_scaled_` twins in fp8, and the two sets never coexist in one cell. The
+#: third impl in the 2026-08-26 base arm was `__pipeline__`, which is the
+#: reference layer above and is counted separately.
+MEASURED_IMPLS_PER_ENV: dict[str, int] = {"base": 2, "vllm": 1, "sglang": 1}
+
+
+def _dtype_family(dtype: str) -> str:
+    return "fp8" if dtype in FP8_WEIGHT_DTYPES else "bf16"
+
+
+def _mode_rows(profile: Profile) -> tuple[int, int]:
+    """`(eager rows, graph rows)` per cell.
+
+    The L2 axis multiplies BOTH, the graph axis selects between them. Counting
+    `len(l2_modes) * len(graph_modes)` as one number, which is what this
+    replaced, prices an eager-only profile at a graph profile's rate and the
+    other way round.
+    """
+    l2 = len(profile.l2_modes)
+    eager = sum(1 for g in profile.graph_modes if not g)
+    graph = sum(1 for g in profile.graph_modes if g)
+    return l2 * eager, l2 * graph
+
+
+#: WHICH INSTRUMENT THE RATES ABOVE DESCRIBE. Every published arm was timed by
+#: `time_eager`/`time_graph`, so `MEASURED_CELL_COST` is a model of the RETIRED
+#: timer and of nothing else. Naming it here is not bookkeeping: the instrument
+#: that replaced it changed the per-row cost, and a rate that does not say what
+#: it was measured on is how the change goes unnoticed.
+MEASURED_COST_INSTRUMENT = "time_eager+time_graph/idle-instant-clock/pre-v5"
+
+#: The warmup the retired timer spent, per PLANNED timing row, so it can be
+#: taken back out. `(warmup + 2) * ms_p50` is the model `MEASURED_CELL_COST`
+#: documents; this is that quantity summed over each arm's rows and divided by
+#: the PLANNED rows of that kind, zeros included, because `should_time_graph`
+#: skips graph rows and a skipped row still lands in the CSV and still paid no
+#: warmup. `timed_fraction` is the other half of the same count.
+#:
+#: THE UNITS ARE WHY THIS EXISTS. The retired timer warmed for a CALL COUNT and
+#: `time_kernel` warms for a DURATION, so the swap is not a tuning: on the base
+#: bf16 eager rows the old warmup averaged 0.283 s and the new one is a flat
+#: 0.300 s, while on every fp8 arm the old one averaged 0.02-0.03 s against the
+#: same 0.300 s. An estimate that keeps the old term is low by the difference,
+#: and it is low by the MOST on the arms whose kernels are fastest.
+RETIRED_WARMUP_S: dict[tuple[str, str, str], tuple[float, float]] = {
+    # (env, dtype family, mode): (retired warmup seconds per planned row,
+    #                             fraction of planned rows that were timed)
+    ("base", "bf16", "eager"): (0.2829, 1.000),     # 16,522 rows
+    ("base", "bf16", "graph"): (0.0062, 0.455),     # 14,658 rows
+    ("base", "fp8", "eager"): (0.0231, 1.000),      #  9,576 rows
+    ("base", "fp8", "graph"): (0.0112, 0.845),      #  9,576 rows
+    ("vllm", "bf16", "eager"): (0.0964, 1.000),     # 15,078 rows
+    ("vllm", "bf16", "graph"): (0.0034, 0.317),     # 14,154 rows
+    ("vllm", "fp8", "eager"): (0.0309, 1.000),      #  2,646 rows
+    ("vllm", "fp8", "graph"): (0.0164, 0.839),      #  2,646 rows
+    ("sglang", "bf16", "eager"): (0.1038, 1.000),   #  5,670 rows
+    ("sglang", "bf16", "graph"): (0.0038, 0.319),   #  4,746 rows
+    ("sglang", "fp8", "eager"): (0.0313, 1.000),    #  2,436 rows
+    ("sglang", "fp8", "graph"): (0.0154, 0.825),    #  2,436 rows
+}
+
+
+def _warmup_swap_s(env: str, family: str, mode: str, warmup_ms: float) -> float:
+    """Seconds to add to one PLANNED row of `mode` when it runs on the instrument.
+
+    The retired term out, the instrument's in, and the instrument only warms a
+    row it actually times, so the new term carries the same `timed_fraction`
+    the old one was averaged over.
+    """
+    retired, timed_fraction = RETIRED_WARMUP_S[(env, family, mode)]
+    return timed_fraction * warmup_ms / 1000.0 - retired
+
+
+def estimated_hours(profile: Profile, *,
+                    warmup_ms: float | None = None) -> dict[str, float]:
+    """Wall-clock hours this profile would cost, per environment plus `total`.
+
+    A profile nobody can afford to run is not a contribution, and until this
+    existed the only way to find out what one cost was to start it and watch.
+    Needs no GPU, no registry and no framework import, so it answers on the
+    laptop the profile is being written on.
+
+    Priced per CELL and then per timing row, because those are the two things a
+    sweep spends time on and they do not scale together. See `CellCost`: the
+    profiles that run one timing mode instead of four keep about 40% of a cell
+    rather than 25%, and the flat per-row rate this replaced was under-pricing
+    `crossing-uniform` and `deployment` by about 1.6x.
+
+    The framework whole-layer cells are priced at the span rates, not guessed:
+    the vLLM arms measured a `__pipeline__:vllm_fused_experts` cell at 1.846 s
+    against the bare span's 1.869 s, a 1.2% difference, because it is the same
+    fused span with a router in front of it. The all-reference layer is the one
+    that is genuinely slower and it has its own constant.
+
+    AN ESTIMATE, and it is low in one known direction. `calibrate_iters` targets
+    a fixed 200 ms of timed work per row, so a row's cost is nearly flat in the
+    token count until `iters` hits its floor of 10, after which cost rises with
+    the batch. The rates average over grids that mostly stopped at 8192, so a
+    profile reaching past it (`crossing-uniform` goes to 16384) costs more at its
+    top end than this says. Checked against every published arm, it lands within
+    10% on nine of fifteen (env, arm) pairs and inside 30% on all of them, the
+    misses being the two arms whose token grid is furthest from the average. A
+    figure to plan a rental against, not a budget with margin built in.
+
+    WHICH INSTRUMENT IS BEING PRICED IS AN ARGUMENT, because the rates were
+    measured on one apparatus and every run since 2026-09-02 uses another.
+    `warmup_ms=None` prices the run the published arms actually made, on
+    `MEASURED_COST_INSTRUMENT`, and is what the arm-reproduction checks compare
+    against. A float prices the run `driver.RunConfig(warmup_ms=...)` would make
+    now: `RETIRED_WARMUP_S` takes the call-count warmup back out of every planned
+    timing row and puts that duration in instead. The second number is the larger
+    one on every environment and dtype in the table, so the caller that prints a
+    figure for a human to rent a box against is the caller that must pass it --
+    `cli.dry_run` does.
+    """
+    if warmup_ms is not None and warmup_ms <= 0:
+        raise ValueError(
+            f"warmup_ms={warmup_ms}: the instrument warms for a duration of "
+            "sustained load and refuses a zero (see timing.warm_until), so "
+            "there is no run for this to be an estimate of. Pass None to price "
+            "the retired timer the published rates were measured on.")
+    specs = len(profile.specs())
+    eager_rows, graph_rows = _mode_rows(profile)
+    families = [_dtype_family(d) for d in profile.dtypes] or ["bf16"]
+
+    def cell_seconds(cost: CellCost, env: str, family: str) -> float:
+        seconds = cost.prologue + eager_rows * cost.eager + graph_rows * cost.graph
+        if warmup_ms is None:
+            return seconds
+        return seconds + (eager_rows * _warmup_swap_s(env, family, "eager", warmup_ms)
+                          + graph_rows * _warmup_swap_s(env, family, "graph", warmup_ms))
+
+    out: dict[str, float] = {}
+    for env, impls in MEASURED_IMPLS_PER_ENV.items():
+        per_spec = impls
+        if profile.include_framework_pipeline and env != BASE_ENV:
+            per_spec += impls          # one whole-layer cell per framework span
+        cells_per_family = specs * per_spec / len(families)
+        seconds = sum(cells_per_family * cell_seconds(MEASURED_CELL_COST[(env, f)],
+                                                      env, f)
+                      for f in families)
+        if profile.include_pipeline_scope and env == BASE_ENV:
+            # Emitted once per spec regardless of env, and it is the slow one.
+            # It has no warmup entry of its own, so the swap uses the base
+            # env's: it is a base-env cell timed by the same timer, and its
+            # graph column is 0.000 s because the skip policy took 100% of its
+            # graph rows, so only the eager term of the swap can reach it.
+            seconds += sum(specs / len(families)
+                           * cell_seconds(REFERENCE_PIPELINE_COST, BASE_ENV, f)
+                           for f in families)
+        out[env] = seconds / 3600.0
+    out["total"] = sum(out.values())
+    return out
 
 
 def tiling_for(span: StageSpan) -> list[str]:

@@ -1,0 +1,289 @@
+{
+ "registration": "2026-10-20-tileA2-floor-gh200",
+ "part": "floor",
+ "pages": {
+  "f128": {
+   "olmoe-1b-7b": "counted (24 of 27 cells in the clock band)",
+   "mixtral-8x7b": "counted (19 of 27 cells in the clock band)"
+  },
+  "f64w8": {
+   "olmoe-1b-7b": "counted (26 of 27 cells in the clock band)",
+   "mixtral-8x7b": "counted (22 of 27 cells in the clock band)"
+  },
+  "f64w4": {
+   "olmoe-1b-7b": "counted (23 of 27 cells in the clock band)"
+  },
+  "f32w4": {
+   "olmoe-1b-7b": "counted"
+  }
+ },
+ "census_occupancy": {
+  "64x128x64w8s3": {
+   "w1": 3,
+   "w2": 3
+  },
+  "16x64x128w4s4": {
+   "w1": 3,
+   "w2": 3
+  },
+  "32x64x128w4s3": {
+   "w1": 4,
+   "w2": 4
+  },
+  "32x128x64w4s3": {
+   "w1": 4,
+   "w2": 4
+  },
+  "128x128x64w8s3": {
+   "w1": 2,
+   "w2": 2
+  },
+  "64x128x64w4s3": {
+   "w1": 3,
+   "w2": 3
+  }
+ },
+ "calibration": {
+  "verdict": "CAL-A",
+  "c": 691.6475590359868,
+  "F": {
+   "w1": 2898.052707811491,
+   "w2": 3346.3006086105324
+  },
+  "se": {
+   "c": 9.8744076087493,
+   "F_w1": 581.9996344742191,
+   "F_w2": 323.3999430882501
+  },
+  "cells": 34,
+  "series": 6,
+  "rel_rms": 0.005527296765568869,
+  "occupancy_recorded": [
+   2
+  ],
+  "models": [
+   "mixtral-8x7b",
+   "olmoe-1b-7b"
+  ]
+ },
+ "fit_64x128_w8": {
+  "c": 418.32647445667584,
+  "F": {
+   "w1": 2410.043456350237,
+   "w2": 2490.194202829617
+  },
+  "se": {
+   "c": 9.410275926172153,
+   "F_w1": 515.9351750551441,
+   "F_w2": 284.90902749794145
+  },
+  "cells": 32,
+  "series": 6,
+  "rel_rms": 0.006614804152609148,
+  "occupancy_recorded": [
+   3
+  ],
+  "models": [
+   "mixtral-8x7b",
+   "olmoe-1b-7b"
+  ]
+ },
+ "re_key": {
+  "f128 recorded": {
+   "olmoe-1b-7b": 2,
+   "mixtral-8x7b": 2
+  },
+  "f64w8 recorded": {
+   "olmoe-1b-7b": 3,
+   "mixtral-8x7b": 3
+  },
+  "census": {
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   }
+  },
+  "rule": "each page is scored at its recorded occupancy where it differs from the census"
+ },
+ "Z_wg": {
+  "B": null,
+  "W": 587.277621,
+  "T": 625.370097
+ },
+ "FLOOR-TEST (DESCRIPTIVE)": {
+  "B": "unreachable or no 64x128 fit",
+  "W": {
+   "verdict": "HOLDS",
+   "rows": [
+    {
+     "model": "olmoe-1b-7b",
+     "gemm": "w1",
+     "S": 32,
+     "u_pred": 15570.322351,
+     "u_meas": 15796.490639,
+     "e": -0.014318
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "gemm": "w2",
+     "S": 16,
+     "u_pred": 8965.355245,
+     "u_meas": 9183.417794,
+     "e": -0.023745
+    },
+    {
+     "model": "mixtral-8x7b",
+     "gemm": "w1",
+     "S": 64,
+     "u_pred": 29337.919234,
+     "u_meas": 29182.937822,
+     "e": 0.005311
+    },
+    {
+     "model": "mixtral-8x7b",
+     "gemm": "w2",
+     "S": 224,
+     "u_pred": 98454.734985,
+     "u_meas": 96195.324481,
+     "e": 0.023488
+    }
+   ],
+   "tol": 0.03,
+   "c64_pred": {
+    "olmoe-1b-7b": 430.237403,
+    "mixtral-8x7b": 430.237403
+   }
+  },
+  "T": {
+   "verdict": "FAILS",
+   "rows": [
+    {
+     "model": "olmoe-1b-7b",
+     "gemm": "w1",
+     "S": 32,
+     "u_pred": 13013.610823,
+     "u_meas": 15796.490639,
+     "e": -0.176171
+    },
+    {
+     "model": "olmoe-1b-7b",
+     "gemm": "w2",
+     "S": 16,
+     "u_pred": 7493.206718,
+     "u_meas": 9183.417794,
+     "e": -0.18405
+    },
+    {
+     "model": "mixtral-8x7b",
+     "gemm": "w1",
+     "S": 64,
+     "u_pred": 24520.511178,
+     "u_meas": 29182.937822,
+     "e": -0.159765
+    },
+    {
+     "model": "mixtral-8x7b",
+     "gemm": "w2",
+     "S": 224,
+     "u_pred": 82288.059029,
+     "u_meas": 96195.324481,
+     "e": -0.144573
+    }
+   ],
+   "tol": 0.03,
+   "c64_pred": {
+    "olmoe-1b-7b": 359.590636,
+    "mixtral-8x7b": 359.590636
+   }
+  }
+ },
+ "selection": {
+  "verdict": "SELECTED W",
+  "selected": "W",
+  "v4_at_64x128": "derived (W)"
+ },
+ "f_form": {
+  "selected": "F-step",
+  "rows": {
+   "w1": {
+    "F_meas": 2410.043456,
+    "se": 515.935175,
+    "F_step": 1752.817828,
+    "F_cyc": 2898.052708
+   },
+   "w2": {
+    "F_meas": 2490.194203,
+    "se": 284.909027,
+    "F_step": 2023.929844,
+    "F_cyc": 3346.300609
+   }
+  },
+  "rule": "F-cyc iff nearer on both GEMMs and F-step off by > 3 se on one"
+ },
+ "w4 (printed)": {
+  "c_meas": 386.382371,
+  "W": 367.880499,
+  "T": 356.147175
+ },
+ "MVA2 at 32x128x64 w4 (printed for D1)": {
+  "c_meas": 410.387273,
+  "c_MVA2": 443.19656,
+  "e": 0.079947,
+  "verdict": "FAILS"
+ },
+ "lock_mhz": 1410.0,
+ "band_in_force": {
+  "primary": [
+   1374.75,
+   1410.0
+  ],
+  "primary_fit": "None",
+  "primary_pages": {
+   "olmoe-1b-7b": "counted (2 of 27 cells in the clock band)",
+   "mixtral-8x7b": "counted (9 of 27 cells in the clock band)"
+  },
+  "fallback": [
+   1352.19,
+   1410.0
+  ],
+  "fallback_fit": "fit",
+  "fallback_pages": {
+   "olmoe-1b-7b": "counted (24 of 27 cells in the clock band)",
+   "mixtral-8x7b": "counted (19 of 27 cells in the clock band)"
+  },
+  "which": "fallback (registered: the primary band left joint_cF None)"
+ },
+ "lock_gate_note": "lock_gate.RATIO_REF holds only 1710 (lock_gate.py:127): at L the counter gate is the nvidia-smi bracket and the null / spread readings, no base-twin level reading",
+ "cross-clock c_128 (DESCRIPTIVE, REVIEW-A2 7c)": {
+  "label": "DESCRIPTIVE (the only cross-clock wgmma reading; decode-tilesource)",
+  "a2_c128": 691.647559,
+  "a2_se": 9.874408,
+  "a2_lock_mhz": 1410.0,
+  "rental_A_c128": 698.67,
+  "rental_A_se": 10.63,
+  "rental_A_clocks": "1601 to 1640 MHz (rental A, out of band, under the 1710 lock)",
+  "difference": -7.022441,
+  "relative": -0.010051,
+  "z": -0.484018
+ }
+}

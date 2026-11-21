@@ -1,0 +1,1 @@
+REFUSED: no VALID R3 page among the inputs; nothing to fit

@@ -1,0 +1,1524 @@
+{
+ "pages": {
+  "mixtral-8x7b-A": "counted",
+  "mixtral-8x7b-B": "counted",
+  "mixtral-8x7b-C": "counted",
+  "phi-3.5-moe-A": "counted",
+  "phi-3.5-moe-B": "counted",
+  "phi-3.5-moe-C": "counted"
+ },
+ "dropped_rows": {
+  "mixtral-8x7b-A": [],
+  "mixtral-8x7b-B": [],
+  "mixtral-8x7b-C": [],
+  "phi-3.5-moe-A": [],
+  "phi-3.5-moe-B": [],
+  "phi-3.5-moe-C": []
+ },
+ "cells_measured": 120,
+ "G3": {
+  "Q": {
+   "Q": 0.84439,
+   "df": 35,
+   "p": 1.0,
+   "sigma": 0.0018,
+   "cells": 36,
+   "heterogeneous": false
+  },
+  "pooled": {
+   "verdict": "EQUIVALENT",
+   "mean": 1.3e-05,
+   "se": 6.9e-05,
+   "ci": [
+    -0.000126,
+    0.000151
+   ],
+   "df": 5,
+   "t": 2.015048,
+   "margin": 0.0036,
+   "clusters": 6,
+   "cells": 36,
+   "cluster_means": {
+    "mixtral-8x7b-A": 0.000257,
+    "mixtral-8x7b-B": 8.7e-05,
+    "mixtral-8x7b-C": 8.4e-05,
+    "phi-3.5-moe-A": -4.4e-05,
+    "phi-3.5-moe-B": -0.000233,
+    "phi-3.5-moe-C": -7.3e-05
+   }
+  },
+  "rows": 36,
+  "verdict": "PASS",
+  "void_strata": [],
+  "d": [
+   {
+    "cell": "mixtral-8x7b/A/3/uniform/native",
+    "d": 0.001754
+   },
+   {
+    "cell": "mixtral-8x7b/A/3/uniform/shared",
+    "d": -2.8e-05
+   },
+   {
+    "cell": "mixtral-8x7b/A/6/uniform/native",
+    "d": -0.000153
+   },
+   {
+    "cell": "mixtral-8x7b/A/6/uniform/shared",
+    "d": -0.000176
+   },
+   {
+    "cell": "mixtral-8x7b/A/16/uniform/native",
+    "d": 0.000263
+   },
+   {
+    "cell": "mixtral-8x7b/A/16/uniform/shared",
+    "d": -0.000116
+   },
+   {
+    "cell": "mixtral-8x7b/B/3/uniform/native",
+    "d": -8.3e-05
+   },
+   {
+    "cell": "mixtral-8x7b/B/3/uniform/shared",
+    "d": 0.000831
+   },
+   {
+    "cell": "mixtral-8x7b/B/6/uniform/native",
+    "d": -9.6e-05
+   },
+   {
+    "cell": "mixtral-8x7b/B/6/uniform/shared",
+    "d": 4.3e-05
+   },
+   {
+    "cell": "mixtral-8x7b/B/16/uniform/native",
+    "d": 4e-06
+   },
+   {
+    "cell": "mixtral-8x7b/B/16/uniform/shared",
+    "d": -0.000178
+   },
+   {
+    "cell": "mixtral-8x7b/C/3/uniform/native",
+    "d": 0.000647
+   },
+   {
+    "cell": "mixtral-8x7b/C/3/uniform/shared",
+    "d": -3.7e-05
+   },
+   {
+    "cell": "mixtral-8x7b/C/6/uniform/native",
+    "d": 0.000129
+   },
+   {
+    "cell": "mixtral-8x7b/C/6/uniform/shared",
+    "d": -0.00031
+   },
+   {
+    "cell": "mixtral-8x7b/C/16/uniform/native",
+    "d": 7.3e-05
+   },
+   {
+    "cell": "mixtral-8x7b/C/16/uniform/shared",
+    "d": 0.0
+   },
+   {
+    "cell": "phi-3.5-moe/A/2/uniform/native",
+    "d": 0.000123
+   },
+   {
+    "cell": "phi-3.5-moe/A/2/uniform/shared",
+    "d": 0.000411
+   },
+   {
+    "cell": "phi-3.5-moe/A/4/uniform/native",
+    "d": -0.00019
+   },
+   {
+    "cell": "phi-3.5-moe/A/4/uniform/shared",
+    "d": 3.9e-05
+   },
+   {
+    "cell": "phi-3.5-moe/A/12/uniform/native",
+    "d": -0.000314
+   },
+   {
+    "cell": "phi-3.5-moe/A/12/uniform/shared",
+    "d": -0.000335
+   },
+   {
+    "cell": "phi-3.5-moe/B/2/uniform/native",
+    "d": -0.000276
+   },
+   {
+    "cell": "phi-3.5-moe/B/2/uniform/shared",
+    "d": -0.000183
+   },
+   {
+    "cell": "phi-3.5-moe/B/4/uniform/native",
+    "d": -0.000317
+   },
+   {
+    "cell": "phi-3.5-moe/B/4/uniform/shared",
+    "d": -0.000229
+   },
+   {
+    "cell": "phi-3.5-moe/B/12/uniform/native",
+    "d": -0.000141
+   },
+   {
+    "cell": "phi-3.5-moe/B/12/uniform/shared",
+    "d": -0.000254
+   },
+   {
+    "cell": "phi-3.5-moe/C/2/uniform/native",
+    "d": 1.5e-05
+   },
+   {
+    "cell": "phi-3.5-moe/C/2/uniform/shared",
+    "d": -0.000396
+   },
+   {
+    "cell": "phi-3.5-moe/C/4/uniform/native",
+    "d": 0.000159
+   },
+   {
+    "cell": "phi-3.5-moe/C/4/uniform/shared",
+    "d": -0.000126
+   },
+   {
+    "cell": "phi-3.5-moe/C/12/uniform/native",
+    "d": -9.2e-05
+   },
+   {
+    "cell": "phi-3.5-moe/C/12/uniform/shared",
+    "d": 0.0
+   }
+  ]
+ },
+ "E1-SKEW": {
+  "verdict": "HOLDS",
+  "stats": {
+   "cells": 84,
+   "rms": 0.006067,
+   "worst": -0.016079,
+   "mean": -0.002419
+  },
+  "per_shape": {
+   "mixtral-8x7b": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 42,
+     "rms": 0.005091,
+     "worst": -0.012183,
+     "mean": -0.001737
+    },
+    "pages_in_view": [
+     "A",
+     "B",
+     "C"
+    ]
+   },
+   "phi-3.5-moe": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 42,
+     "rms": 0.006908,
+     "worst": -0.016079,
+     "mean": -0.003101
+    },
+    "pages_in_view": [
+     "A",
+     "B",
+     "C"
+    ]
+   }
+  },
+  "rental5_bands": "HOLDS",
+  "per_arm": {
+   "native": {
+    "cells": 42,
+    "rms": 0.006493,
+    "worst": -0.016079,
+    "mean": -0.002893
+   },
+   "shared": {
+    "cells": 42,
+    "rms": 0.00561,
+    "worst": -0.013976,
+    "mean": -0.001944
+   }
+  }
+ },
+ "E1-rivals": {
+  "v2": {
+   "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+  },
+  "LT3": {
+   "verdict": "EXCLUDED",
+   "lever_cells": 62,
+   "rms_rival": 0.018269,
+   "rms_v3_on_levers": 0.006837
+  },
+  "H8": {
+   "verdict": "UNDECIDED: 5 lever cells survive, under 6"
+  },
+  "v3_all": {
+   "verdict": "UNDECIDED: 3 lever cells survive, under 6"
+  },
+  "v3_noca": {
+   "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+  }
+ },
+ "E1-UNI": {
+  "verdict": "HOLDS",
+  "stats": {
+   "cells": 36,
+   "rms": 0.004553,
+   "worst": -0.008367,
+   "mean": -0.000161
+  }
+ },
+ "SKEW-RATIO": {
+  "cells": 48,
+  "v3": {
+   "verdict": "HOLDS",
+   "stats": {
+    "cells": 48,
+    "rms": 0.00453,
+    "worst": -0.010965,
+    "mean": -0.003914
+   }
+  },
+  "LT3": {
+   "verdict": "UNDECIDED: 4 lever cells"
+  },
+  "U": {
+   "verdict": "EXCLUDED",
+   "lever_cells": 32,
+   "rms_rival": 0.128482,
+   "rms_v3_on_levers": 0.004995
+  }
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "mixtral-8x7b-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    }
+   },
+   "mixtral-8x7b-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2b-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2b-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   },
+   "mixtral-8x7b-skc": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2c-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2c-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2d-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2d-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 216 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2e-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2e-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   },
+   "phi-3.5-moe-skc": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2f-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2f-lock1710",
+     "use": "counted",
+     "g1_r7": "0 of 162 repeat rows non-clean (0.00%)"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "G3 / pooled / verdict",
+    "ALL": "EQUIVALENT",
+    "CLEAN": "EQUIVALENT",
+    "registered": "EQUIVALENT"
+   },
+   {
+    "path": "G3 / verdict",
+    "ALL": "PASS",
+    "CLEAN": "PASS",
+    "registered": "PASS"
+   },
+   {
+    "path": "E1-SKEW / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "E1-SKEW / per_shape / mixtral-8x7b / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "E1-SKEW / per_shape / phi-3.5-moe / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "E1-rivals / v2 / verdict",
+    "ALL": "UNDECIDED: 0 lever cells survive, under 6",
+    "CLEAN": "UNDECIDED: 0 lever cells survive, under 6",
+    "registered": "UNDECIDED: 0 lever cells survive, under 6"
+   },
+   {
+    "path": "E1-rivals / LT3 / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "EXCLUDED",
+    "registered": "EXCLUDED"
+   },
+   {
+    "path": "E1-rivals / H8 / verdict",
+    "ALL": "UNDECIDED: 5 lever cells survive, under 6",
+    "CLEAN": "UNDECIDED: 5 lever cells survive, under 6",
+    "registered": "UNDECIDED: 5 lever cells survive, under 6"
+   },
+   {
+    "path": "E1-rivals / v3_all / verdict",
+    "ALL": "UNDECIDED: 3 lever cells survive, under 6",
+    "CLEAN": "UNDECIDED: 3 lever cells survive, under 6",
+    "registered": "UNDECIDED: 3 lever cells survive, under 6"
+   },
+   {
+    "path": "E1-rivals / v3_noca / verdict",
+    "ALL": "UNDECIDED: 0 lever cells survive, under 6",
+    "CLEAN": "UNDECIDED: 0 lever cells survive, under 6",
+    "registered": "UNDECIDED: 0 lever cells survive, under 6"
+   },
+   {
+    "path": "E1-UNI / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "SKEW-RATIO / v3 / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "SKEW-RATIO / LT3 / verdict",
+    "ALL": "UNDECIDED: 4 lever cells",
+    "CLEAN": "UNDECIDED: 4 lever cells",
+    "registered": "UNDECIDED: 4 lever cells"
+   },
+   {
+    "path": "SKEW-RATIO / U / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "EXCLUDED",
+    "registered": "EXCLUDED"
+   }
+  ],
+  "CLEAN": {
+   "pages": {
+    "mixtral-8x7b-A": "counted",
+    "mixtral-8x7b-B": "counted",
+    "mixtral-8x7b-C": "counted",
+    "phi-3.5-moe-A": "counted",
+    "phi-3.5-moe-B": "counted",
+    "phi-3.5-moe-C": "counted"
+   },
+   "dropped_rows": {
+    "mixtral-8x7b-A": [],
+    "mixtral-8x7b-B": [],
+    "mixtral-8x7b-C": [],
+    "phi-3.5-moe-A": [],
+    "phi-3.5-moe-B": [],
+    "phi-3.5-moe-C": []
+   },
+   "cells_measured": 120,
+   "G3": {
+    "Q": {
+     "Q": 0.84439,
+     "df": 35,
+     "p": 1.0,
+     "sigma": 0.0018,
+     "cells": 36,
+     "heterogeneous": false
+    },
+    "pooled": {
+     "verdict": "EQUIVALENT",
+     "mean": 1.3e-05,
+     "se": 6.9e-05,
+     "ci": [
+      -0.000126,
+      0.000151
+     ],
+     "df": 5,
+     "t": 2.015048,
+     "margin": 0.0036,
+     "clusters": 6,
+     "cells": 36,
+     "cluster_means": {
+      "mixtral-8x7b-A": 0.000257,
+      "mixtral-8x7b-B": 8.7e-05,
+      "mixtral-8x7b-C": 8.4e-05,
+      "phi-3.5-moe-A": -4.4e-05,
+      "phi-3.5-moe-B": -0.000233,
+      "phi-3.5-moe-C": -7.3e-05
+     }
+    },
+    "rows": 36,
+    "verdict": "PASS",
+    "void_strata": [],
+    "d": [
+     {
+      "cell": "mixtral-8x7b/A/3/uniform/native",
+      "d": 0.001754
+     },
+     {
+      "cell": "mixtral-8x7b/A/3/uniform/shared",
+      "d": -2.8e-05
+     },
+     {
+      "cell": "mixtral-8x7b/A/6/uniform/native",
+      "d": -0.000153
+     },
+     {
+      "cell": "mixtral-8x7b/A/6/uniform/shared",
+      "d": -0.000176
+     },
+     {
+      "cell": "mixtral-8x7b/A/16/uniform/native",
+      "d": 0.000263
+     },
+     {
+      "cell": "mixtral-8x7b/A/16/uniform/shared",
+      "d": -0.000116
+     },
+     {
+      "cell": "mixtral-8x7b/B/3/uniform/native",
+      "d": -8.3e-05
+     },
+     {
+      "cell": "mixtral-8x7b/B/3/uniform/shared",
+      "d": 0.000831
+     },
+     {
+      "cell": "mixtral-8x7b/B/6/uniform/native",
+      "d": -9.6e-05
+     },
+     {
+      "cell": "mixtral-8x7b/B/6/uniform/shared",
+      "d": 4.3e-05
+     },
+     {
+      "cell": "mixtral-8x7b/B/16/uniform/native",
+      "d": 4e-06
+     },
+     {
+      "cell": "mixtral-8x7b/B/16/uniform/shared",
+      "d": -0.000178
+     },
+     {
+      "cell": "mixtral-8x7b/C/3/uniform/native",
+      "d": 0.000647
+     },
+     {
+      "cell": "mixtral-8x7b/C/3/uniform/shared",
+      "d": -3.7e-05
+     },
+     {
+      "cell": "mixtral-8x7b/C/6/uniform/native",
+      "d": 0.000129
+     },
+     {
+      "cell": "mixtral-8x7b/C/6/uniform/shared",
+      "d": -0.00031
+     },
+     {
+      "cell": "mixtral-8x7b/C/16/uniform/native",
+      "d": 7.3e-05
+     },
+     {
+      "cell": "mixtral-8x7b/C/16/uniform/shared",
+      "d": 0.0
+     },
+     {
+      "cell": "phi-3.5-moe/A/2/uniform/native",
+      "d": 0.000123
+     },
+     {
+      "cell": "phi-3.5-moe/A/2/uniform/shared",
+      "d": 0.000411
+     },
+     {
+      "cell": "phi-3.5-moe/A/4/uniform/native",
+      "d": -0.00019
+     },
+     {
+      "cell": "phi-3.5-moe/A/4/uniform/shared",
+      "d": 3.9e-05
+     },
+     {
+      "cell": "phi-3.5-moe/A/12/uniform/native",
+      "d": -0.000314
+     },
+     {
+      "cell": "phi-3.5-moe/A/12/uniform/shared",
+      "d": -0.000335
+     },
+     {
+      "cell": "phi-3.5-moe/B/2/uniform/native",
+      "d": -0.000276
+     },
+     {
+      "cell": "phi-3.5-moe/B/2/uniform/shared",
+      "d": -0.000183
+     },
+     {
+      "cell": "phi-3.5-moe/B/4/uniform/native",
+      "d": -0.000317
+     },
+     {
+      "cell": "phi-3.5-moe/B/4/uniform/shared",
+      "d": -0.000229
+     },
+     {
+      "cell": "phi-3.5-moe/B/12/uniform/native",
+      "d": -0.000141
+     },
+     {
+      "cell": "phi-3.5-moe/B/12/uniform/shared",
+      "d": -0.000254
+     },
+     {
+      "cell": "phi-3.5-moe/C/2/uniform/native",
+      "d": 1.5e-05
+     },
+     {
+      "cell": "phi-3.5-moe/C/2/uniform/shared",
+      "d": -0.000396
+     },
+     {
+      "cell": "phi-3.5-moe/C/4/uniform/native",
+      "d": 0.000159
+     },
+     {
+      "cell": "phi-3.5-moe/C/4/uniform/shared",
+      "d": -0.000126
+     },
+     {
+      "cell": "phi-3.5-moe/C/12/uniform/native",
+      "d": -9.2e-05
+     },
+     {
+      "cell": "phi-3.5-moe/C/12/uniform/shared",
+      "d": 0.0
+     }
+    ]
+   },
+   "E1-SKEW": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 84,
+     "rms": 0.006067,
+     "worst": -0.016079,
+     "mean": -0.002419
+    },
+    "per_shape": {
+     "mixtral-8x7b": {
+      "verdict": "HOLDS",
+      "stats": {
+       "cells": 42,
+       "rms": 0.005091,
+       "worst": -0.012183,
+       "mean": -0.001737
+      },
+      "pages_in_view": [
+       "A",
+       "B",
+       "C"
+      ],
+      "certification": "CERTIFIED"
+     },
+     "phi-3.5-moe": {
+      "verdict": "HOLDS",
+      "stats": {
+       "cells": 42,
+       "rms": 0.006908,
+       "worst": -0.016079,
+       "mean": -0.003101
+      },
+      "pages_in_view": [
+       "A",
+       "B",
+       "C"
+      ],
+      "certification": "CERTIFIED"
+     }
+    },
+    "rental5_bands": "HOLDS",
+    "per_arm": {
+     "native": {
+      "cells": 42,
+      "rms": 0.006493,
+      "worst": -0.016079,
+      "mean": -0.002893
+     },
+     "shared": {
+      "cells": 42,
+      "rms": 0.00561,
+      "worst": -0.013976,
+      "mean": -0.001944
+     }
+    }
+   },
+   "E1-rivals": {
+    "v2": {
+     "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+    },
+    "LT3": {
+     "verdict": "EXCLUDED",
+     "lever_cells": 62,
+     "rms_rival": 0.018269,
+     "rms_v3_on_levers": 0.006837
+    },
+    "H8": {
+     "verdict": "UNDECIDED: 5 lever cells survive, under 6"
+    },
+    "v3_all": {
+     "verdict": "UNDECIDED: 3 lever cells survive, under 6"
+    },
+    "v3_noca": {
+     "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+    }
+   },
+   "E1-UNI": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 36,
+     "rms": 0.004553,
+     "worst": -0.008367,
+     "mean": -0.000161
+    }
+   },
+   "SKEW-RATIO": {
+    "cells": 48,
+    "v3": {
+     "verdict": "HOLDS",
+     "stats": {
+      "cells": 48,
+      "rms": 0.00453,
+      "worst": -0.010965,
+      "mean": -0.003914
+     }
+    },
+    "LT3": {
+     "verdict": "UNDECIDED: 4 lever cells"
+    },
+    "U": {
+     "verdict": "EXCLUDED",
+     "lever_cells": 32,
+     "rms_rival": 0.128482,
+     "rms_v3_on_levers": 0.004995
+    }
+   }
+  }
+ },
+ "P20_view": {
+  "label": "DESCRIPTIVE, NOT A VERDICT: every test on the P20 side view (today's exclusions under a 20% ceiling; rental7-g1rule)",
+  "combined": {
+   "pages": {
+    "mixtral-8x7b-A": "counted",
+    "mixtral-8x7b-B": "counted",
+    "mixtral-8x7b-C": "counted",
+    "phi-3.5-moe-A": "counted",
+    "phi-3.5-moe-B": "counted",
+    "phi-3.5-moe-C": "counted"
+   },
+   "dropped_rows": {
+    "mixtral-8x7b-A": [],
+    "mixtral-8x7b-B": [],
+    "mixtral-8x7b-C": [],
+    "phi-3.5-moe-A": [],
+    "phi-3.5-moe-B": [
+     [
+      "phi-3.5-moe/B/2/DW/shared",
+      "5 clean repeats, under 6"
+     ]
+    ],
+    "phi-3.5-moe-C": []
+   },
+   "cells_measured": 119,
+   "G3": {
+    "Q": {
+     "Q": 1.052622,
+     "df": 35,
+     "p": 1.0,
+     "sigma": 0.0018,
+     "cells": 36,
+     "heterogeneous": false
+    },
+    "pooled": {
+     "verdict": "EQUIVALENT",
+     "mean": 3.7e-05,
+     "se": 7.6e-05,
+     "ci": [
+      -0.000116,
+      0.000191
+     ],
+     "df": 5,
+     "t": 2.015048,
+     "margin": 0.0036,
+     "clusters": 6,
+     "cells": 36,
+     "cluster_means": {
+      "mixtral-8x7b-A": 0.000301,
+      "mixtral-8x7b-B": 4.9e-05,
+      "mixtral-8x7b-C": 0.000153,
+      "phi-3.5-moe-A": 6e-06,
+      "phi-3.5-moe-B": -0.000256,
+      "phi-3.5-moe-C": -2.7e-05
+     }
+    },
+    "rows": 36,
+    "verdict": "PASS",
+    "void_strata": [],
+    "d": [
+     {
+      "cell": "mixtral-8x7b/A/3/uniform/native",
+      "d": 0.001754
+     },
+     {
+      "cell": "mixtral-8x7b/A/3/uniform/shared",
+      "d": 0.000238
+     },
+     {
+      "cell": "mixtral-8x7b/A/6/uniform/native",
+      "d": -0.000153
+     },
+     {
+      "cell": "mixtral-8x7b/A/6/uniform/shared",
+      "d": -0.000176
+     },
+     {
+      "cell": "mixtral-8x7b/A/16/uniform/native",
+      "d": 0.000263
+     },
+     {
+      "cell": "mixtral-8x7b/A/16/uniform/shared",
+      "d": -0.000116
+     },
+     {
+      "cell": "mixtral-8x7b/B/3/uniform/native",
+      "d": -0.000573
+     },
+     {
+      "cell": "mixtral-8x7b/B/3/uniform/shared",
+      "d": 0.001092
+     },
+     {
+      "cell": "mixtral-8x7b/B/6/uniform/native",
+      "d": -9.6e-05
+     },
+     {
+      "cell": "mixtral-8x7b/B/6/uniform/shared",
+      "d": 4.3e-05
+     },
+     {
+      "cell": "mixtral-8x7b/B/16/uniform/native",
+      "d": 4e-06
+     },
+     {
+      "cell": "mixtral-8x7b/B/16/uniform/shared",
+      "d": -0.000178
+     },
+     {
+      "cell": "mixtral-8x7b/C/3/uniform/native",
+      "d": 0.000647
+     },
+     {
+      "cell": "mixtral-8x7b/C/3/uniform/shared",
+      "d": 0.000378
+     },
+     {
+      "cell": "mixtral-8x7b/C/6/uniform/native",
+      "d": 0.000129
+     },
+     {
+      "cell": "mixtral-8x7b/C/6/uniform/shared",
+      "d": -0.00031
+     },
+     {
+      "cell": "mixtral-8x7b/C/16/uniform/native",
+      "d": 7.3e-05
+     },
+     {
+      "cell": "mixtral-8x7b/C/16/uniform/shared",
+      "d": 0.0
+     },
+     {
+      "cell": "phi-3.5-moe/A/2/uniform/native",
+      "d": 0.000445
+     },
+     {
+      "cell": "phi-3.5-moe/A/2/uniform/shared",
+      "d": 0.000388
+     },
+     {
+      "cell": "phi-3.5-moe/A/4/uniform/native",
+      "d": -0.00019
+     },
+     {
+      "cell": "phi-3.5-moe/A/4/uniform/shared",
+      "d": 3.9e-05
+     },
+     {
+      "cell": "phi-3.5-moe/A/12/uniform/native",
+      "d": -0.000314
+     },
+     {
+      "cell": "phi-3.5-moe/A/12/uniform/shared",
+      "d": -0.000335
+     },
+     {
+      "cell": "phi-3.5-moe/B/2/uniform/native",
+      "d": -0.00046
+     },
+     {
+      "cell": "phi-3.5-moe/B/2/uniform/shared",
+      "d": -0.000122
+     },
+     {
+      "cell": "phi-3.5-moe/B/4/uniform/native",
+      "d": -0.000317
+     },
+     {
+      "cell": "phi-3.5-moe/B/4/uniform/shared",
+      "d": -0.000245
+     },
+     {
+      "cell": "phi-3.5-moe/B/12/uniform/native",
+      "d": -0.000141
+     },
+     {
+      "cell": "phi-3.5-moe/B/12/uniform/shared",
+      "d": -0.000254
+     },
+     {
+      "cell": "phi-3.5-moe/C/2/uniform/native",
+      "d": 0.000291
+     },
+     {
+      "cell": "phi-3.5-moe/C/2/uniform/shared",
+      "d": -0.000396
+     },
+     {
+      "cell": "phi-3.5-moe/C/4/uniform/native",
+      "d": 0.000159
+     },
+     {
+      "cell": "phi-3.5-moe/C/4/uniform/shared",
+      "d": -0.000126
+     },
+     {
+      "cell": "phi-3.5-moe/C/12/uniform/native",
+      "d": -9.2e-05
+     },
+     {
+      "cell": "phi-3.5-moe/C/12/uniform/shared",
+      "d": 0.0
+     }
+    ]
+   },
+   "E1-SKEW": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 83,
+     "rms": 0.005894,
+     "worst": -0.016079,
+     "mean": -0.002277
+    },
+    "per_shape": {
+     "mixtral-8x7b": {
+      "verdict": "HOLDS",
+      "stats": {
+       "cells": 42,
+       "rms": 0.005098,
+       "worst": -0.012248,
+       "mean": -0.001755
+      },
+      "pages_in_view": [
+       "A",
+       "B",
+       "C"
+      ]
+     },
+     "phi-3.5-moe": {
+      "verdict": "HOLDS",
+      "stats": {
+       "cells": 41,
+       "rms": 0.006611,
+       "worst": -0.016079,
+       "mean": -0.002811
+      },
+      "pages_in_view": [
+       "A",
+       "B",
+       "C"
+      ]
+     }
+    },
+    "rental5_bands": "HOLDS",
+    "per_arm": {
+     "native": {
+      "cells": 42,
+      "rms": 0.006483,
+      "worst": -0.016079,
+      "mean": -0.002886
+     },
+     "shared": {
+      "cells": 41,
+      "rms": 0.005222,
+      "worst": -0.012311,
+      "mean": -0.001652
+     }
+    }
+   },
+   "E1-rivals": {
+    "v2": {
+     "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+    },
+    "LT3": {
+     "verdict": "EXCLUDED",
+     "lever_cells": 61,
+     "rms_rival": 0.018085,
+     "rms_v3_on_levers": 0.00664
+    },
+    "H8": {
+     "verdict": "UNDECIDED: 5 lever cells survive, under 6"
+    },
+    "v3_all": {
+     "verdict": "UNDECIDED: 3 lever cells survive, under 6"
+    },
+    "v3_noca": {
+     "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+    }
+   },
+   "E1-UNI": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 36,
+     "rms": 0.004549,
+     "worst": -0.008779,
+     "mean": -0.000151
+    }
+   },
+   "SKEW-RATIO": {
+    "cells": 47,
+    "v3": {
+     "verdict": "HOLDS",
+     "stats": {
+      "cells": 47,
+      "rms": 0.004392,
+      "worst": -0.010716,
+      "mean": -0.003794
+     }
+    },
+    "LT3": {
+     "verdict": "UNDECIDED: 4 lever cells"
+    },
+    "U": {
+     "verdict": "EXCLUDED",
+     "lever_cells": 31,
+     "rms_rival": 0.125641,
+     "rms_v3_on_levers": 0.004819
+    }
+   }
+  },
+  "CLEAN": {
+   "pages": {
+    "mixtral-8x7b-A": "counted",
+    "mixtral-8x7b-B": "counted",
+    "mixtral-8x7b-C": "counted",
+    "phi-3.5-moe-A": "counted",
+    "phi-3.5-moe-B": "counted",
+    "phi-3.5-moe-C": "counted"
+   },
+   "dropped_rows": {
+    "mixtral-8x7b-A": [],
+    "mixtral-8x7b-B": [],
+    "mixtral-8x7b-C": [],
+    "phi-3.5-moe-A": [],
+    "phi-3.5-moe-B": [
+     [
+      "phi-3.5-moe/B/2/DW/shared",
+      "5 clean repeats, under 6"
+     ]
+    ],
+    "phi-3.5-moe-C": []
+   },
+   "cells_measured": 119,
+   "G3": {
+    "Q": {
+     "Q": 1.052622,
+     "df": 35,
+     "p": 1.0,
+     "sigma": 0.0018,
+     "cells": 36,
+     "heterogeneous": false
+    },
+    "pooled": {
+     "verdict": "EQUIVALENT",
+     "mean": 3.7e-05,
+     "se": 7.6e-05,
+     "ci": [
+      -0.000116,
+      0.000191
+     ],
+     "df": 5,
+     "t": 2.015048,
+     "margin": 0.0036,
+     "clusters": 6,
+     "cells": 36,
+     "cluster_means": {
+      "mixtral-8x7b-A": 0.000301,
+      "mixtral-8x7b-B": 4.9e-05,
+      "mixtral-8x7b-C": 0.000153,
+      "phi-3.5-moe-A": 6e-06,
+      "phi-3.5-moe-B": -0.000256,
+      "phi-3.5-moe-C": -2.7e-05
+     }
+    },
+    "rows": 36,
+    "verdict": "PASS",
+    "void_strata": [],
+    "d": [
+     {
+      "cell": "mixtral-8x7b/A/3/uniform/native",
+      "d": 0.001754
+     },
+     {
+      "cell": "mixtral-8x7b/A/3/uniform/shared",
+      "d": 0.000238
+     },
+     {
+      "cell": "mixtral-8x7b/A/6/uniform/native",
+      "d": -0.000153
+     },
+     {
+      "cell": "mixtral-8x7b/A/6/uniform/shared",
+      "d": -0.000176
+     },
+     {
+      "cell": "mixtral-8x7b/A/16/uniform/native",
+      "d": 0.000263
+     },
+     {
+      "cell": "mixtral-8x7b/A/16/uniform/shared",
+      "d": -0.000116
+     },
+     {
+      "cell": "mixtral-8x7b/B/3/uniform/native",
+      "d": -0.000573
+     },
+     {
+      "cell": "mixtral-8x7b/B/3/uniform/shared",
+      "d": 0.001092
+     },
+     {
+      "cell": "mixtral-8x7b/B/6/uniform/native",
+      "d": -9.6e-05
+     },
+     {
+      "cell": "mixtral-8x7b/B/6/uniform/shared",
+      "d": 4.3e-05
+     },
+     {
+      "cell": "mixtral-8x7b/B/16/uniform/native",
+      "d": 4e-06
+     },
+     {
+      "cell": "mixtral-8x7b/B/16/uniform/shared",
+      "d": -0.000178
+     },
+     {
+      "cell": "mixtral-8x7b/C/3/uniform/native",
+      "d": 0.000647
+     },
+     {
+      "cell": "mixtral-8x7b/C/3/uniform/shared",
+      "d": 0.000378
+     },
+     {
+      "cell": "mixtral-8x7b/C/6/uniform/native",
+      "d": 0.000129
+     },
+     {
+      "cell": "mixtral-8x7b/C/6/uniform/shared",
+      "d": -0.00031
+     },
+     {
+      "cell": "mixtral-8x7b/C/16/uniform/native",
+      "d": 7.3e-05
+     },
+     {
+      "cell": "mixtral-8x7b/C/16/uniform/shared",
+      "d": 0.0
+     },
+     {
+      "cell": "phi-3.5-moe/A/2/uniform/native",
+      "d": 0.000445
+     },
+     {
+      "cell": "phi-3.5-moe/A/2/uniform/shared",
+      "d": 0.000388
+     },
+     {
+      "cell": "phi-3.5-moe/A/4/uniform/native",
+      "d": -0.00019
+     },
+     {
+      "cell": "phi-3.5-moe/A/4/uniform/shared",
+      "d": 3.9e-05
+     },
+     {
+      "cell": "phi-3.5-moe/A/12/uniform/native",
+      "d": -0.000314
+     },
+     {
+      "cell": "phi-3.5-moe/A/12/uniform/shared",
+      "d": -0.000335
+     },
+     {
+      "cell": "phi-3.5-moe/B/2/uniform/native",
+      "d": -0.00046
+     },
+     {
+      "cell": "phi-3.5-moe/B/2/uniform/shared",
+      "d": -0.000122
+     },
+     {
+      "cell": "phi-3.5-moe/B/4/uniform/native",
+      "d": -0.000317
+     },
+     {
+      "cell": "phi-3.5-moe/B/4/uniform/shared",
+      "d": -0.000245
+     },
+     {
+      "cell": "phi-3.5-moe/B/12/uniform/native",
+      "d": -0.000141
+     },
+     {
+      "cell": "phi-3.5-moe/B/12/uniform/shared",
+      "d": -0.000254
+     },
+     {
+      "cell": "phi-3.5-moe/C/2/uniform/native",
+      "d": 0.000291
+     },
+     {
+      "cell": "phi-3.5-moe/C/2/uniform/shared",
+      "d": -0.000396
+     },
+     {
+      "cell": "phi-3.5-moe/C/4/uniform/native",
+      "d": 0.000159
+     },
+     {
+      "cell": "phi-3.5-moe/C/4/uniform/shared",
+      "d": -0.000126
+     },
+     {
+      "cell": "phi-3.5-moe/C/12/uniform/native",
+      "d": -9.2e-05
+     },
+     {
+      "cell": "phi-3.5-moe/C/12/uniform/shared",
+      "d": 0.0
+     }
+    ]
+   },
+   "E1-SKEW": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 83,
+     "rms": 0.005894,
+     "worst": -0.016079,
+     "mean": -0.002277
+    },
+    "per_shape": {
+     "mixtral-8x7b": {
+      "verdict": "HOLDS",
+      "stats": {
+       "cells": 42,
+       "rms": 0.005098,
+       "worst": -0.012248,
+       "mean": -0.001755
+      },
+      "pages_in_view": [
+       "A",
+       "B",
+       "C"
+      ],
+      "certification": "CERTIFIED"
+     },
+     "phi-3.5-moe": {
+      "verdict": "HOLDS",
+      "stats": {
+       "cells": 41,
+       "rms": 0.006611,
+       "worst": -0.016079,
+       "mean": -0.002811
+      },
+      "pages_in_view": [
+       "A",
+       "B",
+       "C"
+      ],
+      "certification": "CERTIFIED"
+     }
+    },
+    "rental5_bands": "HOLDS",
+    "per_arm": {
+     "native": {
+      "cells": 42,
+      "rms": 0.006483,
+      "worst": -0.016079,
+      "mean": -0.002886
+     },
+     "shared": {
+      "cells": 41,
+      "rms": 0.005222,
+      "worst": -0.012311,
+      "mean": -0.001652
+     }
+    }
+   },
+   "E1-rivals": {
+    "v2": {
+     "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+    },
+    "LT3": {
+     "verdict": "EXCLUDED",
+     "lever_cells": 61,
+     "rms_rival": 0.018085,
+     "rms_v3_on_levers": 0.00664
+    },
+    "H8": {
+     "verdict": "UNDECIDED: 5 lever cells survive, under 6"
+    },
+    "v3_all": {
+     "verdict": "UNDECIDED: 3 lever cells survive, under 6"
+    },
+    "v3_noca": {
+     "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+    }
+   },
+   "E1-UNI": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 36,
+     "rms": 0.004549,
+     "worst": -0.008779,
+     "mean": -0.000151
+    }
+   },
+   "SKEW-RATIO": {
+    "cells": 47,
+    "v3": {
+     "verdict": "HOLDS",
+     "stats": {
+      "cells": 47,
+      "rms": 0.004392,
+      "worst": -0.010716,
+      "mean": -0.003794
+     }
+    },
+    "LT3": {
+     "verdict": "UNDECIDED: 4 lever cells"
+    },
+    "U": {
+     "verdict": "EXCLUDED",
+     "lever_cells": 31,
+     "rms_rival": 0.125641,
+     "rms_v3_on_levers": 0.004819
+    }
+   }
+  },
+  "pages": {
+   "mixtral-8x7b-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 3 of 216 non-clean"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 3 of 216 non-clean"
+    }
+   },
+   "mixtral-8x7b-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2b-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 4 of 162 non-clean"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2b-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 4 of 162 non-clean"
+    }
+   },
+   "mixtral-8x7b-skc": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2c-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 7 of 162 non-clean"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2c-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 7 of 162 non-clean"
+    }
+   },
+   "phi-3.5-moe-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2d-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 13 of 216 non-clean"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2d-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 13 of 216 non-clean"
+    }
+   },
+   "phi-3.5-moe-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2e-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 14 of 162 non-clean"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2e-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 14 of 162 non-clean"
+    }
+   },
+   "phi-3.5-moe-skc": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2f-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 10 of 162 non-clean"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261014T004743Z-p2f-lock1710",
+     "use": "counted",
+     "g1_r7": "P20 view PASS: 10 of 162 non-clean"
+    }
+   }
+  }
+ },
+ "certification": {
+  "mixtral-8x7b": "CERTIFIED",
+  "phi-3.5-moe": "CERTIFIED"
+ },
+ "registration": "2026-10-13-rental7-skew-gh200",
+ "part": "skew"
+}

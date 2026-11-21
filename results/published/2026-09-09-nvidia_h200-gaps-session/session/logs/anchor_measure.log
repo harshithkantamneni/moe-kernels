@@ -1,0 +1,313 @@
+MEASURE PLAN
+  model / dtype        mixtral-8x7b / bf16
+  BLOCK_SIZE_M         32, 64
+  GROUP_SIZE_M         1, 8, 16, 64
+  anchor tread         n = 1 (one M-tile per expert: every weight byte read exactly once)
+  branch treads        n = 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+  pinned               BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 num_warps=8 num_stages=3
+  instrument           queue-deep/l2-flush/clock-under-load/v3
+  timing               300 ms warmup, 3 trials of 400 ms, L2 flush on, seed 0
+                       iters is NOT a knob: the instrument sizes it per cell from the budget and the
+                       warmup's own queue-deep per-call time, and every cell records what it used.
+  stream check         one cell's worth of the same instrument over the real w1/w2 buffers
+  pin assay            per-cell tile read-back + fresh Triton artefacts per (BLOCK_M, GROUP_SIZE_M)
+
+  cells                128 (2 BLOCK_M x 4 G x 16 treads)
+  estimated wall time  4.8 min (crude: 128 cells at 1.5 s plus one compile per setting)
+  run id               nvidia_h200-bm32_64-budget400.0-dtypebf16-flushtrue-g1_8_16_64-k64-modelmixtral_8x7b-n64-s3-seed-34ef5fce
+  output               /workspace/results/gaps-nvidia_h200/memory_branch_anchor/nvidia_h200-bm32_64-budget400.0-dtypebf16-flushtrue-g1_8_16_64-k64-modelmixtral_8x7b-n64-s3-seed-34ef5fce
+
+  WHAT EACH ARM BUYS, and why the committed data cannot supply it:
+    stream  the read ceiling on the ACTUAL weight buffers, in this process at this
+            clock state. The committed calibration used a synthetic 8 GiB buffer in a
+            different process; it sets the ceiling and this only checks it is one.
+    anchor  t(1) at every GROUP_SIZE_M with everything else pinned. This answers the
+            objection that the anchor is measured at a different L2-reuse condition
+            from the branch it anchors -- by measurement rather than by argument.
+    branch  treads from n=2 up, so the slope never sees the anchor and the two ends
+            of the bracket are independent.
+
+  WHAT IT STILL CANNOT DO. It does not identify BW on the branch. That needs a DRAM
+  counter; ncu returns ERR_NVGPUCTRPERM on rented pods and the image's nsys cannot
+  convert its own capture. The deliverable is the interval, not a point.
+
+  MINIMUM DETECTABLE EFFECT, from a stated assumption and not from habit:
+    noise assumption   sigma = 0.77% relative spread on a repeated cell timing
+                       (0.77% is the median of the published H200 replicates, which run 0.76-1.82%; --noise overrides it. It is an
+                       ASSUMPTION about a pod this arm has not run on, not a measurement of one.)
+    two-sided, 5% size, 80% power: z = 2.8
+    smallest anchor RATIO callable   3.05%   (z sigma sqrt2, two independent cells)
+      M1 gates the anchor spread at 4.0% across G<=16 and 8.0% across all G, so both sit above the MDE and can decide.
+    smallest ALPHA shift callable    0.017   (that ratio x (alpha + Act1/W) at alpha=0.558, BLOCK_M=32)
+      A LOWER BOUND: it propagates the anchor's noise only, and the branch slope carries its own.
+    C5's <= 0.05 is a PRIOR, not derived from this noise: it is 2.9x the MDE and is the precision a
+      published alpha is QUOTED at. Read it as a claim about reporting, not about resolution.
+
+REGISTERED PREDICTIONS, before the device is touched
+  P1  the anchor t(1) at a fixed BLOCK_M varies by <= 4.0% across GROUP_SIZE_M in {1, 8, 16}, and by <= 8.0% including 64
+      BASIS       12 committed (arm, model, BLOCK_M) groups give 0.36% to 3.10% across G <= 16 and up to 6.74% including G=64
+      A FAIL      L_hi = t(1) as a condition-free upper bound. The bracket's top end would then have to be taken over swizzle conditions, widening it
+  P2  the anchor rate (W + Act1) / t(1) at BLOCK_M=32 lands between 64% and 78% of the card's pin rate
+      BASIS       21 committed BLOCK_M=32 fits give 1370-1477 GB/s on the A100 (67.2-72.4% of 2039) and 3344-3522 on the H200 (68.0-71.6% of 4916.7)
+      A FAIL      the carry-across. A new anchor at a different rate is not the same physical event as the one the committed arms measured, and the re-scoring of those arms could not be quoted from this run
+  P3  dropping the anchor tread from the branch fit moves the slope B by <= 1.5%
+      BASIS       40 committed fits move by -0.03% to +0.79% when n=1 is dropped
+      A FAIL      the independence of the two ends. B and t(1) would then share the anchor and B / t(1) would be partly a restatement of it, not a bound
+  P4  the anchor rate never exceeds the card's measured ceiling: BW_1 / BW_ceiling <= 1.0 on every cell
+      BASIS       the tightest committed case is 78.6% (1477 GB/s against the A100's 1879.1 write pattern)
+      A FAIL      the bracket outright on that card. An anchor above the ceiling means the ceiling is not one and the interval inverts
+
+  PROVENANCE  P1-P4 are OUT OF SAMPLE for --measure: they are stated from the committed reports and predict a run that has not happened. They are NOT out of sample for --rescore, which re-reads the same reports; there the honest object is the gate thresholds, which are constants at the top of this file and are printed below BEFORE the table they score. Said plainly so nobody reads a reproduction as a prediction.
+
+  OUTPUT PATH  /workspace/results/gaps-nvidia_h200/memory_branch_anchor/nvidia_h200-bm32_64-budget400.0-dtypebf16-flushtrue-g1_8_16_64-k64-modelmixtral_8x7b-n64-s3-seed-34ef5fce  [git silent]
+
+device: NVIDIA H200
+ceiling: NVIDIA H200 (measured): ceiling 4680.2 GB/s (write), pin 4814.3, ridge 152.81 FLOP/byte, measured 2026-09-09 @ 981a42f6  [copy 4301, read_reduce 4471, read_stream 4613, triad 4375, write 4680]
+reference clock: 1485 MHz, nvidia_h200: median of the samples taken while the calibration's dense GEMM ran
+
+instrument: queue-deep/l2-flush/clock-under-load/v3
+triton cache: /workspace/results/gaps-nvidia_h200/memory_branch_anchor/nvidia_h200-bm32_64-budget400.0-dtypebf16-flushtrue-g1_8_16_64-k64-modelmixtral_8x7b-n64-s3-seed-34ef5fce/triton-cache/session-d3ugjw5v (this session's own, empty)
+  ^ LEVEL failed HIGH: loaded clock 1710 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  1 n=  1 r=   32    0.7581 ms  ok
+  BM= 32 G=  1 n=  2 r=   64    1.5000 ms  ok
+  BM= 32 G=  1 n=  3 r=   96    2.2192 ms  ok
+  BM= 32 G=  1 n=  4 r=  128    2.9408 ms  ok
+  BM= 32 G=  1 n=  5 r=  160    3.6550 ms  ok
+  BM= 32 G=  1 n=  6 r=  192    4.3791 ms  ok
+  BM= 32 G=  1 n=  7 r=  224    5.0804 ms  ok
+  BM= 32 G=  1 n=  8 r=  256    5.8731 ms  ok
+  BM= 32 G=  1 n=  9 r=  288    6.5514 ms  ok
+  BM= 32 G=  1 n= 10 r=  320    7.2759 ms  ok
+  BM= 32 G=  1 n= 11 r=  352    8.0037 ms  ok
+  BM= 32 G=  1 n= 12 r=  384    8.7284 ms  ok
+  BM= 32 G=  1 n= 13 r=  416    9.4562 ms  ok
+  BM= 32 G=  1 n= 14 r=  448   10.1827 ms  ok
+  BM= 32 G=  1 n= 15 r=  480   10.9060 ms  ok
+  BM= 32 G=  1 n= 16 r=  512   11.6303 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1590 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.07x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  1 r=   32    0.7698 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1642 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  2 r=   64    1.3241 ms  ok
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  3 r=   96    1.9353 ms  ok
+  ^ LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  4 r=  128    2.4169 ms  ok
+  ^ LEVEL failed HIGH: loaded clock 1710 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  5 r=  160    3.0960 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  6 r=  192    3.6326 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1725 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  7 r=  224    4.2399 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1800 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.21x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  8 r=  256    4.6066 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1725 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n=  9 r=  288    5.3784 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n= 10 r=  320    5.9127 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1725 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n= 11 r=  352    6.5628 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1770 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n= 12 r=  384    7.0237 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n= 13 r=  416    7.6812 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n= 14 r=  448    8.2788 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n= 15 r=  480    8.7894 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1785 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G=  8 n= 16 r=  512    9.1387 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1560 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.05x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  1 r=   32    0.7754 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1642 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  2 r=   64    1.3309 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  3 r=   96    1.9325 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1725 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  4 r=  128    2.4419 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1710 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  5 r=  160    3.0655 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  6 r=  192    3.5961 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  7 r=  224    4.1641 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1800 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.21x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  8 r=  256    4.6102 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n=  9 r=  288    5.2764 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n= 10 r=  320    5.8571 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n= 11 r=  352    6.4393 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1770 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n= 12 r=  384    6.9596 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1770 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n= 13 r=  416    7.5398 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1785 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n= 14 r=  448    8.0371 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1770 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n= 15 r=  480    8.5971 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1830 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 16 n= 16 r=  512    9.0209 ms  ok
+  ^
+  BM= 32 G= 64 n=  1 r=   32    0.7753 ms  ok
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  2 r=   64    1.3371 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  3 r=   96    1.9324 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1718 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  4 r=  128    2.4657 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1725 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  5 r=  160    3.0415 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1740 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  6 r=  192    3.5804 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  7 r=  224    4.1621 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  8 r=  256    4.7384 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n=  9 r=  288    5.2802 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1755 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n= 10 r=  320    5.8614 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1770 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n= 11 r=  352    6.3926 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1770 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n= 12 r=  384    6.9628 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1785 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n= 13 r=  416    7.5088 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1785 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n= 14 r=  448    7.9981 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1785 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n= 15 r=  480    8.5869 ms  ok
+  ^ kept (LEVEL high is not an exclusion): LEVEL failed HIGH: loaded clock 1785 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM= 32 G= 64 n= 16 r=  512    9.1339 ms  ok
+  BM= 64 G=  1 n=  1 r=   64    0.7879 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  2 r=  128    1.5139 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1372 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  3 r=  192    2.2907 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1365 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  4 r=  256    3.0281 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1350 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  5 r=  320    3.8236 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1365 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  6 r=  384    4.6014 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1350 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  7 r=  448    5.3576 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1335 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  8 r=  512    6.1280 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1365 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n=  9 r=  576    6.9060 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1335 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n= 10 r=  640    7.7005 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1365 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n= 11 r=  704    8.4894 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1335 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n= 12 r=  768    9.2808 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1320 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n= 13 r=  832   10.0786 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1350 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n= 14 r=  896   10.8981 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1365 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n= 15 r=  960   11.6790 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1350 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  1 n= 16 r= 1024   12.5225 ms  ok
+  BM= 64 G=  8 n=  1 r=   64    0.7968 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G=  8 n=  2 r=  128    1.3327 ms  ok
+  BM= 64 G=  8 n=  3 r=  192    1.9729 ms  ok
+  BM= 64 G=  8 n=  4 r=  256    2.5020 ms  ok
+  BM= 64 G=  8 n=  5 r=  320    3.1966 ms  ok
+  BM= 64 G=  8 n=  6 r=  384    3.8044 ms  ok
+  BM= 64 G=  8 n=  7 r=  448    4.4640 ms  ok
+  BM= 64 G=  8 n=  8 r=  512    4.7588 ms  ok
+  BM= 64 G=  8 n=  9 r=  576    5.6609 ms  ok
+  BM= 64 G=  8 n= 10 r=  640    6.2119 ms  ok
+  BM= 64 G=  8 n= 11 r=  704    6.8944 ms  ok
+  BM= 64 G=  8 n= 12 r=  768    7.3549 ms  ok
+  BM= 64 G=  8 n= 13 r=  832    8.1203 ms  ok
+  BM= 64 G=  8 n= 14 r=  896    8.6958 ms  ok
+  BM= 64 G=  8 n= 15 r=  960    9.3596 ms  ok
+  BM= 64 G=  8 n= 16 r= 1024    9.6452 ms  ok
+  ^
+  BM= 64 G= 16 n=  1 r=   64    0.8029 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G= 16 n=  2 r=  128    1.3472 ms  ok
+  BM= 64 G= 16 n=  3 r=  192    1.9818 ms  ok
+  BM= 64 G= 16 n=  4 r=  256    2.5112 ms  ok
+  BM= 64 G= 16 n=  5 r=  320    3.1942 ms  ok
+  BM= 64 G= 16 n=  6 r=  384    3.7686 ms  ok
+  BM= 64 G= 16 n=  7 r=  448    4.3746 ms  ok
+  BM= 64 G= 16 n=  8 r=  512    4.8257 ms  ok
+  BM= 64 G= 16 n=  9 r=  576    5.5865 ms  ok
+  BM= 64 G= 16 n= 10 r=  640    6.1686 ms  ok
+  BM= 64 G= 16 n= 11 r=  704    6.8081 ms  ok
+  BM= 64 G= 16 n= 12 r=  768    7.3069 ms  ok
+  BM= 64 G= 16 n= 13 r=  832    7.9528 ms  ok
+  BM= 64 G= 16 n= 14 r=  896    8.5373 ms  ok
+  BM= 64 G= 16 n= 15 r=  960    9.3086 ms  ok
+  BM= 64 G= 16 n= 16 r= 1024    9.4392 ms  ok
+  BM= 64 G= 64 n=  1 r=   64    0.8006 ms  ok
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM= 64 G= 64 n=  2 r=  128    1.3707 ms  ok
+  BM= 64 G= 64 n=  3 r=  192    2.0075 ms  ok
+  ^
+  BM= 64 G= 64 n=  4 r=  256    2.5790 ms  ok
+  BM= 64 G= 64 n=  5 r=  320    3.2416 ms  ok
+  BM= 64 G= 64 n=  6 r=  384    3.8739 ms  ok
+  BM= 64 G= 64 n=  7 r=  448    4.5591 ms  ok
+  BM= 64 G= 64 n=  8 r=  512    5.1365 ms  ok
+  BM= 64 G= 64 n=  9 r=  576    5.8772 ms  ok
+  BM= 64 G= 64 n= 10 r=  640    6.3979 ms  ok
+  BM= 64 G= 64 n= 11 r=  704    6.9769 ms  ok
+  BM= 64 G= 64 n= 12 r=  768    7.6160 ms  ok
+  BM= 64 G= 64 n= 13 r=  832    8.2830 ms  ok
+  BM= 64 G= 64 n= 14 r=  896    8.9374 ms  ok
+  BM= 64 G= 64 n= 15 r=  960    9.6663 ms  ok
+  BM= 64 G= 64 n= 16 r= 1024   10.1434 ms  ok
+
+measured 128 cells in 3.5 min
+clock state: 128 timed cells: 62 level, 18 LOW (below the band, excluded-shaped), 48 HIGH (boosted above the band, kept: the fixed-roof fraction is not comparable, read roof_at_cell_clock), 12 DRIFT failed (excluded-shaped), 0 with LEVEL not determined
+  this arm drops no cell for its clock; the counts are for a reader deciding whether to believe it, and None means NOT DETERMINED, never fine
+stream check on the real weight buffers: 4261.5 GB/s (ceiling 4680.2)
+
+MEASURED BRACKETS. B is refitted on n>=2 only; the anchor is the measured n=1 cell.
+
+    BM    G   t(1) ms     B ms     dB    BW_1   %pin alpha_lo alpha_hi cap/ridge lin/ridge
+  --------------------------------------------------------------------------------------------
+    32    1    0.7581   0.7241  0.02%    3752  77.9%    0.955    1.000     0.217     0.219
+    32    8    0.7698   0.5700  0.02%    3696  76.8%    0.738    0.937     0.280     0.284
+    32   16    0.7754   0.5556  0.15%    3669  76.2%    0.714    0.913     0.290     0.293
+    32   64    0.7753   0.5563  0.16%    3669  76.2%    0.715    0.914     0.289     0.293
+    64    1    0.7879   0.7844  0.31%    3644  75.7%    0.996    1.000     0.413     0.421
+    64    8    0.7968   0.6076  0.22%    3603  74.8%    0.758    0.990     0.539     0.552
+    64   16    0.8029   0.5950  0.08%    3576  74.3%    0.736    0.969     0.555     0.569
+    64   64    0.8006   0.6309  0.24%    3586  74.5%    0.784    1.000     0.522     0.534
+
+
+RESULT: VALIDITY pin_took_effect PASS the forced tile is the tile that ran | measured 128 of 128 cells showed their requested tile; 8 of 8 settings compiled at least one fresh Triton artefact | gate every ok cell shows its requested tile, and every setting compiled
+GATE M6  VALIDITY PASS    the forced tile is the tile that ran
+                        measured 128 of 128 cells showed their requested tile; 8 of 8 settings compiled at least one fresh Triton artefact   gate every ok cell shows its requested tile, and every setting compiled
+RESULT: VALIDITY every_cell_measured PASS every planned cell measured | measured 128 of 128 planned cells ok, 0 failed | gate all planned cells ok
+GATE M5  VALIDITY PASS    every planned cell measured
+                        measured 128 of 128 planned cells ok, 0 failed   gate all planned cells ok
+RESULT: VALIDITY stream_ceiling PASS the committed ceiling is above the measured read rate on the real weight buffers | measured 4261.5 GB/s against a ceiling of 4680.2 (91.1%) | gate <= 100%
+GATE M0  VALIDITY PASS    the committed ceiling is above the measured read rate on the real weight buffers
+                        measured 4261.5 GB/s against a ceiling of 4680.2 (91.1%)   gate <= 100%
+RESULT: VALIDITY measured_bracket_ordered PASS P4: the anchor rate never exceeds the measured ceiling | measured tightest 80.2% at BM=32 G=1 | gate <= 100%
+GATE M4  VALIDITY PASS    P4: the anchor rate never exceeds the measured ceiling
+                        measured tightest 80.2% at BM=32 G=1   gate <= 100%
+RESULT: CLAIM anchor_swizzle_invariant PASS P1: the anchor t(1) does not depend on the swizzle | measured worst spread 2.28% across G<=16, 2.28% across all G | gate <= 4.0% and <= 8.0%
+GATE M1  CLAIM    PASS    P1: the anchor t(1) does not depend on the swizzle
+                        measured worst spread 2.28% across G<=16, 2.28% across all G   gate <= 4.0% and <= 8.0%
+                          BM= 32  G=[1, 8, 16, 64]  spread G<=16 2.28%, all G 2.28%
+                          BM= 64  G=[1, 8, 16, 64]  spread G<=16 1.90%, all G 1.90%
+RESULT: CLAIM anchor_rate_in_band PASS P2: the BLOCK_M=32 anchor rate is in band | measured 76.2%-77.9% of the 4814 GB/s pin rate over 4 cells | gate 64%-78% of pin
+GATE M2  CLAIM    PASS    P2: the BLOCK_M=32 anchor rate is in band
+                        measured 76.2%-77.9% of the 4814 GB/s pin rate over 4 cells   gate 64%-78% of pin
+RESULT: CLAIM slope_independent PASS P3: the slope does not depend on the anchor | measured worst 0.31% at BM=64 G=1 over 16 treads | gate <= 1.5% (calibrated on 16- and 33-tread ladders)
+GATE M3  CLAIM    PASS    P3: the slope does not depend on the anchor
+                        measured worst 0.31% at BM=64 G=1 over 16 treads   gate <= 1.5% (calibrated on 16- and 33-tread ladders)
+
+wrote /workspace/results/gaps-nvidia_h200/memory_branch_anchor/nvidia_h200-bm32_64-budget400.0-dtypebf16-flushtrue-g1_8_16_64-k64-modelmixtral_8x7b-n64-s3-seed-34ef5fce/measure.json
+The brackets above stand on their own. To carry them onto the committed arms, run --rescore, whose P2 band is what licenses that.
+0 DONE: measured; every VALIDITY and CLAIM gate PASSED

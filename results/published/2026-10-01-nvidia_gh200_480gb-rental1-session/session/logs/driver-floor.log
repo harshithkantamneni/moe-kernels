@@ -1,0 +1,35 @@
+== 2026-10-01T20:21:25Z step floor: 3c.5 registered floor design: NATIVE at G = 64 8, treads 1,2,3,4,5,6,8,10, base clock and the 1710 lock
+2026-10-01T20:21:40Z census for mixtral-8x7b-tp8 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp8.json)
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 7269a7, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [1, 2, 3, 4, 5, 6, 8, 10], 32 profiled launches at --clock-control base; 42 metrics asked, dropped []
+wrote /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64.json: '/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64.json' is outside repository at '/home/ubuntu/moe/repo')
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 7269a7, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=8  NATIVE at treads [1, 2, 3, 4, 5, 6, 8, 10], 32 profiled launches at --clock-control base; 42 metrics asked, dropped []
+wrote /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8.json: '/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8.json' is outside repository at '/home/ubuntu/moe/repo')
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 7269a7, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [1, 2, 3, 4, 5, 6, 8, 10], 32 profiled launches at --clock-control none under an nvidia-smi lock of 1710 MHz; 42 metrics asked, dropped []
+RESULT: VALIDITY FL1 FAIL every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock: off the lock: ['w1 fitted 1671 MHz', 'n=4 w1 1663 MHz', 'n=5 w1 1661 MHz
+GATE FL1 VALIDITY FAIL   every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock
+              measured off the lock: ['w1 fitted 1671 MHz', 'n=4 w1 1663 MHz', 'n=5 w1 1661 MHz', 'n=6 w1 1664 MHz', 'w2 fitted 1655 MHz', 'n=1 w2 1658 MHz', 'n=3 w2 1662 MHz', 'n=4 w2 1647 MHz', 'n=5 w2 1648 MHz', 'n=6 w2 1653 MHz', 'n=8 w2 1654 MHz', 'n=10 w2 1657 MHz'] (fit: w1 1671.4 MHz + 2.2 us over 8 cells; w2 1654.5 MHz + -0.5 us over 8 cells)   gate each GEMM's duration = t0 + cycles / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, no cell over 3 steps off
+              a FAIL here invalidates: this file as a reading at 1710 MHz; its numbers stand only as readings at the clocks its cells name
+wrote /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64-lock1710.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64-lock1710.json: '/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64-lock1710.json' is outside repository at '/home/ubuntu/moe/repo')
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 7269a7, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=8  NATIVE at treads [1, 2, 3, 4, 5, 6, 8, 10], 32 profiled launches at --clock-control none under an nvidia-smi lock of 1710 MHz; 42 metrics asked, dropped []
+RESULT: VALIDITY FL1 FAIL every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock: off the lock: ['w1 fitted 1662 MHz', 'n=2 w1 1664 MHz', 'n=3 w1 1654 MHz
+GATE FL1 VALIDITY FAIL   every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock
+              measured off the lock: ['w1 fitted 1662 MHz', 'n=2 w1 1664 MHz', 'n=3 w1 1654 MHz', 'n=4 w1 1659 MHz', 'n=5 w1 1645 MHz', 'n=6 w1 1655 MHz', 'n=10 w1 1663 MHz', 'w2 fitted 1655 MHz', 'n=1 w2 1661 MHz', 'n=3 w2 1660 MHz', 'n=4 w2 1650 MHz', 'n=5 w2 1644 MHz', 'n=6 w2 1652 MHz', 'n=8 w2 1654 MHz', 'n=10 w2 1658 MHz'] (fit: w1 1662.1 MHz + 1.5 us over 8 cells; w2 1654.6 MHz + -0.6 us over 8 cells)   gate each GEMM's duration = t0 + cycles / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, no cell over 3 steps off
+              a FAIL here invalidates: this file as a reading at 1710 MHz; its numbers stand only as readings at the clocks its cells name
+wrote /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8-lock1710.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8-lock1710.json: '/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8-lock1710.json' is outside repository at '/home/ubuntu/moe/repo')
+clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clocks_event_reasons.active
+345 MHz, 2619 MHz, 1980 MHz, 0x0000000000000001
+2026-10-01T20:23:53Z floor: r3f-g64 exit 0
+2026-10-01T20:23:53Z floor: r3f-g8 exit 0
+2026-10-01T20:23:53Z floor: r3f-g64-lock1710 exit 3
+2026-10-01T20:23:53Z floor: r3f-g8-lock1710 exit 3
+2026-10-01T20:23:53Z floor: registered floor design: groups 64,8, treads 1,2,3,4,5,6,8,10

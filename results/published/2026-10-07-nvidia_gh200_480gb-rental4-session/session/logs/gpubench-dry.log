@@ -1,0 +1,12 @@
+GPU-BENCHES (GPL-3.0, third party) at 23e586dd8d8a19e72abd9d385a088623cefabfae into /home/ubuntu/moe/ext/gpu-benches; SM 90; lock 1710.0 MHz; L2 60.0 MiB
+  git clone --quiet https://github.com/RRZE-HPC/gpu-benches /home/ubuntu/moe/ext/gpu-benches
+  git -C /home/ubuntu/moe/ext/gpu-benches fetch --quiet origin 23e586dd8d8a19e72abd9d385a088623cefabfae
+  git -C /home/ubuntu/moe/ext/gpu-benches checkout --quiet --detach 23e586dd8d8a19e72abd9d385a088623cefabfae
+  git -C /home/ubuntu/moe/ext/gpu-benches rev-parse HEAD
+  make -C /home/ubuntu/moe/ext/gpu-benches/gpu-latency SM=90 CUDA_HOME=/usr cuda-latency
+  make -C /home/ubuntu/moe/ext/gpu-benches/gpu-stream SM=90 CUDA_HOME=/usr cuda-stream
+  make -C /home/ubuntu/moe/ext/gpu-benches/gpu-l2-cache SM=90 CUDA_HOME=/usr cuda-l2-cache
+  timeout 420 /home/ubuntu/moe/ext/gpu-benches/gpu-latency/cuda-latency
+  timeout 240 /home/ubuntu/moe/ext/gpu-benches/gpu-stream/cuda-stream
+  timeout 300 /home/ubuntu/moe/ext/gpu-benches/gpu-l2-cache/cuda-l2-cache
+DRY RUN: nothing fetched, built or run (exit 2)

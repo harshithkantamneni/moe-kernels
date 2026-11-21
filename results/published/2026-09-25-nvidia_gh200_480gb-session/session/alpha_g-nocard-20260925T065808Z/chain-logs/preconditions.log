@@ -1,0 +1,391 @@
+
+==== PREFLIGHT ====
+  repo      /home/ubuntu/moe/repo
+  base py   /home/ubuntu/moe/venvs/base/bin/python
+  vllm py   /home/ubuntu/moe/venvs/vllm/bin/python
+  scripts   all 17 present and parse, the fourteen sweep scripts plus
+            check_mma_path.sh, moe/bench/cli.py (both pin probes) and
+            scripts/block_m_crossing_sweep.py (twelve noise-floor replicates)
+  card      nocard -- no CUDA
+            Every path below carries the literal 'nocard', so nothing
+            measured on a real card can resume into this session.
+  session   /home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z
+            UNVERIFIED: git check-ignore exited 128. Usually the path is outside this work tree, the normal case for /workspace on a pod. It is NOT 'tracked'.
+  results   /home/ubuntu/moe/results/gaps-nocard   (exported as MOE_RESULTS_DIR to every arm; the card is in the name)
+            UNVERIFIED: git check-ignore exited 128. Usually the path is outside this work tree, the normal case for /workspace on a pod. It is NOT 'tracked'.
+  ledger    /home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/ARMS-dryrun.tsv
+  tree      0 dirty file(s) before anything ran, by git status
+            --porcelain --untracked-files=all. Re-asked after every arm: two
+            arms used to write into the tracked tree while the session ran.
+
+==== WHAT THIS COMMITS YOU TO ====
+  The min column mixes two clocks and now says which on every row. WALL is a
+  figure whose own plan charges compiles and allocation. KERNEL is one whose
+  plan says, in those words, that it does not. ALLOW is this file's own
+  allowance for an arm whose plan prints no time estimate at all. FREE is an
+  arm booked zero, whose plan refuses or times nothing, and which therefore
+  has no clock to be on.
+  
+  thermal             ~  3 min WALL    starts at ~0 min          WHETHER THIS RENTED CARD CAN HOLD A CLOCK AT
+                        from: thermal_acceptance.py --dry-run -> 'estimated wall time 160 s (2.7 min: 30 s ramp + 120 s window + 10 s allocation and first matmul)'. A WALL figure, and the only arm whose cost IS its window: it compiles nothing, times nothing and allocates two 8192^2 bf16 buffers once. Booked 3, above the figure and never at it. THE THREE TERMS ARE THE FLAGS ON THE ARM LINE, so a re-derivation runs the same command: --settle-seconds 30 is calibrate.settle_clocks' own budget for the governor's ramp (840 -> 1980 MHz on this card), --seconds 120 is four times the 2026-09-11 card's observed ~30 s to collapse AFTER that ramp, and --poll-seconds 2 puts 60 samples in the window against a floor of 9. The 10 s allocation term is an ALLOWANCE and the plan page says so: _load_compute's 256 MiB and cuBLAS's first-call kernel choice have not been timed here.
+  calibrate           ~  3 min ALLOW   starts at ~3 min          This pod's own ridge and both dtype peaks. F
+                        from: calibrate_hardware.py --dry-run prints NO time estimate: a bandwidth ladder, an 8192^3 GEMM per dtype and up to 30 s of settle under load. 3 min is this file's own standing allowance and the one figure here that is not read off a plan.
+                        NOT IN THAT FIGURE: everything: this row is an allowance, not a figure off a plan
+  pin_probe-n64-g1    ~  2 min ALLOW   starts at ~6 min          The S6a gate ('observed tile_block_m = none'
+                        from: moe.bench.cli prints no plan off a GPU box (no framework span registers), so there is no figure to read. 2 min is one profile-cell census under a pin.
+                        NOT IN THAT FIGURE: everything: this row is an allowance, not a figure off a plan
+  
+  TOTAL ~8 minutes (~0h 8m) of what the arms' own plans PRICE,
+  of which ~0 are KERNEL minutes: arms whose plans exclude compiles and
+  allocation in their own words, on rows marked NOT IN THAT FIGURE.
+  
+  BOOK ABOVE THAT AND NEVER AT IT, AND THIS IS THE NUMBER TO BOOK ABOVE:
+  ~8 minutes (~0h 8m), the same table with those 0 KERNEL minutes
+  multiplied by 235/100. That factor is the ONE wall-over-model ratio this
+  repo has measured -- 127 s logged against 54 s modelled for mixtral_g1 on
+  the s4 arm -- and it is the factor replicate_noise_floor.py already applies
+  to the 120 minutes it books above. IT IS AN ILLUSTRATION OF THE SIZE OF
+  THE GAP AND NOT AN ESTIMATE OF ANY ARM: one datum, from a small sweep, and a
+  large sweep amortises its compiles over more timings than a small one does.
+  No figure in the column above was multiplied by it, and 2 of the rows above
+  print a NOT IN THAT FIGURE line naming what their own figure leaves out.
+  
+  The 'starts at' range is priced start to bounded start, and both are an
+  EARLIEST start: a rental shorter than an arm's start does not buy that arm,
+  or anything under it. Nothing in this file has a deadline or a timeout -- an
+  arm that overruns is not cut short, it pushes everything below it down the
+  column -- which is why the column is printed at all instead of one number
+  for the whole session.
+  
+  WHAT A RENTAL OF A GIVEN LENGTH ACTUALLY REACHES:
+  
+    2 HOURS  ~81 priced / ~158 bounded min. BOTH PAYLOAD ARMS -- the alias
+             ablation and bn_g16 -- with their preconditions, plus the 10-minute
+             private-weight reference that says what their alpha MEANS, and
+             nothing else. The 40-minute clock elasticity is in NEITHER set:
+             it reads on the same question and costs a third of this booking.
+               --only thermal,calibrate,pin_probe-n64-g1,pin_probe-n256-g16,private-mixtral-bm32,roofline-n64-g1,roofline-n256-g16,roofline-n256-g32,alias_ablation,bn_g16
+    3 HOURS  ~114 priced / ~216 bounded min. The same plus the depth sweep, the
+             anchor pair and the whole cheap tail.
+               --only thermal,calibrate,pin_probe-n64-g1,pin_probe-n256-g16,private-mixtral-bm32,roofline-n64-g1,roofline-n256-g16,roofline-n256-g32,alias_ablation,bn_g16,bm128_depth,anchor_measure,anchor_rescore,mma_switch,ruler,cap_test,dtype,counter_plan
+  
+  THE 2-HOUR SET NOW BOUNDS ABOVE TWO HOURS, and the honest reading is that
+  its NAME is the rental and its second figure is not a promise. bn_g16 went
+  from 36 to 46 priced minutes on 2026-09-10 when a third subject tile was
+  added to its swept set, and 46 KERNEL minutes bound to 109. The set is
+  unchanged because what it selects is unchanged: both payload arms and
+  their preconditions, nothing else. The bound is the ILLUSTRATION
+  described above and not an estimate of any arm. Read the priced figure as
+  what the plans charge and the bounded one as the size of what they leave
+  out; if the card is booked for exactly two hours, expect bn_g16 to be the
+  arm that is still running when it ends.
+  
+  NEITHER SET CONTAINS THE NOISE FLOOR, and that is the decision this block
+  exists to record rather than to hide. It is 120 WALL minutes on its own,
+  it sits above both payload arms in the read order, and a rental that ENTERS
+  it without finishing it is killed inside it -- which fails that script's own
+  V2, the planned replicates ran, so even the partial floor is unquotable and
+  the minutes buy nothing at all. The floor wants a booking of its own, and
+  until it has one the sigma in the line below stays ASSUMED and every effect
+  in this study is read against a prior rather than against a measurement.
+  
+  AND THE ALIAS ARM IS NOT WHAT PUT THEM OUT OF REACH. It is 14 WALL minutes
+  and it runs ABOVE the floor, so it moved every arm below the floor down by
+  exactly those minutes and moved nothing above it at all. bn_g16 was already
+  past a two-hour booking before this arm existed, and the thing that put it
+  there was the floor. The fix is the --only line, not a shorter arm.
+  
+  MDE 0.0906 in fitted alpha at the design this study runs (one run per condition, known-variance z test, level 0.05, power 0.8: 3.96*sigma)
+      sigma 0.0229, ASSUMED: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [NoiseFloorUnmeasured]
+  
+    Read every effect this session reports against that limit. The three
+    effects already registered in NOISE_FLOOR.json are the swizzle swing
+    0.3855 and the footprint spread 0.411, both far above it, and the
+    cross-card 0.0117, which is BELOW it and therefore unresolved.
+  
+  --dry-run: each arm runs its OWN --dry-run. Free, off GPU, seconds.
+  The minutes above are what the POD run would cost, not this one, and
+  every one of them is re-derivable from the 'from:' line beside it.
+
+==== SESSION  card=nocard  (DRY RUN: plans only) ====
+
+==== 0. can THIS card hold a clock under sustained load ====
+  -> thermal   log /home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/logs/thermal.log
+     PLANNED (exit 2) in 3s; work tree 0 dirty file(s)
+
+==== 0. calibrate THIS card ====
+  -> calibrate   log /home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/logs/calibrate.log
+     PLANNED (exit 2) in 3s; work tree 0 dirty file(s)
+
+==== 0. does MOE_FORCE_TILE reach the kernel AT THE CONFIGURATIONS THE ARMS RUN ====
+  NOT PLANNED pin_probe-n64-g1: no CUDA device: no framework span registers off the GPU box, so the plan would refuse for a reason that is about this laptop and not about the pin.
+
+==== 0c. alpha as a ratio of two MEASURED slopes: the private-weight reference ====
+  The only arm in this session with no assumed bandwidth and no fitted intercept in its answer.
+  SKIP private-mixtral-bm32 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 0d. clock elasticity at one pinned cell ====
+  SKIP elasticity-m32-n64-g16 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 1a. CONTROL: BLOCK_M=128 at the SWEPT configuration (BN=64, G=1) ====
+  This arm can refute a ceiling and cannot confirm one for production.
+  SKIP roofline-n64-g1 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 1b. THE CLAIM: BLOCK_M=128 at vLLM's own tuned entry (BN=256, G=16) ====
+  SKIP roofline-n256-g16 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 1c. THE CLAIM at the swizzle vLLM ships at 2048 tokens (BN=256, G=32) ====
+  SKIP roofline-n256-g32 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 2. depth at BLOCK_M=128: five clean memory-bound treads, monotone ====
+  SKIP bm128_depth (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 3. is the per-tile slope DRAM traffic at all, ablated without the byte model ====
+  The cheapest arm here that can void the most: 13 WALL minutes against every
+  alpha, cap and roof fraction the study has published.
+     no CUDA device: planning alias_ablation for the HYPOTHETICAL card
+     'NVIDIA H200'. Its ceilings, run id and cost are that card's,
+     not this laptop's and not necessarily the one you rent.
+  SKIP alias_ablation (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 4. the noise floor, without which nothing above can be scored ====
+  SKIP noise_floor (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 5. alpha_a and alpha_b separated, and whether the three-term model is complete ====
+  SKIP bn_g16 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 6. the memory-branch anchor, measured rather than extrapolated ====
+  SKIP anchor_measure (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 7. residency or program order: does the standard predictor transfer ====
+  SKIP occupancy (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 7b. the BLOCK_K diagonal: residency or pipeline depth, which P6 could not say ====
+  SKIP blockk-w4 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 8. the ISA switch: is the instruction selected by the tile alone ====
+  SKIP mma_switch (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 9. the ruler: price a ridge change without making one ====
+  SKIP ruler (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 10. BLOCK_M=16 cap test -- the FORMULA, not the production claim ====
+  SKIP cap_test (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 11. is the 1.15 fp8/bf16 crossing the FORMAT or the CONFIG ====
+     no CUDA device: planning dtype for the HYPOTHETICAL card
+     'NVIDIA H200'. Its config lookup, run id and cost are that
+     card's, not this laptop's and not necessarily the one you rent.
+  SKIP dtype (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 12. is the 0.563 separation the span EXTENT or the KERNEL ====
+  Dense grid first: it is the only grid on which C3's mechanism is observable.
+  SKIP span_dense (--only thermal,calibrate,pin_probe-n64-g1)
+  SKIP span (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 13. is a DRAM counter route open on this box ====
+  SKIP counter_plan (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== 14 and 15. the DRAM counter, run at two BLOCK_N ====
+  SKIP counter-n32-m64 (--only thermal,calibrate,pin_probe-n64-g1)
+  SKIP counter-n128-m64 (--only thermal,calibrate,pin_probe-n64-g1)
+
+==== THE PLANS, ARM BY ARM. NOTHING BELOW IS A MEASUREMENT. ====
+
+--- thermal ---
+  closes: WHETHER THIS RENTED CARD CAN HOLD A CLOCK AT ALL, and it is FIRST because every arm below it, arm 0 included, is worthless on a card that cannot. WHAT HAPPENED, on a RunPod H200 on 2026-09-11: the part boosted to its 1980 MHz maximum, collapsed to its 345 MHz floor within ~30 s of sustained bf16 GEMM and stayed there, clocks_event_reasons going 0x0 -> 0x20 SwThermalSlowdown -> 0x68 HwSlowdown|SwThermalSlowdown|HwThermalSlowdown, drawing ~240 W of a 700 W limit while climbing from 87 C to 93 C. That is a cooling fault, not a workload. scripts/calibrate_hardware.py RAN TO COMPLETION on it, published a tracked yaml, and its not_throttled CLAIM gate PASSED, because that gate scored DRIFT and a card pinned flat at its floor has first == last; the only gate that failed was clock_steady_across_patterns, and it failed incidentally on two 675 MHz transients. The ruler it published put the ridge at 73.6 where that card's ridge is near 156, because the compute peak collapsed with the clock and the memory side did not, and every roof fraction, alpha and cap measured below would have been scored against it. WHAT THIS ARM DOES INSTEAD: holds the calibration's OWN compute load (moe.bench.calibrate._load_compute, dense bf16 8192^3) for 30 s of discarded ramp plus a 120 s scored window, polling the SM clock, board power and temperature through NVML with work still in flight. C1 is the median clock against timing.THERMAL_FLOOR_FRACTION of THIS CARD'S OWN MAXIMUM, read off the device: one third, which is the geometric midpoint of the admissible window between the lowest healthy per-cell median in results/published (1275 of 1980, 0.6439, drawn at 697.4 W of a 700 W cap, so a hungry tile and not a sick card) and the fault (345 of 1980, 0.1742), and 1980/3 = 660 MHz sits on the 15 MHz NVML grid. C2 is the repository's own DRIFT rule over the first and last thirds of the window, which catches a card still on its way down while its median is still high. NEITHER IS A CLOCK LITERAL: on an A100 the same file gates at 465 MHz without being told, and the verdict is taken on the MEDIAN because healthy published cells post individual readings at 405 MHz during one drain-and-ramp. IT REFUSES THE SESSION RATHER THAN WARNING, like arm 0's ruler gate and for the same reason: a warning costs a whole rental to ignore, and a CLAIM_FAIL here is a RESULT about this pod that the ledger latches, so the answer is to return the card and rent another rather than to re-run the arm. THE SLOWDOWN REASON MASK IS RECORDED AND PRINTED, NEVER SCORED: a container that does not expose the field would otherwise refuse a healthy card, and the clock already answers what the mask only explains.
+  state:  PLANNED
+  PLAN ONLY: a --dry-run scores no gate, so it prints no RESULT line.
+  off GPU its gates are exercised by: scripts/thermal_acceptance.py --self-test  (eight planted worlds, three of them REFUSALS, one VALIDITY RESULT line and exit 0). THE TWO WORLDS THAT CARRY IT: 'floored' replays 2026-09-11 and shows C2 -- the DRIFT rule, which is all calibrate_hardware's not_throttled used to score -- still PASSING on a card flat at its floor, which is the hole; 'hungry-tile' is the lowest per-cell median in results/published at 697.4 W of 700 and must NOT be refused, because a gate that refuses healthy cards costs a rental as surely as one that admits sick ones. Also scripts/thermal_acceptance.py --dry-run for the plan, the two registered predictions and the resolution line.
+  last 5 lines:
+      reason: --dry-run was given
+      No gate was scored, so no RESULT line was printed and none of the above
+      is a result. --self-test scores the planted worlds off GPU; the bare
+      command loads this card and watches it.
+    ==============================================================================
+
+--- calibrate ---
+  closes: This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm.
+  state:  PLANNED
+  PLAN ONLY: a --dry-run scores no gate, so it prints no RESULT line.
+  off GPU its gates are exercised by: none: it is a measurement and nothing else
+  last 5 lines:
+      settle            up to 30s under load
+      instrument        moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed events, L2 flush between iterations); NOT timing.TIMING_BASIS
+      card              NOT VISIBLE from here, so the run id cannot be formed (provenance.NoCard); pass --card to plan for a named part
+      publish           no; --publish copies it into the tree
+      MDE: 1.99% of the measured value, at alpha 0.05 and 80% power, from sigma 1.23% over 3 trial(s) (median within-cell ms_std/ms_p50 over 76918 published rows; a LOWER bound, since between-run spread is not in that column). A difference smaller than this is not resolvable here.
+
+--- pin_probe-n64-g1 ---
+  closes: The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured.
+  state:  NOT_PLANNED
+  reason: no CUDA device: no framework span registers off the GPU box, so the plan would refuse for a reason that is about this laptop and not about the pin.
+  NOT PLANNED, and not a result. Nothing was run for this arm.
+
+==== ARMS ====
+arm	state	rc	seconds	dirty	log	note
+thermal	PLANNED	2	3	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/logs/thermal.log	
+calibrate	PLANNED	2	3	0	/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z/logs/calibrate.log	
+pin_probe-n64-g1	NOT_PLANNED	-	0	0	-	no CUDA device: no framework span registers off the GPU box, so the plan would refuse for a reason that is about this laptop and not about the pin.
+
+total 0 min of wall clock
+work tree 0 dirty file(s) at start, 0 now
+
+==== READ THESE FIRST ====
+  private-mixtral-bm32  the ratio, and read it BEFORE any alpha below. It is
+               the only number in this session with no assumed bandwidth and no
+               fitted intercept in it: slope(shared)/slope(private), where the
+               private arm gives every M-tile its own copy of the expert weights
+               so reuse is impossible by construction. Both slopes are fitted
+               over treads 2 and deeper, and so are C2 and V5; V4 and V0's
+               floor count those treads and V8 prices its step over them; the
+               every-tread fits are printed beside them and gate nothing. The
+               page NAMES the world
+               it landed in from a partition registered before the run --
+               ISSUE-AND-LATENCY, below/at/above the refit band, or NO-REUSE --
+               and a C1 FAIL is one of those names and not a broken arm; C1
+               UNKNOWN means the point and interval disagree on a world. Read
+               V5 (the declaration: native vs shared, with native's alignment
+               step fitted out), V7 (the two arms' clocks, run at --duty
+               0.25, each idle gap sized from the burst it follows,
+               so they are expected to agree; a V7 FAIL at
+               0.25 means that duty is not yet flat for that arm on
+               this card; the page names a lower duty; the alpha(G) chain
+               skips the G's later seeds and prints the follow-up command, and
+               here the follow-up is by hand, a new design key and its own
+               runs, read with --read on the laptop) and V8 (the probed
+               alignment kernel along the ratio arms' ladder) beside it; the
+               page says in as many words that nothing here bounds a cost paid
+               by READING the copies.
+  elasticity-m32-n64-g16  which band, and it decides what every alpha below
+               MEANS rather than what any of them measures. Below 0.25 the raw
+               readings stand; above 0.40 C3's DIRECTION is retracted while its
+               inequality survives; between them NEITHER registered consequence
+               is licensed and the page says so instead of picking the nearer
+               edge. READ C1 BEFORE C2: a C2 FAIL with C1 FAIL is "not shown",
+               not "shown false". An INVALID here is UNMEASURED and not zero --
+               V1 is the likely gate and it is a property of THIS pod's
+               governor -- and every alpha below then keeps the free parameter
+               it had before this arm ran.
+  alias_ablation  the P1 line, and read it BEFORE the roofline verdict. It is
+               the only arm that says whether alpha is a fraction of a DRAM
+               weight read at all, which is the unit every roof fraction, every
+               cap and the whole mechanism sentence is written in. READ THE P1
+               RESULT LINE'S VERDICT WORD, NOT THIS ARM'S EXIT CODE: two of the
+               four states below exit 1 and only one of them is a finding.
+               P1 PASS: the relabelling stands and every number below keeps its
+               subject. P1 FAIL, in that word: the per-tile slope is some other
+               resource wearing DRAM's name, and the interval says which of
+               0.10 or 0.33 it landed on instead. P1 UNKNOWN, whose detail
+               opens NOT A REFUTATION, is not that, and since 2026-09-09 it is
+               not what this arm spends its minutes on either: the arm is booked
+               --dot-fallback refuse, so a probe that clears no sum-mode pinning
+               stops there, for about 2.0 min and 3 INVALID, instead of running
+               a dot ladder that measures a LOWER BOUND on alpha and cannot ask
+               P1 at all. That is what the 2026-09-09 session bought under
+               --dot-fallback allow: 308 s, P1 UNKNOWN at alpha >= 0.229, and a
+               latched INVALID, four validity gates having failed after the
+               money was spent. If the
+               probe DOES clear, this is the P1 line the study has been waiting
+               for. Do not write the 0.10-or-0.33
+               sentence from an UNKNOWN. A headroom or attribution FAIL is none of the
+               three: it is the apparatus saying it could not have seen DRAM
+               whatever alpha is, which is what the 2026-09-01 attempt returned
+               and what was nearly written up as a null result about DRAM.
+  roofline-n256-g16  its REFUSAL, which is the arm's finding. This is the
+               study's claim at the configuration vLLM ships (BLOCK_M=128,
+               BN=256, G=16) and it CANNOT be confirmed on sm_90: the BLOCK_M=256
+               control is refused at every warp and stage count (65536 of
+               65536 registers per block), no BLOCK_SIZE_N confirms the
+               headline on this card, and nothing else in this session can
+               supply a control. Read roofline-n64-g1 beside it as the control
+               it is: it can only refute. Were a card ever to run the control,
+               CEILING BINDING AT THE PRODUCTION TILE would confirm the claim
+               and CEILING NOT BINDING would refute it; on this card neither
+               line is printed and the paper has no confirming arm.
+  noise_floor  the between-replicate sd. Every effect anywhere in this study is
+               to be read against it from now on, and until it exists the MDE
+               printed at the top of this run is an ASSUMPTION carried from a
+               same-session, same-hour, mixtral-only proxy that confounds
+               num_stages.
+  bn_g16       the residual line. Noise-sized residual = the three-term model is
+               complete. Structure in it names what is missing. It is the ONLY
+               bn arm now: at GROUP_SIZE_M=1 that script's own design self-test
+               exits 3 INVALID and its plan says C1 reads UNKNOWN however the
+               data fall, and no other pinning it was checked at passes either.
+
+==== WHAT TO COMMIT, AND WHAT NOT TO ====
+  NOTHING HERE IS COMMITTED AND NOTHING IS PUSHED. This script runs no git write
+  command and terminates nothing. Read the gates above first.
+
+  THE TWO FILES THAT BELONG IN THE REPO are this card's calibration and this
+  session's noise floor. Both are written by an arm that was given --publish,
+  and both are tracked:
+      git -C /home/ubuntu/moe/repo diff --stat moe/bench/hardware/ results/published/NOISE_FLOOR.json
+  Do not commit the calibration if arm 9 (ruler) C1 PASSED. C1 is
+  "the GEMM clock was sampled in the wrong state", gated at a post-hoc-versus-
+  under-load delta above 5%, so a PASS is the arm SUSTAINING that charge: the
+  compute peak was read in one clock state and the ridge derived from it is not
+  this card's. A C1 FAIL is the designed null and the state in which the
+  calibration is committable; on 2026-09-09 it read FAIL at a measured delta of
+  0.0% on both dtypes. TWO THINGS WERE WRONG WITH THIS LINE UNTIL 2026-09-09.
+  It named P1, and ruler_rebaseline.py scores V1-V3 and C1-C5 with no P1 at
+  all, so it sent the operator to a gate that is not on the page. And it read
+  the verdict backwards, telling them to withhold the calibration in exactly
+  the state that clears it. Read the measured delta on the C1 line either way.
+  Do not commit NOISE_FLOOR.json if the noise_floor arm is not DONE. Its V2 asks
+  that the PLANNED replicates ran, so a floor from an arm cut short is not a
+  floor, and this run bought N=3, at which the estimate is known to 1.92x -- the
+  scope block in the file says so and must not be quoted away from it. Committing
+  it is what finally replaces the assumed sigma of 0.0228 in every later
+  session's detection-limit line with a number this study measured.
+
+  EVERYTHING ELSE LANDS UNDER /home/ubuntu/moe/results/gaps-nocard, which git ignores by design. To publish
+  an arm, copy its run directory under results/published/<date>-<gpu>-<arm>/ --
+  the report.json files are kilobytes -- then:
+      git -C /home/ubuntu/moe/repo check-ignore -v <the path you chose>     # must print NOTHING
+  Three published directories were silently dropped by results/* this week
+  before that check was made routine.
+
+  THE ALIAS ABLATION WRITES NOTHING TRACKED AND IS THE ARM MOST WORTH
+  PUBLISHING. It has no --publish flag because it has no tracked file to land
+  in: report.md, plan.json, cells.jsonl and probe.json go under
+  /home/ubuntu/moe/results/gaps-nocard/alias_ablation/<run id>, which git ignores. Copy that directory into
+  results/published/ whichever way its P1 line reads. A PASS and a FAIL are both
+  results and both decide the paper's mechanism sentence. An INVALID on headroom
+  or attribution is worth publishing too, and as an APPARATUS finding rather
+  than as a fact about the card: that is exactly what the 2026-09-01 run was,
+  and its VOID was nearly read as a null result about DRAM.
+
+  THE SESSION DIRECTORY IS /home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z (NAMED).
+  Its ledger is the only place the latch lives. To resume it, skipping every
+  finished arm, run one of:
+      bash scripts/h200_gaps_session.sh --resume-latest
+      SESSION=/home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z bash scripts/h200_gaps_session.sh
+  A bare re-invocation on this card now REFUSES rather than opening an empty
+  ledger beside this one; --new opens one on purpose.
+
+  A RESUME RE-RUNS NO INVALID ROW AND NO CLAIM_FAIL ROW. That is the latch
+  working as designed, not a bug to route around: both are RESULTS, both are
+  latched, and `arm` skips any arm already holding one. So after a session
+  whose arms landed INVALID (the 2026-09-09 set landed six), --resume-latest
+  runs nothing for them however many defects have been fixed since. A rerun
+  of those arms on this driver is --new, which opens a fresh ledger on purpose. A
+  measuring run prints the exact command and the state each arm is expected to
+  reach, a few lines above this one, under THE STANDALONE DRIVER'S RERUN, AND
+  WHY IT IS --new; a --dry-run has no results to book a rerun against and
+  prints no such block. That is this driver's own path: the next session is
+  the alpha(G) chain, scripts/alpha_g_chain.sh. Deleting rows out of a ledger
+  by hand is the other way back and it edits the record of what was spent;
+  --new does not.
+  ONE ARM IS EXEMPT AND ONLY ONE: counter_plan re-probes on every pass however
+  its last row read, because it measures nothing and reports a property of the
+  POD, which a resume onto a shared /workspace can change under it. Its old row
+  stays on the ledger; the gate reads the newest.
+  Copy it off before releasing the pod:
+      tar czf /workspace/exfil-gaps-nocard.tar.gz           -C "/home/ubuntu/moe/session" "alpha_g-nocard-20260925T065808Z"           -C "/home/ubuntu/moe/results" "gaps-nocard"
+  THE RESULTS ROOT IS IN THAT LINE AND WAS NOT. /home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z holds the ledger and
+  the logs; the per-arm cells.csv, report.json, DEVICE file and triton-cache
+  live under /home/ubuntu/moe/results/gaps-nocard, which is scoped to the card and outlives the session.
+  A tarball of /home/ubuntu/moe/session/alpha_g-nocard-20260925T065808Z alone carries the RESULT lines and not the rows they
+  were scored from.

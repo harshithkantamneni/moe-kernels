@@ -6,6 +6,7 @@
 #   bash scripts/publish_results.sh --run-id a --run-id b    # exactly these
 #   bash scripts/publish_results.sh --label first-smoke      # name the directory
 #   bash scripts/publish_results.sh --dry-run                # stage it, touch no git
+#   bash scripts/publish_results.sh --allow-foreign-calibration   # see below
 #
 # results/ is gitignored on purpose: raw runs are large, machine-specific, and
 # regenerable. results/published/ is tracked on purpose: it is where a run you
@@ -17,6 +18,23 @@
 # experiment. This used to publish the newest CSV, which published a third of
 # the result and looked complete; the base and vLLM arms of the 2026-08-26
 # three-way had to be committed by hand afterwards. It now refuses to guess.
+#
+# THE CALIBRATION IS COPIED FROM ONE FILE PER DEVICE, AND IT MOVES UNDER YOU.
+# `moe/bench/hardware/measured_<device>.yaml` is overwritten by every new
+# calibration, and the copy below takes whatever is in it right now -- not what
+# the rows were measured against. On 2026-08-28 the whole-layer sweep ran
+# 18:08-19:21 UTC, a recalibration overwrote that file at 19:29, and this script
+# published the arm at 19:35 with the new ruler beside rows stamped from the old
+# one. The two disagree by 9.9% on the compute ceiling, nothing downstream could
+# tell, and claim C5 lost its target for three days.
+#
+# So the copy is now CHECKED against the ceilings the rows themselves carry, and
+# a mismatch stops the publish. `--allow-foreign-calibration` is for the one case
+# where a foreign calibration is the point: `scripts/recompute_ceilings.py`
+# derives an arm by restamping old rows against a NEW calibration, and its output
+# declares itself derived so it needs no flag at all. The flag exists for a
+# deliberate case that has not declared itself yet, and it writes the admission
+# into the published arm rather than letting it pass in silence.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,17 +53,23 @@ PY="${MOE_PYTHON:-$WORKSPACE/venvs/base/bin/python}"
 [[ -x "$PY" ]] || PY="python3"
 
 RUN_IDS=()
+REPORTS=()
 ALL=0
 LABEL=""
 PUSH=1
 DRY=0
+FOREIGN_CAL=0
+MISSING_SHA_REASON=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --run-id)  RUN_IDS+=("$2"); shift 2 ;;
+    --reports) REPORTS+=("$2"); shift 2 ;;
     --all)     ALL=1; shift ;;
     --label)   LABEL="$2"; shift 2 ;;
     --no-push) PUSH=0; shift ;;
     --dry-run) DRY=1; shift ;;
+    --allow-foreign-calibration) FOREIGN_CAL=1; shift ;;
+    --allow-missing-sha) MISSING_SHA_REASON="${2:?--allow-missing-sha needs a reason, which is written into SUMMARY.md}"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -156,25 +180,182 @@ MERGE
 CAL="moe/bench/hardware/${SLUG}.yaml"
 if [[ -f "$CAL" ]]; then
   cp "$CAL" "$DEST"/measured.yaml
-  log "included $CAL, the calibration these rows were measured against"
+  # Deliberately NOT "the calibration these rows were measured against". That is
+  # what this copy is supposed to be and what it silently was not for the
+  # whole-layer arm; the check below is what turns it into a claim worth making.
+  log "included $CAL, the calibration currently on disk for this device"
 else
   log "WARNING: no $CAL; efficiency columns will be uninterpretable"
 fi
 
-# Figures belong with the data they were drawn from, not in the repo root.
-if [[ -d plots ]]; then
-  mkdir -p "$DEST/plots"
-  cp plots/*.png "$DEST/plots/" 2>/dev/null && \
-    log "included $(ls "$DEST/plots" | wc -l | tr -d ' ') figure(s)" || true
+# Does the file just copied actually belong to this sweep? The rows carry the
+# ceilings they were computed against, so they can answer that themselves.
+if ! "$PY" - "$DEST" "$FOREIGN_CAL" <<'PROVENANCE'
+import pathlib, sys
+from moe.bench.published import calibration_provenance, entitled_ridge
+
+dest, override = pathlib.Path(sys.argv[1]), sys.argv[2] == "1"
+prov = calibration_provenance(dest)
+ridge, why = entitled_ridge(dest)
+
+print(f"[publish] calibration provenance: {prov.verdict}")
+for key in ("ceilings", "commit", "date", "device"):
+    if key in prov.evidence:
+        print(f"[publish]   {key:9} {prov.evidence[key]}")
+print(f"[publish]   ridge     {why}")
+
+# The verdict goes INTO the arm, pass or fail, so the next reader inherits it
+# instead of re-deriving it from md5sums three days later.
+lines = [f"# Calibration provenance: {dest.name}", "",
+         f"Verdict: **{prov.verdict}**", ""]
+if prov.derived_from:
+    lines += [f"Declared derived from `{prov.derived_from}`, so a calibration "
+              f"from a later session is expected here.", ""]
+for key, value in prov.evidence.items():
+    lines.append(f"- `{key}`: {value}")
+lines += ["", f"Ridge: {why}", ""]
+if prov.blocking_reason:
+    lines += [f"BLOCKING: {prov.blocking_reason}", ""]
+    if override:
+        lines += ["Published anyway with `--allow-foreign-calibration`. Every "
+                  "efficiency column in these rows is quoted against a ruler "
+                  "that is not the one they were measured with.", ""]
+(dest / "CALIBRATION_PROVENANCE.md").write_text("\n".join(lines))
+
+if prov.blocking_reason and not override:
+    sys.exit(f"[publish] REFUSING TO PUBLISH: {prov.blocking_reason}\n"
+             "[publish] The rows and the calibration beside them disagree, so\n"
+             "[publish] every efficiency column in this arm would be quoted\n"
+             "[publish] against a ruler it was not measured with. Either copy in\n"
+             "[publish] the calibration these rows actually used, or re-derive\n"
+             "[publish] the arm with scripts/recompute_ceilings.py, which\n"
+             "[publish] restamps the rows and declares itself. Pass\n"
+             "[publish] --allow-foreign-calibration only if the mismatch is the\n"
+             "[publish] point and you want it recorded in the arm.")
+if prov.blocking_reason:
+    print("[publish] OVERRIDDEN with --allow-foreign-calibration; the admission "
+          "is in CALIBRATION_PROVENANCE.md")
+PROVENANCE
+then
+  log "$DEST is staged on disk and was NOT committed"
+  exit 1
+fi
+
+# --------------------------------------------------------------------------
+# the report/cells pairs this arm carries
+# --------------------------------------------------------------------------
+# `find results/published -name cells.csv` returned ZERO across every published
+# arm. `scaled_iters` promises that the CSV shows which numbers rest on 5
+# samples and which on 50, and the file it promises never reached the repo, so
+# the only per-cell p50s that survive anywhere are in one session log. A report
+# without its cells is a verdict without the measurement under it.
+#
+# The experiment scripts write `<dir>/report.json` beside `<dir>/cells.csv`, so
+# they travel together or not at all: a report copied without its cells is
+# refused here rather than discovered missing by a reader three days later.
+for rdir in "${REPORTS[@]+"${REPORTS[@]}"}"; do
+  stem="$(basename "${rdir%/}")"
+  [[ -f "$rdir/report.json" ]] || die "no report.json in $rdir"
+  [[ -f "$rdir/cells.csv" ]] || die \
+    "$rdir has a report.json and no cells.csv. Publishing the verdict without
+[publish] the measurements under it is how every published report came to have
+[publish] no cells beside it. Re-run the arm, or publish the directory that has
+[publish] both."
+  cp "$rdir/report.json" "$DEST/${stem}.report.json"
+  cp "$rdir/cells.csv" "$DEST/${stem}.cells.csv"
+  log "included report + cells for $stem"
+done
+
+# Figures belong with the data they were drawn from, AND THEY MUST BE DRAWN FROM
+# IT. This used to copy every PNG out of the repo-root `plots/` directory that
+# `run_all.sh` had filled from the whole `/workspace/results` volume: the
+# ridge-resolution arm shipped a `scaling_toy_bf16.png` its CSVs do not contain,
+# and the bf16-only alpha-0558 arm shipped six fp8 figures byte-identical to
+# another arm's. Commit bd8b5b4 said the figures were "regenerable from the
+# committed CSVs"; they were not, and no reader could have told. plot.py is now
+# pointed at the arm, so a figure that is not in these rows cannot be drawn.
+if "$PY" scripts/plot.py --results "$DEST" --out "$DEST/plots" >/dev/null 2>&1; then
+  log "drew $(ls "$DEST/plots" 2>/dev/null | wc -l | tr -d ' ') figure(s) from this arm's own CSVs"
+else
+  log "plotting skipped (matplotlib absent, or these rows support no figure)"
+  rmdir "$DEST/plots" 2>/dev/null || true
+fi
+
+# --------------------------------------------------------------------------
+# every row's commit must exist
+# --------------------------------------------------------------------------
+# A row's git_sha is the whole of its attribution and nothing checked it.
+# 2,100 published rows cite a commit that exists nowhere, rewritten by the very
+# `git pull --rebase` this script recommends when a push is rejected. The check
+# is scoped to THIS arm, so the historical miss does not block a new publish,
+# and the report goes into the arm either way.
+#
+# WHY THIS REFUSES THE COMMIT AND NOT THE STAGING. A dry run's contract is
+# "stage it, touch no git", and the finding is worth more staged than withheld:
+# the report goes into the arm and into SUMMARY.md, where the operator reads it
+# before deciding. What must not happen quietly is the COMMIT, so that is what
+# is refused. A calibration mismatch is refused earlier and harder because it
+# makes the arm's numbers uninterpretable; an unresolvable sha leaves the
+# numbers readable and their provenance uncheckable, and the remedy (push the
+# commit that made them) belongs to the act of publishing.
+SHA_REPORT="$DEST/GIT_SHA_CHECK.txt"
+SHA_OK=1
+if "$PY" scripts/check_published_shas.py --arm "$DEST" --repo "$REPO_ROOT" \
+     > "$SHA_REPORT" 2>&1; then
+  log "every recorded git_sha in this arm resolves"
+else
+  SHA_OK=0
+  sed 's/^/[publish]   /' "$SHA_REPORT"
+fi
+
+# AND THE SAME QUESTION FROM A STRANGER'S SIDE, ASKED BEFORE THE COMMIT.
+# A sha that resolves HERE and on no remote branch is one a stranger who clones
+# cannot reach, which is the same nothing as a missing commit from their side.
+#
+# THIS USED TO RUN AFTER THE PUSH AND APPEND TO A FILE ALREADY COMMITTED. Two
+# things were wrong with that. Every successful publish ended with a TRACKED
+# file modified in the working tree, which is the dirty-tree defect this whole
+# session shell is being repaired for: the next thing measured on that pod
+# stamps git_dirty=True on every row. And the verdict reached neither the
+# committed arm nor SUMMARY.md, which quotes this file as it stands when the
+# summary is generated, so the one reader it was written for never saw it.
+#
+# Asked before the push, the honest answer for a sha this very publish is about
+# to push would be UNPUSHED, which is why --will-push exists: the checker
+# reports PENDING for a sha that `git push origin HEAD` will place on the
+# remote, and UNPUSHED only for one that nothing here will. If the push then
+# fails, the failure branch below says so rather than leaving PENDING to be read
+# as done. Advisory either way: the rows are readable, only their reachability
+# is in question.
+REMOTE_ARGS=(--require-remote)
+if (( PUSH && ! DRY )); then
+  REMOTE_ARGS+=(--will-push HEAD)
+fi
+{ echo; echo "# reachability from a remote, asked before this publish committed"; } \
+  >> "$SHA_REPORT"
+if "$PY" scripts/check_published_shas.py --arm "$DEST" --repo "$REPO_ROOT" \
+     "${REMOTE_ARGS[@]}" >> "$SHA_REPORT" 2>&1; then
+  log "every git_sha in this arm is on a remote, or on the HEAD this publish pushes"
+else
+  # Deliberately not asserting which gate failed: this invocation re-scores
+  # resolvability as well, so its exit code is also 1 for the MISSING case the
+  # block above already reported, and a line that named the remote as the cause
+  # would be wrong half the time.
+  log "WARNING: the reachability check did not come back clean. Either a sha is"
+  log "  on no remote branch and nothing here will push it, or it does not"
+  log "  resolve at all. Either way a stranger who clones cannot reach the code"
+  log "  those rows name. Verdicts in $SHA_REPORT, and in SUMMARY.md, which"
+  log "  quotes it. Reported and not blocking: the numbers are readable."
 fi
 
 # A summary a human can read without opening the CSV.
-"$PY" - "$DEST" > "$DEST/SUMMARY.md" <<'SUMMARY'
-import sys, collections, pathlib
+"$PY" - "$DEST" "$MISSING_SHA_REASON" > "$DEST/SUMMARY.md" <<'SUMMARY'
+import sys, collections, pathlib, statistics
 sys.path.insert(0, ".")
 from moe.bench.schema import passed, read_csv, row_float
 
 dest = pathlib.Path(sys.argv[1])
+missing_sha_reason = sys.argv[2] if len(sys.argv) > 2 else ""
 rows = []
 for p in sorted(dest.glob("run_*.csv")):
     rows.extend(read_csv(p))
@@ -196,9 +377,156 @@ if rows:
     print(f"- commit: {sorted({r.get('git_sha','')[:12] for r in rows})}")
     if "True" in {r.get("git_dirty") for r in rows}:
         print("- **WARNING: some rows were measured from a dirty working tree**")
-throttled = [r for r in rows if r.get("throttled") == "True"]
-if throttled:
-    print(f"- **{len(throttled)} rows throttled (clocks dropped >5% mid-cell)**")
+
+
+def emit(line):
+    print(f"- **{line}**")
+
+
+# `throttled` IS ONE COLUMN WITH TWO MEANINGS, split by the instrument that
+# wrote the row, and until 2026-09-03 this line described neither: "clocks
+# dropped >5% mid-cell" named a detector that never existed. On a row written
+# before schema v5 the flag is the retired two-sample drift check: the SM clock
+# read at an idle instant before the cell and again after it, set on a >5%
+# drop. That detected whether the FIRST read had caught the idle boost clock,
+# not throttling under load (moe/bench/timing.py, CLOCKS ARE READ UNDER LOAD:
+# on the alpha-0558 arm it flagged 91% of vLLM rows above T=4096 while flagged
+# and unflagged replicates timed at ratio 0.998). On a v5 row the driver sets
+# it when the DRIFT verdict taken WHILE the trials ran failed, and on nothing
+# else (moe/bench/driver.py).
+#
+# DRIFT IS THE WHOLE EXCLUSION RULE, SINCE 2026-09-09, AND THE LEVEL SIDE IS A
+# RECORD. Between 03df2d4 (2026-09-03) and that day the driver also wrote a
+# LEVEL failure on the LOW side into `throttled`, and this line reported it as
+# a throttle. The 750-cell H200 census that closed the first gaps session says
+# it is not one: under a 700 W cap the SM clock under load is set PER TILE by
+# that kernel's own power draw. BLOCK_M=128 holds a median 1395 MHz
+# over 196 cells, BLOCK_M=256 1650 over 311, BLOCK_M=32 1474 at GROUP_SIZE_M=1
+# over 18 and 1740 from GROUP_SIZE_M=8 up over 50, memory-shaped
+# cells 1950-1980, and the calibration GEMM itself 1485 at 691 W, which is near
+# the LOW end of what dense tensor work does on this card rather than the
+# middle of anything. So a +/-5% band around the GEMM's clock is a rule against
+# a TILE: it excluded every multi-tile BLOCK_M=128 cell of the roofline arm and
+# 110 of 168 depth treads, each of them the steady state of one tile family in
+# every rep, while excluding nothing at all in the arms whose tiles happen to
+# sit near the GEMM. LEVEL is still SCORED and its side is still WRITTEN, on
+# every row, because "this cell ran at 1395 and the roof was measured at 1485"
+# is a fact the reader needs; it excludes nothing on either side. What is wrong
+# on a cell whose clock differs from the reference is the FIXED-roof fraction
+# `pct_of_achieved_tflops`, and `pct_of_roof_at_cell_clock` is the correction,
+# on the LOW side exactly as on the HIGH side.
+#
+# So this line reads DRIFT for the flag and reports the LEVEL sides beside it
+# as the record they are. The two flag origins are counted apart and named by
+# what each detected; a row whose instrument cannot be read is reported as
+# exactly that rather than filed under either.
+from collections import Counter
+
+from moe.bench.schema import (UNRECORDED, VERDICT_FAILED, TimingInstrumentUnrecorded,
+                              has_kernel_timing, row_bool, timing_verdict)
+try:
+    from moe.bench.timing import DRIFT_FRACTION, LEVEL_FRACTION, LEVEL_HIGH_FRACTION
+    level_word = (f"outside the band {LEVEL_FRACTION:.0%} to "
+                  f"{LEVEL_HIGH_FRACTION:.0%} of")
+    drift_word = f"more than {DRIFT_FRACTION:.0%} apart"
+except Exception:  # torch absent: name the constants rather than guess their values
+    level_word = "outside the band timing.LEVEL_FRACTION to timing.LEVEL_HIGH_FRACTION of"
+    drift_word = "more than timing.DRIFT_FRACTION apart"
+
+
+def side_of(r):
+    # The row's own word, never a constant copied here: the word is written by
+    # moe/bench/driver.py from timing.LEVEL_LOW / LEVEL_HIGH and read back as
+    # is, so a side this file has never heard of is printed, not misfiled.
+    # A v5 row (00f3324 to 03df2d4) carries no side because that instrument
+    # had no high edge, so its LEVEL failure is low by the instrument's own
+    # definition, not by this file's default; a v6 row with no side is a row
+    # the driver did not write, and is printed as unrecorded.
+    side = str(r.get("clock_level_side") or "").strip()
+    if side and side != UNRECORDED:
+        return side
+    try:
+        version = int(float(r.get("schema_version") or 0))
+    except ValueError:
+        version = 0
+    return "low" if 0 < version < 6 else "unrecorded"
+
+
+def sides_text(counter):
+    return ", ".join(f"{side} {n}" for side, n in sorted(counter.items()))
+
+
+flagged = [r for r in rows if row_bool(r, "throttled")]
+# EVERY LEVEL FAILURE IN THE FILE, SPLIT ON THE ONE RULE THAT EXCLUDES. A LEVEL
+# failure is a record and not an exclusion, so it is counted whether the row is
+# flagged or not: counting it over the un-flagged rows alone is what this file
+# did while LOW was a throttle. But a row that failed LEVEL and ALSO failed
+# DRIFT is excluded, on DRIFT, and until now it was counted here and printed
+# under "NONE of them is excluded for it". It is counted apart and reported on
+# its own line instead. It is not a hypothetical row: memory_branch_anchor's
+# 2026-09-09 cells carry 18 LOW and 12 DRIFT with 4 rows in both.
+level_sides = Counter()
+drifted_sides = Counter()
+for r in rows:
+    try:
+        if not has_kernel_timing(r):
+            continue
+        if timing_verdict(r, "clock_level_ok") != VERDICT_FAILED:
+            continue
+        drifted = timing_verdict(r, "clock_drift_ok") == VERDICT_FAILED
+    except TimingInstrumentUnrecorded:
+        continue
+    (drifted_sides if drifted else level_sides)[side_of(r)] += 1
+if flagged:
+    under_load, legacy, unreadable = [], [], []
+    drift = no_drift = 0
+    for r in flagged:
+        try:
+            if not has_kernel_timing(r):
+                legacy.append(r)
+                continue
+            dr = timing_verdict(r, "clock_drift_ok")
+        except TimingInstrumentUnrecorded:
+            unreadable.append(r)
+            continue
+        under_load.append(r)
+        if dr == VERDICT_FAILED:
+            drift += 1
+        else:
+            no_drift += 1
+    if under_load:
+        emit(f"{len(under_load)} rows carry throttled=True from the under-load clock "
+             f"check: DRIFT failed on {drift} (first and last under-load samples "
+             f"{drift_word}, either direction), which is the whole rule since "
+             f"2026-09-09")
+    if no_drift:
+        emit(f"{no_drift} of those rows carry throttled=True with DRIFT not failed, "
+             f"which moe/bench/driver.py never writes: since 2026-09-09 it sets the "
+             f"column from the DRIFT verdict alone. This file was not written by that "
+             f"driver, or it predates the rule and carries a LEVEL-low exclusion; do "
+             f"not pool its flagged rows with rows scored under the current rule")
+    if legacy:
+        emit(f"{len(legacy)} rows carry throttled=True from the retired pre-v5 drift "
+             f"flag: two idle-instant SM-clock reads either side of the cell, >5% "
+             f"apart. It detected an idle-boost catch, not throttling under load "
+             f"(moe/bench/timing.py)")
+    if unreadable:
+        emit(f"{len(unreadable)} rows carry throttled=True with an unreadable "
+             f"instrument column, so which detector set it cannot be said")
+if level_sides:
+    emit(f"{sum(level_sides.values())} rows failed LEVEL (SM clock under load "
+         f"{level_word} the clock the calibration GEMM ran at) and NONE of them is "
+         f"excluded for it: side {sides_text(level_sides)}, recorded. Under a power "
+         f"cap the clock is set per tile by the kernel's own draw, so a LOW cell is a "
+         f"hungry tile at its steady state and a HIGH one a memory-shaped cell "
+         f"boosting; what is wrong for both is the fixed-roof fraction "
+         f"(pct_of_achieved_tflops), and pct_of_roof_at_cell_clock is the column to "
+         f"read beside it")
+if drifted_sides:
+    emit(f"{sum(drifted_sides.values())} further rows failed LEVEL AND drifted "
+         f"(side {sides_text(drifted_sides)}): they are EXCLUDED, on DRIFT, and are "
+         f"not in the count above. A row whose warmup never reached one operating "
+         f"point has no steady clock for a side to describe")
 
 fails = [r for r in rows if not passed(r)]
 if fails:
@@ -207,23 +535,111 @@ if fails:
         print(f"- `{r['impl']}` {r['model']}/T{r['num_tokens']} "
               f"rel={row_float(r,'rel_err'):.3e} tol={row_float(r,'tol_rel_max'):.3e}")
 
-print("\n## Fastest per (impl, model, tokens), L2-flushed eager rows\n")
-best = collections.defaultdict(list)
+# WHICH COMMITS THESE ROWS NAME, and whether they exist. Written here because
+# SUMMARY.md is the file a reader opens, and "clean at 7eecff4" was
+# unverifiable for three days in a file that said nothing about it.
+check = dest / "GIT_SHA_CHECK.txt"
+if check.is_file():
+    print("\n## Commit resolvability\n")
+    print("```")
+    print(check.read_text().strip())
+    print("```")
+    if missing_sha_reason:
+        print(f"\n**Published with `--allow-missing-sha`.** Reason given: "
+              f"{missing_sha_reason}\n")
+        print("Some rows above name a commit this repository does not contain, "
+              "so the code that produced them cannot be inspected.")
+
+# THE BASIS IS READ OFF THE ROWS, NOT ASSERTED IN THE HEADING. This table used
+# to be headed "Fastest per (impl, model, tokens), L2-flushed eager rows" and
+# filtered to l2_flush=True, cuda_graph=False. The alpha-0558 arm has ZERO
+# flushed rows -- all 3,696 are l2_flush=False -- so its table was EMPTY under a
+# heading naming a basis the arm never ran, and any arm that did have flushed
+# rows got a best-of table on top of that.
+#
+# Two changes. The heading names the bases actually present, so an arm that ran
+# one basis says so and an arm that ran two is not silently collapsed into one.
+# And the number is the MEDIAN with its spread rather than the minimum: picking
+# the fastest of N is the best-of report van der Kouwe names, it moves with N,
+# and the spread is the only part of it that tells a reader whether the
+# difference beside it means anything.
+BASES = {("True", "False"): "L2-flushed eager",
+         ("False", "False"): "warm-L2 eager",
+         ("True", "True"): "L2-flushed cuda-graph",
+         ("False", "True"): "warm-L2 cuda-graph"}
+
+
+def basis_of(r):
+    key = (r.get("l2_flush", ""), r.get("cuda_graph", ""))
+    return BASES.get(key, f"l2_flush={key[0] or '?'} cuda_graph={key[1] or '?'}")
+
+
+groups = collections.defaultdict(list)
 for r in ok:
-    if r.get("l2_flush") == "True" and r.get("cuda_graph") == "False":
-        best[(r["impl"], r["model"], int(row_float(r, "num_tokens")))].append(r)
-print("| impl | covers | model | tokens | ms p50 | TFLOP/s | AI |")
-print("|---|---|---|---:|---:|---:|---:|")
-for key in sorted(best)[:60]:
-    r = min(best[key], key=lambda x: row_float(x, "ms_p50"))
+    groups[(basis_of(r), r["impl"], r["model"],
+            int(row_float(r, "num_tokens")))].append(r)
+present = sorted({k[0] for k in groups})
+print("\n## Median ms_p50 per (impl, model, tokens), by timing basis\n")
+print(f"Bases present in these rows: {', '.join(present) or 'none'}. "
+      "The bases are NOT comparable with each other: a flushed row pays a cold "
+      "L2 on every call and a graph row pays no launch.\n")
+print("| basis | impl | covers | model | tokens | n | ms p50 median | spread % | TFLOP/s | AI |")
+print("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
+for key in sorted(groups)[:80]:
+    cell = groups[key]
+    ms = sorted(row_float(r, "ms_p50") for r in cell)
+    med = statistics.median(ms)
+    spread = 100.0 * (ms[-1] - ms[0]) / med if med else 0.0
+    r = cell[len(cell) // 2]
     # `covers` is in the table because these ms are NOT comparable across rows
     # with different extents: one GEMM against a five-stage fused block.
-    print(f"| {key[0]} | {r.get('covers','')} | {key[1]} | {key[2]} | "
-          f"{row_float(r,'ms_p50'):.4f} | {row_float(r,'tflops'):.1f} | "
+    print(f"| {key[0]} | {key[1]} | {r.get('covers','')} | {key[2]} | {key[3]} | "
+          f"{len(cell)} | {med:.4f} | {spread:.1f} | "
+          f"{statistics.median([row_float(x,'tflops') for x in cell]):.1f} | "
           f"{row_float(r,'arith_intensity_compulsory'):.1f} |")
 SUMMARY
 
 log "wrote $DEST/SUMMARY.md"
+
+# THE INVARIANT, checked on the arm rather than trusted. It also catches a
+# report copied in by hand, which is how the three alpha-surface arms came to
+# ship twelve report.json files and no cells at all.
+orphans=0
+for report in "$DEST"/*report.json; do
+  [[ -e "$report" ]] || continue
+  stem="${report%.report.json}"
+  [[ -f "${stem}.cells.csv" || -f "$DEST/cells.csv" ]] && continue
+  log "ORPHAN  $(basename "$report") has no cells beside it"
+  orphans=$((orphans + 1))
+done
+if (( orphans )); then
+  log "$DEST is staged on disk and was NOT committed"
+  die "REFUSING TO PUBLISH: $orphans report(s) carry no cells.csv. A report is a
+[publish] verdict and the cells are the measurement it was read off; published
+[publish] apart, the verdict cannot be rechecked and nobody can tell which
+[publish] numbers rest on 5 samples and which on 50. Copy the cells in with
+[publish] --reports <the directory that holds both>."
+fi
+
+if (( SHA_OK == 0 )); then
+  if [[ -n "$MISSING_SHA_REASON" ]]; then
+    log "OVERRIDDEN with --allow-missing-sha: $MISSING_SHA_REASON"
+    log "  the admission is in $DEST/SUMMARY.md"
+  elif (( DRY )); then
+    log "WOULD REFUSE TO COMMIT: a row names a commit this repository does not"
+    log "  have (report in $SHA_REPORT). Rows that cite code nobody can check"
+    log "  are not reproducible. Push the commit that made them if it exists,"
+    log "  or publish with --allow-missing-sha 'why this is acceptable' and the"
+    log "  reason goes into SUMMARY.md where a reader will find it."
+  else
+    log "$DEST is staged on disk and was NOT committed"
+    die "REFUSING TO PUBLISH: a row names a commit this repository does not have
+[publish] (report in $SHA_REPORT). Rows that cite code nobody can check are not
+[publish] reproducible. Push the commit that made them if it exists, or publish
+[publish] with --allow-missing-sha 'why this is acceptable' and the reason goes
+[publish] into SUMMARY.md where a reader will find it."
+  fi
+fi
 
 if (( DRY )); then
   log "dry run: $DEST is staged on disk, nothing was committed"
@@ -247,6 +663,10 @@ if (( PUSH )); then
   # repo, so a diverged branch is the normal state, not an exception.
   if err="$(git push origin HEAD 2>&1)"; then
     log "pushed. The result set is now on GitHub."
+    # NOTHING IS APPENDED TO THE ARM HERE. The reachability verdict was taken
+    # before the commit, so it is inside the arm that was just pushed; writing
+    # to it now would modify a tracked file and dirty the tree behind a publish
+    # that succeeded.
   else
     log "push failed. git said:"
     printf '%s\n' "$err" | sed 's/^/[publish]   /'
@@ -256,6 +676,8 @@ if (( PUSH )); then
     elif printf '%s' "$err" | grep -qi 'authentication\|could not read\|permission'; then
       log "  no credentials. run: gh auth login"
     fi
-    log "  the commit is safe locally either way"
+    log "  the commit is safe locally either way, but nothing this arm's"
+    log "  GIT_SHA_CHECK.txt calls PENDING reached the remote: that verdict was"
+    log "  taken on the promise of the push that just failed."
   fi
 fi

@@ -1,0 +1,8 @@
+== 2026-10-06T22:49:29Z step rulers: rulers at the 1710 lock: torch read2d / copy / add / matmul bf16 8192^3, the device's L2 size
+RULERS at lock 1710.0 MHz, buffers 4.00 GiB:
+  read2d  torch.sum(a, dim=1), a fp32 [4096, 262144]
+  copy    y.copy_(x), fp32, each the buffer
+  add     torch.add(a, b, out=c), fp32, each the buffer
+  matmul  torch.matmul bf16 8192^3
+{"device": {"name": "NVIDIA GH200 480GB", "sms": 132, "l2_cache_size": 62914560, "total_memory": 101468602368, "capability": "9.0"}, "rates": {"read2d": {"gbps": 3814.9545513899866, "ms": 1.125823974609375}, "copy": {"gbps": 3673.273207666149, "ms": 2.338495969772339}, "add": {"gbps": 3728.2701255144057, "ms": 3.4560000896453857}, "matmul": {"tflops": 689.3662822267252, "ms": 1.5949599742889404}}}
+2026-10-06T22:49:39Z rulers: exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-rulers-r4/rulers.json)

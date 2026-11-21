@@ -1,0 +1,216 @@
+LEDGER ROWS 1 TO 9 (OUTLINE 3.1), SCORED BY THE PROCEDURE REGISTERED IN CODE DOCSTRINGS, ON THE 2026-09-27 GH200 PAGES
+scripts/scoring/session0927/score.py, WRITTEN 2026-10-05 AFTER THE PAGES. Readings marked READING are this scorer's.
+
+M3 FACTS (git, read only)
+  pages_0925  a49a2a4  committed 2026-09-25 22:16:53 UTC
+  timing      fe73508  committed 2026-09-26 17:55:37 UTC
+  wsc         bb979d4  committed 2026-09-26 17:55:37 UTC
+  p1_1605     f0a831b  committed 2026-09-26 21:26:59 UTC
+  run         161f9ec  committed 2026-09-27 05:14:58 UTC
+  pages_0927  c7fd3db  committed 2026-09-27 10:08:03 UTC
+  is-ancestor pages_0925 -> timing       True
+  is-ancestor pages_0925 -> wsc          True
+  is-ancestor pages_0925 -> p1_1605      True
+  is-ancestor pages_0925 -> run          True
+  is-ancestor pages_0925 -> pages_0927   True
+  is-ancestor timing -> wsc              False
+  is-ancestor timing -> p1_1605          True
+  is-ancestor timing -> run              True
+  is-ancestor timing -> pages_0927       True
+  is-ancestor wsc -> timing              False
+  is-ancestor wsc -> p1_1605             True
+  is-ancestor wsc -> run                 True
+  is-ancestor wsc -> pages_0927          True
+  is-ancestor p1_1605 -> timing          False
+  is-ancestor p1_1605 -> wsc             False
+  is-ancestor p1_1605 -> run             True
+  is-ancestor p1_1605 -> pages_0927      True
+  2026-09-25 page tree identical at a49a2a4, fe73508, bb979d4, f0a831b, 161f9ec, c7fd3db: True (187db863b7d8)
+  2026-09-27 page tree at c7fd3db: dda76cda0ea1 (absent at 161f9ec: True)
+
+GROUP (a): LITERAL IN A REGISTERING COMMIT'S DOCSTRING (checked at file:line)
+  row 1 f0a831b scripts/r3_timing_model.py:144 [docstring] P1 clocks and etas: "P1  a held lock at 1410, 1500 and 1605 MHz: the G=4 SHARED slope 2-6, and"
+  row 1 fe73508 scripts/r3_timing_model.py:145 [docstring] P1 etas: "the G=2 increments at 1410, at eta 1 (a fixed cycle count) and at eta"
+  row 1 fe73508 scripts/r3_timing_model.py:147 [docstring] P1 agreement rule: "and the eta the G=2 low steps give must agree."
+  row 2 fe73508 scripts/r3_timing_model.py:150 [docstring] P2 n=1 to 2 step 0.315 ms: "point prediction and is not held to the band: on the GH200 it is 0.315"
+  row 2 fe73508 scripts/r3_timing_model.py:151 [docstring] P2 band [0.538, 0.556]: "ms against a band of [0.538, 0.556]. The judge stated that band and"
+  row 2 fe73508 scripts/r3_timing_model.py:153 [docstring] P2 band rule [0.98, 1.01]: "for it. [0.98, 1.01] x the model's slope, rounded outward to 3"
+  row 3 fe73508 scripts/r3_timing_model.py:160 [docstring] P3 at least 0.10 ms, flat: "P3  G=2 at n=7 to 10, and its odd-n excess over G=4: at least 0.10 ms and"
+  row 4 fe73508 scripts/r3_timing_model.py:162 [docstring] P4 q_w2 1.031 to 1.003: "P4  G=4 n=8 to 9, where q_w2 drops (1.031 to 1.003 at 132 SMs)."
+  row 5 fe73508 scripts/r3_timing_model.py:164 [docstring] P5 flat above 2/3: "G=3 group has (2/3), a period-3 ripple when it is below."
+  row 6 fe73508 scripts/r3_timing_model.py:190 [docstring] P6 353.8 cycles: "WHAT IT CANNOT TELL. Which unit sets the floor: 353.8 cycles per CTA k-step"
+  row 6 fe73508 scripts/r3_timing_model.py:25 [docstring] P6 falsifier (AND form): "- P6 showing achieved occupancy near the occupancy limit AND cycles per CTA"
+  row 6 fe73508 scripts/r3_timing_model.py:26 [docstring] P6 falsifier, 354: "k-step far from 354;"
+  row 7 bb979d4 scripts/wave_split_bytes.py:172 [docstring] row 7 ceiling 1.12, WSC 1.082: "- GH200 w2 SHARED at G=8, n = 2 or 4, above 1.12 (it predicts 1.082 and"
+  row 7 bb979d4 scripts/wave_split_bytes.py:173 [docstring] row 7 WSC 1.118, LRU 1.139 and 1.159: "1.118; the LRU rival predicts 1.139 and 1.159);"
+  row 8 bb979d4 scripts/wave_split_bytes.py:174 [docstring] row 8 rule: "- n=5 or n=8 at G = 2, 4 or 16 outside +-5% of its registered predictions;"
+  row 9 fe73508 scripts/r3_timing_model.py:171 [docstring] P7 1782 and 1787 MHz: "two such pages: 1782 and 1787 MHz against NVML's 1935). That reading"
+  row 9 fe73508 scripts/r3_timing_model.py:175 [docstring] P8 H100 bytes: "tread, against the byte source's (the H100 at G=1: 1.32 to 4.84 W_w2"
+  row 1 fe73508 scripts/r3_timing_model.py:1618 [NOT DOCSTRING] printed by the tool (not docstring): "falsified if: a G=4 slope that neither eta gives (between them, near"
+  row 4 fe73508 scripts/r3_timing_model.py:1657 [NOT DOCSTRING] printed by the tool (not docstring): "falsified if: n=8->9 reads like the others (then the q term is wrong)"
+  row 5 fe73508 scripts/r3_timing_model.py:1667 [NOT DOCSTRING] printed by the tool (not docstring): "falsified if: the ladder does the other"
+  row 6 fe73508 scripts/r3_timing_model.py:1681 [NOT DOCSTRING] printed by the tool (not docstring): "falsified if: cycles far from this, or achieved occupancy near the limit"
+  row 6 fe73508 scripts/r3_timing_model.py:364 [NOT DOCSTRING] printed by the tool (not docstring): ""P6: achieved occupancy near the limit and cycles per CTA k-step far from 354","
+
+GROUP (b): RECOMPUTED FROM THE PRE-RUN CODE ON THE 2026-09-25 PAGES (printouts: prerun/*.txt)
+  row 1 [b] P1 G=4 slope at 1410 MHz, eta 1.0 (searched at fe73508): 0.6654  | literal before the run in: fe73508 tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1410 MHz, eta 1.0 (searched at f0a831b): 0.6654  | literal before the run in: f0a831b tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1500 MHz, eta 1.0 (searched at fe73508): 0.6259  | literal before the run in: fe73508 tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1500 MHz, eta 1.0 (searched at f0a831b): 0.6259  | literal before the run in: f0a831b tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1605 MHz, eta 1.0 (searched at fe73508): 0.5854  | literal before the run in: none
+  row 1 [b] P1 G=4 slope at 1605 MHz, eta 1.0 (searched at f0a831b): 0.5854  | literal before the run in: f0a831b scripts/r3_timing_model.py:342; f0a831b tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=2 increments at 1410, eta 1.0: 0.550 0.731 0.600 0.733 0.598  | literal before the run in: fe73508 tests/test_r3_timing_model.py:326
+  row 1 [b] P1 G=4 slope at 1410 MHz, eta 0.35 (searched at fe73508): 0.5878  | literal before the run in: fe73508 tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1410 MHz, eta 0.35 (searched at f0a831b): 0.5878  | literal before the run in: f0a831b tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1500 MHz, eta 0.35 (searched at fe73508): 0.5754  | literal before the run in: fe73508 tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1500 MHz, eta 0.35 (searched at f0a831b): 0.5754  | literal before the run in: f0a831b tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=4 slope at 1605 MHz, eta 0.35 (searched at fe73508): 0.5621  | literal before the run in: none
+  row 1 [b] P1 G=4 slope at 1605 MHz, eta 0.35 (searched at f0a831b): 0.5621  | literal before the run in: f0a831b scripts/r3_timing_model.py:343; f0a831b tests/test_r3_timing_model.py:323
+  row 1 [b] P1 G=2 increments at 1410, eta 0.35: 0.393 0.703 0.473 0.704 0.471  | literal before the run in: fe73508 tests/test_r3_timing_model.py:327
+  row 2 [b] P2 model slope 2-6 (the band's centre): 0.5499  | literal before the run in: fe73508 tests/test_r3_timing_model.py:307; fe73508 tests/test_r3_timing_model.py:332
+  row 3 [b] P3 odd-n excess at n=3,5,7,9: 0.143 0.145 0.144 0.151  | literal before the run in: none
+  row 3 [b] P3 G=2 n=7 time: 4.0768  | literal before the run in: fe73508 tests/test_r3_timing_model.py:344
+  row 4 [b] P4 G=4 n=8->9 increment: 0.504  | literal before the run in: fe73508 tests/test_r3_timing_model.py:346
+  row 4 [b] P4 median of the other increments: 0.550  | literal before the run in: none
+  row 5 [b] P5 G=3 increments: 0.342 0.523 0.550 0.567 0.533 0.563 0.566  | literal before the run in: fe73508 tests/test_r3_timing_model.py:350
+  row 5 [b] P5 rho*_w1: 0.690  | literal before the run in: fe73508 tests/test_r3_timing_model.py:310
+  row 8 [b] WSC shared w1 G=2 n=5: 3.002  | literal before the run in: none
+  row 8 [b] WSC shared w1 G=2 n=8: 4.003  | literal before the run in: none
+  row 8 [b] WSC shared w2 G=2 n=5: 2.690  | literal before the run in: bb979d4 tests/test_wave_split_bytes.py:696
+  row 8 [b] WSC shared w2 G=2 n=8: 3.330  | literal before the run in: none
+  row 8 [b] WSC private w1 G=2 n=5: 5.004  | literal before the run in: none
+  row 8 [b] WSC private w1 G=2 n=8: 8.007  | literal before the run in: none
+  row 8 [b] WSC private w2 G=2 n=5: 5.019  | literal before the run in: none
+  row 8 [b] WSC private w2 G=2 n=8: 8.034  | literal before the run in: none
+  row 8 [b] WSC shared w1 G=4 n=5: 2.003  | literal before the run in: none
+  row 8 [b] WSC shared w1 G=4 n=8: 2.003  | literal before the run in: none
+  row 8 [b] WSC shared w2 G=4 n=5: 2.027  | literal before the run in: none
+  row 8 [b] WSC shared w2 G=4 n=8: 1.940  | literal before the run in: none
+  row 8 [b] WSC private w1 G=4 n=5: 5.011  | literal before the run in: none
+  row 8 [b] WSC private w1 G=4 n=8: 8.018  | literal before the run in: none
+  row 8 [b] WSC private w2 G=4 n=5: 5.050  | literal before the run in: none
+  row 8 [b] WSC private w2 G=4 n=8: 8.087  | literal before the run in: none
+  row 8 [b] WSC shared w1 G=16 n=5: 1.260  | literal before the run in: none
+  row 8 [b] WSC shared w1 G=16 n=8: 1.007  | literal before the run in: none
+  row 8 [b] WSC shared w2 G=16 n=5: 1.400  | literal before the run in: none
+  row 8 [b] WSC shared w2 G=16 n=8: 1.159  | literal before the run in: bb979d4 scripts/wave_split_bytes.py:173 DOCSTRING (coincident: the LRU rival's G=8 n=4 prediction (1.159), not WSC's G=16 n=8 number)
+  row 8 [b] WSC private w1 G=16 n=5: 5.063  | literal before the run in: none
+  row 8 [b] WSC private w1 G=16 n=8: 8.118  | literal before the run in: none
+  row 8 [b] WSC private w2 G=16 n=5: 5.278  | literal before the run in: none
+  row 8 [b] WSC private w2 G=16 n=8: 8.578  | literal before the run in: none
+  fe73508 against f0a831b: P1 at 1410 and 1500 identical, 1600 -> 1605 only; everything else identical: True
+
+VERDICTS
+  row 1: HELD   (hand: HELD)
+     rule: READING R0 for 'gives' and 'agree' (no number registered); falsifier as printed: 'a G=4 slope that neither eta gives ... or the eta from the G=4 slope and the eta from the G=2 low steps disagreeing'
+  row 2: FALSIFIED   (hand: HELD)
+     rule: REGISTERED: every SHARED per-tread increment from n=2 to n=6 and the slope 2-6 inside the band, at G=8 and G=32 (fe73508 docstring P2; the printed falsifier)
+  row 3: HELD   (hand: HELD)
+     rule: REGISTERED: every odd-n excess >= 0.1 ms; READING for 'flat in n': |OLS change over n=3..9| < 0.05 ms (half the registered floor)
+  row 4: HELD   (hand: HELD)
+     rule: READING R0 for 'reads like the others': n=8->9 within [0.98, 1.01] x the median of the other measured increments (n=2->3 to 7->8; the registered median skips n=1->2 and n=8->9)
+  row 5: FALSIFIED   (hand: FALSIFIED)
+     rule: REGISTERED: the model calls G=3 flat (rho*_w1 above 2/3); falsified if the ladder does the other. READING for 'a period-3 ripple': the increments n=2->3 to 7->8 grouped by n mod 3; ripple if the measured phase-mean range exceeds the registered ladder's own by more than 0.018 ms (P2's band width)
+  row 6: UNDECIDED   (hand: HELD)
+     rule: REGISTERED words, no number: falsified by achieved occupancy near the limit AND cycles far from 354 (docstring falsifier list and the FALSIFIERS tuple) or, as the tool prints it, cycles far OR occupancy near. READINGS: loose (near >= 90% of the limit, far >= 5%) and R0 ([0.98, 1.01] for both). UNDECIDED when the forms or readings part.
+  row 7: HELD   (hand: HELD)
+     rule: REGISTERED: falsified if GH200 w2 SHARED at G=8, n = 2 or 4 reads above 1.12
+  row 8: FALSIFIED   (hand: FALSIFIED)
+     rule: REGISTERED: falsified if n=5 or n=8 at G = 2, 4 or 16 is outside +-5% of the registered prediction (relative to the prediction). NATIVE takes SHARED's number, as the pre-run printout states; n=7 is printed by the tool but is not in the falsifier
+  row 9: not answered   (hand: not answered)
+     rule: P7 needs an unlocked page of the card among the inputs beside a locked fit; P8 needs T3 to trip (the H100 at G=1)
+     row 1 G=4 1410: slope 0.6593 (endpoint 0.6598) vs eta1 0.6654; ratio 0.9908; etas giving it [1.0]; inverted eta 0.952
+     row 1 G=4 1500: slope 0.6222 (endpoint 0.6222) vs eta1 0.6259; ratio 0.9940; etas giving it [1.0]; inverted eta 0.954
+     row 1 G=4 1605: slope 0.5809 (endpoint 0.5812) vs eta1 0.5854; ratio 0.9922; etas giving it [1.0]; inverted eta 0.875
+     row 1 G=2 1410 increments 0.541 0.732 0.591 0.731 0.595; low steps given by etas [1.0]; inverted eta 0.968; common eta [1.0]
+     row 2 G=8: n2->3 0.54365 n3->4 0.54118 n4->5 0.54947 n5->6 0.54467 slope_2_6 0.54486 | band [0.538, 0.556] | outside: none | inside if rounded to 3 decimals: True
+     row 2 G=32: n2->3 0.54147 n3->4 0.54790 n4->5 0.53754 n5->6 0.54659 slope_2_6 0.54324 | band [0.538, 0.556] | outside: n4->5 | inside if rounded to 3 decimals: True
+     row 3 excess 0.1543 0.1532 0.1617 0.1596 vs 0.143 0.145 0.144 0.151; OLS change n=3..9 +0.0072 ms
+     row 4 n=8->9 0.5081 vs 0.5036 (ratio 1.0090); others' median 0.5465 (ratio 0.9297)
+     row 5 increments 0.491 0.576 0.550 0.516 0.580 0.560 vs 0.523 0.550 0.567 0.533 0.563 0.566; phase-mean range 0.0743 vs registered ladder's 0.0382
+     row 6 cycles w1 350.3 365.0, w2 354.1 367.4 vs 353.8 (max |dev| 3.83%); achieved occupancy / limit w1 0.975 0.992, w2 0.883 0.961 (limit {'w1': 5.0, 'w2': 4.0} CTAs per SM)
+     row 6 reading_loose: AND HELD, OR FALSIFIED (near 28, far 0 of 32 cells; both: none)
+     row 6 reading_R0: AND FALSIFIED, OR FALSIFIED (near 13, far 10 of 32 cells; both: r3f-g2.json n=3 w1)
+        r3f-g2.json              n=2 w1   351.2 cycles (-0.73%), occupancy 0.981 of the limit
+        r3f-g2.json              n=2 w2   360.5 cycles (+1.90%), occupancy 0.888 of the limit
+        r3f-g2.json              n=3 w1   365.0 cycles (+3.16%), occupancy 0.987 of the limit
+        r3f-g2.json              n=3 w2   358.1 cycles (+1.20%), occupancy 0.922 of the limit
+        r3f-g2.json              n=4 w1   350.7 cycles (-0.89%), occupancy 0.989 of the limit
+        r3f-g2.json              n=4 w2   355.5 cycles (+0.49%), occupancy 0.942 of the limit
+        r3f-g2.json              n=6 w1   350.4 cycles (-0.96%), occupancy 0.992 of the limit
+        r3f-g2.json              n=6 w2   354.1 cycles (+0.07%), occupancy 0.961 of the limit
+        r3f-g64.json             n=2 w1   351.4 cycles (-0.68%), occupancy 0.976 of the limit
+        r3f-g64.json             n=2 w2   361.1 cycles (+2.07%), occupancy 0.886 of the limit
+        r3f-g64.json             n=3 w1   350.6 cycles (-0.91%), occupancy 0.983 of the limit
+        r3f-g64.json             n=3 w2   357.7 cycles (+1.10%), occupancy 0.922 of the limit
+        r3f-g64.json             n=4 w1   350.6 cycles (-0.90%), occupancy 0.987 of the limit
+        r3f-g64.json             n=4 w2   356.0 cycles (+0.62%), occupancy 0.941 of the limit
+        r3f-g64.json             n=6 w1   350.3 cycles (-0.99%), occupancy 0.990 of the limit
+        r3f-g64.json             n=6 w2   354.7 cycles (+0.26%), occupancy 0.960 of the limit
+        r3f-g64-unlocked.json    n=2 w1   352.1 cycles (-0.48%), occupancy 0.975 of the limit
+        r3f-g64-unlocked.json    n=2 w2   367.4 cycles (+3.83%), occupancy 0.883 of the limit
+        r3f-g64-unlocked.json    n=3 w1   351.1 cycles (-0.77%), occupancy 0.983 of the limit
+        r3f-g64-unlocked.json    n=3 w2   359.9 cycles (+1.72%), occupancy 0.918 of the limit
+        r3f-g64-unlocked.json    n=4 w1   351.1 cycles (-0.78%), occupancy 0.986 of the limit
+        r3f-g64-unlocked.json    n=4 w2   357.4 cycles (+1.02%), occupancy 0.939 of the limit
+        r3f-g64-unlocked.json    n=6 w1   350.8 cycles (-0.86%), occupancy 0.990 of the limit
+        r3f-g64-unlocked.json    n=6 w2   355.4 cycles (+0.46%), occupancy 0.959 of the limit
+        r3f-g64-lock1710.json    n=2 w1   351.7 cycles (-0.59%), occupancy 0.975 of the limit
+        r3f-g64-lock1710.json    n=2 w2   365.2 cycles (+3.22%), occupancy 0.883 of the limit
+        r3f-g64-lock1710.json    n=3 w1   351.0 cycles (-0.81%), occupancy 0.983 of the limit
+        r3f-g64-lock1710.json    n=3 w2   359.2 cycles (+1.52%), occupancy 0.919 of the limit
+        r3f-g64-lock1710.json    n=4 w1   350.8 cycles (-0.85%), occupancy 0.987 of the limit
+        r3f-g64-lock1710.json    n=4 w2   356.8 cycles (+0.85%), occupancy 0.939 of the limit
+        r3f-g64-lock1710.json    n=6 w1   350.6 cycles (-0.90%), occupancy 0.990 of the limit
+        r3f-g64-lock1710.json    n=6 w2   355.2 cycles (+0.38%), occupancy 0.960 of the limit
+     row 7 q 1.0782 1.0996 vs WSC 1.082 1.118, LRU {'2': 1.139, '4': 1.159}, ceiling 1.12; G=8 page stored VALIDITY not PASS: [['V10', 'FAIL']]
+     row 8 shared  w2 G=2  n=5 meas 2.862 reg 2.690   +6.4% OUTSIDE
+     row 8 private w2 G=2  n=5 meas 5.027 reg 5.019   +0.2% 
+     row 8 shared  w2 G=2  n=7 meas 3.845 reg 3.606   +6.6% (n=7, not in the falsifier)
+     row 8 private w2 G=2  n=7 meas 7.046 reg 7.029   +0.2% (n=7, not in the falsifier)
+     row 8 shared  w2 G=2  n=8 meas 3.838 reg 3.330  +15.3% OUTSIDE
+     row 8 private w2 G=2  n=8 meas 8.047 reg 8.034   +0.2% 
+     row 8 shared  w2 G=4  n=5 meas 2.034 reg 2.027   +0.3% 
+     row 8 private w2 G=4  n=5 meas 5.070 reg 5.050   +0.4% 
+     row 8 shared  w2 G=4  n=7 meas 2.563 reg 2.517   +1.8% (n=7, not in the falsifier)
+     row 8 private w2 G=4  n=7 meas 7.106 reg 7.074   +0.4% (n=7, not in the falsifier)
+     row 8 shared  w2 G=4  n=8 meas 2.061 reg 1.940   +6.2% OUTSIDE
+     row 8 private w2 G=4  n=8 meas 8.123 reg 8.087   +0.4% 
+     row 8 shared  w2 G=16 n=5 meas 1.513 reg 1.400   +8.1% OUTSIDE
+     row 8 private w2 G=16 n=5 meas 5.347 reg 5.278   +1.3% 
+     row 8 shared  w2 G=16 n=7 meas 1.762 reg 1.540  +14.4% (n=7, not in the falsifier)
+     row 8 private w2 G=16 n=7 meas 7.581 reg 7.443   +1.9% (n=7, not in the falsifier)
+     row 8 shared  w2 G=16 n=8 meas 1.384 reg 1.159  +19.4% OUTSIDE
+     row 8 private w2 G=16 n=8 meas 8.843 reg 8.578   +3.1% 
+     row 8 outside (all arms, both GEMMs): {'2': ['shared w2 n=5 +6.4%', 'native w2 n=5 +6.3%', 'shared w2 n=8 +15.3%', 'native w2 n=8 +15.5%'], '4': ['shared w2 n=8 +6.2%', 'native w2 n=8 +6.3%'], '16': ['shared w2 n=5 +8.1%', 'native w2 n=5 +8.1%', 'shared w2 n=8 +19.4%', 'native w2 n=8 +19.4%']}; without the G=2 page (V7 FAIL even re-scored): 6 cells outside; stored VALIDITY not PASS: {'2': [['V7', 'FAIL'], ['V10', 'FAIL']], '4': [['V10', 'FAIL']], '16': [['V10', 'FAIL']]}
+     row 9 unlocked 2026-09-27 timed pages: none
+
+AGAINST THE HAND SCORING (session README)
+  row 1 agree: verdict: scorer HELD | hand HELD
+  row 2 DIFFERS: verdict: scorer FALSIFIED | hand HELD
+  row 3 agree: verdict: scorer HELD | hand HELD
+  row 4 agree: verdict: scorer HELD | hand HELD
+  row 5 agree: verdict: scorer FALSIFIED | hand FALSIFIED
+  row 6 DIFFERS: verdict: scorer UNDECIDED | hand HELD
+  row 7 agree: verdict: scorer HELD | hand HELD
+  row 8 agree: verdict: scorer FALSIFIED | hand FALSIFIED
+  row 9 agree: verdict: scorer not answered | hand not answered
+  row 1 DIFFERS: G=4 slopes 2-6 at 1410/1500/1605: scorer 0.6593 0.6222 0.5809 | hand 0.6598 0.6222 0.5812 | the registered slope 2-6 is the OLS slope (`_slope`); the README's values are (T6 - T2) / 4
+  row 1 agree: registered eta-1 slopes (recomputed): scorer 0.6654 0.6259 0.5854 | hand 0.6654 0.6259 0.5854
+  row 1 agree: registered eta-0.35 slopes (recomputed): scorer 0.5878 0.5754 0.5621 | hand 0.5878 0.5754 0.5621
+  row 1 agree: G=2 increments at 1410: scorer 0.5408 0.7316 0.5911 0.7311 0.5948 | hand 0.5410 0.7320 0.5910 0.7310 0.5950
+  row 1 agree: registered G=2 eta-1 increments (recomputed): scorer 0.5501 0.7310 0.5999 0.7328 0.5980 | hand 0.5500 0.7310 0.6000 0.7330 0.5980
+  row 3 agree: odd-n excess: scorer 0.1543 0.1532 0.1617 0.1596 | hand 0.1540 0.1530 0.1620 0.1600
+  row 3 agree: registered excess (recomputed): scorer 0.1432 0.1450 0.1438 0.1509 | hand 0.1430 0.1450 0.1440 0.1510
+  row 4 agree: G=4 n=8->9: scorer 0.5081 | hand 0.5080
+  row 4 agree: registered n=8->9 (recomputed): scorer 0.5036 | hand 0.5040
+  row 5 agree: G=3 increments n=2->3..7->8: scorer 0.4910 0.5756 0.5499 0.5156 0.5796 0.5600 | hand 0.4910 0.5760 0.5500 0.5160 0.5800 0.5600
+  row 6 DIFFERS: w1 cycles range: scorer 350 365 | hand 350 352 | all four floor captures; the README range leaves out r3f-g2 n=3 w1
+  row 6 agree: w2 cycles range: scorer 354 367 | hand 354 367
+  row 6 agree: registered cycles (recomputed): scorer 353.8198 | hand 353.8000
+  row 7 agree: w2 SHARED G=8 q at n=2, 4: scorer 1.0782 1.0996 | hand 1.0780 1.1000
+  row 7 agree: registered q (recomputed): scorer 1.0815 1.1179 | hand 1.0820 1.1180
+  row 8 DIFFERS: w2 SHARED G=16 n=5, 7, 8 (% vs registered): scorer 8.0754 14.4265 19.4298 | hand 7.5000 12.6000 16.3000 | the README divides by the measured q: (meas - reg) / meas reads 7.5, 12.6, 16.3; n=7 is not in the registered falsifier
+  row 8 DIFFERS: w2 SHARED G=4 n=8 (%): scorer 6.2419 | hand 5.9000
+  row 8 DIFFERS: w2 SHARED G=2 n=5, 7, 8 (%): scorer 6.3969 6.6402 15.2664 | hand 6.0000 6.2000 13.2000
+  row 8 DIFFERS: every w1 and PRIVATE cell within 1.5% (README, beside the test): scorer False | hand True | over the cells the pre-run printout predicts at G = 2, 4, 16 and n = 5, 7, 8 the worst is private w2 G=16 n=8 +3.1%

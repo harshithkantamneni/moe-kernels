@@ -1,0 +1,291 @@
+{
+ "registration": "2026-10-07-rental5-bk128-gh200",
+ "pages": {
+  "bk64": "counted",
+  "bk128": "counted"
+ },
+ "cells": [
+  {
+   "n": 4,
+   "q_meas": 0.9957884252419675,
+   "e": {
+    "H_C": 0.0018254252545515381,
+    "SYNC": 0.7143907286881737,
+    "PS": -0.0008985543643045268
+   }
+  },
+  {
+   "n": 5,
+   "q_meas": 0.9956518200348005,
+   "e": {
+    "H_C": 0.001744429655968105,
+    "SYNC": 0.7257428749816712,
+    "PS": -0.0010045421678352984
+   }
+  },
+  {
+   "n": 6,
+   "q_meas": 0.9951443253726695,
+   "e": {
+    "H_C": 0.0012771479035789124,
+    "SYNC": 0.7338670523702959,
+    "PS": -0.0014896963938741958
+   }
+  },
+  {
+   "n": 7,
+   "q_meas": 0.9946134564129687,
+   "e": {
+    "H_C": 0.0007712016165151159,
+    "SYNC": 0.7387009677803957,
+    "PS": -0.0020073404417670915
+   }
+  },
+  {
+   "n": 8,
+   "q_meas": 0.9948700591913628,
+   "e": {
+    "H_C": 0.0010525598006918546,
+    "SYNC": 0.7442140792964778,
+    "PS": -0.0017368443425574975
+   }
+  },
+  {
+   "n": 9,
+   "q_meas": 0.9948739531720527,
+   "e": {
+    "H_C": 0.0010736019891717241,
+    "SYNC": 0.7476403044126092,
+    "PS": -0.001723921953966423
+   }
+  }
+ ],
+ "H_C": {
+  "rms": 0.001345459912117603,
+  "verdict": "HOLDS"
+ },
+ "SYNC": {
+  "cells_beyond": 6,
+  "bound": 0.007636753236814714,
+  "verdict": "EXCLUDED"
+ },
+ "PS": {
+  "rms": 0.0015304493393165526,
+  "verdict": "PRINTED"
+ },
+ "verdict": "H_C HOLDS; SYNC EXCLUDED",
+ "secondary": {
+  "calibration": {
+   "cells": 6,
+   "clusters": 1,
+   "fit": "OLS ln(meas) on ln(pred)",
+   "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+   "seed": 20261007,
+   "resamples": 2000,
+   "intercept": 0.036632,
+   "slope": 6.751661,
+   "verdict": "NOT RESOLVED (1 clusters, under 6): descriptive only"
+  },
+  "gamma": {
+   "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+   "concordant": 0,
+   "discordant": 0,
+   "resolved_threshold_ln": 0.005091,
+   "gamma": null,
+   "verdict": "NOT RESOLVED (0 resolved pairs, under 10)"
+  },
+  "gamma_alt_sigma": {
+   "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+   "concordant": 0,
+   "discordant": 0,
+   "resolved_threshold_ln": 0.002828,
+   "gamma": null,
+   "verdict": "NOT RESOLVED (0 resolved pairs, under 10)"
+  },
+  "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "olmoe-1b-7b-bk64": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2h-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2h-lock1710",
+     "use": "counted"
+    }
+   },
+   "olmoe-1b-7b-bk128": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2i-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2i-lock1710",
+     "use": "counted"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "H_C / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "SYNC / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "EXCLUDED",
+    "registered": "EXCLUDED"
+   },
+   {
+    "path": "PS / verdict",
+    "ALL": "PRINTED",
+    "CLEAN": "PRINTED",
+    "registered": "PRINTED"
+   },
+   {
+    "path": "verdict",
+    "ALL": "H_C HOLDS; SYNC EXCLUDED",
+    "CLEAN": "H_C HOLDS; SYNC EXCLUDED",
+    "registered": "H_C HOLDS; SYNC EXCLUDED"
+   },
+   {
+    "path": "secondary / calibration / verdict",
+    "ALL": "NOT RESOLVED (1 clusters, under 6): descriptive only",
+    "CLEAN": "NOT RESOLVED (1 clusters, under 6): descriptive only",
+    "registered": "NOT RESOLVED (1 clusters, under 6): descriptive only"
+   },
+   {
+    "path": "secondary / gamma / verdict",
+    "ALL": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "CLEAN": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "registered": "NOT RESOLVED (0 resolved pairs, under 10)"
+   },
+   {
+    "path": "secondary / gamma_alt_sigma / verdict",
+    "ALL": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "CLEAN": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "registered": "NOT RESOLVED (0 resolved pairs, under 10)"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-07-rental5-bk128-gh200",
+   "pages": {
+    "bk64": "counted",
+    "bk128": "counted"
+   },
+   "cells": [
+    {
+     "n": 4,
+     "q_meas": 0.9957884252419675,
+     "e": {
+      "H_C": 0.0018254252545515381,
+      "SYNC": 0.7143907286881737,
+      "PS": -0.0008985543643045268
+     }
+    },
+    {
+     "n": 5,
+     "q_meas": 0.9956518200348005,
+     "e": {
+      "H_C": 0.001744429655968105,
+      "SYNC": 0.7257428749816712,
+      "PS": -0.0010045421678352984
+     }
+    },
+    {
+     "n": 6,
+     "q_meas": 0.9951443253726695,
+     "e": {
+      "H_C": 0.0012771479035789124,
+      "SYNC": 0.7338670523702959,
+      "PS": -0.0014896963938741958
+     }
+    },
+    {
+     "n": 7,
+     "q_meas": 0.9946134564129687,
+     "e": {
+      "H_C": 0.0007712016165151159,
+      "SYNC": 0.7387009677803957,
+      "PS": -0.0020073404417670915
+     }
+    },
+    {
+     "n": 8,
+     "q_meas": 0.9948700591913628,
+     "e": {
+      "H_C": 0.0010525598006918546,
+      "SYNC": 0.7442140792964778,
+      "PS": -0.0017368443425574975
+     }
+    },
+    {
+     "n": 9,
+     "q_meas": 0.9948739531720527,
+     "e": {
+      "H_C": 0.0010736019891717241,
+      "SYNC": 0.7476403044126092,
+      "PS": -0.001723921953966423
+     }
+    }
+   ],
+   "H_C": {
+    "rms": 0.001345459912117603,
+    "verdict": "HOLDS"
+   },
+   "SYNC": {
+    "cells_beyond": 6,
+    "bound": 0.007636753236814714,
+    "verdict": "EXCLUDED"
+   },
+   "PS": {
+    "rms": 0.0015304493393165526,
+    "verdict": "PRINTED"
+   },
+   "verdict": "H_C HOLDS; SYNC EXCLUDED",
+   "secondary": {
+    "calibration": {
+     "cells": 6,
+     "clusters": 1,
+     "fit": "OLS ln(meas) on ln(pred)",
+     "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+     "seed": 20261007,
+     "resamples": 2000,
+     "intercept": 0.036632,
+     "slope": 6.751661,
+     "verdict": "NOT RESOLVED (1 clusters, under 6): descriptive only"
+    },
+    "gamma": {
+     "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+     "concordant": 0,
+     "discordant": 0,
+     "resolved_threshold_ln": 0.005091,
+     "gamma": null,
+     "verdict": "NOT RESOLVED (0 resolved pairs, under 10)"
+    },
+    "gamma_alt_sigma": {
+     "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+     "concordant": 0,
+     "discordant": 0,
+     "resolved_threshold_ln": 0.002828,
+     "gamma": null,
+     "verdict": "NOT RESOLVED (0 resolved pairs, under 10)"
+    },
+    "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+   }
+  }
+ }
+}

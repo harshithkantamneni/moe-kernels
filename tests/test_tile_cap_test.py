@@ -1,0 +1,1058 @@
+"""The four apparatus repairs to `scripts/tile_cap_test.py`, each pinned.
+
+`tests/test_tile_cap.py` is the experiment's own suite: the depth argument, the
+two worlds, the demotion from a production claim, the run-id collisions. This
+file is narrower and is about the APPARATUS the 2026-09-02 audit found below the
+bar, one section per finding, so that a later reader can see which check exists
+because of which defect:
+
+  R1  V3 asked a FUSED layer to reach the DENSE cuBLAS peak. No published arm
+      exceeds 0.54 (H200) or 0.64 (A100), so the gate failed on every card, the
+      FAIL voided the page and the arm was INVALID by construction: nine pod
+      minutes whose verdict was computable from the calibration alone.
+  R2  Both planted worlds were noiseless, so every noise-floored threshold was
+      exercised at the one spread no pod produces; nothing asserted a verdict
+      per world; and C2's FAIL branch was unreachable in either world.
+  R3  The file knew `B/(A+B)` biases the cap and said so in prose, with no
+      number. `moe.bench.ai_model` names the factor exactly.
+  R4  The instrument, the provenance block, the exit-code table and the run-id
+      rule were the script's own rather than the repository's.
+
+Everything here runs off GPU.
+"""
+from __future__ import annotations
+
+import dataclasses
+import importlib.util
+import json
+import math
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+
+def _load_script(name: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: `@dataclass` resolves annotations through
+    # `sys.modules[cls.__module__]`, and a module that is not there yet makes
+    # the decorator fail with an AttributeError that names nothing useful.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+CAP = _load_script("tile_cap_test")
+SWEEP = CAP.SWEEP
+
+from moe.bench import ai_model, exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
+from moe.spec import MODEL_CONFIGS  # noqa: E402
+
+MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
+TILES = (16, 256)
+#: WITHDRAWN 2026-09-02 as any card's ridge: two compute calibrations of one H200
+#: (its own is 162.8). Planted here because the self-test pins it as HYPOTHESIS and
+#: a planted number is not a measurement; nothing below reads it as a card's ridge.
+RIDGE, RIDGE_HI = 160.3, 176.2   # withdrawn pair
+BAND = (RIDGE, RIDGE_HI)
+BANDWIDTH = 4374.5
+ROOF = RIDGE * BANDWIDTH * 1e9 / 1e12
+
+
+def _cells(alpha: float, *, r_max: int = 2112, noise: float = 0.0, seed: int = 0):
+    grid = SWEEP.build_grid(MIXTRAL, TILES, r_max, 32, 6)
+    return grid, SWEEP.synthetic_cells(
+        MIXTRAL, grid, TILES, alpha=alpha, ridge=RIDGE, bandwidth_gbps=BANDWIDTH,
+        b=2, sm_count=132, noise=noise, seed=seed)
+
+
+def _report(alpha: float, **kw):
+    grid, cells = _cells(alpha, **kw)
+    return CAP.analyse(
+        cells, MIXTRAL, cap_tile=16, control_tile=256, alpha=alpha, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b", dtype="bf16",
+        compiles={16: 1, 256: 1}, executed={16: 1, 256: 1}, sm_count=132,
+        sm_source="test", depth=CAP.required_depth(16, b=2, ridge_band=BAND),
+        planned_cells=len(grid) * len(TILES), header=[])
+
+
+def _tp(fraction: float, treads: int = 4):
+    """A control throughput ladder pinned at one fraction of the dense peak."""
+    return [(n, fraction) for n in range(1, treads + 1)]
+
+
+# --------------------------------------------------------------------------
+# R1. The ruler V3 scores against.
+# --------------------------------------------------------------------------
+
+def test_the_published_fused_layer_band_is_where_the_v3_floor_comes_from():
+    """The floor is the band's low end, not a number someone liked.
+
+    46.5-75.6% of `ridge x bandwidth` is what the sibling's `bracketing`
+    docstring counted across 26 published reports. If that band is ever
+    re-measured, the floor must move with it rather than being edited
+    separately, which is what this pins.
+    """
+    lo, hi = CAP.FUSED_PLATEAU_BAND
+    assert CAP.FUSED_ROOF_FLOOR == lo
+    assert lo < hi <= CAP.FUSED_ROOF_CEILING
+    # The dense-compute-bound fraction the sibling uses is ABOVE the whole
+    # band, which is exactly why asking a fused layer for it never passed.
+    assert SWEEP.COMPUTE_BOUND_FRACTION > hi
+
+
+@pytest.mark.parametrize("fraction", [0.465, 0.51, 0.54, 0.64, 0.756, 0.95])
+def test_v3_passes_everywhere_a_real_fused_layer_has_ever_landed(fraction):
+    """THE DEFECT, STATED AS A RANGE. Every published arm sits in here."""
+    gate = CAP.gate_v3_control_roof(_tp(fraction), control_tile=256,
+                                    roof_tflops=ROOF, plateau=fraction * ROOF)
+    assert gate.verdict == CAP.PASS, gate.measured
+
+
+@pytest.mark.parametrize("fraction", [0.0001, 0.10, 0.30, 0.46])
+def test_v3_still_fails_when_nothing_reached_any_roof(fraction):
+    """The FAIL branch is reachable, which is what makes the PASS mean anything."""
+    gate = CAP.gate_v3_control_roof(_tp(fraction), control_tile=256,
+                                    roof_tflops=ROOF, plateau=fraction * ROOF)
+    assert gate.verdict == CAP.FAIL
+
+
+@pytest.mark.parametrize("verdict,fraction", [(CAP.FAIL, 0.10),
+                                              (CAP.UNDECIDED, 1.40)])
+def test_the_v3_consequence_does_not_invite_a_quote_off_an_invalid_page(
+        verdict, fraction):
+    """WHAT A NON-PASS ON THIS GATE COSTS, in the gate's own words.
+
+    The consequence text used to end at "C2 SURVIVES this: it needs no roof,
+    only the cap tile's own treads", which contradicted the exit code the same
+    gate produces. V3 is VALIDITY, `moe.bench.exit_codes` maps a VALIDITY
+    non-PASS to INVALID, and INVALID means nothing on the page may be quoted --
+    C2 included. A reader following the old sentence would quote a C2 off a page
+    the table had already voided.
+
+    Both halves have to be there, because dropping either one is a different
+    error: without the first the page looks readable, and without the second the
+    surviving claim gets thrown away with the dead one and a whole arm is
+    re-measured to recover a number that never needed the roof.
+
+    Checked on BOTH non-PASS branches, since one text serves the floor and the
+    ceiling.
+    """
+    gate = CAP.gate_v3_control_roof(_tp(fraction), control_tile=256,
+                                    roof_tflops=ROOF, plateau=fraction * ROOF)
+    assert gate.verdict == verdict
+    assert "THE WHOLE PAGE IS UNQUOTABLE, C2 INCLUDED" in gate.consequence
+    assert "arithmetically independent of the roof" in gate.consequence
+    assert "re-running the CONTROL is enough to recover it" in gate.consequence
+    assert "C2 is not a result" in gate.consequence
+
+
+def test_v3_refuses_a_control_that_beat_the_dense_peak():
+    """A broken ruler is not a strong kernel, and UNDECIDED is not PASS."""
+    gate = CAP.gate_v3_control_roof(_tp(1.40), control_tile=256,
+                                    roof_tflops=ROOF, plateau=1.40 * ROOF)
+    assert gate.verdict == CAP.UNDECIDED
+    assert "ABOVE the dense peak" in " ".join(gate.lines)
+
+
+def test_the_upper_wall_widens_with_the_measured_spread():
+    """`top` is a MAXIMUM over treads, so it carries the spread upward.
+
+    The planted world lands at exactly 1.000 of the dense peak at zero noise and
+    at 1.02 / 1.04 / 1.07 at spreads of 1 / 2 / 3%. A fixed wall would turn the
+    self-test's own noise into a refusal, so the wall widens the way V2's
+    flatness gate does.
+    """
+    quiet = CAP.gate_v3_control_roof(_tp(1.07), control_tile=256,
+                                     roof_tflops=ROOF, plateau=ROOF, noise=0.0)
+    noisy = CAP.gate_v3_control_roof(_tp(1.07), control_tile=256,
+                                     roof_tflops=ROOF, plateau=ROOF, noise=0.03)
+    assert quiet.verdict == CAP.UNDECIDED
+    assert noisy.verdict == CAP.PASS
+
+
+def test_the_gate_and_the_report_share_one_fused_roof():
+    """One function owns the number, so a threshold cannot be registered for
+    one quantity and scored against another."""
+    report = _report(CAP.ALPHA)
+    assert (report.payload["fused_layer_roof_tflops"]
+            == pytest.approx(CAP.fused_layer_roof(
+                report.payload["model_roof_tflops"])))
+    v3 = next(g for g in report.gates if g.tag == "V3")
+    assert f"{report.payload['fused_layer_roof_tflops']:.0f}" in v3.threshold
+
+
+def test_a_roof_of_zero_refuses_instead_of_returning_zero():
+    with pytest.raises(CAP.Unmeasurable):
+        CAP.fused_layer_roof(0.0)
+
+
+def _slowed_report(factor: float):
+    """The whole planted sweep slowed by ONE factor, through `analyse`.
+
+    Slowing every cell equally leaves the ladder SHAPES untouched -- V2 stays
+    PASS, the control stays proportional and flat -- and moves only the LEVEL,
+    which is the one thing V3 reads. It is the only way to put the gate at a
+    chosen fraction of the dense peak without also breaking something else and
+    then not knowing which gate answered.
+    """
+    grid, cells = _cells(CAP.ALPHA)
+    slowed = [SWEEP.make_cell(MIXTRAL, c.rows_per_expert, c.block_m,
+                              c.ms_p50 * factor, sm_count=132, block_n=64,
+                              ms_min=c.ms_min * factor,
+                              ms_stdev=c.ms_stdev * factor)
+              for c in cells]
+    return CAP.analyse(
+        slowed, MIXTRAL, cap_tile=16, control_tile=256, alpha=CAP.ALPHA,
+        ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b",
+        dtype="bf16", compiles={16: 1, 256: 1}, executed={16: 1, 256: 1},
+        sm_count=132, sm_source="test",
+        depth=CAP.required_depth(16, b=2, ridge_band=BAND),
+        planned_cells=len(grid) * len(TILES), header=[])
+
+
+def _verdict(report, tag: str) -> str:
+    return next(g for g in report.gates if g.tag == tag).verdict
+
+
+def test_the_published_fused_layer_level_is_a_pass_and_not_a_void_page():
+    """THE STATE OF ALL 26 PUBLISHED REPORTS, AND IT IS NOT AN INVALID RUN.
+
+    Their plateaus ran 46.5-75.6% of the card's `ridge x bandwidth`, which is
+    the DENSE cuBLAS peak. V3 used to demand 0.95 of that product from a FUSED
+    layer -- a gate, an alignment kernel, two GEMMs, a SiLU and a reduction,
+    with only the two GEMMs' FLOPs in the numerator -- so it failed on every
+    card that exists, and a VALIDITY FAIL makes the page unquotable. The arm was
+    INVALID by construction before it was scheduled: nine pod minutes whose
+    verdict was computable from the calibration alone.
+
+    At 2x slow the control lands around 0.50 of the dense peak, which is exactly
+    where every published fused-layer arm sits, and V3 must PASS there. This is
+    the assertion `tests/test_tile_cap.py` used to make the other way round;
+    that file now carries the 4x FAIL and this one carries the PASS.
+    """
+    report = _slowed_report(2.0)
+    assert _verdict(report, "V2") == CAP.PASS, "only the level changed"
+    assert _verdict(report, "V3") == CAP.PASS, (
+        "0.50 of the dense peak is where every published fused-layer arm sits; "
+        "a validity gate that voids the page there cannot pass on any card")
+    frac = report.payload["peak_roof_fraction"]["256"]
+    assert CAP.FUSED_ROOF_FLOOR <= frac < 0.6, frac
+    assert (report.payload["fused_layer_roof_tflops"]
+            == pytest.approx(CAP.FUSED_ROOF_FLOOR
+                             * report.payload["model_roof_tflops"]))
+
+
+def test_a_sweep_far_under_even_the_fused_roof_still_voids_the_page():
+    """The FAIL branch survives the repair, at a level no fused layer explains.
+
+    Under `FUSED_ROOF_FLOOR` nothing in the sweep reached ANY roof, fused or
+    dense, so C1 is a statement about the instrument. The page is INVALID and
+    C2 may not be quoted off it either; what is true is that C2's number needs
+    no roof, so re-running the CONTROL recovers it.
+    """
+    report = _slowed_report(4.0)
+    assert _verdict(report, "V2") == CAP.PASS, "only the level changed"
+    assert _verdict(report, "V3") == CAP.FAIL
+    assert report.payload["peak_roof_fraction"]["256"] < CAP.FUSED_ROOF_FLOOR
+
+
+def test_a_control_above_the_dense_peak_refuses_through_analyse_too():
+    """A fused layer counting only its GEMM FLOPs cannot beat the dense peak.
+
+    Above it the ridge, the bandwidth or the FLOP count belongs to another
+    machine, and a gate that reported PASS there would be reading a broken ruler
+    as a strong kernel. Checked here through `analyse` and not only on the gate
+    in isolation, because the payload the plan and the report share is what a
+    reader sees and it has to agree with the verdict.
+    """
+    report = _slowed_report(0.5)
+    assert _verdict(report, "V3") == CAP.UNDECIDED
+    v3 = next(g for g in report.gates if g.tag == "V3")
+    assert "ABOVE the dense peak" in " ".join(v3.lines)
+    assert report.payload["peak_roof_fraction"]["256"] > CAP.FUSED_ROOF_CEILING
+
+
+def test_the_dense_peak_fraction_is_still_reported_and_is_labelled_diagnostic():
+    """It is the number that compares across cards and against the sibling's
+    gate 4, and it is the number that must never again be the verdict."""
+    gate = CAP.gate_v3_control_roof(_tp(0.52), control_tile=256,
+                                    roof_tflops=ROOF, plateau=0.52 * ROOF)
+    text = " ".join(gate.lines)
+    assert "DIAGNOSTIC, not the verdict" in text
+    assert "0.520" in text
+
+
+# --------------------------------------------------------------------------
+# R2. Planted noise, planted worlds, and a registered verdict per world.
+# --------------------------------------------------------------------------
+
+def test_plant_noise_defaults_to_the_published_spread():
+    args = CAP.build_parser().parse_args([])
+    assert args.plant_noise == CAP.PUBLISHED_CELL_SPREAD
+    assert 0.0076 <= CAP.PUBLISHED_CELL_SPREAD <= 0.0182, (
+        "the default must sit inside the published H200 ladder spread range; "
+        "outside it, it is a number rather than an assumption")
+
+
+def test_the_retired_spelling_still_reaches_the_same_knob():
+    """`--self-test-noise` is the name the sibling and the docs used. It must
+    not silently become a second, separately-defaulting knob."""
+    args = CAP.build_parser().parse_args(["--self-test-noise", "0.02"])
+    assert args.plant_noise == 0.02
+
+
+@pytest.mark.parametrize("alpha", sorted(CAP.SELF_TEST_WORLDS))
+def test_every_registered_world_returns_its_registered_verdicts(alpha):
+    """The registration IS the test. A self-test that only runs is a smoke
+    test, and both worlds this file used to plant asserted nothing at all."""
+    world = CAP.SELF_TEST_WORLDS[alpha]
+    report = _report(alpha, noise=CAP.PUBLISHED_CELL_SPREAD)
+    assert world.check(report) == []
+
+
+def test_the_worlds_between_them_reach_every_branch_of_c2():
+    """C2's FAIL branch was unreachable before `C2_FAIL_ALPHA` existed.
+
+    At 0.558 C2 passes; at the retracted 0.10 the cap tile's memory branch runs
+    parallel to the compute branch (ridge/cap = 1.002, inside the tolerance) so
+    the fit declines to name an alpha and C2 is UNDECIDED. Neither can fail it.
+    """
+    seen = {w.expect.get("C2") for w in CAP.SELF_TEST_WORLDS.values()}
+    assert {CAP.PASS, CAP.FAIL, CAP.UNDECIDED} <= seen
+
+
+def test_the_c2_fail_world_is_where_the_arithmetic_says_it_is():
+    """Derived, not tuned. Two conditions have to hold at once and the
+    docstring's numbers are recomputed here rather than quoted."""
+    cap = SWEEP.ai_cap(CAP.CAP_TILE, CAP.C2_FAIL_ALPHA, 2)
+    disc = CAP.cap_discriminator(CAP.CAP_TILE, RIDGE, 2)
+    assert cap / RIDGE > disc, "below the discriminator C2 would PASS"
+    assert abs(RIDGE / cap - 1.0) > SWEEP.PARALLEL_BRANCH_TOLERANCE, (
+        "inside the tolerance the fit refuses to name an alpha and C2 goes "
+        "UNDECIDED, which is the state this world exists to escape")
+
+
+def test_a_world_that_breaks_its_registration_is_an_error_and_not_a_result(
+        tmp_path, monkeypatch):
+    """A self-test coming out other than registered is a broken apparatus.
+
+    ERROR rather than INVALID or CLAIM_FAIL, because both of those invite a
+    reader to interpret the run. Planted by registering a verdict the refit
+    world cannot produce.
+    """
+    broken = CAP.PlantedWorld(CAP.ALPHA, "a registration that cannot hold",
+                              {"C1": CAP.FAIL})
+    monkeypatch.setitem(CAP.SELF_TEST_WORLDS, CAP.ALPHA, broken)
+    rc = CAP.main(["--self-test", str(CAP.ALPHA), "--out", str(tmp_path)])
+    assert rc == exit_codes.ERROR
+
+
+def test_a_registration_is_not_asserted_on_a_design_it_was_not_made_for():
+    """`--r-max 512` fails V1 and V2 BY DESIGN, and that is not a defect.
+
+    A check that fires on the one thing it is not about is worse than no check,
+    because the way to silence it is to weaken the registration.
+    """
+    world = CAP.SELF_TEST_WORLDS[CAP.ALPHA]
+    assert world.applies(tiles=(16, 256), reached_rows=2112,
+                         needed_rows=2112) == ""
+    shallow = world.applies(tiles=(16, 256), reached_rows=512, needed_rows=2112)
+    assert "512" in shallow
+    other = world.applies(tiles=(32, 128), reached_rows=2112, needed_rows=2112)
+    assert "tile pair" in other
+
+
+def test_a_gate_named_in_a_registration_that_the_report_omits_is_a_mismatch():
+    """A registration that silently matches nothing is the
+    check-that-examined-nothing shape one level up."""
+    world = CAP.PlantedWorld(CAP.ALPHA, "names a gate that does not exist",
+                             {"V9": CAP.PASS})
+    bad = world.check(_report(CAP.ALPHA))
+    assert len(bad) == 1 and "no gate V9" in bad[0]
+
+
+def test_the_audit_s_own_command_reports_v3_pass(tmp_path, capsys):
+    """`--self-test 0.558 --plant-noise 0.015 | grep '^RESULT: VALIDITY V3'`,
+    which is the check the audit asked for, run as the audit wrote it."""
+    CAP.main(["--self-test", "0.558", "--plant-noise", "0.015",
+              "--out", str(tmp_path)])
+    lines = [ln for ln in capsys.readouterr().out.splitlines()
+             if ln.startswith("RESULT: VALIDITY V3")]
+    assert len(lines) == 1 and " PASS " in lines[0]
+
+
+# --------------------------------------------------------------------------
+# R3. The EXA identity, and the factor a LIN cap is high by.
+# --------------------------------------------------------------------------
+
+def test_c2_prints_the_exa_form_and_the_overstatement_beside_the_cap():
+    report = _report(CAP.ALPHA)
+    c2 = next(g for g in report.gates if g.tag == "C2")
+    text = " ".join(c2.lines)
+    assert "(alpha_b + phi)/(1 + phi + delta)" in text
+    assert "exact cap implied" in text
+    assert "lin_overstatement" in text
+
+
+def test_the_printed_overstatement_is_ai_models_own_number():
+    """Recomputed from `ai_model` here, so a drift in either direction is a
+    failure rather than two files quietly disagreeing."""
+    report = _report(CAP.ALPHA)
+    lo, hi = report.payload["lin_overstatement"]
+    ends = []
+    for alpha_a in (0.0, 1.0):
+        p = ai_model.phi(2 * MIXTRAL.intermediate_size, MIXTRAL.hidden_size,
+                         block_m=CAP.CAP_TILE, block_n=64, alpha_a=alpha_a, b=2)
+        ends.append(ai_model.lin_overstatement(phi=p, delta=0.0))
+    assert (lo, hi) == pytest.approx((min(ends), max(ends)))
+    assert lo > 1.0, "a factor of 1.0 would say the LIN cap is exact"
+
+
+def test_the_overstatement_grows_with_the_tile_and_is_smallest_where_it_is_tested():
+    """WHY BLOCK_M=16 IS WHERE THE FORMULA IS TESTABLE, as a number.
+
+    phi is the activation re-read in units of one weight read and scales with
+    BLOCK_M/BLOCK_N, so the bracket widens fast with the tile: at BM=128 its top
+    end is over 3x, far larger than the cap-to-ridge gap the study is deciding,
+    while the whole bracket at BM=16 stays under 1.26.
+    """
+    brackets = [SWEEP.cap_overstatement(MIXTRAL, bm, 64, 2)
+                for bm in (16, 64, 128, 256)]
+    assert [lo for lo, _ in brackets] == sorted(lo for lo, _ in brackets)
+    assert [hi for _, hi in brackets] == sorted(hi for _, hi in brackets)
+    assert all(lo > 1.0 for lo, _ in brackets), (
+        "a factor of 1.0 would say a LIN cap is exact at some tile height")
+    assert brackets[0][1] < 1.26, "the cap tile's whole bracket is narrow"
+    assert brackets[2][1] > 3.0, "and BM=128's is not"
+
+
+def test_a_gate_with_no_model_config_says_the_factor_is_unstated():
+    """REFUSE RATHER THAN DEFAULT. A cap printed with no factor beside it is
+    the shape that put a 31% overstatement into the study's headline table."""
+    report = _report(CAP.ALPHA)
+    fit = report.payload["ladder"]["16"]
+    gate = CAP.gate_c2_measured_cap(
+        _fit_of(report), report.payload["alpha_corrected"], cap_tile=16,
+        ridge=RIDGE, b=2, discriminator=0.589, cfg=None, block_n=0)
+    assert fit["alpha"] is not None
+    assert "NOT stated here" in " ".join(gate.lines)
+
+
+def _fit_of(report):
+    """The cap tile's `LadderFit`, refitted from the same cells the report used."""
+    _, cells = _cells(CAP.ALPHA)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    ref = SWEEP.compute_reference(ok, TILES, cfg=MIXTRAL, ridge=RIDGE,
+                                  bandwidth_gbps=BANDWIDTH, b=2)
+    return SWEEP.fit_ladder(SWEEP.ladder_points(ok, 16), 16, ref,
+                            SWEEP.MEMORY_BRANCH_MARGIN)
+
+
+# --------------------------------------------------------------------------
+# R4. The instrument, the provenance block, the exit table, the run id.
+# --------------------------------------------------------------------------
+
+def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does(
+        tmp_path, capsys):
+    CAP.main(["--self-test", "0.558", "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    parsed = exit_codes.parse_result_lines(out)
+    report = _report(CAP.ALPHA, noise=CAP.PUBLISHED_CELL_SPREAD)
+    assert [r.name for r in parsed] == [g.tag for g in report.gates]
+    raw = [ln for ln in out.splitlines() if ln.startswith("RESULT: ")]
+    assert len(raw) == len(parsed), "a RESULT line the parser cannot read back"
+
+
+@pytest.mark.parametrize("alpha,code", [
+    (0.558, exit_codes.DONE),
+    (0.10, exit_codes.CLAIM_FAIL),
+])
+def test_the_log_recomputes_the_code_the_process_returned(alpha, code,
+                                                          tmp_path, capsys):
+    """`classify_text` over the RESULT lines against the returned integer.
+
+    THEY MAY NOT DIFFER AT ALL ANY MORE. This test used to accept one
+    disagreement -- without `--fail-on-gate` a CLAIM_FAIL was REPORTED as DONE
+    -- and the alpha=0.10 world is where it fired: nine RESULT lines carrying a
+    failed CLAIM, and a process saying "measured; every gate PASSED". That is
+    the defect `moe.bench.exit_codes` is named against, and an accepted
+    exception to a rule is not the rule. The fold is retired.
+    """
+    rc = CAP.main(["--self-test", str(alpha), "--out", str(tmp_path)])
+    assert rc == code
+    assert exit_codes.classify_text(capsys.readouterr().out) == rc
+
+
+def test_fail_on_gate_is_retired_and_changes_no_code(tmp_path):
+    """The flag is accepted so an old driver line still parses, and ignored.
+
+    A falsified pre-registered claim is a RESULT and CLAIM_FAIL is already the
+    code that says so: 1 is in `FINISHED_CODES` and `ledger_state(1)` is
+    "CLAIM_FAIL", so the ledger never retries it. Folding it into 0 protected
+    nothing and made the log disagree with the process.
+    """
+    assert CAP.main(["--self-test", "0.10",
+                     "--out", str(tmp_path / "a")]) == exit_codes.CLAIM_FAIL
+    assert CAP.main(["--self-test", "0.10", "--fail-on-gate",
+                     "--out", str(tmp_path / "b")]) == exit_codes.CLAIM_FAIL
+
+
+def test_the_report_carries_a_provenance_block_with_the_instrument_named(
+        tmp_path):
+    CAP.main(["--self-test", "0.558", "--out", str(tmp_path)])
+    payload = json.loads(next(tmp_path.rglob("report.json")).read_text())
+    for key in PV.TOP_LEVEL_KEYS:
+        assert key in payload, key
+    # A SYNTHETIC RUN NAMES THE SYNTHETIC INSTRUMENT. A planted report carrying
+    # the real instrument's name satisfies a presence check while describing an
+    # instrument the run never touched.
+    assert payload["instrument"] == SWEEP.SYNTHETIC_INSTRUMENT
+    assert payload["provenance"]["ridge_source"] == payload["ridge_source"]
+    assert payload["provenance"]["bandwidth"] == pytest.approx(BANDWIDTH)
+
+
+def test_a_direct_analyse_call_says_it_has_no_provenance_rather_than_looking_clean():
+    payload = _report(CAP.ALPHA).payload
+    assert payload["provenance"] is None
+    assert "names no git sha" in payload["provenance_note"]
+
+
+def test_the_run_id_is_the_repositorys_rule_and_not_a_local_hash():
+    """One run-id scheme in the repository. Two is how two settings came to
+    derive one directory in the first place."""
+    args = CAP.build_parser().parse_args([])
+    got = CAP.default_run_id(args, 2112, "NVIDIA H200")
+    assert got.startswith(PV.card_slug("NVIDIA H200") + "-")
+    # The hash is provenance's, over the whole canonical key, so any knob moving
+    # moves the tail.
+    other = CAP.default_run_id(
+        CAP.build_parser().parse_args(["--trials", "9"]), 2112, "NVIDIA H200")
+    assert other != got
+
+
+def test_the_run_id_refuses_a_knob_that_was_never_resolved():
+    """`provenance.run_id` raises on None, and it is right to: a run named
+    without saying what a knob was is a directory two settings can share."""
+    with pytest.raises(PV.UnresolvedKnob):
+        PV.run_id(card="NVIDIA H200", model="mixtral-8x7b", planted=None)
+
+
+def test_the_timing_knobs_are_the_instruments_units_and_are_in_the_id():
+    """`--warmup` is MILLISECONDS of delivered load, because `run_sweep` hands
+    it to `time_kernel` as a duration. A count there would be a warmup of 20 ms
+    where 300 was meant, silently."""
+    parser = CAP.build_parser()
+    assert parser.parse_args([]).warmup == 300.0
+    assert parser.parse_args(["--warmup-ms", "50"]).warmup == 50.0
+    base = CAP.default_run_id(parser.parse_args([]), 2112, "NVIDIA H200")
+    for knob in (["--warmup", "50"], ["--trials", "5"], ["--no-l2-flush"]):
+        moved = CAP.default_run_id(parser.parse_args(knob), 2112, "NVIDIA H200")
+        assert moved != base, knob
+
+
+def test_the_plan_states_an_mde_from_the_stated_noise_assumption(capsys):
+    CAP.main(["--dry-run", "--capability", "9.0"])
+    out = capsys.readouterr().out
+    assert "MINIMUM DETECTABLE EFFECT" in out
+    assert f"{CAP.PUBLISHED_CELL_SPREAD:.2%}" in out
+    for tag in ("C1", "C2", "V2"):
+        assert f"  {tag}  " in out
+
+
+def test_the_mde_refuses_a_zero_spread_rather_than_reporting_omniscience(capsys):
+    """At sigma = 0 every effect is detectable, which is a statement about the
+    planted world and not about any pod."""
+    CAP.main(["--dry-run", "--capability", "9.0", "--plant-noise", "0"])
+    out = capsys.readouterr().out
+    assert "MINIMUM DETECTABLE EFFECT: not stateable" in out
+
+
+def test_the_mde_shrinks_with_depth_and_grows_with_the_spread():
+    """Both directions, because a power calculation that moves the wrong way is
+    invisible in a single printed number."""
+    def slope(treads, spread):
+        ys = [SWEEP.model_ms(MIXTRAL, n * 16, 16, alpha=CAP.ALPHA, ridge=RIDGE,
+                             bandwidth_gbps=BANDWIDTH, b=2)
+              for n in range(1, treads + 1)]
+        return CAP.slope_relative_se(ys, spread)
+
+    assert slope(40, 0.015) < slope(10, 0.015)
+    assert slope(10, 0.03) == pytest.approx(2.0 * slope(10, 0.015))
+
+
+def test_a_single_tread_has_no_slope_and_says_so():
+    with pytest.raises(CAP.Unmeasurable):
+        CAP.slope_relative_se([1.0], 0.015)
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the whole exit-code repair: the log and the process
+# say the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. A plan and a
+#: refusal score no gate and are REFUSED; every `--self-test` world scores the
+#: real gates and takes whatever `classify` makes of them.
+OFF_GPU_MODES = [
+    (["--dry-run", "--capability", "9.0"], exit_codes.REFUSED),
+    (["--dry-run", "--plant-noise", "0", "--capability", "9.0"],
+     exit_codes.REFUSED),
+    # A PLAN WHOSE PINNED TILE CANNOT PHYSICALLY RUN. Refused before the cost is
+    # even printed, and free.
+    (["--cap-tile", "8", "--dry-run", "--capability", "9.0"],
+     exit_codes.REFUSED),
+    # THE TWO TILES ORDERED BACKWARDS: every comparison below would read the
+    # wrong way round, so the run never starts.
+    (["--cap-tile", "256", "--control", "16", "--dry-run",
+      "--capability", "9.0"], exit_codes.REFUSED),
+    (["--self-test", "0.558"], exit_codes.DONE),
+    (["--self-test", "0.10"], exit_codes.CLAIM_FAIL),
+    # A GRID SWEPT TOO SHALLOW TO DECIDE, and since 2026-09-09 that is answered
+    # BEFORE the cells exist rather than after. This row used to expect INVALID:
+    # 512 rows gives the control two exactly-full stacks and the cap tile 32
+    # tiles against the 132 the horizon needs, so V1 and V4 were decided by the
+    # grid and the run measured 66 cells to say so. `grid_refusal` now states it
+    # at plan time and the mode is REFUSED.
+    (["--self-test", "0.10", "--r-max", "512"], exit_codes.REFUSED),
+]
+
+
+@pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
+                         ids=[" ".join(a) for a, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, tmp_path, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+
+    Two of these rows used to break it. `--dry-run` returned DONE, which reads
+    "measured; every VALIDITY and CLAIM gate PASSED", from a run that measured
+    nothing and wrote nothing. `--self-test 0.10` printed nine RESULT lines
+    carrying a failed CLAIM and returned DONE, because `--fail-on-gate` folded a
+    claim failure into 0.
+    """
+    rc = CAP.main([*argv, "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == code
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")
+
+
+def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
+    """The apparatus breaking must not be filed as one of the arm's outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records the arm as finished, skips it on every resume, leaves
+    RETRY_ARMS at zero and exits the session 0 over an arm that never measured.
+    ERROR (4) is outside FINISHED_CODES so the two can be told apart, and the
+    traceback is printed rather than swallowed because a bare code names
+    nothing to fix. Planted rather than argued: tile_cap_test had no top-level handler
+    until 2026-09-02.
+    """
+    from moe.bench import exit_codes as EX
+
+    def explode(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(CAP, "_main", explode)
+    code = CAP.main([])
+    err = capsys.readouterr().err
+    assert code == EX.ERROR
+    assert code != EX.CLAIM_FAIL
+    assert code not in EX.FINISHED_CODES, "an apparatus failure must stay retryable"
+    assert EX.ledger_state(code) == "RETRY"
+    assert "planted: the allocator gave up halfway" in err, \
+        "the traceback was swallowed"
+    assert "RuntimeError" in err
+
+
+# --------------------------------------------------------------------------
+# R7. The grid the plan lets through, and which ladder may be the reference.
+#
+# 2026-09-09, H200. `r_max = depth.rows` was 688 on that card's own ridge band,
+# `build_grid` stopped at 672, and two multiples of the 256 control landed on
+# the grid. V1 wanted three per tile and V4 wanted 43 tiles at BLOCK_M=16
+# against the 42 the grid held: both were decided before a cell was timed, the
+# plan printed "BM=256:2" beside a WARNING, and 72 measured cells produced
+# nothing quotable. `compute_reference` then skipped the two-tread control and
+# fell through to BLOCK_M=16, the SUBJECT, refusing it on non-vacuity 1.044,
+# so the report read "BLOCK_M=16 ... its LEVEL is wrong" for the very ladder the
+# experiment exists to measure, and the 1.044 was never printed.
+# --------------------------------------------------------------------------
+
+#: The 2026-09-09 H200 calibration's ridge band, which is what made `depth.rows`
+#: 688. The module's own pinned band gives 2112 and hid this for a year.
+H200_BAND = (142.8112754272431, 155.4122703178822)
+H200_RIDGE = 152.8120650229884
+
+
+def test_the_h200_band_depth_alone_cannot_carry_v1_and_v4_and_the_floor_can():
+    """688 rows is the cap tile's horizon and nothing else: it knows nothing
+    about the control and is not a multiple of --row-step."""
+    depth = CAP.required_depth(16, b=2, ridge_band=H200_BAND)
+    assert depth.rows == 688 and depth.tiles == 43
+    grid = SWEEP.build_grid(MIXTRAL, TILES, depth.rows, 32, 6)
+    assert sum(1 for r in grid if r % 256 == 0) == 2 < CAP.V1_ALIGNED_NEEDED
+    assert CAP.grid_depth(grid, 16) == 42 < depth.tiles
+    assert CAP.grid_refusal(grid, tiles=TILES, depth=depth, row_step=32)
+
+    floor = max(depth.rows, CAP.CONTROL_STACKS_FLOOR * 256)
+    floor += (-floor) % 32
+    assert floor == 1024
+    grid = SWEEP.build_grid(MIXTRAL, TILES, floor, 32, 6)
+    assert sum(1 for r in grid if r % 256 == 0) >= CAP.CONTROL_STACKS_FLOOR
+    assert CAP.grid_depth(grid, 16) >= depth.tiles
+    assert CAP.grid_refusal(grid, tiles=TILES, depth=depth, row_step=32) == ""
+
+
+def test_the_plan_refuses_the_short_grid_and_prints_the_stack_counts(tmp_path,
+                                                                     capsys):
+    """Exit REFUSED before the pod is billed, naming every count that is short.
+
+    A refusal a reader cannot act on is a crash with better manners, so the
+    line has to carry the counts, the gates that wanted them, and the --r-max
+    that would satisfy both.
+    """
+    rc = CAP.main(["--self-test", "1.0", "--plant-noise", "0.01",
+                   "--r-max", "688", "--ridge", str(H200_RIDGE),
+                   "--ridge-band", f"{H200_BAND[0]},{H200_BAND[1]}",
+                   "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert "BLOCK_M=256 has 2 exactly-full stack(s) against the 3 V1 requires" in out
+    assert "deepest BLOCK_M=16 stack is 42 tiles against the 43 V4 requires" in out
+    assert "raise --r-max to at least 1024" in out
+    assert "RESULT:" not in out, "a refused plan scores no gate"
+    assert "WARNING" not in out, \
+        "the short grid was a WARNING that ran anyway until 2026-09-09"
+
+
+@pytest.mark.parametrize("alpha", [1.0, 0.558])
+def test_the_floored_grid_passes_v1_v2_and_c2_on_both_planted_worlds(
+        alpha, tmp_path, capsys):
+    """The booking the refusal above points at: --r-max 1024, H200 band."""
+    rc = CAP.main(["--self-test", str(alpha), "--plant-noise", "0.01",
+                   "--r-max", "1024", "--ridge", str(H200_RIDGE),
+                   "--ridge-band", f"{H200_BAND[0]},{H200_BAND[1]}",
+                   "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.DONE, out[-2000:]
+    verdicts = {line.name: line.verdict
+                for line in exit_codes.parse_result_lines(out)}
+    assert verdicts["V1"] == "PASS" and verdicts["V2"] == "PASS"
+    assert verdicts["C2"] == "PASS"
+
+
+def test_the_default_r_max_is_floored_at_the_controls_stacks():
+    """The H200 default moves 688 -> 1024; the module band's 2112 is unchanged
+    because 2112 already carries 8 control stacks."""
+    for band, expected in ((H200_BAND, 1024), (BAND, 2112)):
+        depth = CAP.required_depth(16, b=2, ridge_band=band)
+        floor = max(depth.rows, CAP.CONTROL_STACKS_FLOOR * 256)
+        floor += (-floor) % 32
+        assert floor == expected
+
+
+def test_only_the_control_may_be_the_compute_reference():
+    """A two-tread control must decline in ITS OWN name.
+
+    Before the fix the sibling's walk fell through to the cap tile, fitted the
+    SUBJECT's ladder and refused it on non-vacuity, and the report blamed
+    BLOCK_M=16's level for a hole the control's tread count had made.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 688, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.01, seed=0)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    assert len(SWEEP.ladder_points(ok, 256)) == 2
+
+    fell_through = SWEEP.compute_reference(
+        ok, TILES, cfg=MIXTRAL, ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    assert fell_through.refused_block_m == 16, "the sibling walk still falls through"
+
+    ref = CAP.control_reference(ok, tiles=TILES, control_tile=256, cfg=MIXTRAL,
+                                ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    assert ref.block_m is None and ref.refused_block_m is None
+    assert "BLOCK_M=256, the control and the ONLY candidate" in ref.note
+    assert "2 exactly-full tread(s)" in ref.note
+    assert "cap tile and is not a candidate" in ref.note
+
+
+def test_the_level_checks_still_see_every_swept_ladder():
+    """Candidacy is restricted, the comparison set is not.
+
+    Telling `_level_checks` that 256 is the smallest tile on the grid scales
+    non-vacuity to 256 instead of 16 and moves the H200 control's ratio from
+    0.106 to 1.690, which REFUSES the very ladder that has to be the reference.
+    That is why `control_reference` passes both tiles and filters afterwards.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.01, seed=0)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    ref = CAP.control_reference(ok, tiles=TILES, control_tile=256, cfg=MIXTRAL,
+                                ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    assert ref.block_m == 256, ref.note
+    assert ref.vacuity_ratio < 0.2
+    assert ref.level_comparisons >= 3
+
+    narrowed = SWEEP.compute_reference(ok, (256,), cfg=MIXTRAL, ridge=H200_RIDGE,
+                                       bandwidth_gbps=BANDWIDTH, b=2)
+    assert narrowed.refused_block_m == 256 and narrowed.vacuity_ratio > 1.0
+
+
+def test_v2_names_the_ladder_the_reference_is_on():
+    """The failing condition is an IDENTITY and it was never printed: the FAIL
+    line carried the cap tile's own 0.7% against a 5% bound and named nothing.
+    """
+    good = SWEEP.ComputeReference(256, 0.0, 1.99, 0.010, "BLOCK_M=256 ladder")
+    gate = CAP.gate_v2_control(good, _tp(0.5, treads=4), control_tile=256,
+                               noise=0.01)
+    assert gate.verdict == CAP.PASS
+    assert "BLOCK_M=256" in "\n".join(gate.lines)
+
+    wrong = SWEEP.ComputeReference(None, 0.0, None, 0.007, "refused",
+                                   refused_block_m=16, refusals=("level",))
+    gate = CAP.gate_v2_control(wrong, _tp(0.5, treads=4), control_tile=256,
+                               noise=0.01)
+    assert gate.verdict == CAP.FAIL
+    assert "reference is BLOCK_M=16, REFUSED on its level, not the control" \
+        in gate.measured
+    assert "0.7%" not in gate.measured, \
+        "the refused ladder's own fit error read as if it were the control's"
+    assert "the reference IS BLOCK_M=256" in gate.threshold
+
+
+def test_the_references_refusal_numbers_reach_the_page_and_report_json():
+    """"its LEVEL is wrong" with no number beside it was the whole of what the
+    H200 page and its report.json said about the failing check."""
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.01, seed=0)
+    rep = CAP.analyse(
+        cells, MIXTRAL, cap_tile=16, control_tile=256, alpha=0.558,
+        ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2,
+        model_name="mixtral-8x7b", dtype="bf16", compiles={16: 1, 256: 1},
+        executed={16: 1, 256: 1}, sm_count=132, sm_source="test",
+        depth=CAP.required_depth(16, b=2, ridge_band=H200_BAND),
+        planned_cells=len(grid) * 2, header=[], ridge_band=H200_BAND)
+    page = "\n".join(rep.lines)
+    assert "LEVEL roof fraction" in page
+    assert "LEVEL non-vacuity" in page
+    assert "LEVEL vs smaller BM" in page
+    p = rep.payload
+    assert p["compute_reference_candidate"] == 256
+    assert p["compute_reference_block_m"] == 256
+    assert p["compute_reference_refusals"] == []
+    assert 0 < p["compute_reference_vacuity_ratio"] < 1.0
+    assert p["compute_reference_roof_fraction"] is not None
+    assert p["compute_reference_level_comparisons"] >= 3
+    # And the planted alpha comes back, which is the point of a qualified
+    # reference: 24 of 24 treads at BLOCK_M=16 stand above the control's branch.
+    assert abs(p["alpha_measured"] - 1.0) < 0.03
+
+
+def test_a_control_refused_on_shape_declines_with_the_number_that_failed():
+    """R7's "declines in ITS name" was implemented for two of three branches.
+
+    `compute_reference` names its ladder in `block_m` when it qualifies one and
+    in `refused_block_m` when the LEVEL checks throw one out. On the third
+    exit, a ladder refused on SHAPE, it names it in NEITHER, which is exactly
+    what the "no ladder had 3 treads" exit leaves behind too. The identity test
+    `control_tile in (ref.block_m, ref.refused_block_m)` therefore read a
+    control refused on its own shape as a control the walk never reached, threw
+    away "not proportional to its tile count (N% mean error)", and printed
+    "has 4 exactly-full tread(s) against the 3 a through-origin fit needs" to
+    the page and to report.json, which states a condition the control SATISFIES
+    as its failure and throws away the number that did fail.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.0, seed=0)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    # Four aligned treads at the control, re-timed as a MEMORY branch A + B n:
+    # a real intercept, which a line through the origin cannot describe.
+    memory = [dataclasses.replace(c, ms_p50=1.2 + 0.80 * c.tiles_per_expert)
+              if c.block_m == 256 else c for c in ok]
+    assert len(SWEEP.ladder_points(memory, 256)) == 4
+
+    sibling = SWEEP.compute_reference(memory, TILES, cfg=MIXTRAL,
+                                      ridge=H200_RIDGE,
+                                      bandwidth_gbps=BANDWIDTH, b=2)
+    assert sibling.block_m is None and sibling.refused_block_m is None, \
+        "the shape refusal still names its ladder in neither field"
+    assert 0 < sibling.mean_rel_err < math.inf
+
+    assert CAP.walk_reached(memory, TILES, sibling) == 256
+    ref = CAP.control_reference(memory, tiles=TILES, control_tile=256,
+                                cfg=MIXTRAL, ridge=H200_RIDGE,
+                                bandwidth_gbps=BANDWIDTH, b=2)
+    assert ref.note == sibling.note, "the control's own refusal, unrewritten"
+    assert "not proportional to its tile count" in ref.note
+    assert f"{sibling.mean_rel_err:.1%}" in ref.note
+    assert "exactly-full tread(s)" not in ref.note, \
+        "a satisfied condition printed as the failure"
+
+    gate = CAP.gate_v2_control(ref, _tp(0.5, treads=4), control_tile=256,
+                               noise=0.01)
+    assert gate.verdict == CAP.FAIL
+    assert "the control BLOCK_M=256 is NOT proportional" in gate.measured
+    assert f"{sibling.mean_rel_err:.1%}" in gate.measured
+    assert "reference is none" not in gate.measured
+
+
+def test_an_empty_walk_still_declines_on_the_controls_tread_count():
+    """The other both-None exit, and the wrapper must keep telling it apart.
+
+    "no ladder had the 3 treads" carries `math.inf`, so the tread count IS the
+    failure there and the wrapper's own note is the right one.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 688, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.0, seed=0)
+    two_treads = [c for c in cells
+                  if c.status == "ok" and c.ms_p50 > 0
+                  and (c.block_m == 256 or not c.aligned)]
+    assert len(SWEEP.ladder_points(two_treads, 256)) == 2
+    assert SWEEP.ladder_points(two_treads, 16) == []
+    sibling = SWEEP.compute_reference(two_treads, TILES, cfg=MIXTRAL,
+                                      ridge=H200_RIDGE,
+                                      bandwidth_gbps=BANDWIDTH, b=2)
+    assert sibling.mean_rel_err == math.inf
+    assert CAP.walk_reached(two_treads, TILES, sibling) is None
+    ref = CAP.control_reference(two_treads, tiles=TILES, control_tile=256,
+                                cfg=MIXTRAL, ridge=H200_RIDGE,
+                                bandwidth_gbps=BANDWIDTH, b=2)
+    assert "2 exactly-full tread(s)" in ref.note
+    assert "cap tile and is not a candidate" not in ref.note, \
+        "nothing was reached, so nothing may be named as reached"
+
+
+def test_the_compute_reference_is_built_by_name_and_the_probe_watches_it():
+    """A dataclass built POSITIONALLY across a file boundary is worse than a
+    TypeError: a reorder of the first five same-typed fields would put wrong
+    values in the right slots, silently, and the sibling is edited on its own
+    branch."""
+    assert "ComputeReference" in CAP.REQUIRED_SWEEP_API
+    fields = CAP.REQUIRED_SWEEP_API["ComputeReference"]
+    assert fields == ("block_m", "overhead_ms", "slope_per_tile",
+                      "mean_rel_err", "note")
+    import inspect
+    params = inspect.signature(SWEEP.ComputeReference).parameters
+    assert all(name in params for name in fields)
+    CAP.require_sweep_api()
+
+
+# --------------------------------------------------------------------------
+# R2. Two rulers on every throughput, and only the fixed one is scored.
+#
+# A kernel's under-load SM clock on this card is set PER TILE by its own power
+# draw under the 700 W cap: the 2026-09-09 session's cap_test cells carry 34
+# distinct clocks from 1440 to 1980 MHz against a calibration GEMM that held
+# 1485. A fraction of the FIXED roof therefore mixes "how well this tile uses
+# the machine" with "what clock the governor gave it". The gates keep reading
+# the fixed roof, which is the only denominator any threshold is stated
+# against; the own-clock fraction is printed beside it as issue efficiency.
+# --------------------------------------------------------------------------
+
+def _clocked(cells, mhz: dict[int, float]):
+    """The same cells with a per-BLOCK_M under-load clock stamped on them."""
+    return [dataclasses.replace(c, sm_clock_load_mhz=mhz.get(c.block_m))
+            for c in cells]
+
+
+def test_the_own_clock_fraction_is_the_fixed_one_scaled_by_the_clock_ratio():
+    grid, cells = _cells(1.0)
+    ok = _clocked([c for c in cells if c.status == "ok" and c.ms_p50 > 0],
+                  {16: 1980.0, 256: 1650.0})
+    fixed = dict(SWEEP._throughput_ladder(ok, 256, ROOF))
+    issue = CAP.issue_ladder(ok, 256, ROOF, 1485.0)
+    assert set(issue) == set(fixed)
+    for n, v in fixed.items():
+        assert issue[n] == pytest.approx(v * 1485.0 / 1650.0)
+    # The cap tile ran HIGHER than the roof's clock, so its fixed fraction was
+    # the inflated one and issue efficiency is the smaller number.
+    cap_issue = CAP.issue_ladder(ok, 16, ROOF, 1485.0)
+    cap_fixed = dict(SWEEP._throughput_ladder(ok, 16, ROOF))
+    assert all(cap_issue[n] < cap_fixed[n] for n in cap_fixed)
+
+
+def test_both_fractions_reach_every_ladder_line_and_every_gate_line():
+    grid, cells = _cells(1.0)
+    ok = _clocked([c for c in cells if c.status == "ok" and c.ms_p50 > 0],
+                  {16: 1980.0, 256: 1650.0})
+    rep = CAP.analyse(
+        ok, MIXTRAL, cap_tile=16, control_tile=256, alpha=1.0, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b", dtype="bf16",
+        compiles={16: 1, 256: 1}, executed={16: 1, 256: 1}, sm_count=132,
+        sm_source="test", depth=CAP.required_depth(16, b=2, ridge_band=BAND),
+        planned_cells=len(grid) * len(TILES), header=[], ridge_band=BAND,
+        reference_mhz=1485.0, reference_clock_source="planted for this test")
+    page = rep.text()
+    assert "FIXED ROOF / OWN-CLOCK ROOF" in page
+    assert "Reference clock 1485 MHz, planted for this test" in page
+    for gate in rep.gates:
+        for line in gate.lines:
+            if "throughput per tread" in line:
+                assert "own clock" in line
+                assert "/-" not in line, "every row here carries a clock"
+    scored = {g.tag: g.measured for g in rep.gates}
+    assert "own-clock" in scored["V3"] and "own-clock" in scored["C1"]
+    # AND IT IS NOT A GATE INPUT. The control ran 165 MHz above the roof's
+    # clock, so its own-clock fraction is 10% lower; V3's verdict is read off
+    # the fixed one and does not move with it.
+    p = rep.payload
+    assert p["peak_issue_efficiency"]["256"] == pytest.approx(
+        p["peak_roof_fraction"]["256"] * 1485.0 / 1650.0)
+    assert p["reference_clock_mhz"] == 1485.0
+    v3 = next(g for g in rep.gates if g.tag == "V3")
+    assert v3.verdict == CAP.PASS
+    assert f"{p['peak_roof_fraction']['256']:.3f}" in v3.measured
+
+
+def test_without_a_reference_clock_the_second_fraction_is_absent_not_zero():
+    """A missing number is printed as missing. Zero would read as a tile that
+    issued nothing, which is the opposite of "not known"."""
+    rep = _report(1.0)
+    page = rep.text()
+    assert "NOT AVAILABLE on this run" in page
+    assert "n=1:" in page and "n=1:0.000" not in page
+    ladder = [line for gate in rep.gates for line in gate.lines
+              if "throughput per tread" in line]
+    assert ladder and all(line.rstrip().endswith("-")
+                          or "/-," in line for line in ladder)
+    assert rep.payload["peak_issue_efficiency"] == {"16": None, "256": None}
+    assert rep.payload["reference_clock_mhz"] is None
+
+
+def test_a_self_test_reads_no_hardware_for_its_second_ruler(tmp_path, capsys):
+    """`--self-test` is a replay and must be identical on every machine, so it
+    resolves no reference clock even on a box that has a calibration."""
+    assert CAP.main(["--self-test", "0.558", "--plant-noise", "0",
+                     "--out", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "PINNED for --self-test: no hardware is read" in out
+    payload = json.loads(next(tmp_path.rglob("report.json")).read_text())
+    assert payload["reference_clock_mhz"] is None

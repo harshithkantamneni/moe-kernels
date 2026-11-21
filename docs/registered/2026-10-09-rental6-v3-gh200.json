@@ -1,0 +1,598 @@
+{
+ "registered": "2026-10-09, before any rental-6 page",
+ "name": "2026-10-09-rental6-v3-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r6 DESIGN.md corrected by design-r6-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-09 (1-6 accepted; h kept and labelled SEEN-FITTED)",
+ "tool": "scripts/r3_timing_model_v3.py (V3_H_MS, v3_b_ms, call_ms), scripts/wave_split_bytes_v3.py (ModelV3, content_events_counts: MODEL M4), scripts/scoring/rental6/r6model.py (v3 and the rivals)",
+ "modules": {
+  "rule": "OWNER DECISION 2026-10-09: v3 lives in new modules that import the pinned ones; scripts/r3_timing_model.py, scripts/wave_split_bytes.py and scripts/scoring/rental5/skewmodel.py stay byte-identical to rental5-skew's code_pins (tests/test_rental6_model.py checks the sha256)",
+  "timing": "r3_timing_model_v3.call_ms = r3_timing_model.call_ms (dead_model v2) + term (b)",
+  "bytes": "wave_split_bytes_v3.ModelV3 = wave_split_bytes.Model(content_a=True) + content keys on histogram cells"
+ },
+ "model": {
+  "base": "model v2 (docs/registered/2026-10-07-rental5-v2-gh200), its registered x unchanged: {\"T0\": 0.04323, \"c\": 202.547644, \"bw\": 3597.800853, \"s_small\": 0.012987, \"s_block\": -0.007069}",
+  "a_content_a": "MODEL M4: w1's A keyed by tile CONTENT on histogram cells too (realize_counts, the page's token-row shuffle, each expert's rows sorted; partial last tiles weighted rows / 32; the compulsory offset (distinct-content rows - all tile rows) / 32 A tiles); 0 fitted constants. On a skewed cell no two experts share a token set, so it moves w1 q only through the partial-tile weighting (at most 0.16% on the rental-6 byte cells); it moves uniform / balanced w1 (OLMoE up to 16%, Mixtral at most 0.29%, Phi at most 0.71%)",
+  "b_alignment": "on every non-NATIVE cell whose NATIVE twin (same model, n, declaration E) takes the block-scan alignment kernel: + A_arm(n) from the page's own align_probe, and on SHARED also + h = -5.16 us; 0 elsewhere",
+  "A_statistic": "A_arm(n) = median over the probe's repeats of align(arm, n) ms - median of align(native, n) ms, both from the same page's align_probe; histogram-independent (the probe runs balanced ids at the tread's numel, and a histogram cell's numel is its tread's), so a histogram cell takes A at its tread n"
+ },
+ "h": {
+  "value_us": -5.16,
+  "label": "SEEN-FITTED (4 models' timed pages): at least 143 of its 178 cells are SEEN held-out timing pages of earlier registrations",
+  "fit": {
+   "h_us": -5.16,
+   "h_unrounded_us": -5.156793587769217,
+   "page_bootstrap_95_us": [
+    -6.21,
+    -4.3
+   ],
+   "s_hat_us": -1.912,
+   "s_hat_ci_us": [
+    -2.773,
+    -0.864
+   ],
+   "cells": 178,
+   "groups": 27,
+   "per_model_s_hat_us": {
+    "mixtral-8x22b": 0.12,
+    "mixtral-8x7b": -1.37,
+    "olmoe-1b-7b": -1.43,
+    "qwen2-57b-a14b": -3.86
+   },
+   "estimator": "per block-scan cell s_hat = (S - N)_meas - (S - N)_v2 + A + s_block_v2 under rental 3's host rule (T_N + F240 >= 0.40 ms); h = -(mean s_hat - s_block_v2); page-cluster bootstrap B 20000 seed 20261009"
+  },
+  "groups": [
+   {
+    "pages": "8x7B 2026-09-27 G 2/3/4/8/32",
+    "cells": 35,
+    "status": "CAL for the 5 registered pages; G2 and G4 repeat pages SEEN"
+   },
+   {
+    "pages": "8x7B 2026-09-25 G 1/2/4/16/64",
+    "cells": 15,
+    "status": "SEEN, not in the CAL timing set"
+   },
+   {
+    "pages": "8x22B 2026-09-28",
+    "cells": 26,
+    "status": "SEEN held-out TIME test page"
+   },
+   {
+    "pages": "Qwen2-57B 2026-09-28",
+    "cells": 53,
+    "status": "SEEN held-out TIME test page"
+   },
+   {
+    "pages": "OLMoE 2026-09-29",
+    "cells": 33,
+    "status": "SEEN held-out TIME test page (rental5-v2: no OLMoE time page enters any v2 fit)"
+   },
+   {
+    "pages": "OLMoE rental 4 (2026-10-07) D 576 and 960",
+    "cells": 16,
+    "status": "SEEN held-out TIME test page"
+   }
+  ],
+  "in_sample": "8x22B, Qwen2-57B and OLMoE (and 8x7B) are IN-SAMPLE for term (b); OLMoE's E1 cells and its n 3 Q1-H pairs are therefore not BLIND-CALMODEL for (b)",
+  "rival_H8": {
+   "what": "the registered 8x7B timing set alone, h free (6 parameters), A from those pages' probes",
+   "x": {
+    "T0_ms": 0.045211,
+    "c_ns": 202.627394,
+    "bw_gbps": 3598.197676,
+    "s_small_ms": 0.010862,
+    "s_block_ms": -0.010014
+   },
+   "h_us": -0.652801,
+   "rms": 0.002706,
+   "cells": 75
+  }
+ },
+ "seen_informed_choices": [
+  "h = -5.16 us is SEEN-FITTED (above); kept by the owner (2026-10-09)",
+  "the block-scan path condition is SEEN-INFORMED: chosen after the rental-5 Mixtral n 2 pages (slip-affected) read +1.6 us under v3 and +9.9 us with (b) everywhere. Evidence the other way, stated: on the CAL 2026-09-27 G 8 page Mixtral n 3 (NATIVE small-batch) reads g = -8.03 us under v3, the v3_all direction",
+  "content_a is SEEN-SELECTED: picked out of 14 diag-Q2 WSC variants on SEEN byte pages (rental 5 skc, rental 4 B', rental 1 A-tile)",
+  "the n = 1 exclusion from Q1-H is SEEN-INFORMED: Qwen1.5 SHARED n 1 was seen to be anomalous (+6.6 us) on the 2026-09-29 and rental-5 pages, and CAL Qwen2-57B reads the same at n 1",
+  "Phi-3.5 carries Mixtral's fitted (kind, param) to E 16 at Phi's B (owner decision 4): no Phi routing statistics",
+  "the Q1-H population is control pairs only (review (b)): skewed pairs carry a SEEN offset (Q1-SK, open)",
+  "the Q1-P statistic is DESCRIPTIVE (rental6-q1): its SEEN small-batch residual trends with n",
+  "B-SKEW carves OLMoE's skewed w1 rows out of its pooled verdict (OPEN-L2SKEW, scored apart): SEEN-INFORMED, decided after rental 5 read those rows +8% at n 4 and +25% at n 16 (v3's content keys do not move a skewed cell)"
+ ],
+ "rental5_code_pins_note": "rental 5's registrations list scripts/private_weight_reference.py and scripts/skew_synth.py in their code_pins, and rental 6 changes both (the slip plumbing and the align probe; --draw6 / --check6). Harmless: rental 5's scorer (scripts/scoring/rental5/score_skew.py, unchanged) checks only its three pinned files, r3_timing_model.py, wave_split_bytes.py and rental5/skewmodel.py, which stay byte-identical (tests/test_rental6_model.py), and rental 5's pages are already published; the other pins record the tree, they gate nothing",
+ "align_proxy": {
+  "what": "the SEEN-table proxy (review (h) 17): A when a page has no align_probe, and the A every registered prediction carries; the median over every published GH200 BLOCK_M 32 report's probe at that (model, SHARED declaration); n > 9 extrapolated along n 8 -> 9; a declaration with no table takes the c9 table",
+  "table": {
+   "granite-3.0-3b-a800m|360": {
+    "private": {
+     "1": 0.1,
+     "2": 0.39,
+     "3": 0.51,
+     "4": 0.73,
+     "5": 1.07,
+     "6": 1.15,
+     "7": 1.31,
+     "8": 1.69,
+     "9": 1.81
+    },
+    "shared": {
+     "1": 0.11,
+     "2": 0.44,
+     "3": 0.65,
+     "4": 0.86,
+     "5": 1.37,
+     "6": 1.53,
+     "7": 1.78,
+     "8": 1.98,
+     "9": 2.28
+    },
+    "native_abs_us": {
+     "1": 5.5,
+     "2": 5.74,
+     "3": 6.31,
+     "4": 6.49,
+     "5": 7.02,
+     "6": 7.37,
+     "7": 7.78,
+     "8": 8.0,
+     "9": 8.51
+    },
+    "reports": 10
+   },
+   "jetmoe-8b|72": {
+    "private": {
+     "1": -0.75,
+     "2": -3.25,
+     "3": -5.63,
+     "4": 0.5,
+     "5": 0.44,
+     "6": 0.6,
+     "7": 0.67,
+     "8": 0.88,
+     "9": 0.97
+    },
+    "shared": {
+     "1": -0.75,
+     "2": -3.24,
+     "3": -5.5,
+     "4": 0.54,
+     "5": 0.75,
+     "6": 0.92,
+     "7": 1.06,
+     "8": 1.23,
+     "9": 1.45
+    },
+    "native_abs_us": {
+     "1": 5.89,
+     "2": 8.49,
+     "3": 11.03,
+     "4": 5.14,
+     "5": 5.52,
+     "6": 5.62,
+     "7": 5.74,
+     "8": 5.7,
+     "9": 6.11
+    },
+    "reports": 5
+   },
+   "mixtral-8x22b|72": {
+    "private": {
+     "1": -0.62,
+     "2": -3.2,
+     "3": -5.59,
+     "4": 0.41,
+     "5": 0.53,
+     "6": 0.54,
+     "7": 0.61,
+     "8": 0.82,
+     "9": 0.86
+    },
+    "shared": {
+     "1": -0.64,
+     "2": -3.14,
+     "3": -5.58,
+     "4": 0.58,
+     "5": 0.72,
+     "6": 0.88,
+     "7": 0.99,
+     "8": 1.17,
+     "9": 1.38
+    },
+    "native_abs_us": {
+     "1": 5.78,
+     "2": 8.5,
+     "3": 11.07,
+     "4": 5.18,
+     "5": 5.54,
+     "6": 5.64,
+     "7": 5.97,
+     "8": 5.93,
+     "9": 6.29
+    },
+    "reports": 6
+   },
+   "mixtral-8x7b|72": {
+    "private": {
+     "1": -0.76,
+     "2": -3.13,
+     "3": -5.41,
+     "4": 0.64,
+     "5": 0.74,
+     "6": 0.78,
+     "7": 0.82,
+     "8": 1.03,
+     "9": 1.05
+    },
+    "shared": {
+     "1": -0.84,
+     "2": -3.09,
+     "3": -5.3,
+     "4": 0.72,
+     "5": 0.98,
+     "6": 1.09,
+     "7": 1.2,
+     "8": 1.38,
+     "9": 1.53
+    },
+    "native_abs_us": {
+     "1": 5.82,
+     "2": 8.5,
+     "3": 10.92,
+     "4": 5.07,
+     "5": 5.34,
+     "6": 5.52,
+     "7": 5.65,
+     "8": 5.62,
+     "9": 5.93
+    },
+    "reports": 17
+   },
+   "olmoe-1b-7b|576": {
+    "private": {
+     "1": 0.34,
+     "2": 0.5,
+     "3": 0.58,
+     "4": 0.78,
+     "5": 0.83,
+     "6": 1.08,
+     "7": 1.18,
+     "8": 1.48,
+     "9": 1.47
+    },
+    "shared": {
+     "1": 0.35,
+     "2": 0.58,
+     "3": 0.74,
+     "4": 1.03,
+     "5": 1.22,
+     "6": 1.55,
+     "7": 1.73,
+     "8": 2.12,
+     "9": 2.28
+    },
+    "native_abs_us": {
+     "1": 5.56,
+     "2": 6.08,
+     "3": 6.72,
+     "4": 7.35,
+     "5": 7.95,
+     "6": 8.57,
+     "7": 9.13,
+     "8": 9.54,
+     "9": 10.26
+    },
+    "reports": 6
+   },
+   "olmoe-1b-7b|960": {
+    "private": {
+     "1": 0.45,
+     "2": 0.61,
+     "3": 0.6,
+     "4": 0.55,
+     "5": 0.58,
+     "6": 0.56,
+     "7": 0.58,
+     "8": 0.68,
+     "9": 0.57
+    },
+    "shared": {
+     "1": 0.44,
+     "2": 0.73,
+     "3": 0.86,
+     "4": 0.98,
+     "5": 1.17,
+     "6": 1.4,
+     "7": 1.5,
+     "8": 1.67,
+     "9": 1.72
+    },
+    "native_abs_us": {
+     "1": 5.56,
+     "2": 6.1,
+     "3": 6.7,
+     "4": 7.34,
+     "5": 7.93,
+     "6": 8.55,
+     "7": 9.19,
+     "8": 9.53,
+     "9": 10.35
+    },
+    "reports": 1
+   },
+   "phi-3.5-moe|144": {
+    "private": {
+     "1": -3.84,
+     "2": 0.33,
+     "3": 0.44,
+     "4": 0.74,
+     "5": 0.64,
+     "6": 0.84,
+     "7": 0.75,
+     "8": 0.79,
+     "9": 0.84
+    },
+    "shared": {
+     "1": -3.86,
+     "2": 0.4,
+     "3": 0.6,
+     "4": 0.85,
+     "5": 0.87,
+     "6": 1.09,
+     "7": 1.08,
+     "8": 1.18,
+     "9": 1.4
+    },
+    "native_abs_us": {
+     "1": 9.02,
+     "2": 5.05,
+     "3": 5.44,
+     "4": 5.41,
+     "5": 5.88,
+     "6": 5.92,
+     "7": 6.32,
+     "8": 6.2,
+     "9": 6.56
+    },
+    "reports": 5
+   },
+   "qwen1.5-moe-a2.7b|540": {
+    "private": {
+     "1": 0.26,
+     "2": 0.36,
+     "3": 0.46,
+     "4": 0.54,
+     "5": 0.76,
+     "6": 1.01,
+     "7": 0.82,
+     "8": 1.17,
+     "9": 1.11
+    },
+    "shared": {
+     "1": 0.27,
+     "2": 0.48,
+     "3": 0.67,
+     "4": 0.79,
+     "5": 1.09,
+     "6": 1.39,
+     "7": 1.33,
+     "8": 1.79,
+     "9": 1.89
+    },
+    "native_abs_us": {
+     "1": 5.54,
+     "2": 6.3,
+     "3": 6.85,
+     "4": 7.57,
+     "5": 8.11,
+     "6": 8.65,
+     "7": 9.38,
+     "8": 9.69,
+     "9": 10.34
+    },
+    "reports": 5
+   },
+   "qwen2-57b-a14b-tp8|576": {
+    "private": {
+     "1": 0.36,
+     "2": 0.49,
+     "3": 0.61,
+     "4": 0.67,
+     "5": 0.95,
+     "6": 1.05,
+     "7": 1.3,
+     "8": 1.45,
+     "9": 1.44
+    },
+    "shared": {
+     "1": 0.37,
+     "2": 0.59,
+     "3": 0.78,
+     "4": 0.94,
+     "5": 1.34,
+     "6": 1.48,
+     "7": 1.78,
+     "8": 2.11,
+     "9": 2.39
+    },
+    "native_abs_us": {
+     "1": 5.5,
+     "2": 6.18,
+     "3": 6.83,
+     "4": 7.35,
+     "5": 7.95,
+     "6": 8.55,
+     "7": 9.07,
+     "8": 9.56,
+     "9": 10.29
+    },
+    "reports": 7
+   },
+   "qwen2-57b-a14b-tp8|960": {
+    "private": {
+     "1": 0.43,
+     "2": 0.56,
+     "3": 0.5,
+     "4": 0.63,
+     "5": 0.78,
+     "6": 0.5,
+     "7": 0.4,
+     "8": 0.76,
+     "9": 0.65
+    },
+    "shared": {
+     "1": 0.41,
+     "2": 0.7,
+     "3": 0.77,
+     "4": 1.02,
+     "5": 1.33,
+     "6": 1.22,
+     "7": 1.34,
+     "8": 1.79,
+     "9": 1.89
+    },
+    "native_abs_us": {
+     "1": 5.59,
+     "2": 6.1,
+     "3": 6.76,
+     "4": 7.36,
+     "5": 7.83,
+     "6": 8.59,
+     "7": 9.23,
+     "8": 9.54,
+     "9": 10.31
+    },
+    "reports": 1
+   },
+   "qwen2-57b-a14b|576": {
+    "private": {
+     "1": 0.38,
+     "2": 0.52,
+     "3": 0.59,
+     "4": 0.69,
+     "5": 0.96,
+     "6": 1.05,
+     "7": 1.25,
+     "8": 1.43,
+     "9": 1.47
+    },
+    "shared": {
+     "1": 0.38,
+     "2": 0.6,
+     "3": 0.74,
+     "4": 0.96,
+     "5": 1.38,
+     "6": 1.48,
+     "7": 1.77,
+     "8": 2.05,
+     "9": 2.41
+    },
+    "native_abs_us": {
+     "1": 5.47,
+     "2": 6.16,
+     "3": 6.84,
+     "4": 7.34,
+     "5": 7.97,
+     "6": 8.53,
+     "7": 9.1,
+     "8": 9.59,
+     "9": 10.25
+    },
+    "reports": 7
+   }
+  }
+ },
+ "seen_reproduction": {
+  "rental5_E1_SKEW_72": {
+   "v2": {
+    "cells": 72,
+    "rms": 0.012635,
+    "worst": 0.043775,
+    "mean": 0.003977
+   },
+   "v3": {
+    "cells": 72,
+    "rms": 0.008981,
+    "worst": 0.030775,
+    "mean": 0.000931
+   },
+   "v3_nob": {
+    "cells": 72,
+    "rms": 0.012183,
+    "worst": 0.043775,
+    "mean": 0.00366
+   },
+   "v3_noca": {
+    "cells": 72,
+    "rms": 0.009365,
+    "worst": 0.030775,
+    "mean": 0.001248
+   },
+   "LT3": {
+    "cells": 72,
+    "rms": 0.012237,
+    "worst": 0.028508,
+    "mean": -0.007058
+   },
+   "v3_all": {
+    "cells": 72,
+    "rms": 0.008981,
+    "worst": 0.030775,
+    "mean": 0.000931
+   },
+   "H8": {
+    "cells": 72,
+    "rms": 0.013956,
+    "worst": 0.048037,
+    "mean": 0.004369
+   }
+  },
+  "cells": 72,
+  "cal_8x7b_fitted_cells_v3": {
+   "cells": 75,
+   "rms": 0.002492,
+   "worst": -0.009458,
+   "mean": -0.000195
+  },
+  "design_numbers": {
+   "rental5_E1_SKEW_72_v2": "1.26 / +0.40 / +4.38",
+   "rental5_E1_SKEW_72_v3": "0.90 / +0.09 / +3.08",
+   "rental5_E1_SKEW_72_H8": 1.4,
+   "cal_8x7b_v3_rms": 0.249
+  }
+ },
+ "open_residuals": {
+  "Q1-C": "Qwen1.5 SHARED n = 1 carries a further ~+6.6 us under v3 (SEEN); CAL Qwen2-57B reads the same at n 1; registered as open with rivals CALL and DEAD on D = x15 - x9 (rental6-q1)",
+  "Q1-SK": "skewed pairs' S - N gap sits under the controls' on the same page (SEEN: OLMoE -3.39 us, Qwen1.5 -1.78 us, Mixtral rms 4.98 us); open, printed (rental6-q1)",
+  "OPEN-L2SKEW": "skewed OLMoE w1 bytes: v3's content keys do not move a skewed cell; the row-key rival is priced before any page (rental6-skew)",
+  "granite": "the 09-30 Granite G 8 cells with n <= 6 are host-bound (268-303 us every arm): nothing planned"
+ },
+ "variants": {
+  "v2": "registered model",
+  "v3_nob": "v3 without (b)",
+  "v3_noca": "v3 without (a)",
+  "LT3": "v3 with wave_q = 1",
+  "v3_all": "v3 with (b) on every non-NATIVE cell",
+  "H8": "M4 bytes, the 8x7B 6-parameter refit's (x, h), (b) on every non-NATIVE cell"
+ },
+ "seen_data": [
+  "the v2 source fit is CAL (8x7B 2026-09-27)",
+  "h is SEEN-FITTED",
+  "content_a SEEN-SELECTED",
+  "the align proxy is SEEN",
+  "every reproduction number is on SEEN pages"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633"
+ }
+}

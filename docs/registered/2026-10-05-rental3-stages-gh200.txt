@@ -1,0 +1,71 @@
+REGISTERED 2026-10-05, before any rental-3 page: rental 3, 2026-10-05-rental3-stages-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r3/DESIGN.md section 5 with REVIEW.md section 4: the one-page pairs, NULL's role, k128s3's occupancy verified on the page, drop-group c
+tool: scripts/l2_survival.py, wave_split_bytes.page_window; scorer scripts/scoring/rental3/score_stages.py
+
+
+pages:
+  path: <date>-nvidia_gh200_480gb-mixtral-8x7b-tp2-<label>-r3-counters/lock1710/r3c-g1.json
+  base: l2base
+  knobs: {"k32s8": {"block_k": 32, "num_stages": 8}, "k128s4": {"block_k": 128, "num_stages": 4}, "k128s3": {"block_k": 128, "num_stages": 3}, "k64s7": {"block_k": 64, "num_stages": 7}, "k64s3": {"block_k": 64, "num_stages": 3}}
+  control: k64s3
+  G: 1
+gemm: w2 (x 0.92, P 64) is classified; w1 (x 1.86, P 224) is printed
+occupancy:
+  field: wave_split_bytes.page_window(page, 'w2')[1]: the least of the four recorded launch__occupancy_limit_* of w2, the same in every cell
+  expected: {"k32s8": 4, "k128s4": 2, "k128s3": 3, "k64s7": 2, "k64s3": 4}
+  expected_basis: the design's estimate from shared memory (192 BK bytes a stage, 228 KiB an SM, 1 KiB a CTA) capped by the SEEN register limit; never used to score: each page's column is re-keyed from its RECORDED value
+  k128s3: scored as k128s3 only when its recorded w2 occupancy is 3; otherwise its column is re-keyed and the pairs it alone separates (OCC / U-OCC) read NO SEPARATION
+stages_and_block_k: read off each page's design block (num_stages, block_k), asserted equal to the plan's
+hypotheses:
+  OCC: lifted when CTAs per SM <= 2
+  DEPTH: lifted when num_stages >= 7 (SEEN puts it between 6 and 8)
+  WIDTH: lifted when BLOCK_K >= 128
+  U-OCC: OCC or WIDTH
+  U-DEPTH: DEPTH or WIDTH
+  NULL: never lifted (the knob does nothing): the control's prediction, SEEN-refuted on s8 and BK128 and still scored
+patterns_at_expected:
+  OCC: {"k32s8": "base", "k128s4": "lifted", "k128s3": "base", "k64s7": "lifted", "k64s3": "base"}
+  DEPTH: {"k32s8": "lifted", "k128s4": "base", "k128s3": "base", "k64s7": "lifted", "k64s3": "base"}
+  WIDTH: {"k32s8": "base", "k128s4": "lifted", "k128s3": "lifted", "k64s7": "base", "k64s3": "base"}
+  U-OCC: {"k32s8": "base", "k128s4": "lifted", "k128s3": "lifted", "k64s7": "lifted", "k64s3": "base"}
+  U-DEPTH: {"k32s8": "lifted", "k128s4": "lifted", "k128s3": "lifted", "k64s7": "lifted", "k64s3": "base"}
+  NULL: {"k32s8": "base", "k128s4": "base", "k128s3": "base", "k64s7": "base", "k64s3": "base"}
+pairs:
+  differ_on: {"OCC/DEPTH": ["k32s8", "k128s4"], "OCC/WIDTH": ["k128s3", "k64s7"], "OCC/U-OCC": ["k128s3"], "OCC/U-DEPTH": ["k32s8", "k128s3"], "OCC/NULL": ["k128s4", "k64s7"], "DEPTH/WIDTH": ["k32s8", "k128s4", "k128s3", "k64s7"], "DEPTH/U-OCC": ["k32s8", "k128s4", "k128s3"], "DEPTH/U-DEPTH": ["k128s4", "k128s3"], "DEPTH/NULL": ["k32s8", "k64s7"], "WIDTH/U-OCC": ["k64s7"], "WIDTH/U-DEPTH": ["k32s8", "k64s7"], "WIDTH/NULL": ["k128s4", "k128s3"], "U-OCC/U-DEPTH": ["k32s8"], "U-OCC/NULL": ["k128s4", "k128s3", "k64s7"], "U-DEPTH/NULL": ["k32s8", "k128s4", "k128s3", "k64s7"]}
+  one_page_pairs: {"OCC/U-OCC": ["k128s3"], "WIDTH/U-OCC": ["k64s7"], "U-OCC/U-DEPTH": ["k32s8"]}
+  rule: a pair separated by ONE page needs that page classified; else that pair reads NO SEPARATION, and every other pair is still scored
+bands:
+  lifted: [0.1, 0.35]
+  base: [-0.06, 0.06]
+  ns: [4, 5, 6, 7, 8, 9]
+  need: 4
+  ds: s_knob(n) - s_base(n), the same-board l2base page
+  basis: SEEN tp2 w2: lifted pages +0.13 to +0.28 per n (s8 +0.18 to +0.28, BK128/s2 +0.13 to +0.27); base pages (s6, BK32, pad 7) -0.03 to +0.03; same-board noise 0.02
+  rule: a page is lifted (base) when at least 4 of n = 4..9 fall in the lifted (base) band; else unclassified
+verdict:
+  falsify: a hypothesis is FALSIFIED by any classified page whose class it gets wrong (at that page's recorded occupancy)
+  select: SELECTED when it matches every classified page, at least 4 of the 5 pages are classified, and every other hypothesis (NULL included) is FALSIFIED
+  control: k64s3 is predicted base by every hypothesis: lifted there FALSIFIES all six (the lift has another cause); unclassified or missing changes nothing
+  missing: a page that is missing or fails to compile is NOT SCORED and leaves the population; the 4-page minimum then decides
+  else: INCONCLUSIVE, the survivors and every NO SEPARATION pair printed
+controls:
+  board_check: {"rule": "the l2base page's w2 s within 0.05 of rental 2's tp2 l2base at 4 of n = 4..9", "rental2_s_w2_SEEN": {"2": 0.765339, "3": 0.59699, "4": 0.575207, "5": 0.583233, "6": 0.544675, "7": 0.561303, "8": 0.543702, "9": 0.530733}, "effect": "a failure turns every verdict INCONCLUSIVE"}
+  F_over_Mn: {"band": [0.5, 0.56], "rule": "every PRIVATE cell of every page", "effect": "a failing page's class is printed and the page leaves the count"}
+  V6: a page whose V6 is not PASS is FLAGGED: it leaves the count
+  V7_V10: do not gate (bytes; s reads SHARED and PRIVATE)
+co_prediction:
+  status: PRINTED
+  rule: the far share of SHARED's extra hits (l2_survival far, mean over n = 4..9): lifted pages <= 0.22, base pages >= 0.23; a lifted page with a base far share is printed as a mechanism counter-example
+  SEEN: lifted 0.15 and 0.19 to 0.20; base 0.25 to 0.27
+ambiguities_resolved:
+  C-1: w2 only; w1 printed
+  C-2: page_window's least recorded limit of w2
+  C-3: k64s3 lifted falsifies all; else no effect
+  C-4: printed
+  C-5: NULL must be FALSIFIED for a SELECTED
+  C-6: the one-page-pair rule above
+  C-7: NOT SCORED page, population shrinks, 4-of-5 minimum
+seen_data:
+  - the bands are SEEN (rental 2's knob pages); the five knob combinations are on no page
+  - rental 2's tp2 l2base s is SEEN, the board check's reference

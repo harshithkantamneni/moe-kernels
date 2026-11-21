@@ -1,0 +1,198 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "mixtral-8x7b",
+ "page": "C",
+ "shuffle_seed": 20261007,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 2,
+   "counts": [
+    71,
+    54,
+    33,
+    67,
+    68,
+    79,
+    54,
+    86
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 13.051,
+    "seed": 20261016,
+    "stats": {
+     "cv": 0.24357,
+     "max_mean": 1.34375,
+     "gini": 0.133789
+    },
+    "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 256",
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW",
+   "n": 2,
+   "counts": [
+    67,
+    97,
+    105,
+    53,
+    64,
+    22,
+    35,
+    69
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 3.7495,
+    "seed": 20262013,
+    "stats": {
+     "cv": 0.410807,
+     "max_mean": 1.640625,
+     "gini": 0.22998
+    },
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 256",
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts": [
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 8,
+   "counts": [
+    190,
+    305,
+    320,
+    224,
+    251,
+    240,
+    303,
+    215
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 17.404,
+    "seed": 20264007,
+    "stats": {
+     "cv": 0.174955,
+     "max_mean": 1.25,
+     "gini": 0.098145
+    },
+    "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 1024",
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "PW",
+   "n": 8,
+   "counts": [
+    376,
+    326,
+    310,
+    142,
+    146,
+    139,
+    299,
+    310
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.0,
+    "seed": 20265047,
+    "stats": {
+     "cv": 0.354173,
+     "max_mean": 1.46875,
+     "gini": 0.18811
+    },
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 1024",
+    "matches": [
+     "cv",
+     "gini"
+    ]
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 8,
+   "counts": [
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 8,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "fitted Zipf/Dirichlet shapes (scripts/skew_synth.py); no trace count"
+}

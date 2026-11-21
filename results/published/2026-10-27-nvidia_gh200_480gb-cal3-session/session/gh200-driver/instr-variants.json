@@ -1,0 +1,4 @@
+[
+ {"id": "u7-st7", "kind": "stamps", "model": "mixtral-8x7b", "groups": [1], "arms": ["native"], "block_m": 128, "block_n": 128, "block_k": 64, "num_warps": 8, "num_stages": 3, "histogram": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json", "spec": "stamps=ends"},
+ {"id": "u8-stq", "kind": "stamps", "model": "qwen2-57b-a14b", "groups": [1], "arms": ["native"], "block_m": 128, "block_n": 128, "block_k": 64, "num_warps": 8, "num_stages": 3, "histogram": "docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json", "spec": "stamps=ends"}
+]

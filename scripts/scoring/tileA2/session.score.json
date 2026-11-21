@@ -1,0 +1,16 @@
+{
+ "registration": "2026-10-20-tileA2-gates-gh200",
+ "part": "session",
+ "verdict": "NOT READ: the two power readings disagree (900.0 and 700.0 W)",
+ "lock_mhz": 1410.0,
+ "power_limit_w": null,
+ "readings": {
+  "clocks-at-start power.limit": 900.0,
+  "power-set Current Power Limit (GPU)": 700.0
+ },
+ "probe rungs (gate records)": {
+  "1710": "FAIL",
+  "1410": "PASS"
+ },
+ "session": "results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session/session"
+}

@@ -1,0 +1,5887 @@
+"""The unattended driver has to be checkable without a pod.
+
+`scripts/h200_gaps_session.sh` spends about four and a half hours of rented GPU
+across twenty arms, and near seven once its KERNEL rows are put on a wall clock.
+Almost everything that can go wrong with it goes wrong SILENTLY and is only
+visible an hour later: an arm marked finished having measured nothing, a
+pipeline that recorded `tee`'s exit status, a flag the sibling script renamed, a
+summary that prints an imported constant out of a refused log as if this session
+had measured it. None of those raise.
+
+So this file checks what can be checked off GPU, and makes every child it
+spawns a laptop on any box (`_spawn`: CUDA hidden, the driver's interpreters
+pinned to this one), so a pod's pytest never plans an arm under the vllm venv
+for a minute per test and never starts a measurement from a test:
+
+  1. THE SHELL ITSELF -- syntax, and the three habits this project has already
+     been burned by (`set -e` aborting a long run, a pipeline masking an exit
+     code, a PID variable in a shell that started no background job).
+  2. THE ARM TABLE IS COMPLETE AND ORDERED. Every arm needs an estimate, a
+     statement of what it closes, and the arms whose results change how a later
+     arm is READ have to come first.
+  3. THE FLAGS STILL EXIST. A driver that passes `--densify` to a script that
+     dropped it fails after the pod is already running.
+  4. THE STATES. The driver adopts `moe/bench/exit_codes.py`, and the shell
+     mirror of that table is compared with the module code for code. The
+     planting states (PLANNED / PLAN_REFUSED / BROKEN) are exercised with stub
+     commands, because a `--dry-run` that tracebacks used to be recorded as a
+     clean plan.
+  5. THE SUMMARY GREPS ONLY `^RESULT: `. The previous summary grepped
+     `floor|sigma` and printed an imported prior and a pre-registered
+     expectation out of a REFUSED log under the heading "THE GATES". The two
+     tests that pin this feed it exactly such a log.
+  6. THE COST TABLE IS THE ARMS' OWN. Added 2026-09-03, after a pod-readiness
+     check ran every arm the way this driver invokes it and found the table
+     wrong by 2.1x overall and by 10x on the noise floor -- an operator sizing
+     a rental off it under-booked by half a day, and the session it bought
+     reached minute 12, entered a 240-minute arm booked at 25, and was killed
+     inside it. Every booked figure is now checked against the plan that
+     printed it, by RUNNING that plan, and the TOTAL is checked to be the sum
+     of the column rather than a constant.
+  7. A GATE THAT CANNOT FAIL IS NOT A GATE. Three measuring arms ran without
+     the flag their own script needs to exit CLAIM_FAIL, and both
+     `occupancy_vs_swizzle.exit_for` and `bn_decomposition.exit_for` downgrade
+     a failed claim to exit 0 DONE without it. The check walks every arm's
+     measuring invocation and asks the SCRIPT which gate flag it defines, and a
+     second test reproduces the downgrade live rather than asserting it from
+     memory. The same shape is checked on the advertised off-GPU commands,
+     where the span line returned the same code whether the planted world was
+     reproduced or not.
+  8. A --dry-run THAT PREVIEWS A DIFFERENT RUN IS NOT A PREVIEW. Four arms
+     planned something the pod does not execute -- a skipped calibrate, a
+     rescore-mode anchor, a depth sweep at the wrong --r-max, a dtype arm with
+     no card to name -- so the tests below plant the distinguishing flag and
+     then run the whole dry session and check every arm reached a plan.
+  9. AN ARM THAT IS IN NO SESSION CLOSES NOTHING. `grep -c alias_ablation
+     scripts/h200_gaps_session.sh` returned 0, and so did the same grep over
+     all 28 branches, while `scripts/alias_ablation.py` is the only instrument
+     in the tree that tests whether the per-tile slope every alpha is built
+     from IS DRAM traffic. The tests below pin that it is scheduled, that it is
+     booked at what its own plan prints (which, since the alias slice made the
+     plan page charge the probe, is the pod's own figure and no longer 1.4
+     minutes under it), that its dry branch cannot measure, and that the two
+     rental subsets the banner prints are priced by the same two functions as
+     the table rather than by a second copy of it.
+ 10. THE SECOND OPINION IS TAKEN. `exit_codes.classify_text` was written so the
+     driver could recompute a script's verdict from the RESULT lines it printed
+     and compare it with the exit code, and until 2026-09-03 nothing in the
+     driver called it: `arm` read the integer and the summary grepped the lines
+     for display. A `RESULT: CLAIM C1 FAIL` page under exit 0 was latched DONE.
+     `second_opinion` is one function with a printed table, every row of it is
+     planted here through the shipped `arm()`, and the four proofs the review
+     ran (a FAIL line under exit 0, no line under exit 0, all-PASS lines under
+     exit 1, and a Python import-time crash under the real pod command lines
+     with a broken torch on PYTHONPATH) are the tests below.
+ 11. THE LATCH IS REACHABLE. The ledger lives in one session directory; a plain
+     re-invocation used to open a fresh one beside it and re-run every row the
+     latch protects, and nothing in --help said SESSION= was the way back.
+     `session_choice` decides the directory in one place, so every branch
+     (named, resumed, new, refused, latest-exists) is planted off GPU.
+
+HOW THE SHELL FUNCTIONS ARE TESTED. Sourcing the driver would run the session,
+so the file marks a block of pure function definitions between
+`# >>> LIFTABLE` and `# <<< LIFTABLE`, and `lift()` below evaluates that block
+in a fresh bash. That asks the SHIPPED function rather than a Python copy of
+its case statement, which would agree with it until it did not.
+"""
+from __future__ import annotations
+
+import importlib.util
+import math
+import os
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+DRIVER = ROOT / "scripts" / "h200_gaps_session.sh"
+TEXT = DRIVER.read_text()
+#: The same file with whole-line comments dropped. The structural checks below
+#: are about what the shell RUNS, and this file's own comments name the very
+#: constructs they forbid ("`cmd | tee log` would record tee's exit status",
+#: "no `$!`"), so a check over the raw text matches its own documentation and
+#: fails on a correct script.
+CODE = "\n".join(ln for ln in TEXT.splitlines() if not ln.lstrip().startswith("#"))
+
+sys.path.insert(0, str(ROOT))
+from _committed import ncu_refusals  # noqa: E402
+from _hermetic import LAPTOP_ENV  # noqa: E402
+from _shared_run import shared  # noqa: E402
+
+from moe.bench import exit_codes  # noqa: E402
+
+# The twenty arms, in the order their results are READ. Rewritten 2026-09-02
+# after the standards audit: the headline roofline was running BLOCK_N=64 with
+# GROUP_SIZE_M=1, a configuration vLLM never ships for a multi-tile BLOCK_M=128,
+# so it could refute the ceiling and never confirm it. The configuration is now
+# IN THE ARM NAME wherever two arms differ only by configuration.
+# alias_ablation was added on 2026-09-03: it was in no session on any branch,
+# and it is the only arm that tests the relabelling of the per-tile slope as
+# DRAM traffic that every alpha, cap and roof fraction in the study rests on.
+# bn_g1 was dropped on 2026-09-03: at GROUP_SIZE_M=1 `bn_decomposition.py
+# --self-test` exits 3 INVALID and the arm's own plan says C1 reads UNKNOWN
+# however the data fall, and no other pinning that self-test was checked at
+# passes either, so there was nowhere to re-pin it to.
+#: NO ARM IS EXEMPT FROM THE PLAN-READING TESTS, and between 2026-09-09 and now
+#: one was. The depth arm was booked `--partner-block-m 32`, a flag no version
+#: of `scripts/bm128_depth.py` has ever defined, and a `PENDING_SCRIPT_FLAGS`
+#: dict here let three plan-reading tests skip that arm by name until it landed.
+#: It was never going to land: the BM=32 scaling partner is UNCONDITIONAL in the
+#: script (`SMALL_TILE_BLOCK_M`, carried in `BLOCK_SIZES` beside the subject and
+#: the reference), so the exemption would have stood for good while the
+#: measuring branch exited 2 on argparse and the ledger filed the one arm this
+#: session exists to rescue as REFUSED. The flag is gone from the driver, the
+#: dict is gone from here, and every arm is read off its own plan again.
+
+
+#: TWO INTERPRETATION ARMS sit after the three preconditions and ahead of every
+#: ladder, both added 2026-09-16. Neither changes what any arm below MEASURES;
+#: both change what every one of them MEANS, so an operator cutting the session
+#: short has to see them before spending 46 minutes on bn_g16's alpha.
+#: `private-mixtral-bm32` is first of the two and that ordering is a budget
+#: decision, not a dependency: neither reads the other, the private reference is
+#: the cheaper booking of the two in `arm_minutes`, and the elasticity is the one
+#: of the pair that can spend its whole booking and still exit INVALID (V1, the
+#: duty states failing to separate in clock). The cheaper arm buys a direct
+#: alpha before forty minutes are risked on what the fitted one means.
+ARMS = ("thermal", "calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
+        "private-mixtral-bm32", "elasticity-m32-n64-g16",
+        "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
+        "bm128_depth", "alias_ablation", "noise_floor",
+        "bn_g16", "anchor_measure", "anchor_rescore", "occupancy", "blockk-w4",
+        "mma_switch", "ruler", "cap_test", "dtype", "span_dense", "span",
+        "counter_plan", "counter-n32-m64", "counter-n128-m64",
+        "counter_contrast")
+
+#: The counter is TWO arms and the pair is the instrument: one BLOCK_N buys
+#: alpha_b as a traffic slope, the CONTRAST between two BLOCK_N at one BLOCK_M
+#: is what decides traffic from time. Until 2026-09-10 it was one arm named
+#: `counter` that passed neither --block-n nor --block-m, so it ran the
+#: script's defaults (BLOCK_N=64, BLOCK_M=32) while `arm_closes` said in the
+#: same file that it ran the contrast.
+COUNTER_ARMS = ("counter-n32-m64", "counter-n128-m64")
+#: The zero-minute arm that READS the pair, added 2026-09-10. Until then the
+#: session paid for both payloads and never took the ratio between them:
+#: `grep -rn -- --contrast` over the driver and the docs returned nothing.
+COUNTER_CONTRAST_ARM = "counter_contrast"
+COUNTER_BLOCK_M = 64
+COUNTER_BLOCK_NS = (32, 128)
+
+
+def _spawn(cmd, **kw):
+    """EVERY CHILD THIS FILE STARTS IS A LAPTOP ON EVERY BOX. `LAPTOP_ENV` is
+    laid over whatever environment the caller built (or the process's own):
+    CUDA hidden, PY_BASE and PY_VLLM pinned to this interpreter. Without it,
+    on a pod a bare `run([])` starts the whole session from inside pytest and
+    every --dry-run plans for real under /workspace/venvs/vllm (~55 s a test,
+    session 4). The file's structural test refuses any other spawn."""
+    env = dict(kw.pop("env", None) or os.environ)
+    env.update(LAPTOP_ENV)
+    return subprocess.run(cmd, env=env, **kw)
+
+
+def run(args, cwd=None, session=None, env_extra=None):
+    env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home())}
+    if session:
+        env["SESSION"] = str(session)
+    env.update(env_extra or {})
+    return _spawn(["bash", str(DRIVER), *args], cwd=str(cwd or ROOT),
+                          capture_output=True, text=True, timeout=900, env=env)
+
+
+@pytest.fixture(scope="session")
+def gaps_dry(request, tmp_path_factory):
+    """ONE `--dry-run` of the driver, SESSION=<shared dir>/s, for every test
+    that only reads it: `(session dir, CompletedProcess)`. Until 2026-09-26
+    each of those tests ran its own copy, about 30 s apiece, 17 a suite.
+    Shared across xdist workers and frozen read-only (tests/_shared_run.py).
+    A test that writes into a session, or asks with another argv or
+    environment, runs its own."""
+    where, got = shared(request, tmp_path_factory, "gaps-dry-s",
+                        lambda d: run(["--dry-run"], session=d / "s"))
+    return where / "s", got
+
+
+def lift(script: str, **variables):
+    """Evaluate the driver's LIFTABLE function block, then `script`.
+
+    Every global those functions read is passed explicitly, so a test that
+    forgets one gets an unbound-variable error rather than a value the session
+    happened to leave lying around.
+    """
+    setup = "\n".join(f'{k}={v!r}' for k, v in variables.items())
+    body = (f"set -uo pipefail\n{setup}\n"
+            f'eval "$(sed -n \'/^# >>> LIFTABLE/,/^# <<< LIFTABLE/p\' "{DRIVER}")"\n'
+            f"{script}\n")
+    return _spawn(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=120)
+
+
+# --------------------------------------------------------------------------
+# 1. the shell itself
+# --------------------------------------------------------------------------
+
+def test_the_driver_parses():
+    done = _spawn(["bash", "-n", str(DRIVER)], capture_output=True,
+                          text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+
+
+def test_it_does_not_set_e_because_one_arm_must_not_end_the_run():
+    """A 3.4-hour unattended run that aborts at minute six on a shape that does
+    not compile is worse than no automation."""
+    assert "set -uo pipefail" in TEXT
+    assert not re.search(r"^set -[a-z]*e", TEXT, re.M)
+
+
+def test_no_measured_command_is_run_through_a_pipeline():
+    """FAILURE MODE 7. `cmd | tee log` reports the exit status of `tee`, and the
+    exit code is the only thing that decides one ledger state from another, so
+    every arm would be recorded as finished."""
+    assert '"$@" > "$log" 2>&1' in CODE
+    body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
+    assert "tee" not in body
+
+
+def test_it_starts_no_background_job_and_reads_no_pid():
+    """The other half of failure mode 7: a PID variable read in a shell that
+    started nothing. There is no `$!` here because there is nothing to wait
+    for."""
+    assert "$!" not in CODE
+    assert not re.search(r"[^&\s]\s*&\s*$", CODE, re.M)
+
+
+# --------------------------------------------------------------------------
+# 2. the arm table
+# --------------------------------------------------------------------------
+
+def test_every_arm_declares_a_cost_and_what_it_closes():
+    """A cost, the clock that cost is on, and what the arm closes. The clock is
+    part of the declaration: a figure whose unit is not stated is what let the
+    session total add wall minutes to kernel minutes and print one number."""
+    listing = run(["--list"])
+    assert listing.returncode == 0, listing.stderr
+    for name in ARMS:
+        assert re.search(rf"^  {re.escape(name)}\s+~\d+ min (WALL|KERNEL|ALLOW|FREE)$",
+                         listing.stdout, re.M), name
+
+
+def test_the_list_prints_the_one_exit_code_table_instead_of_per_arm_code_lists():
+    """WHAT THE AUDIT FOUND. The driver kept a hand-written "finished on exit
+    0,1" list per arm, in a tree where `memory_branch_anchor.py` used 2 for a
+    VALIDITY FAIL after measuring and three other scripts refused with 3. One
+    table replaces twelve lists, and `--list` prints the table."""
+    listing = run(["--list"]).stdout
+    assert "finished on exit" not in listing
+    assert "arm_done_codes" not in TEXT
+    for word in ("DONE", "CLAIM_FAIL", "REFUSED", "INVALID", "RETRY"):
+        assert word in listing, word
+    assert "exit_codes.py" in listing
+
+
+def test_every_arm_says_what_it_closes_and_what_it_leaves_open():
+    listing = run(["--list"]).stdout
+    for name in ARMS:
+        block = listing.split(f"  {name} ", 1)[1].split("\n\n", 1)[0]
+        assert len(block) > 100, name
+    assert "THE CLAIM'S CONFIGURATION, and NO ARM CAN CONFIRM IT ON sm_90" in listing
+    assert "THE CONTROL" in listing
+    assert "DEMOTED" in listing, "the BLOCK_M=16 arm must say it no longer carries the claim"
+
+
+def test_the_arms_whose_result_changes_a_later_reading_come_first():
+    """ORDER IS THE ARGUMENT. The calibration sets the ridge every roof fraction
+    below is scored against. The pin probes decide whether a forced census can
+    be attributed to a tile at all, and each probes the configuration the arms
+    it gates actually run."""
+    order = re.search(r"^ARM_NAMES=\(([^)]*)\)", TEXT, re.M).group(1).split()
+    assert order == list(ARMS)
+    # THE CARD BEFORE THE RULER, since 2026-09-11. The ruler is measured ON the
+    # clock: a card pinned at its floor publishes a ceiling that is wrong
+    # rather than low, and arm 0 PASSED on such a card because it scored DRIFT
+    # and a flat clock does not drift. It scores the FLOOR term too now, so it
+    # CAN tell -- but only after it has spent the card's minutes, and under
+    # --publish it writes the tracked yaml whichever way that term reads, so
+    # the ordering is still what protects the session. Three minutes here
+    # retires the whole rental.
+    assert order[0] == "thermal"
+    assert order[1] == "calibrate"
+    assert order[2].startswith("pin_probe") and order[3].startswith("pin_probe")
+    # AND THE TWO INTERPRETATION ARMS BEFORE EVERY LADDER, since 2026-09-16.
+    # Neither gates anything and neither refuses anything; between them they
+    # decide what every alpha below MEANS. The session-3 reading found that
+    # sweeping the admissible clock elasticity moves pooled EXA alpha_b from
+    # 0.974 to 0.897, 21x the quoted sd, and breaks the 26.7-sigma BLOCK_M
+    # monotonicity at 0.5; the private-weight reference measures alpha as a
+    # ratio of two slopes with no assumed rate in it at all. An operator who
+    # runs out of pod hours inside bn_g16 needs either reading rather than
+    # another alpha. THE ORDER BETWEEN THE TWO IS A BUDGET DECISION AND NOT A
+    # DEPENDENCY: neither arm reads the other, so the cheaper one runs first
+    # and the 40-minute one that can exit INVALID on V1 runs second.
+    assert (order[4], order[5]) == ("private-mixtral-bm32",
+                                    "elasticity-m32-n64-g16")
+    # And "the cheaper one" is read off the table, not remembered: the private
+    # reference went from 3 to 10 booked minutes when it moved to a duty cycle.
+    cost = {name: int(lift(f"arm_minutes {name}", REPO=str(ROOT)).stdout)
+            for name in (order[4], order[5])}
+    assert cost[order[4]] < cost[order[5]], cost
+    for early in ("private-mixtral-bm32", "elasticity-m32-n64-g16"):
+        assert order.index(early) < order.index("bn_g16")
+        assert order.index(early) < order.index("roofline-n64-g1")
+    # The control roofline runs first of the three: if BLOCK_M=128 reaches the
+    # roof at the LEANEST configuration it reaches it at every richer one, so a
+    # refutation there ends the session's whole middle at minute ten.
+    assert order.index("roofline-n64-g1") < order.index("roofline-n256-g16")
+    assert order.index("roofline-n256-g16") < order.index("roofline-n256-g32")
+    assert order.index("roofline-n256-g32") < order.index("bm128_depth")
+    assert order.index("bm128_depth") < order.index("noise_floor")
+    # The ablation runs BEFORE the floor and before every alpha arm. Its result
+    # changes what bn_g16, the anchor, occupancy, cap_test and both span arms
+    # are decomposing; the floor changes only how each of them is scored. The
+    # two are independent in both directions, so the order between them is a
+    # budget decision, and a 13-minute arm that can retire the mechanism
+    # sentence does not sit behind a 120-minute one.
+    assert order.index("bm128_depth") < order.index("alias_ablation")
+    assert order.index("alias_ablation") < order.index("noise_floor")
+    assert order.index("alias_ablation") < order.index("bn_g16")
+    assert order.index("alias_ablation") < order.index("anchor_measure")
+    assert order.index("alias_ablation") < order.index("span_dense")
+    assert order.index("noise_floor") < order.index("bn_g16")
+    assert "bn_g1" not in order
+    # A measurement precedes the free re-scoring that reads it.
+    assert order.index("anchor_measure") < order.index("anchor_rescore")
+    assert order.index("roofline-n64-g1") < order.index("cap_test")
+    # THE PROBE IMMEDIATELY BEFORE THE RUNS IT GATES. counter_plan is ten
+    # seconds and its BLOCKED verdict retires FOUR pod-hours of counter for
+    # the whole session, so running either counter arm first would spend them
+    # to discover what a ten-second probe answers. This assertion read
+    # `order[-1] == "counter_plan"` until 2026-09-10, when the probe stopped
+    # being the last thing in the session, and `order[-1] == "counter"` until
+    # the counter became the pair it always claimed to be. The zero-minute
+    # contrast then went on the end, after the two payloads it reads, so the
+    # tail is indexed from the probe forwards rather than from the end
+    # backwards: the reading is always last and the pair is always between.
+    assert order[-4] == "counter_plan"
+    assert (order[-3], order[-2]) == COUNTER_ARMS
+    assert order[-1] == COUNTER_CONTRAST_ARM
+
+
+def test_the_dense_span_grid_runs_before_the_sparse_one():
+    """AUDIT A11. `span_extent_separation --self-test kernel` on the SPARSE grid
+    the driver schedules returns C2 FAIL, C5 FAIL and C3 UNKNOWN; with
+    `--densify` it is 12/12 PASS. The dense grid is the only one on which C3's
+    mechanism is observable, so a 45-minute sparse arm that runs first spends
+    the budget on the grid that cannot answer."""
+    order = re.search(r"^ARM_NAMES=\(([^)]*)\)", TEXT, re.M).group(1).split()
+    assert order.index("span_dense") < order.index("span")
+
+
+def test_a_claim_gate_failing_is_finished_and_never_re_run():
+    """AUDIT A11, the other half: the driver used to accept only exit 0 for the
+    span arms, so the outcome the kernel world PREDICTS landed in the ledger as
+    RETRY and the arm was queued to spend its 45 minutes again. Exit 1 is
+    CLAIM_FAIL for every arm alike now, and the resume check treats it as
+    finished."""
+    body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
+    assert '$2 == "CLAIM_FAIL"' in body
+    assert '$2 == "INVALID"' in body
+    got = lift('ledger_state 1', REPO=str(ROOT))
+    assert got.stdout.strip() == "CLAIM_FAIL"
+
+
+def test_the_estimated_total_is_printed_before_anything_is_spent(gaps_dry):
+    """THE ONE NUMBER THAT DECIDES WHETHER TO RENT USED TO BE PRINTED ONLY
+    AFTER THE DECISION. `TOTAL ~$total minutes` sat inside the `else` of
+    `if (( DRY ))`, so --dry-run listed twenty per-arm minutes and no sum, and
+    the sum an operator would have reached by hand was wrong by nearly four
+    hours. Both modes print it now, with the cumulative minute each arm starts
+    at beside it, because "how long is the session" and "what is still
+    unstarted when I release the pod" are different questions."""
+    _, got = gaps_dry
+    assert "WHAT THIS COMMITS YOU TO" in got.stdout
+    body = got.stdout.split("WHAT THIS COMMITS YOU TO")[1]
+    assert body.index("SESSION  card=") > 0
+    for name in ARMS:
+        assert re.search(rf"  {re.escape(name)}\s+~\s*\d+ min", body), name
+    total = re.search(r"TOTAL ~(\d+) minutes \(~(\d+)h (\d+)m\)", body)
+    assert total, body
+    minutes = int(total.group(1))
+    assert minutes == int(total.group(2)) * 60 + int(total.group(3))
+    # The sum is the arms', not a constant: add the column back up.
+    listing = run(["--list"]).stdout
+    booked = {n: int(re.search(rf"^  {re.escape(n)}\s+~(\d+) min \w+$",
+                               listing, re.M).group(1)) for n in ARMS}
+    assert sum(booked.values()) == minutes
+    # And every arm says the cumulative minute it starts at, which must be the
+    # running sum of the arms above it and nothing else. The column is a RANGE
+    # once a KERNEL arm is above it, priced start to bounded start; the priced
+    # half is the one that has to be the running sum.
+    running = 0
+    for name in ARMS:
+        found = re.search(
+            rf"  {re.escape(name)}\s+~\s*\d+ min \w+\s+starts at "
+            rf"~\s*(\d+)(?:-(\d+))? min", body)
+        assert found, name
+        assert int(found.group(1)) == running, (name, found.group(1), running)
+        if found.group(2):
+            assert int(found.group(2)) >= running, name
+        running += booked[name]
+
+
+def test_no_arm_books_a_figure_this_file_invented(gaps_dry):
+    """THE COST TABLE WAS WRONG BY 2.1x OVERALL AND BY 10x ON THE NOISE FLOOR,
+    and the fix is not a better guess: every row now names the command whose
+    plan printed its figure, and what that figure leaves out. A row with no
+    basis is a number somebody made up, which is the state the whole table was
+    in."""
+    body = gaps_dry[1].stdout.split(
+        "WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
+    for name in ARMS:
+        basis = lift(f'arm_basis {shlex.quote(name)}', REPO=str(ROOT))
+        assert basis.returncode == 0 and basis.stdout.strip(), name
+        assert basis.stdout.strip() in body, name
+    # The three arms whose own plan refuses before spending anything are booked
+    # ZERO. Booking minutes for a refusal hides that the answer is already in.
+    for name in ("roofline-n256-g16", "roofline-n256-g32", "span"):
+        got = lift(f'arm_minutes {shlex.quote(name)}', REPO=str(ROOT))
+        assert got.stdout.strip() == "0", name
+        assert "REFUSE" in lift(f'arm_basis {shlex.quote(name)}',
+                                REPO=str(ROOT)).stdout.upper(), name
+    # And an arm whose figure excludes compiles says so where the figure is.
+    assert "NOT IN THAT FIGURE" in body
+    for name in ("span_dense", "dtype", "bn_g16"):
+        assert lift(f'arm_unpriced {shlex.quote(name)}',
+                    REPO=str(ROOT)).stdout.strip(), name
+    # An arm whose plan already prints a WALL clock has nothing unpriced.
+    for name in ("noise_floor", "anchor_measure", "ruler"):
+        assert not lift(f'arm_unpriced {shlex.quote(name)}',
+                        REPO=str(ROOT)).stdout.strip(), name
+
+
+#: The seven arms booked at their plans' own "excluding compiles and
+#: allocation" kernel time, and the two booked at a wall clock. Written out here
+#: so that a row moving between the two groups has to be a deliberate edit to
+#: this list; the test below does not trust it, it re-derives every membership
+#: from the arm's own printed plan and then checks this list against what it
+#: found.
+KERNEL_ARMS = ("private-mixtral-bm32", "roofline-n64-g1", "bm128_depth",
+               "bn_g16", "occupancy", "blockk-w4", "cap_test", "dtype",
+               "span_dense")
+
+
+def test_the_cost_column_names_the_clock_each_figure_is_on(gaps_dry):
+    """THE TOTAL ADDED TWO DIFFERENT UNITS. Fixing every figure to be the arm's
+    own left them in mixed clocks and said so nowhere: noise_floor's 120 and
+    anchor_measure's 5 are WALL, while seven arms are booked at what their plans
+    call "the model's own timings, excluding compiles and allocation". The
+    column names the clock on every row now.
+
+    THE MEMBERSHIP IS NOT A LIST KEPT HERE OR THERE. `arm_clock` reads
+    `arm_unpriced`, so there is one set in the driver rather than two that drift
+    -- the defect this whole slice keeps meeting -- and this test re-derives the
+    same answer a third way, from what each arm's own --dry-run PRINTS, which is
+    the only source neither of them can quietly disagree with."""
+    session, got = gaps_dry
+    assert got.returncode == 0, got.stdout[-3000:]
+    logs = session / "logs"
+    found = {"KERNEL": [], "WALL": [], "ALLOW": [], "FREE": []}
+    for name in ARMS:
+        clock = lift(f'arm_clock {shlex.quote(name)}', REPO=str(ROOT)).stdout.strip()
+        assert clock in found, (name, clock)
+        found[clock].append(name)
+        minutes = int(lift(f'arm_minutes {shlex.quote(name)}',
+                           REPO=str(ROOT)).stdout.strip())
+        unpriced = lift(f'arm_unpriced {shlex.quote(name)}', REPO=str(ROOT)).stdout
+        log = logs / f"{name}.log"
+        plan = log.read_text() if log.exists() else ""
+        if minutes == 0:
+            # A refusal, or a re-score that times nothing. There is no clock to
+            # name, and calling it WALL would file a refusal as a wall figure.
+            assert clock == "FREE", (name, clock)
+            continue
+        assert clock != "FREE", (name, minutes)
+        if unpriced.startswith("everything:"):
+            assert clock == "ALLOW", (name, clock)
+            # The whole meaning of ALLOW: there was no plan to read a figure off.
+            assert "estimat" not in plan.lower(), (name, plan[-1500:])
+            continue
+        # Everything else is decided by the arm's own words, in its own plan.
+        disclaims = ("excluding compiles and allocation" in plan
+                     or "not the wall clock" in plan.lower())
+        assert plan, f"{name} printed no plan to read the clock off"
+        assert (clock == "KERNEL") == disclaims, (name, clock, disclaims)
+    assert tuple(found["KERNEL"]) == KERNEL_ARMS, found["KERNEL"]
+    assert "noise_floor" in found["WALL"] and "anchor_measure" in found["WALL"]
+    assert found["ALLOW"] and found["FREE"]
+    # And the word reaches both places an operator reads the table.
+    body = got.stdout.split("WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
+    listing = run(["--list"]).stdout
+    for clock, names in found.items():
+        for name in names:
+            assert re.search(rf"  {re.escape(name)}\s+~\s*\d+ min {clock}\b",
+                             body), (name, clock)
+            assert re.search(rf"^  {re.escape(name)}\s+~\d+ min {clock}$",
+                             listing, re.M), (name, clock)
+
+
+def test_the_total_bounds_the_kernel_rows_instead_of_leaving_them_unbounded(gaps_dry):
+    """"BOOK ABOVE THAT AND NEVER AT IT" WITH NO NUMBER TO BOOK ABOVE. The old
+    banner printed one total over mixed units, computed the "starts at" column
+    -- the one thing a rental is sized with -- from that sum, and then declined
+    to bound it. Declining was defensible: this repo has ONE measured
+    wall-over-model datum, on one small arm, and multiplying every row by it
+    would be an invented number wearing a measurement's clothes. Printing no
+    bound at all was not: it left the mixed sum as the only figure on the page.
+
+    Both numbers are printed now, the second is arithmetic over the first, and
+    no per-arm figure is touched by it."""
+    _, got = gaps_dry
+    body = got.stdout.split("WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
+    priced = int(re.search(r"TOTAL ~(\d+) minutes", body).group(1))
+    kernel = re.search(r"of which ~(\d+) are KERNEL minutes", body)
+    assert kernel, body
+    kernel_min = int(kernel.group(1))
+    listing = run(["--list"]).stdout
+    booked = {n: int(re.search(rf"^  {re.escape(n)}\s+~(\d+) min \w+$",
+                               listing, re.M).group(1)) for n in ARMS}
+    assert kernel_min == sum(booked[n] for n in KERNEL_ARMS)
+    assert 0 < kernel_min < priced, (kernel_min, priced)
+    bound = re.search(r"~(\d+) minutes \(~(\d+)h (\d+)m\), the same table", body)
+    assert bound, body
+    bounded = int(bound.group(1))
+    assert bounded == int(bound.group(2)) * 60 + int(bound.group(3))
+    pct = int(lift("wall_over_model_pct", REPO=str(ROOT)).stdout.strip())
+    assert bounded == priced - kernel_min + -(-kernel_min * pct // 100)
+    assert bounded > priced, (bounded, priced)
+    # The factor is the one this repo measured, and it is named where it is
+    # used rather than left as a bare 2.35.
+    assert "127 s logged against 54 s modelled" in body
+    assert abs(pct / 100 - 127 / 54) < 0.01, pct
+    assert "ILLUSTRATION" in body
+    # THE OTHER DIRECTION, which is what says the bound is arithmetic and not a
+    # constant: with no KERNEL minutes in it, a total is not inflated at all.
+    assert lift("bounded_minutes 249 0", REPO=str(ROOT)).stdout.strip() == "249"
+    assert lift("bounded_minutes 0 0", REPO=str(ROOT)).stdout.strip() == "0"
+    # It rounds UP, because the number exists to be booked above and never at.
+    assert lift("bounded_minutes 1 1", REPO=str(ROOT)).stdout.strip() == "3"
+    # And no row was multiplied by it: the printed column still sums to the
+    # priced total, not to the bound.
+    assert sum(booked.values()) == priced
+
+
+# --------------------------------------------------------------------------
+# 3. the flags still exist on the far side
+# --------------------------------------------------------------------------
+
+INVOKED = {
+    # The card-acceptance arm, added 2026-09-11. Its three window flags are on
+    # the arm line rather than left to the script's defaults, for the reason
+    # the counter pair's are: a gate advertised at one configuration while the
+    # arm runs another is this driver's standing defect.
+    "scripts/thermal_acceptance.py": ("--dry-run", "--self-test", "--seconds",
+                                      "--settle-seconds", "--poll-seconds"),
+    "scripts/calibrate_hardware.py": ("--publish", "--dry-run"),
+    # THE DUTY LIST AND THE REPEAT COUNT ARE BOTH PLAN-SHAPING. The duty states
+    # set the cost (the idle gaps are 17x the kernel time and they ARE the
+    # experiment) and --repeats and --treads set the V1 clock-separation
+    # threshold the plan COMPUTES from them, so an arm line missing any of them
+    # previews a different sweep, a different threshold and a different run id.
+    # AND THE LAST TWO ARE NOT ON THE ARM LINE, deliberately. This tuple is a
+    # RENAME tripwire -- the test below only asks that the script still mentions
+    # each string -- so it is the right place to pin a flag the driver must keep
+    # NOT passing: `--card` would file the rows under this driver's spelling of
+    # the part while the rows carry torch's, and `--min-clock-ratio` is the
+    # operator's own assertion about V1, which the arm line has no business
+    # making. The comment above used to call every string here a plan-shaping
+    # flag on the arm line, and two of them are neither.
+    # --group-m AND --session-tag JOINED THE ARM LINE ON 2026-09-22: the G the
+    # arm's name promises is asked for rather than defaulted, and the tag is
+    # what stops the arm reproducing session 4's run id on the shared volume.
+    "scripts/clock_elasticity.py": ("--dry-run", "--self-test", "--model",
+                                    "--dtype", "--group-m", "--treads", "--duty",
+                                    "--repeats", "--burst-ms", "--target-ms",
+                                    "--trials", "--warm-ms", "--settle-seconds",
+                                    "--session-tag", "--card",
+                                    "--min-clock-ratio"),
+    "scripts/ruler_rebaseline.py": ("--dry-run", "--fail-on-gate"),
+    "scripts/check_mma_path.sh": ("--block-m", "--tokens", "--model", "--out",
+                                  "--dry-run"),
+    # The no-reuse reference, added 2026-09-14. Every flag that shapes the
+    # ladder is on both branches; --device-memory-gb is the dry branch's alone
+    # and names a HYPOTHETICAL card, the way dtype's --card does. --duty since
+    # 2026-09-22, DESIGN DECISION 15 as the owner decided it.
+    "scripts/private_weight_reference.py": ("--dry-run", "--capability",
+                                            "--model", "--block-m", "--treads",
+                                            "--repeats", "--duty", "--self-test",
+                                            "--device-memory-gb",
+                                            "--session-tag"),
+    "scripts/tile_cap_test.py": ("--dry-run", "--capability", "--fail-on-gate"),
+    "scripts/dtype_tile_confound.py": ("--dry-run", "--card", "--fail-on-claim"),
+    "scripts/span_extent_separation.py": ("--dry-run", "--densify",
+                                          "--no-densify", "--fail-on-world"),
+    "scripts/bm128_roofline.py": ("--block-n", "--group-m", "--control",
+                                  "--dry-run", "--fail-on-gate"),
+    "scripts/bm128_depth.py": ("--dry-run", "--r-max", "--fail-on-gate"),
+    "scripts/bn_decomposition.py": ("--dry-run", "--group-m", "--reps",
+                                    "--capability", "--fail-on-gate", "--tiles"),
+    "scripts/occupancy_vs_swizzle.py": ("--dry-run", "--run", "--fail-on-gate"),
+    # The warp count is on BOTH branches and in the arm name: it is the one
+    # configuration choice that decides whether this arm's design is
+    # identifiable at all, and the script's own --dry-run prints the table it
+    # was chosen from.
+    "scripts/blockk_diagonal.py": ("--dry-run", "--capability", "--num-warps",
+                                   "--fail-on-gate", "--self-test", "--cells"),
+    # --run IS D3'S AND IS NOT HERE YET. The counter arm's measuring branch
+    # runs `dram_counter_route.py --run`; the file it runs currently plans,
+    # probes, brackets and analyses, and its ncu loop is still the shell recipe
+    # its own plan page prints. The driver checks for the flag and skip_arms
+    # the arm by name rather than letting the pod discover it as an argparse
+    # exit 2, which is the shape of the 2026-09-09 --partner-block-m defect.
+    # This row and the test below are what turn red until that runner lands.
+    # --block-m and --block-n ARE ON THE ARM LINES SINCE 2026-09-10 and are
+    # checked here for the same reason as every other flag: the pair runs
+    # --block-m 64 at --block-n 32 and 128, and the script's own defaults are
+    # 32 and 64, so an arm that stops passing them silently runs a different
+    # cell from the one three pages of prose describe.
+    "scripts/dram_counter_route.py": ("--dry-run", "--probe", "--card",
+                                      "--out", "--analyse", "--run",
+                                      "--block-m", "--block-n"),
+    "scripts/replicate_noise_floor.py": ("--dry-run", "--replicates", "--arms",
+                                         "--publish"),
+    "scripts/memory_branch_anchor.py": ("--rescore", "--out-dir", "--dry-run",
+                                        "--measure"),
+    # No --dry-run and no --fail-on-gate in this one, and both absences are the
+    # design: a BARE invocation is its plan, `--run` is what makes it measure,
+    # and its exit code comes straight from `exit_codes.classify` over the gates
+    # it scored, so there is no downgrade for a flag to close.
+    "scripts/alias_ablation.py": ("--run", "--models", "--alias-extent",
+                                  "--compute", "--replicates", "--probe",
+                                  "--dot-fallback", "--card", "--synthetic"),
+}
+
+
+@pytest.mark.parametrize("script,flags", sorted(INVOKED.items()))
+def test_every_script_the_driver_invokes_exists_and_takes_the_flags_it_is_given(
+        script, flags):
+    """A renamed flag fails an hour into a rented pod, in the one arm nobody is
+    watching. Checked here for a few seconds instead."""
+    path = ROOT / script
+    assert path.exists(), script
+    assert script in TEXT, f"{script} is not actually invoked any more"
+    haystack = path.read_text()
+    for flag in flags:
+        assert flag in haystack, f"{script} no longer mentions {flag}"
+
+
+# THE GATE FLAGS. A script that defines one and is not given it can only ever
+# report the gate PASSING, and the measuring arms are exactly where that costs
+# an hour of rented card. `--fail-on-world` is deliberately NOT in this set: it
+# scores a --self-test's PLANTED WORLDS, not a measured run, so it belongs on
+# the off-GPU line and nowhere near a pod invocation.
+GATE_FLAGS = ("--fail-on-gate", "--fail-on-claim")
+
+
+def _dispatched_arm_lines(joined, arm_name):
+    """`arm` lines for an arm that is run through a dispatcher function.
+
+    Since 2026-09-10 the two counter arms are not written as two `arm counter-*`
+    lines: they are `counter_arm counter-n32-m64 32` and
+    `counter_arm counter-n128-m64 128`, and the gate, the card and the runner
+    check live once inside `counter_arm` so a fix cannot land on one of the
+    two. This resolves that one level of indirection, the dispatch call giving
+    the positional arguments and the function body the `arm "$name"` lines,
+    so every test that reads "the command line the pod runs" keeps reading
+    the file instead of a list kept here. Returns [] for an arm that is not
+    dispatched."""
+    call = [ln.split() for ln in joined.splitlines()
+            if re.match(r'\s*[a-z_]+_arm ' + re.escape(arm_name) + r'(\s|$)', ln)]
+    if not call:
+        return []
+    assert len(call) == 1, (arm_name, call)
+    fn, args = call[0][0], call[0][1:]
+    body = joined.split('\n' + fn + '() {', 1)[1].split('\n}', 1)[0]
+    params = re.findall(r'(\w+)="\$(\d+)"', body)
+    assert params, body[:300]
+    subs = {'"$' + var + '"': args[int(pos) - 1] for var, pos in params}
+    subs['"$' + params[0][0] + '"'] = args[0]
+    lines = []
+    for ln in body.splitlines():
+        if not re.match(r'\s*arm "\$\w+"\s', ln):
+            continue
+        for token, value in subs.items():
+            ln = ln.replace(token, value)
+        lines.append(ln)
+    assert lines, body[:300]
+    return lines
+
+
+def measuring_invocation(arm_name):
+    """The one command line the pod runs for `arm_name`, as shell words.
+
+    Read out of the file rather than listed here, because a list of what the
+    driver runs is a second copy of the driver and goes stale the day someone
+    edits the first."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    found = [ln for ln in joined.splitlines()
+             if re.match(rf"\s*arm {re.escape(arm_name)}\s", ln)]
+    found = found or _dispatched_arm_lines(joined, arm_name)
+    # The dry-run branch and the measuring branch, in that order in every arm.
+    measuring = [ln for ln in found if "--dry-run" not in ln]
+    # alias_ablation.py has no --dry-run flag: a BARE invocation is its plan and
+    # --run is what makes it measure, so its two plan branches carry no flag to
+    # exclude on. Where more than one line survives, the one that names --run
+    # is the pod's. This used to assert one survivor and was only ever reached
+    # for arms whose script defines a gate flag, which that one does not.
+    if len(measuring) > 1:
+        measuring = [ln for ln in measuring if "--run" in ln]
+    assert len(measuring) == 1, (arm_name, found)
+    return shlex.split(measuring[0])
+
+
+@pytest.mark.parametrize("arm_name", [
+    a for a in ARMS if a not in ("anchor_rescore",)])
+def test_every_arm_is_given_the_gate_flag_its_own_script_defines(arm_name):
+    """THE THREE ARMS THAT COULD NOT REACH THE STATE THEY WERE SCHEDULED FOR.
+    occupancy and both bn arms ran without --fail-on-gate, and
+    `occupancy_vs_swizzle.exit_for` / `bn_decomposition.exit_for` both downgrade
+    a CLAIM_FAIL to exit 0 DONE when it is absent. So ~94 minutes of the old
+    schedule could only ever land DONE, REFUSED or INVALID, and occupancy's P2
+    -- which the driver says is EXPECTED to fail, and that FAIL is the finding
+    -- had no code to land on.
+
+    Asked of the SCRIPT rather than of a list kept here: if a file defines a
+    gate flag, the arm that runs it has to pass it. A script that retires its
+    flag keeps accepting it (three of them say so in their own --help), so
+    passing it is also what stops a re-introduced downgrade from silently taking
+    an arm's CLAIM_FAIL away again."""
+    rel = lift(f"arm_script {shlex.quote(arm_name)}", REPO=str(ROOT)).stdout.strip()
+    if not rel or not (ROOT / rel).exists():
+        pytest.skip(f"{arm_name} runs no file under this repo")
+    source = (ROOT / rel).read_text()
+    defines = [f for f in GATE_FLAGS if f'"{f}"' in source]
+    if not defines:
+        pytest.skip(f"{rel} defines no gate flag")
+    words = measuring_invocation(arm_name)
+    for flag in defines:
+        assert flag in words, (
+            f"{arm_name} runs {rel}, which defines {flag}, without it. "
+            f"Its exit_for downgrades a CLAIM_FAIL to 0 DONE when the flag is "
+            f"absent, so the arm cannot report the state it is scheduled for.")
+
+
+def test_the_downgrade_this_flag_closes_is_real_and_not_remembered():
+    """The finding, reproduced rather than asserted. Off GPU, live:
+    `occupancy_vs_swizzle.py --audit` prints RESULT: CLAIM ... FAIL and exits 0,
+    while `exit_codes.classify_text` over that same log returns 1 -- a
+    disagreement between the process and its own page, which
+    moe/bench/exit_codes.py's docstring names as itself a defect. With the flag
+    both are 1."""
+    script = str(ROOT / "scripts" / "occupancy_vs_swizzle.py")
+    without = _spawn([sys.executable, script, "--audit"],
+                             capture_output=True, text=True, timeout=900,
+                             cwd=str(ROOT))
+    assert "RESULT: CLAIM" in without.stdout and "FAIL" in without.stdout
+    assert exit_codes.classify_text(without.stdout) == exit_codes.CLAIM_FAIL
+    assert without.returncode == exit_codes.DONE, "the downgrade is gone; drop this test"
+    with_flag = _spawn([sys.executable, script, "--audit",
+                                "--fail-on-gate"],
+                               capture_output=True, text=True, timeout=900,
+                               cwd=str(ROOT))
+    assert with_flag.returncode == exit_codes.CLAIM_FAIL
+    assert exit_codes.classify_text(with_flag.stdout) == with_flag.returncode
+
+
+def test_the_advertised_off_gpu_gates_can_actually_fail():
+    """A GATE THAT EXAMINED NOTHING REPORTS NO FAILURES, which is the shape
+    exit_codes.py is named against. The span arms' advertised check was
+    `span_extent_separation.py --self-test kernel|extent|neither --densify`,
+    and all three exit 2 with ZERO `RESULT: ` lines: the command returned the
+    same code whether the planted world was reproduced or not, and the script's
+    own last line says why ("Pass --fail-on-world to score the S gates"). With
+    the flag it is 15 RESULT lines per world. The occupancy line had the same
+    shape for the same reason."""
+    for arm_name, flag in (("span_dense", "--fail-on-world"),
+                           ("span", "--fail-on-world"),
+                           ("occupancy", "--fail-on-gate"),
+                           ("dtype", "--card"),
+                           ("alias_ablation", "--synthetic")):
+        advertised = lift(f"arm_offgpu_gates {shlex.quote(arm_name)}",
+                          REPO=str(ROOT)).stdout
+        assert flag in advertised, (arm_name, advertised)
+    script = str(ROOT / "scripts" / "span_extent_separation.py")
+    for world in ("kernel", "extent", "neither"):
+        bare = _spawn(
+            [sys.executable, script, "--self-test", world, "--densify"],
+            capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+        assert bare.returncode == exit_codes.REFUSED
+        assert "RESULT: " not in bare.stdout, world
+        scored = _spawn(
+            [sys.executable, script, "--self-test", world, "--densify",
+             "--fail-on-world"],
+            capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+        assert scored.stdout.count("RESULT: ") > 0, world
+        assert exit_codes.classify_text(scored.stdout) == scored.returncode
+
+
+def test_the_dtype_gate_needs_the_card_the_dry_run_branch_was_already_given():
+    """THE SAME DEFECT ONE ARM OVER, INSIDE THE COMMIT THAT NAMED IT. The word
+    that makes dtype_tile_confound.py plan off a GPU box went into this file's
+    dtype DRY-RUN branch and not into `arm_offgpu_gates`, so the command an
+    operator runs before renting -- `--self-test 2.033 --self-test-alpha 0.2` --
+    exits 2 NoCardToLabel with ZERO RESULT lines in all three planted worlds, the
+    same shape --fail-on-world closed on span: a check that examined nothing
+    reporting no failures.
+
+    With --card the three worlds SEPARATE, which is the whole point of planting
+    them, and they separate on the C3 line rather than on the exit code: a
+    self-test observes no config, so every validity gate but V0 reads UNKNOWN and
+    all three exit 3 INVALID. classify_text agreeing with that 3 is what says the
+    3 is the table's word and not a crash."""
+    script = str(ROOT / "scripts" / "dtype_tile_confound.py")
+    seen = {}
+    for world, verdict, tilt in (("2.033", "PASS", "1.023"),
+                                 ("2.400", "FAIL", "1.208"),
+                                 ("1.000", "FAIL", "0.503")):
+        bare = _spawn(
+            [sys.executable, script, "--self-test", world,
+             "--self-test-alpha", "0.2"],
+            capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+        assert bare.returncode == exit_codes.REFUSED, world
+        assert "RESULT: " not in bare.stdout, world
+        assert "NoCardToLabel" in bare.stdout, world
+        carded = _spawn(
+            [sys.executable, script, "--self-test", world,
+             "--self-test-alpha", "0.2", "--card", "NVIDIA H200"],
+            capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+        assert carded.stdout.count("RESULT: ") >= 10, world
+        assert exit_codes.classify_text(carded.stdout) == carded.returncode
+        c3 = re.search(r"^RESULT: CLAIM C3 (PASS|FAIL) median matched tilt "
+                       r"([\d.]+)", carded.stdout, re.M)
+        assert c3, carded.stdout[-2000:]
+        seen[world] = (c3.group(1), c3.group(2))
+        assert c3.group(1) == verdict, (world, c3.group(0))
+        assert c3.group(2) == tilt, (world, c3.group(0))
+    # A gate that says the same thing in every world is not a gate.
+    assert len(set(seen.values())) == 3, seen
+
+
+def test_every_advertised_off_gpu_command_is_run_by_this_guard_and_scores():
+    """THE ANTIDOTE TO A FIX LANDING AT ONE OF TWO CALL SITES, which is how
+    dtype's off-GPU line kept refusing for nine lines' distance from its own
+    remedy. This walks EVERY arm's advertised off-GPU line, extracts the command
+    it prints, RUNS it, and asks the log what it scored. A line an operator is
+    told to run before paying for a pod is either a command that examines
+    something, or a sentence saying no off-GPU check exists; there is no third
+    kind, and the failure both defects had is the third kind wearing the first
+    one's clothes.
+
+    A SCORING mode (--self-test, --audit, --rescore, --corpus-only) must print
+    RESULT lines and exit through the shared table. A PLANNING mode (--dry-run)
+    is exempt from RESULT lines and must still print a plan rather than a
+    traceback."""
+    import tempfile
+    scored_arms, planning_arms, prose_arms = [], [], []
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in ARMS:
+            line = lift(f"arm_offgpu_gates {shlex.quote(name)}",
+                        REPO=str(ROOT)).stdout.strip()
+            assert line, f"{name} advertises nothing at all"
+            if "scripts/" not in line:
+                prose_arms.append(name)
+                continue
+            cmd = line[line.index("scripts/"):]
+            for cut in (", ", " and ", "  (", "("):
+                if cut in cmd:
+                    cmd = cmd[:cmd.index(cut)]
+            # `kernel|extent|neither` is one command shown three ways; run the
+            # first, since the worlds are covered arm by arm above.
+            cmd = re.sub(r"([^\s|]+)(?:\|[^\s|]+)+", r"\1", cmd)
+            # `<a path outside the tree>` is a placeholder for a directory.
+            cmd = re.sub(r"<[^>]*>", tmp, cmd)
+            words = shlex.split(cmd)
+            assert (ROOT / words[0]).exists(), (name, cmd)
+            got = _spawn([sys.executable, *words], capture_output=True,
+                                 text=True, timeout=900, cwd=str(ROOT))
+            # --synthetic is alias_ablation.py's planted-world mode and is a
+            # SCORING one: it generates timings from a stated law, runs every
+            # gate on them and exits through the shared table. Leaving it out
+            # would have sent that arm's advertised line down the PLANNING
+            # branch, where the guard demands a --dry-run the script does not
+            # have, and the one arm added to close a missing-check defect would
+            # have been checked by the wrong half of the guard.
+            scoring = {"--self-test", "--audit", "--rescore", "--corpus-only",
+                       "--synthetic"}
+            if scoring & set(words):
+                scored_arms.append(name)
+                assert got.stdout.count("RESULT: ") > 0, (name, cmd, got.stdout[-2000:])
+                assert exit_codes.classify_text(got.stdout) == got.returncode, (
+                    name, cmd, got.returncode)
+            else:
+                planning_arms.append(name)
+                assert "--dry-run" in words, (name, cmd)
+                assert got.stdout.strip(), (name, cmd)
+                assert "Traceback" not in got.stdout + got.stderr, (name, cmd)
+    # The three groups are all non-empty, so none of the branches above is dead,
+    # and every arm landed in exactly one of them.
+    assert scored_arms and planning_arms and prose_arms
+    assert len(scored_arms) + len(planning_arms) + len(prose_arms) == len(ARMS)
+    assert "dtype" in scored_arms, scored_arms
+    # An arm that advertises no command must say so in words rather than by
+    # printing an empty line -- and it must not name a SCORING flag while
+    # naming no program to run it with. That was the old dtype line's exact
+    # shape ("C3 by --self-test 2.033|2.400|1.000"): an instruction to score
+    # three planted worlds, with nothing for this guard to run and nothing for
+    # the operator to run either without reconstructing the command.
+    assert "alias_ablation" in scored_arms, scored_arms
+    for name in prose_arms:
+        line = lift(f"arm_offgpu_gates {shlex.quote(name)}",
+                    REPO=str(ROOT)).stdout
+        assert len(line.split()) >= 4, (name, line)
+        for flag in ("--self-test", "--audit", "--rescore", "--corpus-only",
+                     "--fail-on"):
+            assert flag not in line, (name, flag, line)
+
+
+def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
+    """THE ARM THAT ATE THE SESSION. Booked 25 minutes against its own plan's
+    240, run bare so the defaults stood, with no deadline or timeout anywhere in
+    this file -- so a session sized off the old table entered it at minute 12
+    and was still inside it when the pod was released, which fails that
+    script's own V2 and makes even the partial floor unquotable. Bare also
+    meant no --publish, and NOISE_FLOOR.json is written under that flag alone,
+    so the sigma every future MDE line prints stayed ASSUMED.
+
+    This runs the arm's own --dry-run with exactly the flags the driver passes
+    and compares its TOTAL with the booking."""
+    words = measuring_invocation("noise_floor")
+    assert "--publish" in words, "the arm writes nothing without it"
+    assert "--replicates" in words and words[words.index("--replicates") + 1] == "3"
+    arms = words[words.index("--arms") + 1]
+    assert arms == "$NOISE_ARMS", words
+    named = re.search(r'^NOISE_ARMS=(\S+)$', CODE, re.M).group(1)
+    models = {a.split("_")[0] for a in named.split(",")}
+    assert len(models) >= 2, (
+        "V7 is a VALIDITY gate: a single-model floor lands the whole arm on "
+        "3 INVALID unless --single-model-floor is also given")
+    for model in models:
+        assert {f"{model}_g1", f"{model}_g16"} <= set(named.split(",")), (
+            "C3 is a swizzle contrast and needs G=1 AND G=16 of the SAME "
+            f"model; {model} has only one of them, so its C3 row would read "
+            "G=1 against G=1")
+    plan = _spawn(
+        [sys.executable, str(ROOT / "scripts" / "replicate_noise_floor.py"),
+         "--dry-run", "--replicates", "3", "--arms", named],
+        capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+    total = re.search(r"^TOTAL: ~(\d+) min of GPU", plan.stdout, re.M)
+    assert total, plan.stdout[-3000:]
+    booked = lift("arm_minutes noise_floor", REPO=str(ROOT)).stdout.strip()
+    assert booked == total.group(1), (booked, total.group(1))
+    # And --publish is NOT on the dry-run line: verified live, a --dry-run given
+    # --publish WRITES results/published/NOISE_FLOOR.json, which git tracks, and
+    # a plan that dirties the tracked tree is the anchor-rescore defect again.
+    dry = [ln for ln in CODE.splitlines()
+           if re.match(r"\s*arm noise_floor\s", ln)
+           or "replicate_noise_floor.py" in ln]
+    dry_line = " ".join(ln for ln in dry if "--dry-run" in ln)
+    assert "--publish" not in dry_line, dry_line
+
+
+@pytest.mark.parametrize("arm_name,flag", [
+    ("calibrate", "--dry-run"),
+    ("anchor_measure", "--measure"),
+    ("bm128_depth", "--r-max"),
+    ("blockk-w4", "--num-warps"),
+    ("dtype", "--card"),
+    ("private-mixtral-bm32", "--block-m"),
+    ("private-mixtral-bm32", "--treads"),
+    ("private-mixtral-bm32", "--session-tag"),
+    ("private-mixtral-bm32", "--duty"),
+    ("elasticity-m32-n64-g16", "--session-tag"),
+    ("elasticity-m32-n64-g16", "--group-m"),
+])
+def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
+    """FOUR ARMS PREVIEWED SOMETHING ELSE. calibrate was skipped entirely with
+    a reason that is false ("has no --dry-run": it has one, prints a nine-line
+    plan and exits REFUSED) -- and it is the arm whose gate can end the session
+    at minute 3. anchor_measure dry-ran without --measure, so it previewed
+    rescore mode and 26 committed reports instead of "cells 128 ... estimated
+    wall time 4.8 min". bm128_depth dry-ran at the default --r-max, previewing
+    126 s and a -r1024- run id against the pod's 252 s and -r2048-. dtype
+    dry-ran without --card, refused with NoCardToLabel and landed PLAN_REFUSED,
+    which reads as a broken arm rather than as this laptop having no GPU."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    dry = [ln for ln in joined.splitlines()
+           if re.match(rf"\s*arm {re.escape(arm_name)}\s", ln)
+           and "--dry-run" in ln]
+    assert dry, arm_name
+    # dtype has two plan branches on purpose: with a device attached the script
+    # names its own card and a --card flag would override it, and off a GPU box
+    # it is given a NAMED HYPOTHETICAL, which the session labels as one. Every
+    # other arm has a single plan branch and it must carry the flag.
+    assert (any if arm_name == "dtype" else all)(
+        flag in ln for ln in dry), (arm_name, flag, dry)
+    assert not re.search(rf"^\s*skip_arm {re.escape(arm_name)}\b", CODE, re.M), \
+        f"{arm_name} is skipped rather than planned"
+
+
+def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(gaps_dry):
+    """The end-to-end form of the four fixes above, on a box with no GPU: the
+    only arms without a PLANNED row are the two pin probes, the anchor rescore
+    and the counter contrast, each of which is NOT_PLANNED with a reason.
+    calibrate used to be a fourth, skipped for a reason that was false, and
+    dtype a fifth, landing PLAN_REFUSED because it was given no card to name.
+
+    `counter_contrast` is the 2026-09-10 addition and it is NOT_PLANNED off GPU
+    for a reason no plan mode can remove: `--contrast` is mutually exclusive
+    with `--dry-run` in the runner, and the two payloads it reads are written by
+    the counter pair on the card. The predictions it is scored against are
+    registered off GPU all the same, in section 2 of each counter arm's plan."""
+    session, got = gaps_dry
+    rows = dict(ln.split("\t")[:2] for ln in
+                (session / "ARMS-dryrun.tsv").read_text().splitlines()[1:])
+    # NOT_PLANNED: no plan mode reachable here, named with the reason.
+    # PLAN_REFUSED: the two BLOCK_N=256 rooflines print their refusal on line
+    # one and never plan, which is that arm's own finding -- no BLOCK_M=256
+    # control fits at BLOCK_N=256 -- and not a defect in this driver.
+    expected = dict.fromkeys(ARMS, "PLANNED")
+    expected.update(dict.fromkeys(
+        ("pin_probe-n64-g1", "pin_probe-n256-g16", "anchor_rescore",
+         COUNTER_CONTRAST_ARM),
+        "NOT_PLANNED"))
+    expected.update(dict.fromkeys(
+        ("roofline-n256-g16", "roofline-n256-g32"), "PLAN_REFUSED"))
+    for name in ARMS:
+        assert rows.get(name) == expected[name], (
+            name, rows.get(name), got.stdout[-3000:])
+
+
+@pytest.mark.parametrize("arm_name", ARMS)
+def test_no_arm_is_given_a_flag_its_own_script_does_not_define(arm_name):
+    """WHAT THE PENDING-FLAG EXEMPTION WAS HIDING. On 2026-09-09 both depth arm
+    lines were written `--partner-block-m 32`, a flag no version of
+    `scripts/bm128_depth.py` defines: the measuring branch would have exited 2
+    on argparse and the arm this session exists to rescue would have been filed
+    REFUSED having spent nothing. `INVOKED` above did not catch it because it is
+    a hand-kept list of flags per script and that flag was simply not in it, so
+    it guards against a RENAMED flag and not against an INVENTED one.
+
+    This asks the question the other way round: every flag the driver actually
+    writes on an `arm` line has to appear in the file that line runs. Derived
+    from the driver's own text, so it cannot go stale against it."""
+    rel = lift(f"arm_script {shlex.quote(arm_name)}", REPO=str(ROOT)).stdout.strip()
+    if not rel or not (ROOT / rel).exists():
+        pytest.skip(f"{arm_name} runs no file under this repo")
+    source = (ROOT / rel).read_text()
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(rf"\s*arm {re.escape(arm_name)}\s", ln)]
+    # An arm run through a dispatcher (`counter_arm counter-n32-m64 32`) has
+    # its `arm` lines inside that function, and its flags are just as much
+    # written by this driver, so they are resolved and asked the same question.
+    lines = lines or _dispatched_arm_lines(joined, arm_name)
+    assert lines, arm_name
+    flags = sorted({w for ln in lines for w in shlex.split(ln)
+                    if w.startswith("--")})
+    assert flags, (arm_name, lines)
+    for flag in flags:
+        assert flag in source, (
+            f"{arm_name} is given {flag}, which {rel} does not define: on the "
+            "pod that is an argparse exit 2 and an arm that measured nothing")
+
+
+def test_a_command_line_refusal_is_reported_as_one_and_not_as_a_blank_reason(tmp_path):
+    """The other half of the usage-error fix. `summarize_arm` greps a refused
+    log for the word REFUSED, which argparse never prints, so an arm refused by
+    its own command line printed the heading "REFUSED BEFORE MEASURING" and
+    then nothing at all, sending the reader to the log to find one line on
+    stderr. It now prints that line and says whose fault it is: a flag this
+    driver passed that the script does not define is not a refusal the script
+    chose."""
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    log = logs / "bm128_depth.log"
+    log.write_text(
+        "usage: bm128_depth.py [-h] [--dry-run] [--r-max R_MAX]\n"
+        "bm128_depth.py: error: unrecognized arguments: --partner-block-m 32\n")
+    got = lift(f'summarize_arm bm128_depth {log} PLAN_REFUSED', REPO=str(ROOT),
+               LEDGER=str(tmp_path / "ARMS.tsv"), LOGS=str(logs))
+    assert "REFUSED BY ITS OWN COMMAND LINE" in got.stdout, got.stdout
+    assert "unrecognized arguments: --partner-block-m 32" in got.stdout
+    assert "not a refusal the script chose" in got.stdout
+    # A script's own refusal still reads the way it did.
+    own = logs / "span.log"
+    own.write_text("plan line\nREFUSED: grid too sparse for C2\n")
+    got = lift(f'summarize_arm span {own} PLAN_REFUSED', REPO=str(ROOT),
+               LEDGER=str(tmp_path / "ARMS.tsv"), LOGS=str(logs))
+    assert "REFUSED BEFORE MEASURING" in got.stdout, got.stdout
+    assert "grid too sparse for C2" in got.stdout
+
+
+def test_no_arm_is_skipped_in_a_dry_run_with_a_reason_that_is_false(tmp_path):
+    """The skip that stood over calibrate said "calibrate_hardware.py is a
+    measurement and has no --dry-run". It has one. This asks the script."""
+    assert "has no --dry-run" not in TEXT
+    plan = _spawn(
+        [sys.executable, str(ROOT / "scripts" / "calibrate_hardware.py"),
+         "--dry-run"], capture_output=True, text=True, timeout=900,
+        cwd=str(ROOT))
+    assert plan.returncode == exit_codes.REFUSED
+    assert len([ln for ln in plan.stdout.splitlines() if ln.strip()]) >= 9
+    got = run(["--dry-run", "--only", "calibrate"], session=tmp_path / "s")
+    ledger = (tmp_path / "s" / "ARMS-dryrun.tsv").read_text().splitlines()
+    row = [ln.split("\t") for ln in ledger if ln.startswith("calibrate\t")]
+    assert row and row[0][1] == "PLANNED", (row, got.stdout[-3000:])
+
+
+def test_the_production_roofline_arm_runs_the_configuration_vllm_ships():
+    """AUDIT A8, THE FINDING THAT DECIDES THE PAPER. The headline arm ran
+    `SWEEP.FIXED` -- BLOCK_N=64, GROUP_SIZE_M=1 -- under a heading about what
+    production runs. vLLM 0.27.1's tuned entry for mixtral at BLOCK_M=128 is in
+    this repo (moe/bench/hardware/vllm_configs/E=8,N=14336,device_name=
+    NVIDIA_H200.json): BLOCK_N=256 with GROUP_SIZE_M=16 from 512 tokens up and
+    32 at 2048. An arm at BN=64/G=1 can refute a ceiling and cannot confirm one,
+    and the driver now says which arm is which."""
+    plan = run(["--dry-run", "--only",
+                "roofline-n64-g1,roofline-n256-g16,roofline-n256-g32"]).stdout
+    assert len(re.findall(r"roofline.*-n256-g16", plan)) >= 1
+    assert len(re.findall(r"roofline.*-n256-g32", plan)) >= 1
+    for flags in ("--block-n 256 --group-m 16 --control 256",
+                  "--block-n 256 --group-m 32 --control 256",
+                  "--block-n 64 --group-m 1 --control 256"):
+        assert flags in CODE, flags
+    # The control arm is named a control in words, not only by its suffix.
+    assert "can REFUTE the ceiling" in TEXT
+    assert "CANNOT confirm one for production" in TEXT
+
+
+def test_the_pin_is_probed_at_the_configurations_the_arms_run():
+    """AUDIT A17. The probe pinned BLOCK_SIZE_N=128, which no arm runs: the
+    control roofline, both bn arms, the anchor and the cap test pin 64, and the
+    production rooflines pin 256. A pin honoured at one BLOCK_N is evidence
+    about that BLOCK_N."""
+    assert '"BLOCK_SIZE_N":128' not in CODE
+    assert '"BLOCK_SIZE_M":128,"BLOCK_SIZE_N":64' in CODE
+    assert '"BLOCK_SIZE_M":128,"BLOCK_SIZE_N":256' in CODE
+    assert '"GROUP_SIZE_M":16' in CODE
+    # ...and the two probes together still cost what the one probe cost.
+    minutes = _spawn(
+        ["bash", "-c",
+         f'eval "$(sed -n \'/^arm_minutes()/,/^esac; }}/p\' "{DRIVER}")"; '
+         f'arm_minutes pin_probe-n64-g1; arm_minutes pin_probe-n256-g16'],
+        capture_output=True, text=True, timeout=60)
+    assert sum(int(x) for x in minutes.stdout.split()) == 4
+
+
+def test_the_pin_probe_passes_the_two_flags_without_which_it_measures_nothing():
+    """THE FIX THE REVIEW FOUND MISSING FROM pod_session.sh:1703.
+
+    `profiles.candidate_impls` filters on `span.env` and `VllmFusedExperts`
+    declares `env="vllm"`, so without `--env vllm` the probe plans only torch's
+    CUTLASS spans, whose `tile_block_m` is 0. The gate then reads
+    "observed = none" however good the hook is -- which is exactly the state the
+    2026-09-01 session shipped in.
+    """
+    block = TEXT.split("PIN_SWEPT=", 1)[1].split("# ---", 1)[0]
+    assert block.count("--env vllm") >= 2
+    assert block.count("--impl vllm_fused_experts") >= 2
+
+
+def test_the_pin_is_never_exported_over_the_other_arms():
+    """Exported, MOE_FORCE_TILE would pin every later arm silently and each one
+    would be measuring a tile nobody asked it for."""
+    assert "export MOE_FORCE_TILE" not in TEXT
+    assert "env MOE_FORCE_TILE=" in TEXT
+
+
+def test_the_anchor_rescore_is_kept_out_of_the_tracked_tree():
+    """AUDIT A6. `--rescore` defaults its output to results/published/ and
+    rewrote two TRACKED files, ANCHOR_RESCORE.txt and .json, on every
+    invocation -- `--dry-run` included, since the driver ran it in both modes.
+    P1 then passed at preflight and 3,696 published rows carry git_dirty=True."""
+    assert '--rescore \\\n      --out-dir "$SESSION/anchor-rescore"' in TEXT
+    plan = run(["--dry-run", "--only", "anchor_rescore"]).stdout
+    assert "NOT PLANNED anchor_rescore" in plan
+    assert "scores the committed corpus" in plan
+
+
+# --------------------------------------------------------------------------
+# 4. the states, and the table they all come from
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("rc", [0, 1, 2, 3, 4, 5, 6, 127, 130])
+def test_the_shell_ledger_state_agrees_with_the_module_code_for_code(rc):
+    """THE DEFECT THIS PINS. Until 2026-09-02 the driver read 2 as REFUSED while
+    `memory_branch_anchor.py` exited 2 for a VALIDITY gate that failed AFTER an
+    eight-minute measurement, so a measured, unquotable run was logged as
+    "REFUSED BEFORE MEASURING" and, because the anchor's stream check only runs
+    on a freshly timed cell, every resume hit M0 FAIL and the arm could never
+    reach DONE. Two integers meant two things in two files. This test is the
+    only thing that keeps the shell copy honest."""
+    got = lift(f'ledger_state {rc}', REPO=str(ROOT))
+    assert got.stdout.strip() == exit_codes.ledger_state(rc), got.stderr
+
+
+def test_the_driver_names_every_state_the_module_names():
+    for state in exit_codes.LEDGER_STATES:
+        assert state in TEXT, state
+
+
+def test_a_dry_run_records_the_exit_code_and_a_tracebacking_plan_is_broken(tmp_path):
+    """AUDIT A3. `:411-412` mapped EVERY dry-run exit code to PLANNED, so a
+    `--dry-run` that ended in a traceback was written into the ledger as a clean
+    plan and the operator flew to the pod with it. A plan gets three words now,
+    and the one that means "this is not a plan" is planted here with a stub that
+    tracebacks the way a python script does."""
+    ledger = tmp_path / "ARMS-dryrun.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    stub = tmp_path / "stub.py"
+    stub.write_text("raise RuntimeError('the plan did not survive its own dry run')\n")
+    got = lift(f'arm stub {sys.executable} {stub}',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[0] == "stub"
+    assert row[1] == "BROKEN"
+    assert row[2] == "1"
+    assert "Traceback" in (logs / "stub.log").read_text()
+    assert "BROKEN: this is a PLAN" in got.stdout
+
+
+@pytest.mark.parametrize("rc,state", [(0, "PLANNED"), (2, "PLAN_REFUSED"),
+                                      (1, "BROKEN"), (3, "BROKEN"),
+                                      (4, "BROKEN"), (127, "BROKEN")])
+def test_a_plan_gets_planning_words_and_a_refusal_is_not_a_breakage(rc, state):
+    """A PLAN IS NOT A MEASUREMENT, so it does not get measuring words. rc 2 is
+    the one non-zero code that is not a breakage: off a GPU box several of these
+    plans are SUPPOSED to refuse, and a refusal costs nothing. Everything else
+    -- a claim verdict, an INVALID, a traceback, a missing interpreter -- is a
+    plan that did not print."""
+    got = lift(f'dry_state {rc}', REPO=str(ROOT))
+    assert got.stdout.strip() == state, "with no log to read, rc 2 printed nothing"
+
+
+def test_a_dry_run_writes_a_separate_ledger_and_marks_nothing_done(gaps_dry):
+    """A PLAN IS NOT A MEASUREMENT, and the resume path reads the ledger. Written
+    into the measuring ledger a plan's exit code would mark arms finished having
+    measured nothing, and the pod run would skip them, ending with a confident
+    summary of twenty arms and no data."""
+    session, got = gaps_dry
+    assert (session / "ARMS-dryrun.tsv").exists()
+    assert not (session / "ARMS.tsv").exists()
+    rows = [r.split("\t") for r in
+            (session / "ARMS-dryrun.tsv").read_text().splitlines()[1:]]
+    assert rows
+    for row in rows:
+        assert row[1] in ("PLANNED", "PLAN_REFUSED", "BROKEN", "NOT_PLANNED"), row
+        assert row[1] not in exit_codes.LEDGER_STATES, row
+    # A session with a broken plan exits INVALID and NAMES the arms; one with
+    # none exits 0. Which of the two happens here depends on sibling scripts
+    # whose refusals still exit 3, so both branches are checked for coherence
+    # rather than one of them asserted.
+    broken = [r[0] for r in rows if r[1] == "BROKEN"]
+    if broken:
+        assert got.returncode == exit_codes.INVALID
+        assert f"{len(broken)} PLAN(S) BROKEN" in got.stdout
+        for name in broken:
+            assert re.search(rf"^  {re.escape(name)}\s+exited \d+ under --dry-run",
+                             got.stdout, re.M), name
+        assert "a refusal wearing an" in got.stdout
+    else:
+        assert got.returncode == 0, got.stdout[-2000:]
+
+
+def test_the_session_exits_non_zero_when_a_plan_is_broken(tmp_path):
+    """The other half of A3: recording BROKEN and then exiting 0 would leave the
+    word in a file nobody reads. `--dry-run` is a gate, so it has a FAIL branch,
+    and the branch is planted by pointing an arm at a stub that tracebacks."""
+    ledger = tmp_path / "ARMS-dryrun.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    stub = tmp_path / "stub.py"
+    stub.write_text("raise RuntimeError('boom')\n")
+    counted = lift(
+        f'arm stub {sys.executable} {stub}\n'
+        'if (( DRY )) && (( BROKEN_ARMS > 0 )); then exit 3; fi\nexit 0',
+        REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+        DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert counted.returncode == 3, counted.stdout
+    # ...and the shipped script contains that same branch, not a variant.
+    assert "if (( DRY )) && (( BROKEN_ARMS > 0 )); then" in CODE
+    # The PASS branch: a plan that works exits 0 and counts no BROKEN arm.
+    stub.write_text("print('a plan')\n")
+    clean = lift(
+        f'arm stub {sys.executable} {stub}\n'
+        'if (( DRY )) && (( BROKEN_ARMS > 0 )); then exit 3; fi\nexit 0',
+        REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+        DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert clean.returncode == 0, clean.stdout
+
+
+def test_an_invalid_arm_is_recorded_in_its_own_state_and_not_retried(tmp_path):
+    """INVALID IS NOT REFUSED AND IS NOT A RETRY. It cost the whole arm, its
+    cells are on disk and must not be scored, and repeating it repeats the
+    failure unless the log says the cause was transient. The old driver had no
+    word for it at all: exit 3 fell into "anything else", which it called
+    RETRY."""
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    # The stub NAMES the gate that failed, as a real INVALID does. A bare
+    # `exit 3` used to stand here; since the second opinion an INVALID that
+    # scored no gate is UNEARNED and not latched, which the last block below
+    # plants as the FAIL branch of this same test.
+    invalid = 'arm stub bash -c "echo RESULT: VALIDITY M0 FAIL stream check; exit 3"'
+    first = lift(invalid,
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert first.returncode == 0, first.stderr
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[1] == "INVALID"
+    assert "Do NOT re-run and do NOT quote it" in first.stdout
+    # A second pass over the same ledger must not spend the arm again.
+    again = lift(invalid,
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert "SKIP stub (already INVALID" in again.stdout
+    assert len(ledger.read_text().splitlines()) == 1
+    # UNEARNED: exit 3 over a page with no scored gate names no failed VALIDITY
+    # gate, so there is nothing to latch. UNKNOWN, and re-attempted.
+    bare = tmp_path / "BARE.tsv"
+    for _ in range(2):
+        got = lift('arm stub bash -c "exit 3"',
+                   REPO=str(ROOT), LEDGER=str(bare), LOGS=str(logs), ONLY="",
+                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+        assert "SKIP stub" not in got.stdout
+        assert "UNEARNED INVALID" in got.stdout
+    rows = [r.split("\t") for r in bare.read_text().splitlines()]
+    assert [r[1] for r in rows] == ["UNKNOWN", "UNKNOWN"], rows
+
+
+def test_counter_plan_is_never_latched_because_a_resume_can_be_on_another_pod(tmp_path):
+    """A COUNTER ROUTE IS A PROPERTY OF THE POD, and the pod is what a resume
+    can change. SESSION_PREFIX is `gaps-$CARD-`, keyed to the card MODEL;
+    /workspace is a network volume two rentals share, which this driver already
+    warns about at MOE_RESULTS_DIR; and a plain re-invocation that finds a
+    session REFUSES and tells the operator to `--resume-latest`. So the latch
+    would hand the previous rental's CLAIM_FAIL to `counter_arm`, which skips
+    both 120-minute arms on it: a stale BLOCKED retires the session's headline
+    pair on a pod nobody asked, and a stale OPEN spends four pod-hours on one
+    where the read is refused. The probe is about fifteen seconds against the
+    240 minutes it gates, so it is re-asked every pass.
+
+    `ledger_arm_state` takes the LAST row for a name, so the fresh verdict is
+    the one the gate reads and the stale row stays as history.
+    """
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    # EARNED PAGES, because an unearned exit does not latch in the first place
+    # and would prove nothing about the exemption. These are the two the probe
+    # actually writes: BLOCKED is `P1 FAIL` under exit 1, OPEN is `P1 PASS`
+    # under exit 0.
+    blocked = tmp_path / "blocked.sh"
+    blocked.write_text("#!/bin/bash\necho 'RESULT: CLAIM P1 FAIL route BLOCKED'\n"
+                       "exit 1\n")
+    opened = tmp_path / "open.sh"
+    opened.write_text("#!/bin/bash\necho 'RESULT: CLAIM P1 PASS route OPEN'\nexit 0\n")
+    # A BLOCKED probe on the first pod: CLAIM_FAIL, which every other arm latches.
+    first = arm_lift(f"arm counter_plan bash {blocked}", ROOT, ledger, logs)
+    assert "SKIP" not in first.stdout, first.stdout
+    assert ledger.read_text().splitlines()[-1].split("\t")[1] == "CLAIM_FAIL"
+    # The same command on the REPLACEMENT pod, resumed into this ledger.
+    again = arm_lift(f"arm counter_plan bash {opened}", ROOT, ledger, logs)
+    assert "SKIP counter_plan" not in again.stdout, again.stdout
+    assert "RE-RUN counter_plan" in again.stdout, again.stdout
+    rows = [r.split("\t") for r in ledger.read_text().splitlines()]
+    assert [r[1] for r in rows] == ["CLAIM_FAIL", "DONE"], rows
+    state = lift("ledger_arm_state counter_plan", LEDGER=str(ledger))
+    assert state.stdout.strip() == "DONE"
+    # AND EVERY OTHER ARM STILL LATCHES, which is what makes this an exemption
+    # and not a hole: `never_latches` names one arm.
+    other = tmp_path / "OTHER.tsv"
+    arm_lift(f"arm counter-n32-m64 bash {blocked}", ROOT, other, logs)
+    held = arm_lift(f"arm counter-n32-m64 bash {opened}", ROOT, other, logs)
+    assert "SKIP counter-n32-m64 (already CLAIM_FAIL" in held.stdout, held.stdout
+    assert lift("never_latches counter_plan; echo $?").stdout.strip() == "0"
+    assert lift("never_latches counter-n32-m64; echo $?").stdout.strip() == "1"
+    assert lift("never_latches thermal; echo $?").stdout.strip() == "1"
+
+
+def test_a_refused_arm_is_re_attempted_because_refusing_costs_nothing(tmp_path):
+    """The asymmetry the table implies. A REFUSED arm spent no pod minutes and
+    the usual reason to re-run this driver is that the precondition it named was
+    fixed, so REFUSED is the one finished state that is not skipped."""
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    for _ in range(2):
+        got = lift('arm stub bash -c "exit 2"',
+                   REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+        assert "SKIP stub" not in got.stdout
+    rows = [r.split("\t") for r in ledger.read_text().splitlines()]
+    assert [r[1] for r in rows] == ["REFUSED", "REFUSED"]
+
+
+def test_the_ledger_records_the_dirty_file_count_after_every_arm(tmp_path):
+    """AUDIT A6/P1. `calibrate_hardware.py` writes a TRACKED yaml and the anchor
+    re-score rewrote two TRACKED files, both while the session ran, so a P1
+    check at preflight passed and said nothing about the tree the later arms
+    measured on. The count is re-asked after every arm and lands in its own
+    column; a growth prints a warning naming the two file counts."""
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    got = lift('arm stub bash -c "exit 0"',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[4].isdigit(), row
+    assert "dirty file(s)" in got.stdout
+    # The FAIL branch: an arm that writes into the tree is named as having done
+    # it. The stub writes an untracked file under the repo, which is what
+    # --untracked-files=all is counted for.
+    scratch = ROOT / "___dirty_probe_for_the_driver_test.tmp"
+    try:
+        dirtying = lift(f'arm dirtystub bash -c "echo x > {scratch}"',
+                        REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs),
+                        ONLY="", DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+        assert "WARNING: this arm dirtied the work tree" in dirtying.stdout
+    finally:
+        scratch.unlink(missing_ok=True)
+
+
+def test_a_measuring_run_refuses_without_a_card_and_writes_nothing(tmp_path):
+    """Every verdict here is scored against a per-card calibrated ridge -- 145.8
+    on the A100 against 163.7 on the H200 -- so there is no card-free measuring
+    mode and none is offered. The driver's own stop codes speak the same table
+    as the arms': nothing measured is REFUSED, which is 2."""
+    session = tmp_path / "s"
+    got = run([], session=session)
+    assert got.returncode == exit_codes.REFUSED
+    assert "REFUSED: no CUDA device" in got.stdout
+    assert not session.exists()
+
+
+def test_the_resume_check_does_not_depend_on_a_gnu_only_grep():
+    """`grep -qP` is a GNU extension. On a laptop it fails, the resume check
+    silently says "not done" for every arm, and a re-run repeats work -- or
+    worse, the same construct is trusted on the pod after being tested nowhere.
+    Both reference drivers use it; this one uses awk."""
+    body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
+    assert "grep -qP" not in body
+    assert "awk -F" in body
+
+
+# --------------------------------------------------------------------------
+# 5. the card is in every name
+# --------------------------------------------------------------------------
+
+def test_the_results_root_carries_the_card(gaps_dry):
+    """AUDIT A5. The comment said the card was "IN BOTH NAMES" while the export
+    was a bare /workspace/results. That volume outlives the pod: two published
+    arms, one for sm_count 132 and one for 108, contain a report file of the
+    same name because a second card resumed the first card's directories."""
+    _, got = gaps_dry
+    line = [ln for ln in got.stdout.splitlines() if "MOE_RESULTS_DIR" in ln
+            and "results " in ln]
+    assert line, got.stdout
+    # Off a GPU box the card cannot be named, so the literal "nocard" is what
+    # goes in the path AND the driver says so rather than leaving the reader to
+    # infer it from an absence.
+    assert "nocard" in line[0]
+    assert "card      nocard -- " in got.stdout
+    assert "the card is in the name" in line[0]
+
+
+def test_a_results_root_that_does_not_name_the_card_is_refused(tmp_path):
+    """The gate has both branches. An operator-supplied MOE_RESULTS_DIR is not
+    silently rewritten -- that would put output where they are not looking --
+    and it is not silently accepted either."""
+    bad = run(["--dry-run"], session=tmp_path / "s",
+              env_extra={"MOE_RESULTS_DIR": str(tmp_path / "plain")})
+    assert bad.returncode == exit_codes.REFUSED
+    assert "does not contain the card" in bad.stdout
+    good = run(["--dry-run", "--only", "counter_plan"], session=tmp_path / "s2",
+               env_extra={"MOE_RESULTS_DIR": str(tmp_path / "gaps-nocard")})
+    assert good.returncode == 0, good.stdout[-2000:]
+    assert "does not contain the card" not in good.stdout
+
+
+# --------------------------------------------------------------------------
+# 6. the summary may read only the one line a scored gate prints
+# --------------------------------------------------------------------------
+
+PROSE_LOG = """\
+reading the imported floor: 0.0905 at the design this study runs
+C1  the crossing ratio is above 1 + alpha  [PASS]
+V3  VALIDITY PASS   sigma 0.0228 carried from NOISE_FLOOR.json
+REFUSED: no calibration for this device. Nothing was measured.
+"""
+
+RESULT_LOG = """\
+prose that mentions PASS and floor and sigma, at length
+C1 ... [PASS]   <- a pre-registered expectation, not a result
+RESULT: VALIDITY V0 PASS override_config changed the kernel
+RESULT: CLAIM C1 FAIL plateau 0.47 of roof, control 0.52, gap 0.05 < 0.10
+"""
+
+
+def test_a_log_of_pure_prose_yields_an_empty_summary(tmp_path):
+    """THE DEFECT, PLANTED. The old summary grepped `floor|sigma` for the
+    noise-floor arm and `^\\[(PASS|FAIL)\\]` for others. Against a REFUSED log it
+    matched eighteen times and printed `floor: 0.0905` -- a prior imported from
+    a file -- and `C1 ... [PASS]` -- a pre-registered expectation -- under the
+    heading "THE GATES", as this session's output. This log contains both and no
+    RESULT line, and the summary must print NOTHING from it."""
+    log = tmp_path / "arm.log"
+    log.write_text(PROSE_LOG)
+    got = lift(f'result_lines {log}', REPO=str(ROOT))
+    assert got.stdout == ""
+    scored = lift(f'summarize_arm noise_floor {log} DONE', REPO=str(ROOT))
+    assert scored.returncode == 1
+    assert "0.0905" not in scored.stdout
+    assert "PASS" not in scored.stdout
+
+
+def test_a_log_with_result_lines_yields_exactly_those(tmp_path):
+    """And the PASS branch: the two RESULT lines are printed verbatim, the prose
+    around them is not, and what comes back parses as the gates that were
+    scored."""
+    log = tmp_path / "arm.log"
+    log.write_text(RESULT_LOG)
+    got = lift(f'summarize_arm roofline-n64-g1 {log} CLAIM_FAIL', REPO=str(ROOT))
+    assert got.returncode == 0
+    lines = [ln for ln in got.stdout.splitlines() if ln]
+    assert lines == [ln for ln in RESULT_LOG.splitlines()
+                     if ln.startswith("RESULT: ")]
+    parsed = exit_codes.parse_result_lines(got.stdout)
+    assert [(p.kind, p.name, p.verdict) for p in parsed] == [
+        ("VALIDITY", "V0", "PASS"), ("CLAIM", "C1", "FAIL")]
+    assert exit_codes.classify_text(got.stdout) == exit_codes.CLAIM_FAIL
+
+
+def test_the_free_text_greps_are_gone():
+    """The regexes themselves, not only their effect: `floor|sigma` and the
+    bracketed-verdict patterns were per-arm case entries, and a per-arm regex is
+    a per-arm opportunity to match prose."""
+    assert "arm_gate_regex" not in CODE
+    assert "floor|sigma" not in CODE
+    assert "grep -E '^RESULT: '" in CODE
+    # The header still NAMES the old grep, as the defect it was; that is the
+    # one place the string is allowed to survive.
+    assert "`floor|sigma` matched a REFUSED noise-floor log" in TEXT
+
+
+def test_an_invalid_arm_says_in_the_summary_that_nothing_may_be_quoted(tmp_path):
+    log = tmp_path / "arm.log"
+    log.write_text(RESULT_LOG)
+    got = lift(f'summarize_arm anchor_measure {log} INVALID', REPO=str(ROOT))
+    assert "MEASURED, THEN A VALIDITY GATE FAILED" in got.stdout
+    assert "NOT auto-retried" in got.stdout
+    # ...and it still prints the gate lines, because which VALIDITY gate failed
+    # is the whole content of an INVALID arm.
+    assert "RESULT: VALIDITY V0 PASS" in got.stdout
+
+
+def test_an_arm_with_no_result_line_is_reported_rather_than_omitted(gaps_dry):
+    """A CHECK THAT EXAMINED NOTHING REPORTS NO FAILURES. An arm whose log
+    carries no RESULT line has not passed its gates; printing nothing for it
+    would read as having found nothing wrong."""
+    _, got = gaps_dry
+    assert "PLAN ONLY: a --dry-run scores no gate" in got.stdout
+    assert "This arm was NOT scored" in TEXT
+    assert "do not read prose in it as a verdict" in TEXT
+
+
+# --------------------------------------------------------------------------
+# 7. the plan states its own detection limit
+# --------------------------------------------------------------------------
+
+def test_the_plan_prints_an_mde_from_a_stated_noise_assumption(tmp_path):
+    """AUDIT B14. No arm in this study states an MDE, and the driver told the
+    operator to "read every effect against the noise floor" while the floor
+    itself has never been measured. The line is computed through
+    `replicate_noise_floor.mde_external_sigma` -- the known-variance form, the
+    only one that describes a design with one run per condition -- from the
+    sigma in NOISE_FLOOR.json, and it says ASSUMED in the same breath because
+    part (a) has not run on a card."""
+    got = run(["--dry-run", "--only", "counter_plan"], session=tmp_path / "s")
+    mde = [ln for ln in got.stdout.splitlines() if ln.strip().startswith("MDE ")]
+    assert len(mde) == 1, got.stdout
+    assert re.search(r"MDE 0\.\d{4} in fitted alpha", mde[0]), mde[0]
+    sigma = [ln for ln in got.stdout.splitlines() if ln.strip().startswith("sigma ")]
+    assert len(sigma) == 1 and "ASSUMED" in sigma[0], got.stdout
+    assert "CONFOUNDS num_stages" in sigma[0]
+    assert "0.0117, which is BELOW it" in got.stdout
+
+
+def test_the_mde_line_refuses_rather_than_inventing_a_number(tmp_path):
+    """The FAIL branch, planted: with no readable noise floor the session states
+    NO detection limit and says every effect is unscored. A default sigma here
+    would be a made-up denominator under every effect the session reports."""
+    empty = tmp_path / "norepo"
+    (empty / "results" / "published").mkdir(parents=True)
+    got = lift('mde_line', REPO=str(empty), PY_BASE=sys.executable)
+    assert got.returncode == 1
+    assert "MDE UNAVAILABLE" in got.stdout
+    assert "states no detection limit" in got.stdout
+
+
+# --------------------------------------------------------------------------
+# 8. the header says what the data say
+# --------------------------------------------------------------------------
+
+def test_the_regime_paragraph_is_counted_on_padded_rows_and_says_uniform_only():
+    """AUDIT B3. The header said "128 is the only tile vLLM runs multi-tile (59
+    of 87 cells, up to 32 tiles), at 16/32/64 it never does". Counted on
+    `load_max_rows`, what `moe_align_block_size` actually pads to, it is 65 of
+    87 and up to 33-34 tiles, BLOCK_M=16 fires in 1 of 24 cells and BLOCK_M=64
+    in 5 of 112 -- isolated, not never. And every one of those counts is over
+    UNIFORM routing; skewed routings, which is what production serves, were
+    never counted at all."""
+    header = TEXT.split("set -uo pipefail", 1)[0]
+    assert "65 of 87" in header
+    assert "33-34" in header
+    assert "1 of 24" in header and "5 of 112" in header
+    assert "SKEWED ROUTINGS WERE NEVER COUNTED" in header
+    assert "uniform routing" in header.lower()
+    assert "59 of 87" not in TEXT.replace(
+        'The earlier "59 of 87, up to 32, and 16/32/64 never" was counted on', "")
+
+
+def test_the_retracted_cap_identity_is_not_asserted_anywhere():
+    """AUDIT B1. The header carried "cap = 2*BM/(alpha_fitted*b) is EXACTLY the
+    three-term cap; the published cap numbers stand", and that sentence set this
+    file's whole order. The test that "proved" it defined alpha_fitted by the
+    formula under test. The estimator in use is B/(A+B), the (EXA) form in
+    moe/bench/ai_model.py, and a cap built from a fitted alpha is 31% high at
+    BLOCK_M=128 -- more than the cap-to-ridge gap it was deciding."""
+    assert "the published cap numbers stand" not in CODE
+    assert "EXACTLY the three-term cap" not in CODE
+    assert "THE CAP IDENTITY IS RETRACTED" in TEXT
+    # It survives in the header only inside the quoted sentence being retracted,
+    # on the same line as the word that retracts it, so no reader can take it as
+    # current.
+    for line in TEXT.splitlines():
+        if "the published cap numbers stand" in line:
+            assert "was a tautology" in line, line
+    assert "moe/bench/ai_model.py" in TEXT
+    assert "(EXA)" in TEXT
+
+
+def test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid():
+    """THE G=1 DECOMPOSITION ARM WAS, and this is the check that ran too late.
+    `bn_decomposition.py --self-test --capability 9.0 --group-m 1 --reps 17
+    --plant-noise 0.008` exits 3 INVALID: S4 sees sd(alpha_a) 0.1562 against a
+    gate of 0.025, and S5 sees the planted MISSING world PASS C2 at chi2 2.70
+    against a ceiling of 4.0, so neither of that arm's two readouts can be
+    resolved at the pinning it was booked at. The same command at --group-m 16
+    exits 0 at sd 0.0075. The arm was dropped rather than re-pinned because the
+    self-test also fails at 2, 4, 8, 32 and 64, so GROUP_SIZE_M=16 -- the arm
+    already scheduled -- is the only pinning left.
+
+    THE FIGURES ARE NOT PINNED HERE AS LITERALS, they are re-measured: the two
+    runs below print S4's own `saw sd`, and the driver's paragraphs are checked
+    against what came back. Eight sites carried 0.1759 and chi2 1.78 until
+    2026-09-10, which are neither the current figure nor the one the design
+    line prints (0.1507 at G=1), and no verdict moved when they were
+    corrected.
+
+    This runs the gate at the pinning the surviving arm ACTUALLY runs, which is
+    the substitution the whole finding is about: the driver used to advertise
+    the G=16 self-test as the off-GPU check for a G=1 arm."""
+    _THIS_DOC = test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid.__doc__
+    names = re.search(r"^ARM_NAMES=\(([^)]*)\)", TEXT, re.M).group(1).split()
+    assert "bn_g1" not in names and "bn_g16" in names
+    assert not re.search(r"^  bn_g1\s", run(["--list"]).stdout, re.M)
+    advertised = lift('arm_offgpu_gates bn_g16', REPO=str(ROOT)).stdout
+    # The COMMAND, not the paragraph beside it: the paragraph names --group-m 1
+    # on purpose, to say what the dropped arm's gate did.
+    command = re.match(r"[^(]*", advertised).group(0)
+    assert "--group-m 16" in command, command
+    assert "--group-m 1 " not in command, command
+    # And the invocation and the gate agree on the pinning. ANCHORED ON THE
+    # HEADING'S WORDS AND NOT ON ITS NUMBER: this read `say "4. alpha_a` until
+    # 2026-09-03, when inserting alias_ablation at 3 renumbered every heading
+    # below it and the split raised IndexError. A section number is a position
+    # in the read order, which is the one thing about this file that is meant
+    # to change; the sentence is what identifies the arm.
+    body = CODE.split("alpha_a and alpha_b separated", 1)[1].split("\nsay ", 1)[0]
+    assert "--group-m 16" in body
+    assert "--group-m 1 " not in body
+    runbook = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
+    for pinning, want in ((["--group-m", "1"], 3), (["--group-m", "16"], 0)):
+        done = _spawn(
+            [sys.executable, str(ROOT / "scripts" / "bn_decomposition.py"),
+             "--self-test", "--capability", "9.0", *pinning,
+             "--reps", "17", "--plant-noise", "0.008"],
+            capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+        assert done.returncode == want, (pinning, done.returncode, done.stdout[-2000:])
+        assert exit_codes.classify_text(done.stdout) == want, pinning
+        # AND THE PROSE IS CHECKED AGAINST WHAT CAME BACK. Eight sites in this
+        # tree quoted sd 0.1759 and chi2 1.78, figures the self-test had
+        # stopped printing; nothing checked them, so they aged in place through
+        # a whole session's worth of edits. S4's own `saw sd` is the number S4
+        # is scored on, so it is the one the pages must carry.
+        sd = re.search(r"S4 \w+ .*?saw sd = ([\d.]+)", done.stdout)
+        assert sd, done.stdout[-2000:]
+        assert sd.group(1) in TEXT, (pinning, sd.group(1))
+        if pinning[1] == "1":
+            assert sd.group(1) in runbook, sd.group(1)
+            assert sd.group(1) in _THIS_DOC, sd.group(1)
+            # The chi2 the MISSING world passes C2 at, from the same page.
+            row = re.search(r"^\s*MISSING\s+\S+\s+\S+\s+\S+\s+([\d.]+)",
+                            done.stdout, re.M)
+            assert row, done.stdout[-2000:]
+            assert row.group(1) in TEXT, row.group(1)
+            assert row.group(1) in _THIS_DOC, row.group(1)
+    # AND THE RETIRED FIGURES ARE GONE, not merely joined by the current ones.
+    # Presence of the right number somewhere on a page is not the check that
+    # was missing: every one of the eight sites carried a figure, and a page
+    # can hold both. These six are the 2026-09-10 re-measurement's casualties,
+    # and outside this file they survive nowhere.
+    for retired in ("0.1759", "0.4864", "0.0635", "0.1021", "0.0902",
+                    "chi2 1.78"):
+        assert retired not in TEXT, retired
+        assert retired not in runbook, retired
+        assert retired not in (ROOT / "docs" / "APPARATUS.md").read_text(), retired
+
+
+# --------------------------------------------------------------------------
+# 9. git is asked, not remembered
+# --------------------------------------------------------------------------
+
+def test_it_asks_git_check_ignore_rather_than_asserting_the_rule():
+    """FAILURE MODE 3. `.gitignore` ignores `results/*` and re-includes only
+    `results/published/`, so the answer differs for three kinds of path and a
+    remembered sentence is right for one of them. This repo has already lost
+    every published plot of ten arms that way."""
+    assert "git check-ignore" in TEXT
+    assert "check-ignore -q" in TEXT
+    assert "UNVERIFIED" in TEXT
+    assert "It is NOT 'tracked'" in TEXT
+
+
+def test_the_git_verdict_is_asked_of_a_path_an_arm_really_writes(gaps_dry):
+    """`results/` itself is not ignored -- the pattern is `results/*` -- so
+    asking about the ROOT answers the wrong question and reports "tracked" for a
+    tree whose every child git drops."""
+    _, got = gaps_dry
+    assert "/bm128_roofline" in got.stdout
+
+
+def test_it_never_commits_terminates_or_pushes(gaps_dry):
+    # These may appear only as printed ADVICE to the operator, inside the
+    # closing heredoc or a comment, never as a command this script runs.
+    runnable = [ln for ln in CODE.splitlines()
+                if ln[:1] not in ("", " ") and not ln.startswith("cat <<")]
+    for forbidden in ("git commit", "git push", "git add ", "runpodctl",
+                      "shutdown", "poweroff", "rm -rf"):
+        for line in runnable:
+            assert forbidden not in line, line
+    _, got = gaps_dry
+    assert "NOTHING HERE IS COMMITTED AND NOTHING IS PUSHED" in got.stdout
+
+
+# --------------------------------------------------------------------------
+# 10. the card probe, the capability parse, and the gate they feed
+# --------------------------------------------------------------------------
+#: The shipped read, lifted verbatim rather than retyped, so a change to the
+#: delimiter or the field order fails here instead of on a pod.
+READ_FIELDS = "IFS='|' read -r CARD CAPABILITY CARD_REASON"
+#: The two shipped lines that turn a compute capability into a major number.
+PARSE = re.search(r'^SM_MAJOR=""\n\[\[ "\$CAPABILITY" =~ [^\n]*\n', TEXT, re.M).group(0)
+
+
+def read_probe(line):
+    """Run the driver's own field split over one planted probe line."""
+    body = (f'set -uo pipefail\n{READ_FIELDS} '
+            f'< <(printf "%s\\n" {shlex.quote(line)})\n'
+            'printf "%s\\n%s\\n%s\\n" "$CARD" "$CAPABILITY" "$CARD_REASON"\n')
+    done = _spawn(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0, done.stderr
+    return done.stdout.split("\n")[:3]
+
+
+def test_the_probe_is_pipe_delimited_because_a_prose_reason_ate_the_capability():
+    """THE 2026-09-02 LIVE BUG, PLANTED. The probe used to split on a character
+    the reasons themselves contain, so `compute capability unreadable:
+    RuntimeError, no CUDA` put the words `no CUDA` in CAPABILITY. `pre_hopper`
+    was then written as an arithmetic comparison, bash looked for a variable
+    named CUDA, and `set -u` ended the session at the second arm. A pipe cannot
+    appear in a reason these branches write, and the reason is the LAST field,
+    so anything unexpected in it stays in it."""
+    assert READ_FIELDS in CODE
+    # The python side of the probe emits the same three pipe-joined fields on
+    # every exit, including the two that give up.
+    assert 'print(f"{card_slug(prov.gpu_name)}|{capability}|")' in TEXT
+    assert TEXT.count('print(f"nocard||') == 2
+    card, cap, reason = read_probe(
+        "nocard||compute capability unreadable: RuntimeError, no CUDA, none")
+    assert card == "nocard"
+    assert cap == "", "the reason must not reach the capability field"
+    assert reason == "compute capability unreadable: RuntimeError, no CUDA, none"
+    # And the PASS side: a real card fills the first two and leaves the third empty.
+    assert read_probe("nvidia_h200|9.0|") == ["nvidia_h200", "9.0", ""]
+
+
+@pytest.mark.parametrize("capability,major", [
+    ("9.0", "9"), ("8.0", "8"), ("10.0", "10"),
+    ("", ""), ("no CUDA", ""), ("nine.zero", ""), ("9", ""),
+])
+def test_the_capability_major_is_taken_only_from_a_number(capability, major):
+    """A capability that did not parse leaves SM_MAJOR EMPTY rather than
+    guessing. `9` with no dot is deliberately empty: the field this driver reads
+    is always `major.minor`, and a bare integer is a string from somewhere
+    else."""
+    body = (f"set -uo pipefail\nCAPABILITY={shlex.quote(capability)}\n"
+            f'{PARSE}printf "%s\\n" "$SM_MAJOR"\n')
+    done = _spawn(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == major
+
+
+@pytest.mark.parametrize("sm_major,skips", [
+    ("7", True), ("8", True), ("9", False), ("10", False), ("", False),
+])
+def test_pre_hopper_skips_a_pre_hopper_card_and_never_skips_on_a_string_it_could_not_read(
+        sm_major, skips):
+    """ALL THREE BRANCHES OF THE GATE THAT DECIDES FOUR ARMS. sm_80 skips them,
+    because BLOCK_N=256 at four stages asks 192 KiB of shared memory against
+    that card's 164. sm_90 runs them. An EMPTY SM_MAJOR runs them too: the gate
+    exists to spare a card that provably cannot hold the shape, and a
+    capability nobody could parse is not that proof. Skipping on an unreadable
+    string would drop the session's only confirming arm and say nothing."""
+    got = lift('if pre_hopper; then echo SKIP; else echo RUN; fi',
+               REPO=str(ROOT), SM_MAJOR=sm_major)
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == ("SKIP" if skips else "RUN")
+
+
+def test_an_unreadable_capability_travels_the_whole_chain_without_ending_the_run():
+    """The probe, the parse and the gate together, on the exact string that
+    ended a session. Under `set -u`, and the run must still be RUN and rc 0."""
+    script = (f'{READ_FIELDS} < <(printf "%s\\n" '
+              f'{shlex.quote("nocard||compute capability unreadable: no CUDA")})\n'
+              f'{PARSE}'
+              'if pre_hopper; then echo SKIP; else echo RUN; fi\n')
+    got = lift(script, REPO=str(ROOT))
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == "RUN"
+
+
+def test_the_pre_hopper_gate_decides_exactly_the_four_arms_that_need_the_shape():
+    """The gate is not free: every arm behind it is an arm the session does not
+    run. These four are the ones whose configuration a pre-Hopper card cannot
+    hold; anything else appearing here is an arm silently dropped."""
+    guarded = re.findall(r"if pre_hopper; then\n\s*skip_arm ([\w.-]+)", CODE)
+    assert sorted(guarded) == sorted(["pin_probe-n256-g16", "roofline-n256-g16",
+                                      "roofline-n256-g32", "mma_switch"])
+    for name in guarded:
+        assert 'compute capability $CAPABILITY' in CODE.split(f"skip_arm {name} ", 1)[1][:400] \
+            or 'capability $CAPABILITY' in CODE.split(f"skip_arm {name} ", 1)[1][:400], name
+
+
+# --------------------------------------------------------------------------
+# 11. the state word is disclosed when the file that produced it uses another table
+# --------------------------------------------------------------------------
+
+def plant_exit_codes(repo: Path) -> Path:
+    """Make `moe.bench.exit_codes` importable from a planted repo.
+
+    `arm()` takes its second opinion by running `exit_codes.classify_text` over
+    the log through $PY_BASE with REPO on sys.path, so a planted repo with no
+    such module makes every row UNREADABLE and therefore UNKNOWN, which is the
+    refusal working and not the branch these tests are planting. The one file
+    is linked rather than the package copied: the point is that the driver and
+    the scripts read one line format from one module, and a copy would be a
+    second one."""
+    target = repo / "moe" / "bench" / "exit_codes.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # Regular packages, not namespace portions: the venv has the real `moe`
+    # installed, and a namespace portion at sys.path[0] does not shadow an
+    # installed regular package, so without these two files the driver would
+    # read the installed module and the planting would be decorative.
+    for init in (repo / "moe" / "__init__.py", repo / "moe" / "bench" / "__init__.py"):
+        if not init.exists():
+            init.write_text("")
+    if not target.exists():
+        target.symlink_to(ROOT / "moe" / "bench" / "exit_codes.py")
+    return repo
+
+
+def adopting_repo(tmp_path, rel):
+    """A repo whose `rel` imports the module, for the caveat's silent branch."""
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("from moe.bench.exit_codes import classify\n")
+    return plant_exit_codes(tmp_path)
+
+
+def unadopting_repo(tmp_path, rel):
+    """A repo whose `rel` does NOT import the module, for the caveat's loud
+    branch. Written rather than picked from the tree on purpose: which real
+    script is unadopted changes every time a slice lands (the anchor's adoption
+    broke two tests that had named it), and a test of the MECHANISM must not
+    depend on that. `adopts_exit_codes` reads the file, so a file is what this
+    gives it."""
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("def main():\n    raise SystemExit(2)\n")
+    return plant_exit_codes(tmp_path)
+
+
+def test_a_blocked_counter_route_is_not_reported_as_a_broken_instrument(tmp_path):
+    """THE DEFECT, PLANTED. `dram_counter_route.py` ended `return 0 if verdict ==
+    "OPEN" else 3`, so BLOCKED -- the answer that arm exists to obtain, and the
+    expected one on a rented pod -- exited 3, which the adopted table reads as
+    INVALID. The base driver carried `counter_plan) echo 0,3` for exactly this;
+    R1 deleted the per-arm lists, so the row was wrong and the only honest thing
+    this file could do was say so beside it.
+
+    AGAINST A PLANTED FILE SINCE 2026-09-02, for the reason `unadopting_repo`
+    gives: that script has since adopted the table and its BLOCKED verdict now
+    exits DONE, so the real tree no longer reaches this branch. The MECHANISM is
+    what is under test and it must not depend on which script is unadopted this
+    week. `test_an_unadopted_refusal_says_two_may_mean_the_opposite` was moved
+    the same way when the anchor adopted, one function below.
+    """
+    repo = unadopting_repo(tmp_path, "scripts/dram_counter_route.py")
+    log = tmp_path / "counter_plan.log"
+    log.write_text(RESULT_LOG)
+    got = lift(f'summarize_arm counter_plan {log} INVALID', REPO=str(repo))
+    # Told as history: that script adopted the table on 2026-09-02 and exits
+    # DONE on BLOCKED, and a caveat that said "returns 3" in the present tense
+    # was the recurring defect (a description of the old behaviour standing at
+    # a second site) inside the function that exists to disclose it.
+    assert "dram_counter_route.py used to return 3 for" in got.stdout
+    assert "dram_counter_route.py returns 3 for" not in got.stdout
+    assert "not OPEN" in got.stdout
+    assert "not a broken instrument" in got.stdout
+    # and it still says what INVALID does to the ledger, because that is what
+    # the operator has to undo.
+    assert "delete this row from" in got.stdout
+
+
+def test_an_unadopted_refusal_says_two_may_mean_the_opposite(tmp_path):
+    """The other direction of the same collision. `memory_branch_anchor.py`
+    documents 2 as a VALIDITY gate that failed AFTER an eight-minute
+    measurement; this session reads 2 as REFUSED and prints "REFUSED BEFORE
+    MEASURING". Until that script adopts the module the summary must not leave
+    that sentence standing alone."""
+    repo = unadopting_repo(tmp_path, "scripts/memory_branch_anchor.py")
+    log = tmp_path / "anchor.log"
+    log.write_text("REFUSED: no calibration for this device.\n")
+    got = lift(f'summarize_arm anchor_measure {log} REFUSED', REPO=str(repo))
+    assert "REFUSED BEFORE MEASURING" in got.stdout
+    assert "used to document 2" in got.stdout
+    assert "eight-minute measurement" in got.stdout
+    # THE SAME ARM AGAINST THE REAL TREE IS SILENT, because the anchor adopted
+    # the table in this same rebuild. That is the caveat working, not missing.
+    real = lift(f'summarize_arm anchor_measure {log} REFUSED', REPO=str(ROOT))
+    assert "used to document 2" not in real.stdout
+
+
+def test_the_caveat_is_silent_once_the_file_speaks_the_table(tmp_path):
+    """THE PASS BRANCH, and the reason this is asked of the file rather than
+    kept in a list here: a sibling slice landing the fix must turn the caveat
+    off without anyone editing this driver."""
+    repo = adopting_repo(tmp_path, "scripts/dram_counter_route.py")
+    got = lift('contract_caveat counter_plan INVALID; echo "rc=$?"', REPO=str(repo))
+    assert got.stdout.strip() == "rc=1"
+    assert "CAVEAT" not in got.stdout
+
+
+def test_a_file_the_driver_cannot_find_is_unknown_and_not_adopted(tmp_path):
+    """REFUSE RATHER THAN DEFAULT. An arm whose script is missing gets the
+    caveat, worded as UNKNOWN, because "could not check" is not "checked and
+    fine"."""
+    got = lift('contract_caveat counter_plan INVALID', REPO=str(tmp_path))
+    assert "could not find" in got.stdout
+    assert "UNKNOWN" in got.stdout
+    rcs = lift('adopts_exit_codes scripts/nothing_here.py; echo "rc=$?"',
+               REPO=str(tmp_path))
+    assert rcs.stdout.strip() == "rc=2"
+
+
+def test_the_measuring_run_prints_the_disclosure_the_dry_run_used_to_have_alone(tmp_path):
+    """AUDIT A4, the half that was left in the cheap branch. The `--dry-run`
+    banner said a refusal exiting 3 is "a refusal wearing an INVALID's number";
+    the measuring path, where the mislabel costs an arm, said nothing. Both
+    branches of the new section are planted: rows from unadopted files, and a
+    ledger with none."""
+    assert '(( DRY )) || contract_disclosure "$LEDGER"' in CODE
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text(
+        "arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+        "counter_plan\tINVALID\t3\t61\t0\t/x.log\t\n"
+        "anchor_measure\tREFUSED\t2\t480\t0\t/y.log\t\n"
+        "mma_switch\tDONE\t0\t400\t0\t/w.log\t\n"
+        "ruler\tDONE\t0\t9\t0\t/z.log\t\n")
+    repo = unadopting_repo(tmp_path, "scripts/memory_branch_anchor.py")
+    unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    adopting_repo(tmp_path, "scripts/ruler_rebaseline.py")
+    (repo / "scripts" / "dram_counter_route.py").write_text(
+        "def main():\n    raise SystemExit(3)\n")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(repo))
+    assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" in got.stdout
+    assert "counter_plan        INVALID" in got.stdout
+    assert "anchor_measure      REFUSED" in got.stdout
+    # A DONE row IS disclosed when its file speaks another table: 0 there can be
+    # a run that scored no gate. It was skipped until 2026-09-02, along with the
+    # 1 and the 4 that the two live non-adopters actually spend.
+    assert "mma_switch          DONE" in got.stdout
+    assert "ruler" not in got.stdout, "a row from a file that has adopted the " \
+        "table has nothing to disclose, in any state"
+    # AGAINST THE REAL TREE, NOTHING IN THIS LEDGER IS DISCLOSED ANY MORE, and
+    # that is the all-clear rather than a gap. Two slices landed together here:
+    # one widened the disclosure to every state a non-adopter can spend (the
+    # planted branch above), the other made `dram_counter_route.py` adopt the
+    # table, which is what empties this branch. The planted repo keeps the loud
+    # path covered no matter which real file adopts next; this branch asserts
+    # the driver says the all-clear in a sentence instead of going silent.
+    # AGAINST THE REAL TREE the answer is whatever has actually adopted today,
+    # so it is ASKED rather than asserted. Hardcoding it is what broke this test
+    # twice: once when the anchor adopted, once when the counter route did.
+    real = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
+    for arm, script in (("counter_plan", "scripts/dram_counter_route.py"),
+                        ("anchor_measure", "scripts/memory_branch_anchor.py"),
+                        ("mma_switch", "scripts/check_mma_path.sh")):
+        adopted = lift(f'adopts_exit_codes {script}; echo "rc=$?"',
+                       REPO=str(ROOT)).stdout.strip().endswith("rc=0")
+        if adopted:
+            assert arm not in real.stdout, (
+                f"{script} adopts the table, so {arm} has nothing to disclose")
+        else:
+            assert arm in real.stdout, (
+                f"{script} does not adopt the table, so {arm} must be disclosed "
+                "in whatever state it lands, including DONE")
+    # And the all-clear appears exactly when nothing was disclosed. Asserted on
+    # the SECTION HEADING plus "No row", not on the sentence: the sentence was
+    # rewritten when the disclosure widened past REFUSED and INVALID, and this
+    # assertion pinned the old one and failed on the widening.
+    if "WRONG WORD" not in real.stdout:
+        assert "THE EXIT-CODE CONTRACT" in real.stdout
+        assert "No row" in real.stdout
+
+    clean = tmp_path / "CLEAN.tsv"
+    clean.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                     "ruler\tDONE\t0\t9\t0\t/z.log\t\n")
+    ok = lift(f'contract_disclosure {clean}', REPO=str(ROOT))
+    assert "THE EXIT-CODE CONTRACT" in ok.stdout
+    assert "WRONG WORD" not in ok.stdout
+    assert "No row in this session, in ANY state" in ok.stdout
+
+
+def test_the_disclosure_restores_no_per_arm_state_map():
+    """R1 DELETED THE PER-ARM DONE-CODE LISTS AND THIS PUTS NONE BACK. The new
+    functions print words; they call `ledger_state` nowhere and assign `state`
+    nowhere, so the ledger word still comes from the one table and from nothing
+    else."""
+    for fn in ("arm_script", "adopts_exit_codes", "contract_caveat",
+               "contract_disclosure"):
+        body = CODE.split(f"\n{fn}() ", 1)[1].split("\nesac; }", 1)[0] \
+            if f"\n{fn}() {{ case" in CODE else \
+            CODE.split(f"\n{fn}() {{", 1)[1].split("\n}", 1)[0]
+        assert "ledger_state" not in body, fn
+        assert not re.search(r'^\s*state=', body, re.M), fn
+    assert "arm_done_codes" not in TEXT
+
+
+def test_a_ledger_of_one_claim_fail_row_does_not_print_the_all_clear(tmp_path):
+    """THE DEFECT, PLANTED, AND IT IS THE ALL-CLEAR ITSELF. The disclosure fired
+    on REFUSED and INVALID rows only, and the two arms whose files have not
+    adopted the table spend 1 and 4. So a ledger holding nothing but
+    `mma_switch CLAIM_FAIL 1` -- check_mma_path.sh, whose own header says "1 a
+    gate failed" and which spends 1 on a VALIDITY reading, on "no interpreter"
+    and on "no .ptx", three different things -- walked every row, matched none
+    and printed a POSITIVE assurance that every state word was correct, over the
+    one row where it was not."""
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      "mma_switch\tCLAIM_FAIL\t1\t400\t0\t/x.log\t\n")
+    # THE UNADOPTING FILE IS PLANTED, NOT NAMED. check_mma_path.sh adopted the
+    # table on 2026-09-02 and this assertion broke on the driver being right,
+    # which is the third time a test here pinned which real script had adopted.
+    # What is under test is the all-clear's reachability, not the census.
+    repo = unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(repo))
+    assert "THE EXIT-CODE CONTRACT" not in got.stdout, got.stdout
+    assert "No row in this session" not in got.stdout
+    assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" in got.stdout
+    assert "mma_switch          CLAIM_FAIL" in got.stdout
+    assert "check_mma_path.sh" in got.stdout
+
+
+@pytest.mark.parametrize("state,rc,tell", [
+    ("DONE", "0", "A check\n  that examined nothing reports no failures."),
+    ("CLAIM_FAIL", "1", "1 is three things"),
+    ("UNKNOWN", "1", "1 is three things"),
+    ("REFUSED", "2", "used to document 2"),
+    ("INVALID", "3", "used to return 3 for"),
+    ("RETRY", "4", "may spend such a code on a REGISTERED ANSWER"),
+])
+def test_every_state_a_non_adopting_file_can_produce_is_disclosed(
+        tmp_path, state, rc, tell):
+    """COVER THE STATES, NOT THE TWO THAT WERE NOTICED FIRST. A file that speaks
+    another table can land in any of these, and each one means something
+    different when it does: 0 can be a run that scored no gate, 1 can be a
+    crash, 4 can be a registered answer. The caveat has a branch for each and
+    the ledger walk stops filtering to REFUSED and INVALID."""
+    repo = unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    got = lift(f'contract_caveat mma_switch {state}; echo "rc=$?"', REPO=str(repo))
+    assert "CAVEAT: this row came from scripts/check_mma_path.sh" in got.stdout
+    assert tell in got.stdout, got.stdout
+    assert got.stdout.strip().endswith("rc=0")
+    # THE SILENT BRANCH, for the same state: the day that file adopts the table
+    # the caveat stops printing without anyone editing this driver.
+    quiet = lift(f'contract_caveat mma_switch {state}; echo "rc=$?"',
+                 REPO=str(adopting_repo(tmp_path / "adopted",
+                                        "scripts/check_mma_path.sh")))
+    assert quiet.stdout.strip() == "rc=1"
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      f"mma_switch\t{state}\t{rc}\t9\t0\t/x.log\t\n")
+    walked = lift(f'contract_disclosure {ledger}', REPO=str(repo))
+    assert f"mma_switch          {state}" in walked.stdout, walked.stdout
+
+
+def test_the_disclosure_walks_no_header_row_and_no_unplanned_arm(tmp_path):
+    """The widened filter must not widen onto rows that are not exit codes. The
+    ledger's first line is its column names and `skip_arm` writes NOT_PLANNED
+    with an rc of `-`; neither is a state a command returned, and a caveat about
+    either would be a sentence about nothing."""
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      "mma_switch\tNOT_PLANNED\t-\t0\t0\t-\tno GPU\n")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(
+        unadopting_repo(tmp_path, "scripts/check_mma_path.sh")))
+    assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" not in got.stdout
+    assert "No row in this session, in ANY state" in got.stdout
+
+
+# --------------------------------------------------------------------------
+# 12. an exit 1 this file cannot read is not a result
+# --------------------------------------------------------------------------
+
+def test_an_exit_one_from_a_file_that_does_not_speak_the_table_is_not_latched(tmp_path):
+    """THE MOST EXPENSIVE MISLABEL AVAILABLE HERE. Python exits 1 for any
+    exception that escapes `main`, and only three of the eleven arm scripts
+    install the ERROR(4) handler that would say so. Under the table 1 is
+    CLAIM_FAIL -- "measured, the world disagreed, a RESULT" -- and CLAIM_FAIL is
+    one of the three words `arm()` LATCHES, so a crashed arm would be skipped on
+    every later run and its silence reported as a finding. The driver cannot fix
+    those scripts from here; what it can do is decline to read a word out of a
+    table the file never agreed to."""
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    repo = unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    got = lift('arm mma_switch bash -c "exit 1"',
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[1] == "UNKNOWN", row
+    assert row[2] == "1"
+    assert "NOT latched" in got.stdout
+    assert "1 is three things" in got.stdout
+    # ...and NOT latched means exactly that: the arm is attempted again.
+    again = lift('arm mma_switch bash -c "exit 1"',
+                 REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert "SKIP mma_switch" not in again.stdout
+    assert len(ledger.read_text().splitlines()) == 2
+
+
+def test_an_exit_one_from_a_file_that_does_speak_the_table_is_still_a_result(tmp_path):
+    """THE OTHER BRANCH, and the one that must not move. From a file that HAS
+    adopted the module, 1 means what the table says: the experiment worked and a
+    pre-registered claim did not hold. That is the most valuable outcome this
+    study has, it is finished, and re-running it until it passes is the failure
+    mode the module is named against."""
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    repo = adopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    # The stub prints the gate it failed, as an adopting script does: one
+    # RESULT line per scored gate, then `classify`. A bare `exit 1` stood here
+    # until the second opinion, and from an adopting file a 1 with no gate line
+    # is a crash before the first gate, which is the test after this one.
+    refuted = 'arm mma_switch bash -c "echo RESULT: CLAIM S6a FAIL observed none; exit 1"'
+    got = lift(refuted,
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    assert "CAVEAT" not in got.stdout
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[1] == "CLAIM_FAIL", row
+    assert row[6].startswith("log agrees"), row
+    again = lift(refuted,
+                 REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert "SKIP mma_switch (already CLAIM_FAIL" in again.stdout
+
+
+def test_the_unknown_state_is_the_drivers_word_and_not_a_second_table():
+    """R1 deleted the per-arm done-code lists and this puts none back:
+    `ledger_state` still turns every exit code into a word by itself, and the
+    UNKNOWN branch is a REFUSAL TO READ one, taken after that function has
+    spoken and only for a file that has not adopted the module."""
+    body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
+    assert 'state="$(ledger_state "$rc")"' in body
+    # The adoption question is asked ONCE, in `arm`, and handed to
+    # `second_opinion`, which holds the non-adopter branch. Until 2026-09-03 it
+    # was an inline demotion here and the only second look the row got.
+    assert 'adopts_exit_codes "$(arm_script "$name")" || adopts=$?' in body
+    assert 'second_opinion "$rc" "$state" "$(log_verdict "$log")" "$adopts"' in body
+    opinion = CODE.split("\nsecond_opinion() {", 1)[1].split("\n}", 1)[0]
+    assert "has not adopted moe/bench/exit_codes" in opinion
+    assert "UNKNOWN" not in exit_codes.LEDGER_STATES
+    for rc in (0, 1, 2, 3, 4):
+        assert lift(f'ledger_state {rc}', REPO=str(ROOT)).stdout.strip() == \
+            exit_codes.ledger_state(rc)
+
+
+# --------------------------------------------------------------------------
+# 13. a plan that printed is not a plan that refused
+# --------------------------------------------------------------------------
+
+PLANNED_LOG = """\
+=== plan: four models, twelve cells ===
+  mixtral-8x7b  T=1024  BLOCK_M 128
+  the cost of the whole arm is 35 minutes
+NOT A RESULT. Nothing was measured.
+  reason: --dry-run was given
+"""
+
+REFUSED_LOG = """\
+REFUSED before any GPU time, from the pinned constants alone:
+  BLOCK_M=256: the accumulator needs 256 registers per thread against 255.
+"""
+
+
+def test_a_plan_that_printed_and_then_refused_is_planned_and_one_that_did_not_is_not(tmp_path):
+    """THE DISTINCTION DRY MODE EXISTS TO DRAW, AND THE PHASE-3 CLOSE ERASED IT.
+    Once every script adopted the table its own --dry-run began exiting REFUSED,
+    which is right -- a plan measured nothing and scored no gate -- and eleven of
+    the sixteen planned arms landed on PLAN_REFUSED, so the ledger could no
+    longer say whether there was a plan on the page. The log still says it: one
+    of these two printed a plan and then said it measured nothing, the other
+    refused on line 1 and never planned."""
+    planned = tmp_path / "planned.log"
+    planned.write_text(PLANNED_LOG)
+    refused = tmp_path / "refused.log"
+    refused.write_text(REFUSED_LOG)
+    assert lift(f'dry_state 2 {planned}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
+    assert lift(f'dry_state 2 {refused}', REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    # An empty log is a refusal that printed nothing, and a missing one is not a
+    # plan either: "could not read it" is not "it planned".
+    (tmp_path / "empty.log").write_text("\n   \n")
+    assert lift(f'dry_state 2 {tmp_path}/empty.log',
+                REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    assert lift(f'dry_state 2 {tmp_path}/gone.log',
+                REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    # ...and rc 0 and a traceback are still decided by the code alone.
+    assert lift(f'dry_state 0 {refused}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
+    assert lift(f'dry_state 1 {planned}', REPO=str(ROOT)).stdout.strip() == "BROKEN"
+    # AN ARGPARSE USAGE ERROR IS NOT A PLAN, found on 2026-09-09 by handing an
+    # arm a flag its script had not landed yet: argparse writes a usage block
+    # and one error line to stderr, the driver captures both into the log, and
+    # every line of that block counted as a line of plan printed before a
+    # refusal marker that never comes, so the arm was filed PLANNED. The
+    # signature is argparse's own error line, which no plan prints.
+    usage = tmp_path / "usage.log"
+    usage.write_text(
+        "usage: bm128_depth.py [-h] [--dry-run] [--model MODEL] [--r-max R_MAX]\n"
+        "                      [--reps REPS] [--group-m GROUP_M]\n"
+        "bm128_depth.py: error: unrecognized arguments: --partner-block-m 32\n")
+    assert lift(f'dry_state 2 {usage}', REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    # And a plan that merely contains the word "error" in prose is still a plan.
+    prose = tmp_path / "prose.log"
+    prose.write_text(PLANNED_LOG.replace("\n", "\n", 1)
+                     + "\n  the estimator error is 1.5%\n")
+    assert lift(f'dry_state 2 {prose}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
+
+
+def test_the_dry_run_ledger_still_distinguishes_the_two(gaps_dry):
+    """The same distinction end to end, against the real scripts rather than a
+    planted log: some arm has to reach each word, or the ledger has one word
+    for two things again."""
+    session, got = gaps_dry
+    assert got.returncode in (0, exit_codes.INVALID), got.stdout[-2000:]
+    states = {r.split("\t")[0]: r.split("\t")[1] for r in
+              (session / "ARMS-dryrun.tsv").read_text().splitlines()[1:]}
+    assert "PLANNED" in states.values(), states
+    assert "PLAN_REFUSED" in states.values(), states
+    assert 'dry_state "$rc" "$log"' in CODE
+
+
+# --------------------------------------------------------------------------
+# 14. the ruler the arms read is the one this session measured
+# --------------------------------------------------------------------------
+
+def calibration_yaml(path: Path, utc: str) -> Path:
+    """A calibration file with only the field the gate reads, plus a `detail:`
+    block carrying a `utc:` of its own. The real yaml nests a hundred keys under
+    `detail`, and a grep for `utc:` over the whole file would find whichever
+    came first."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("name: TESTCARD (measured)\n"
+                    "detail:\n  utc: '1999-01-01T00:00:00+00:00'\n"
+                    f"provenance:\n  utc: '{utc}'\n  git_dirty: false\n")
+    return path
+
+
+def test_the_session_publishes_the_calibration_it_measures():
+    """THE WORST ONE IN THE SET. Arm 0 ran `calibrate_hardware.py` bare. Phase
+    2's A6 fix had moved that script's output to an untracked session path and
+    made the copy into the tracked tree a separate `--publish` decision -- "the
+    copy is what makes the ruler visible to roofline.load_measured() and
+    therefore to the sweep", in its own header. So arm 0 spent three minutes
+    measuring THIS card's ridge where nothing reads it, and every later arm
+    resolved its ridge from whatever measured_<card>.yaml a PREVIOUS rental left
+    in the checkout, labelled "measured on this machine". The audit's own "a
+    constant from another machine presented as a measurement", recreated by the
+    fix for a different one."""
+    assert 'scripts/calibrate_hardware.py" --publish' in CODE
+    assert "--publish IS THE ARM" in TEXT
+    # And the gate that follows it, with a stop that is not advice. It asks BOTH
+    # questions: when the file was written, and whether the arm that wrote it
+    # passed its own gates. OK is the only word that proceeds.
+    gate = CODE.split('scripts/calibrate_hardware.py" --publish', 1)[1] \
+               .split("\nsay ", 1)[0]
+    assert 'CALIB_STATE="$(calibration_state "$CALIB_YAML" "$SESSION_SINCE")"' in gate
+    assert 'CALIB_ROW="$(ledger_arm_state calibrate)"' in gate
+    assert 'CALIB_VERDICT="$(calibration_verdict "$CALIB_ROW" "$CALIB_STATE")"' in gate
+    assert '[[ "$CALIB_VERDICT" == "OK" ]]' in gate
+    assert 'exit "$RC_REFUSED"' in gate
+    # and the four yaml states are still named, now by the refusal it calls.
+    refusal = CODE.split("calibration_refusal() {", 1)[1].split("\n}\n", 1)[0]
+    for word in ("MISSING", "UNDATED", "STALE", "NO_BASELINE"):
+        assert word in refusal, word
+
+
+def test_a_fresh_stamp_is_not_a_ruler_the_arm_stood_behind(tmp_path):
+    """THE DEFECT THE FIX INTRODUCED, planted through `arm()`. The first version
+    of this gate asked only WHEN the tracked yaml was measured, and
+    calibrate_hardware.py copies that yaml into the tree at :683 BEFORE it
+    scores a gate at :712 -- its own --help says so: "A calibration whose clock
+    could not be established is INVALID rather than DONE ... the yaml is still
+    written". So a calibrate that fails VALIDITY clock_established ("the samples
+    disagree with the settle plateau; nothing normalised by the clock may be
+    quoted") published a fresh-stamped ruler, calibration_state said PUBLISHED,
+    the gate printed "measured in THIS session", and 3.4 hours of arms scored
+    every roof fraction, LEVEL flag and alpha against a ruler arm 0 itself
+    refused to stand behind. Worse on a resume: INVALID is LATCHED, so the bad
+    calibrate is never re-run and the gate keeps saying PUBLISHED.
+
+    The stand-in publishes and then exits 3, exactly as the real script does."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    yaml = repo / "moe" / "bench" / "hardware" / "measured_testcard.yaml"
+    yaml.parent.mkdir(parents=True)
+    plant_exit_codes(repo)
+    fake = repo / "scripts" / "calibrate_hardware.py"
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -uo pipefail\n"
+        f'printf "name: T\\nprovenance:\\n  utc: \'$(date -u '
+        '+%Y-%m-%dT%H:%M:%S)+00:00\'\\n" > '
+        f'"{yaml}"\n'
+        f'echo "[calibrate] PUBLISHED to {yaml}"\n'
+        "echo 'RESULT: VALIDITY clock_established FAIL samples disagree with the plateau'\n"
+        "exit 3\n")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"\n'
+               f'arm calibrate bash {fake} --publish >/dev/null\n'
+               'ROW="$(ledger_arm_state calibrate)"\n'
+               f'STATE="$(calibration_state {yaml} "$SESSION_SINCE")"\n'
+               'echo "row=$ROW state=$STATE"\n'
+               'calibration_verdict "$ROW" "$STATE"; echo "rc=$?"',
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    lines = got.stdout.strip().splitlines()
+    # The yaml IS this session's by date, and the arm is still not one to trust.
+    assert lines[-3] == "row=INVALID state=PUBLISHED", got.stdout
+    assert lines[-2] == "ARM INVALID", got.stdout
+    assert lines[-1] == "rc=1", got.stdout
+
+
+@pytest.mark.parametrize("row,state,verdict,rc", [
+    ("DONE", "PUBLISHED", "OK", 0),
+    ("DONE", "STALE", "YAML STALE", 1),
+    ("DONE", "UNDATED", "YAML UNDATED", 1),
+    ("DONE", "MISSING", "YAML MISSING", 1),
+    ("INVALID", "PUBLISHED", "ARM INVALID", 1),
+    ("CLAIM_FAIL", "PUBLISHED", "ARM CLAIM_FAIL", 1),
+    ("REFUSED", "PUBLISHED", "ARM REFUSED", 1),
+    ("UNKNOWN", "PUBLISHED", "ARM UNKNOWN", 1),
+    ("", "PUBLISHED", "ARM NO_ROW", 1),
+    ("", "UNDATED", "ARM NO_ROW", 1),
+])
+def test_one_pair_of_words_proceeds_and_every_other_pair_refuses(row, state, verdict, rc):
+    """BOTH HALVES, AND THE FAIL BRANCH OF EACH. DONE alone is a run that wrote
+    a ruler somewhere; PUBLISHED alone is a file of unknown standing. Only the
+    pair means "this card's ruler, from an instrument that passed its own
+    gates". The empty row prints NO_ROW rather than nothing, because an empty
+    word inside a refusal reads as a bug in the refusal."""
+    got = lift(f'calibration_verdict {row!r} {state!r}; echo "rc=$?"', REPO=str(ROOT))
+    assert got.stdout.split("\n")[0] == verdict, got.stdout
+    assert got.stdout.strip().splitlines()[-1] == f"rc={rc}", got.stdout
+
+
+def test_the_gate_is_not_scoped_to_only_and_the_refusal_says_which_flag(tmp_path):
+    """THE GATE IS UNCONDITIONAL AND ARM 0 IS NOT. `arm calibrate` returns early
+    through `wanted` when --only names other arms, while the gate runs anyway,
+    because every arm resolves its ridge through roofline.load_measured() no
+    matter which subset was asked for. The cost of keeping it unconditional is
+    that the file's own documented invocation must name calibrate, so it does,
+    and the refusal an operator will actually see says which flag left arm 0
+    out instead of reporting UNDATED on a file this session never touched."""
+    # THE FILE'S OWN DOCUMENTED INVOCATION NAMES BOTH UNCONDITIONAL GATES.
+    # There are two now: the thermal probe refuses a card that cannot clock and
+    # the calibration gate refuses a ruler that is not this card's, and neither
+    # is scoped to --only, so an example that names only one sends an operator
+    # to a refusal the flag itself caused.
+    assert "--only thermal,calibrate,roofline-n256-g16,noise_floor" in TEXT
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('V="$(calibration_verdict "$(ledger_arm_state calibrate)" UNDATED)"\n'
+               'echo "$V"\n'
+               'calibration_refusal "$V" testcard /nowhere/measured_testcard.yaml UNDATED',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="occupancy",
+               PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.splitlines()[0] == "ARM NO_ROW", got.stdout
+    assert "--only occupancy left arm 0 out" in got.stdout, got.stdout
+    assert "--only calibrate,occupancy" in got.stdout, got.stdout
+    # and a session with no --only is not told to blame one.
+    alone = lift('calibration_refusal "ARM NO_ROW" testcard /nowhere/y.yaml UNDATED',
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+                 PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert "left arm 0 out" not in alone.stdout, alone.stdout
+    assert "no --only to explain it" in alone.stdout, alone.stdout
+
+
+def test_the_claim_fail_refusal_reads_the_page_instead_of_naming_the_pin_rate(tmp_path):
+    """THE PIN-RATE GATE WAS NAMED FOR ALL FOUR OF THEM, and backwards.
+    `calibrate_hardware.py` scores four CLAIM gates
+    (no_pattern_exceeds_the_pin_rate, write_rate_is_a_store_rate,
+    clock_steady_across_patterns, not_throttled). Until 2026-09-09 this refusal
+    told the operator, whichever had failed, that "no access pattern reached the
+    pin rate", which is the wrong gate three times in four, and a
+    misdescription of the fourth: that gate fails when a pattern EXCEEDS the
+    derived pin rate. The refusal now reads the arm's own RESULT lines."""
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "calibrate.log").write_text(
+        "RESULT: VALIDITY clock_established PASS the samples agree\n"
+        "RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS write 4680.2 GB/s\n"
+        "RESULT: CLAIM clock_steady_across_patterns FAIL two clock states: "
+        "1980 -> 1650 MHz\n")
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("calibrate\tCLAIM_FAIL\t1\t31\t1\t"
+                      f"{logs / 'calibrate.log'}\tlog agrees\n")
+    got = lift('calibration_refusal "ARM CLAIM_FAIL" testcard /nowhere/y.yaml MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "RESULT: CLAIM clock_steady_across_patterns FAIL" in got.stdout, got.stdout
+    assert "1980 -> 1650 MHz" in got.stdout
+    # The gate that PASSED is not reported as the failure, and the old sentence
+    # is gone from the driver entirely.
+    assert "no access pattern reached the" not in TEXT
+    assert "no_pattern_exceeds_the_pin_rate PASS" not in got.stdout
+    # A page with no failing CLAIM line is a disagreement, and says so rather
+    # than inventing a gate.
+    (logs / "calibrate.log").write_text(
+        "RESULT: VALIDITY clock_established PASS the samples agree\n")
+    got = lift('calibration_refusal "ARM CLAIM_FAIL" testcard /nowhere/y.yaml MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "holds no failing CLAIM line" in got.stdout, got.stdout
+    # UNKNOWN counts: classify maps an UNKNOWN CLAIM to CLAIM_FAIL, so an arm
+    # can wear the word with no FAIL line on its page.
+    (logs / "calibrate.log").write_text(
+        "RESULT: CLAIM not_throttled UNKNOWN no reference clock\n")
+    got = lift('calibration_refusal "ARM CLAIM_FAIL" testcard /nowhere/y.yaml MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "not_throttled UNKNOWN" in got.stdout, got.stdout
+
+
+def test_a_refusal_this_gate_cannot_read_refuses_rather_than_proceeding():
+    """REFUSE RATHER THAN DEFAULT, over the one input neither half issues. A
+    verdict word this refusal does not know is a bug in the gate, and the two
+    states it decides between are "this card's ruler" and "another machine's",
+    so there is no side to guess."""
+    got = lift('calibration_refusal "SOMETHING_ELSE" testcard /nowhere/y.yaml UNDATED',
+               REPO=str(ROOT), LEDGER="/nowhere/ARMS.tsv", LOGS="/nowhere", ONLY="",
+               PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert got.stdout.startswith("REFUSED:"), got.stdout
+    assert "SOMETHING_ELSE" in got.stdout
+
+
+@pytest.mark.parametrize("state,utc", [
+    ("PUBLISHED", "2026-09-02T14:00:00+00:00"),
+    ("PUBLISHED", "2026-09-02T13:45:01+00:00"),
+    ("STALE", "2026-09-02T13:45:00+00:00"),
+    ("STALE", "2026-08-14T09:00:00+00:00"),
+])
+def test_a_calibration_measured_before_this_session_is_stale(tmp_path, state, utc):
+    """BOTH BRANCHES OF THE GATE, and the boundary is the session's own start:
+    one second earlier is the last rental's ruler. The H200's dense bf16 moved
+    7.1% between two sessions while its bandwidth held to 0.014%, so a carried
+    ridge is wrong by more than most effects this study reports."""
+    yaml = calibration_yaml(tmp_path / "measured_testcard.yaml", utc)
+    got = lift(f'calibration_state {yaml} 20260902134501', REPO=str(ROOT))
+    assert got.stdout.strip() == state, got.stderr
+
+
+def test_a_calibration_that_cannot_say_when_it_was_measured_is_not_this_ones(tmp_path):
+    """REFUSE RATHER THAN DEFAULT, over the three ways the answer can be absent.
+
+    Every case is PLANTED here. Until 2026-09-09 the UNDATED case was read off
+    the committed `measured_nvidia_h200.yaml`, which predated the provenance
+    block; the 2026-09-09 calibration carries `provenance.utc`, so that
+    assertion became a statement about a file that had been replaced. A
+    yaml with no provenance is planted instead, and the committed one is
+    asserted to be what a yaml that CAN say when it was measured looks like.
+
+    THE TWO PROBE STAMPS ARE READ OFF THAT FILE AND ARE NOT TYPED HERE. Until
+    2026-09-10 they were the literals 20260909000000 and 20260910000000,
+    written when the committed ruler was the 2026-09-09 one; the 2026-09-10
+    calibration replaced it at 04:12:29 UTC, so the second literal stopped
+    straddling the file's own date and the STALE branch asserted PUBLISHED. A
+    test that pins a calibration's date instead of reading it is stale the day
+    the card is re-calibrated, which on this study is every rental."""
+    undated = tmp_path / "undated.yaml"
+    undated.write_text("name: testcard (measured)\nmemory:\n  bandwidth_tb_s: 4.0\n")
+    got = lift(f'calibration_state {undated} 20260902134501', REPO=str(ROOT))
+    assert got.stdout.strip() == "UNDATED", got.stdout
+    # And the committed ruler is dated, so it is decided on its date and not on
+    # "cannot say": a session started one second before the stamp the FILE
+    # carries sees it as this rental's, and one started a second after sees the
+    # previous rental's ruler.
+    h200 = f"{ROOT}/moe/bench/hardware/measured_nvidia_h200.yaml"
+    stamp = lift(f'calibration_stamp {h200}', REPO=str(ROOT)).stdout.strip()
+    assert re.fullmatch(r"\d{14}", stamp), (
+        f"the committed H200 ruler carries no readable provenance.utc: {stamp!r}")
+    assert lift(f'calibration_state {h200} {int(stamp) - 1}',
+                REPO=str(ROOT)).stdout.strip() == "PUBLISHED"
+    assert lift(f'calibration_state {h200} {int(stamp) + 1}',
+                REPO=str(ROOT)).stdout.strip() == "STALE"
+    gone = lift(f'calibration_state {tmp_path}/nothing.yaml 20260902134501',
+                REPO=str(ROOT))
+    assert gone.stdout.strip() == "MISSING"
+    # A date with no time cannot decide which of two same-day rentals wrote it.
+    coarse = tmp_path / "coarse.yaml"
+    coarse.write_text("provenance:\n  utc: '2026-09-02'\n")
+    assert lift(f'calibration_state {coarse} 20260902134501',
+                REPO=str(ROOT)).stdout.strip() == "UNDATED"
+    # And a driver that could not stamp its own start says so rather than
+    # comparing against an empty string, which every number is greater than.
+    fresh = calibration_yaml(tmp_path / "fresh.yaml", "2026-09-02T14:00:00+00:00")
+    assert lift(f'calibration_state {fresh} ""',
+                REPO=str(ROOT)).stdout.strip() == "NO_BASELINE"
+
+
+def test_a_calibrate_that_does_not_publish_leaves_the_gate_refusing(tmp_path):
+    """THE FIX, PROVED THROUGH `arm()` WITH A STAND-IN CALIBRATE, because the
+    consequence is not that the flag is absent from a line -- it is that the
+    file the arms read is not the file this session wrote. Two fakes, identical
+    but for whether they honour `--publish`. The one that ignores it is the
+    shipped behaviour before this fix: the arm lands DONE, the tree is clean,
+    and every arm after it would score against whatever was already there."""
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    for honours, expected in ((True, "PUBLISHED"), (False, "MISSING")):
+        repo = tmp_path / ("honours" if honours else "ignores")
+        (repo / "scripts").mkdir(parents=True)
+        plant_exit_codes(repo)
+        fake = repo / "scripts" / "calibrate_hardware.py"
+        body = ('printf "name: T\\nprovenance:\\n  utc: \'$(date -u '
+                '+%Y-%m-%dT%H:%M:%S)+00:00\'\\n" > "$out"\n'
+                if honours else 'echo "[calibrate] wrote a session path only"\n')
+        # Both fakes score a gate, as the real calibrate does before it exits
+        # 0: DONE has to be EARNED by a RESULT line or the second opinion
+        # records UNKNOWN, and what this test plants is the publish decision,
+        # not the scoring.
+        fake.write_text(
+            '#!/usr/bin/env bash\n'
+            'set -uo pipefail\n'
+            f'out="{repo}/moe/bench/hardware/measured_testcard.yaml"\n'
+            'mkdir -p "$(dirname "$out")"\n'
+            f'[[ "${{1:-}}" == "--publish" ]] && {body}'
+            'echo "RESULT: VALIDITY clock_established PASS plateau held"\n'
+            'echo "[calibrate] done"\n')
+        ledger = tmp_path / f"ARMS-{expected}.tsv"
+        got = lift(f'SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"\n'
+                   f'arm calibrate bash {fake} --publish\n'
+                   f'calibration_state {repo}/moe/bench/hardware/'
+                   'measured_testcard.yaml "$SESSION_SINCE"',
+                   REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+        assert got.returncode == 0, got.stderr
+        assert ledger.read_text().splitlines()[-1].split("\t")[1] == "DONE"
+        assert got.stdout.strip().splitlines()[-1] == expected, got.stdout
+
+
+def test_the_session_start_stamp_survives_a_resume_into_the_same_directory(tmp_path):
+    """A RESUME MUST NOT REFUSE AN HOUR OF FINISHED ARMS. The baseline is the
+    session directory's own UTC stamp, not this process's start, so a session
+    restarted into `gaps-<card>-<stamp>` still counts the calibration its first
+    pass published. A SESSION the operator named by hand carries no stamp and
+    falls back to now, which refuses until calibrate runs again: three minutes,
+    not the session."""
+    assert 'SESSION_SINCE="$(utc_stamp "${SESSION##*-}")" || SESSION_SINCE=' in CODE
+    got = lift('utc_stamp "${SESSION##*-}"',
+               REPO=str(ROOT), SESSION="/workspace/session/gaps-nvidia_h200-20260902T134501Z")
+    assert got.stdout.strip() == "20260902134501"
+    handmade = lift('utc_stamp "${SESSION##*-}"; echo "rc=$?"',
+                    REPO=str(ROOT), SESSION=str(tmp_path / "s"))
+    assert handmade.stdout.strip() == "rc=1"
+
+
+# --------------------------------------------------------------------------
+# 15. the two span arms are two arms
+# --------------------------------------------------------------------------
+
+def test_the_two_span_arms_do_not_derive_one_run_id():
+    """THE SECOND ARM MEASURED NOTHING AND LANDED DONE. `--densify` became the
+    default (BooleanOptionalAction) while the driver still booked `span_dense`
+    with it and `span` bare, so both densified, both hashed to the same plan,
+    and the second restored every row the first had written, timed nothing and
+    was recorded finished with 30 minutes booked against it. `--max-minutes`
+    could not have separated them either: it prices a run rather than defining
+    one and is deliberately out of the key. This runs both plans and compares
+    the ids the script itself prints."""
+    assert '--dry-run --no-densify' in CODE
+    # AND NEITHER ARM IS TRUNCATED. --max-minutes does not refuse: at
+    # span_extent_separation.py:4602 it breaks out of the cell loop, records
+    # "stopped after N minutes with K of M cells done" as prose that no gate
+    # reads, and the reduction then scores whichever cells finished to the same
+    # exit code a complete grid gets. Checked over the INVOCATIONS, not the
+    # whole file: the paragraph above them names the flag it removes.
+    invocations = [ln for ln in CODE.splitlines()
+                   if ln.lstrip().startswith("arm span")]
+    assert len(invocations) == 4, invocations
+    for line in invocations:
+        assert "--max-minutes" not in line, line
+    ids = {}
+    for flag in ("--densify", "--no-densify"):
+        done = _spawn(
+            [sys.executable, str(ROOT / "scripts" / "span_extent_separation.py"),
+             "--dry-run", flag], capture_output=True, text=True, timeout=600,
+            cwd=str(ROOT))
+        found = re.search(r"^run id (\S+)$", done.stdout, re.M)
+        assert found, done.stdout[-2000:]
+        ids[flag] = found.group(1)
+    assert ids["--densify"] != ids["--no-densify"], ids
+    assert "densifytrue" in ids["--densify"]
+    assert "densifyfalse" in ids["--no-densify"]
+
+
+def test_the_sparse_span_arm_says_it_expects_to_refuse():
+    """It is booked on the published powers-of-two grid, where every expert
+    holds a power-of-two number of rows and the padding factor is exactly 1.00
+    at every point, so `c2_grid_power` refuses before spending a minute. That is
+    the honest answer for that grid and it is free -- but an operator reading
+    `span REFUSED` in the ledger has to find it stated somewhere, or it reads as
+    a broken arm."""
+    block = run(["--list"]).stdout.split("  span ", 1)[1].split("\n\n", 1)[0]
+    assert "IT REFUSES" in block
+    assert "--no-densify" in block
+    # And it is booked at zero, because a refusal spends nothing and booking
+    # thirty minutes for one hides that the answer is already in.
+    assert lift('arm_minutes span', REPO=str(ROOT)).stdout.strip() == "0"
+
+
+def test_the_counter_arm_says_its_ledger_word_is_earned_and_blocked_is_an_answer():
+    """Until 2026-09-03 the row told the operator to read the probe's VERDICT
+    line and distrust its ledger state, because the route exited 0 for OPEN
+    and BLOCKED alike and printed no RESULT line. The gates slice made it
+    score one gate per verdict and exit through the table, so the ledger word
+    is earned and the row must say THAT, and must no longer send the operator
+    around the second opinion. BLOCKED being the answer is unchanged."""
+    listing = run(["--list"]).stdout
+    block = listing.split("  counter_plan ", 1)[1].split("\n\n", 1)[0]
+    assert "READ ITS RESULT LINES, AND THE LEDGER WORD IS EARNED" in block
+    assert "READ ITS VERDICT LINE, NOT ITS LEDGER STATE" not in block
+    assert "UNEARNED DONE" not in block
+    assert "BLOCKED is the ANSWER" in block
+
+
+def test_the_counter_arm_predicts_no_word_and_gives_the_committed_record():
+    """`rerun_expectation counter_plan` said "Expect BLOCKED unless a provider
+    has granted one of those" and `arm_closes counter_plan` said "IT IS
+    PROBABLY BLOCKED": two pods' refusals printed as the platform's answer,
+    which session 5's findings list under do-not-believe. Both now say no word
+    is predicted, the pod's own is the answer, and give the committed record:
+    each ERR_NVGPUCTRPERM a profile log commits (by its file and its run's own
+    date) and 2026-09-15."""
+    refusals = ncu_refusals()
+    assert refusals
+    for fn in ("rerun_expectation", "arm_closes"):
+        text = " ".join(lift(f"{fn} counter_plan", REPO=str(ROOT)).stdout.split())
+        for stale in ("Expect BLOCKED", "PROBABLY BLOCKED"):
+            assert stale not in text, (fn, stale)
+        for path, day, _card in refusals:
+            assert path in text and day in text, (fn, path, day)
+        assert "2026-09-15" in text and "not the platform" in text, fn
+    closes = " ".join(lift("arm_closes counter_plan", REPO=str(ROOT)).stdout.split())
+    assert "NO WORD IS PREDICTED FOR IT" in closes
+    expectation = " ".join(lift("rerun_expectation counter_plan", REPO=str(ROOT)).stdout.split())
+    assert "ITS WORD IS THE POD'S, DONE on OPEN and CLAIM_FAIL on BLOCKED" in expectation
+
+
+# --------------------------------------------------------------------------
+# 12. the alias ablation, and what a rental of a given length reaches
+# --------------------------------------------------------------------------
+
+#: The command whose plan the alias row is booked from. It carries --run, the
+#: pod's own line; off a GPU box it prints the table and then refuses at the
+#: probe having measured nothing. `report_cost` used to charge the probe's six
+#: specialisations only under --run, and the test that runs this line now pins
+#: that the bare plan prints the SAME figure. Every test below that runs it is
+#: skipped on a machine with a CUDA device, because there the same command IS
+#: the arm and would spend thirteen minutes of somebody's card.
+#: The pod's own command, which since 2026-09-09 books `--dot-fallback refuse`:
+#: the allow branch was bought once, on 2026-09-09, and returned P1 UNKNOWN
+#: after 308 s. The fallback does not move the plan's figure, because both
+#: price the whole ladder; what it changes is the cost of a probe miss.
+ALIAS_POD_PLAN = (
+    "scripts/alias_ablation.py --card 'NVIDIA H200' "
+    "--models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite,deepseek-v3 "
+    "--alias-extent block --compute sum --replicates 9 --probe "
+    "--dot-fallback refuse --run")
+
+
+def _wall_minutes(stdout):
+    found = re.search(r"^  WALL\s+([\d.]+) min", stdout, re.M)
+    assert found, stdout[-2500:]
+    return float(found.group(1))
+
+
+def test_the_arm_that_tests_the_first_inferential_link_is_in_the_session():
+    """THE DEFECT THIS SECTION EXISTS FOR, and it was an absence rather than a
+    wrong number: `grep -c alias_ablation scripts/h200_gaps_session.sh` returned
+    0, and the same grep over all 28 branches of this repository returned 0 on
+    every one of them.
+
+    Every alpha in this study is a slope per extra M-tile RELABELLED as a
+    fraction of a fresh DRAM weight read. Every cap, every roof fraction and the
+    sentence about a decode-configured kernel never reaching its compute roof is
+    that relabelling carried forward, and `scripts/alias_ablation.py` is the only
+    instrument in the tree that measures the same quantity without the byte
+    model that does the relabelling. An arm in no session closes nothing."""
+    assert "alias_ablation" in ARMS
+    assert "scripts/alias_ablation.py" in TEXT
+    rel = lift("arm_script alias_ablation", REPO=str(ROOT)).stdout.strip()
+    assert rel == "scripts/alias_ablation.py"
+    # It speaks the one exit-code table, so no row of its own can reach the
+    # disclosure that says the state word may be a translation nobody agreed to.
+    adopts = lift("adopts_exit_codes scripts/alias_ablation.py", REPO=str(ROOT))
+    assert adopts.returncode == 0
+    caveat = lift("contract_caveat alias_ablation INVALID", REPO=str(ROOT))
+    assert caveat.returncode == 1 and not caveat.stdout.strip()
+    # And what it closes states BOTH outcomes against the mechanism sentence,
+    # plus the third state that is not an outcome at all.
+    closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
+    assert "P1 PASS" in closes and "P1 FAIL" in closes
+    assert "THE THIRD STATE IS NOT AN OUTCOME" in closes
+    assert "0.529-0.588" in closes
+    # The dependency on arm 0, and the direction that makes it expensive.
+    assert "ARM 0" in closes and "DOES NOT REFUSE WITHOUT IT" in closes
+
+
+def test_the_alias_arm_is_booked_at_what_its_plan_prints_for_the_POD():
+    """THE PLAN THE DRY BRANCH PREVIEWS IS THE POD'S OWN FIGURE. That script
+    does not take a --dry-run flag at all: a bare invocation is its plan and
+    `--run` is what makes it measure. Until 2026-09-03 `report_cost` charged
+    the probe's six Triton specialisations only under `--run`, so the bare plan
+    said WALL 11.6 while the pod spent WALL 13.0, and this test pinned that GAP
+    as a disclosed fact. The alias slice then closed it from the script's side:
+    the plan page charges the probe too, because an operator books a pod before
+    they have one and the plan is the only page they can read. This test broke
+    on the closing, which is the ninth time in this rebuild a fix at one site
+    left a description of the old behaviour standing at another. It now pins
+    the agreement: bare plan, pod figure and booking are one number.
+
+    The dry branch is still bare, deliberately: a --dry-run carrying --run would
+    MEASURE on a pod, and this file's rule is that a plan is free in every
+    sense. Nothing needs disclosing because nothing differs."""
+    pod = _spawn([sys.executable, *shlex.split(ALIAS_POD_PLAN)],
+                         capture_output=True, text=True, timeout=900,
+                         cwd=str(ROOT))
+    assert pod.returncode == exit_codes.REFUSED, pod.stdout[-2000:]
+    assert "BOOK THIS ONE" in pod.stdout
+    pod_wall = _wall_minutes(pod.stdout)
+    plan_words = [w for w in shlex.split(ALIAS_POD_PLAN) if w != "--run"]
+    plan = _spawn([sys.executable, *plan_words], capture_output=True,
+                          text=True, timeout=900, cwd=str(ROOT))
+    plan_wall = _wall_minutes(plan.stdout)
+    assert plan_wall == pod_wall, (plan_wall, pod_wall)
+    booked = int(lift("arm_minutes alias_ablation", REPO=str(ROOT)).stdout.strip())
+    assert booked == math.ceil(pod_wall), (booked, pod_wall)
+    assert booked == math.ceil(plan_wall), (booked, plan_wall)
+    # The row says where the figure came from, names the flag that separates the
+    # two, and warns that on a GPU box the same command is the arm.
+    basis = lift("arm_basis alias_ablation", REPO=str(ROOT)).stdout
+    assert "--run" in basis and f"{pod_wall:.1f}" in basis, (basis, pod_wall)
+    assert "11.6 is what the dry branch" not in basis, (
+        "arm_basis still describes the gap the alias slice closed")
+    assert "the two agree" in basis
+    assert "on a box with no GPU" in basis
+    # And the row says which fallback the figure was read at, because the two
+    # cost the same to plan and different amounts to MISS.
+    assert "--dot-fallback refuse" in basis, basis
+    # WALL, not KERNEL: its plan charges the probe's compiles outright rather
+    # than leaving them to the ratio, and says BOOK THIS ONE beside the figure.
+    assert lift("arm_clock alias_ablation", REPO=str(ROOT)).stdout.strip() == "WALL"
+    assert not lift("arm_unpriced alias_ablation", REPO=str(ROOT)).stdout.strip()
+
+
+def test_no_dry_branch_of_the_alias_arm_can_measure():
+    """A --dry-run must be free in every sense, and this is the one arm where
+    the flag that would make its preview exact is also the flag that makes it
+    spend a card. Both plan branches are therefore bare, and the pod branch is
+    the only line in the file that gives that script --run."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm alias_ablation\s", ln)]
+    assert len(lines) == 3, lines
+    with_run = [ln for ln in lines if "--run" in ln]
+    assert len(with_run) == 1, lines
+    assert "PY_VLLM" in with_run[0], with_run[0]
+    # Off a GPU box the plan is given a NAMED HYPOTHETICAL card, exactly as
+    # dtype's is: without one the script labels the run
+    # 'no-card-nothing-measured', prints NOT PRICED and cannot say what the arm
+    # costs, which is the shape that made dtype's preview examine nothing.
+    assert sum("--card" in ln for ln in lines if "--run" not in ln) == 1, lines
+    assert 'ALIAS_PLAN_CARD="${ALIAS_PLAN_CARD:-NVIDIA H200}"' in CODE
+
+
+def test_the_alias_planted_worlds_separate_and_the_fail_branch_is_planted():
+    """A GATE THAT CANNOT FAIL IS NOT A GATE, checked on the arm's own advertised
+    off-GPU command rather than asserted from its header. The four worlds land
+    on three different exit codes, `classify_text` recomputes each one from the
+    log, and the world that plants the FAILURE is `alias-blind`: the 2026-09-01
+    apparatus, whose aliased arm never cleared the card's read roof, replayed as
+    a law. That run's VOID was very nearly written up as a null result about
+    DRAM, so a planted world in which the gates MUST refuse is the one this arm
+    most needs."""
+    script = str(ROOT / "scripts" / "alias_ablation.py")
+    seen = {}
+    for world, code in (("refit", exit_codes.DONE),
+                        ("retracted", exit_codes.CLAIM_FAIL),
+                        ("tempo", exit_codes.CLAIM_FAIL),
+                        ("alias-blind", exit_codes.INVALID)):
+        got = _spawn([sys.executable, script, "--synthetic", world],
+                             capture_output=True, text=True, timeout=900,
+                             cwd=str(ROOT))
+        assert got.stdout.count("RESULT: ") > 0, world
+        assert got.returncode == code, (world, got.returncode, got.stdout[-2000:])
+        assert exit_codes.classify_text(got.stdout) == got.returncode, world
+        p1 = re.search(r"^RESULT: CLAIM P1-\S+ (PASS|FAIL)", got.stdout, re.M)
+        assert p1, (world, got.stdout[-2000:])
+        seen[world] = (p1.group(1), got.returncode)
+    # P1 alone does not separate the worlds and was never meant to: alias-blind
+    # PASSES it on an interval so wide it contains everything, and what refuses
+    # the page there is the VALIDITY half. Both halves are checked, because a
+    # claim gate reading PASS out of an apparatus that could not see DRAM is the
+    # exact failure this arm was rebuilt to make impossible.
+    assert seen["refit"] == ("PASS", exit_codes.DONE)
+    assert seen["retracted"] == ("FAIL", exit_codes.CLAIM_FAIL)
+    assert seen["tempo"] == ("FAIL", exit_codes.CLAIM_FAIL)
+    assert seen["alias-blind"][1] == exit_codes.INVALID
+    blind = _spawn([sys.executable, script, "--synthetic", "alias-blind"],
+                           capture_output=True, text=True, timeout=900,
+                           cwd=str(ROOT))
+    for gate in ("headroom", "attribution", "signal", "bracket"):
+        assert re.search(rf"^RESULT: VALIDITY {gate}\S* FAIL", blind.stdout, re.M), gate
+
+
+def test_the_rental_subsets_are_priced_by_the_table_and_not_by_a_second_copy():
+    """WHAT THE SESSION COSTS AND WHAT FITS ARE DIFFERENT QUESTIONS, and the
+    banner answered only the first. An operator with a two-hour budget could
+    read that bn_g16 starts at minute 146 and then had to work out by hand which
+    subset to name in --only.
+
+    The two subsets are priced by `session_bound`, which walks the SAME
+    `arm_minutes` and `arm_clock` the cost table walks, so a re-booked arm moves
+    them by itself. A second copy of the cost model is this repo's recurring
+    defect and there is not one here: this test re-derives both totals from the
+    printed per-arm column."""
+    listing = run(["--list"]).stdout
+    booked = {n: int(re.search(rf"^  {re.escape(n)}\s+~(\d+) min (\w+)$",
+                               listing, re.M).group(1)) for n in ARMS}
+    clocks = {n: re.search(rf"^  {re.escape(n)}\s+~\d+ min (\w+)$",
+                           listing, re.M).group(1) for n in ARMS}
+    pct = int(lift("wall_over_model_pct", REPO=str(ROOT)).stdout.strip())
+    for fn in ("rental_2h_arms", "rental_3h_arms"):
+        names = lift(fn, REPO=str(ROOT)).stdout.split()
+        assert names, fn
+        assert len(names) == len(set(names)), (fn, names)
+        for n in names:
+            assert n in ARMS, (fn, n)
+        priced, bound = lift(f"session_bound {' '.join(names)}",
+                             REPO=str(ROOT)).stdout.split()
+        want = sum(booked[n] for n in names)
+        kern = sum(booked[n] for n in names if clocks[n] == "KERNEL")
+        assert int(priced) == want, (fn, priced, want)
+        assert int(bound) == want - kern + -(-kern * pct // 100), (fn, bound)
+    # A name that is not an arm is a subset nobody can run, so it prices to
+    # nothing and says so in its exit status rather than quietly summing to 0.
+    bogus = lift("session_bound calibrate not_an_arm", REPO=str(ROOT))
+    assert bogus.returncode != 0 and bogus.stdout.strip() == "0 0"
+
+
+def test_the_short_rentals_buy_the_payload_and_leave_the_floor_out(gaps_dry):
+    """THE DECISION THIS BLOCK RECORDS. The owner's payload is bn_g16 and the
+    alias ablation; the noise floor is 120 WALL minutes and sits above both of
+    them in the read order. A rental that ENTERS the floor without finishing it
+    is killed inside it, which fails that script's own V2 and makes even the
+    partial floor unquotable, so a short booking has to leave it out rather than
+    start it. Both subsets therefore carry both payload arms and neither carries
+    the floor.
+
+    And the alias arm is not what put them out of reach: it is thirteen minutes
+    above the floor, so it moved every arm below the floor down by exactly that
+    and moved nothing above it. bn_g16 was already past a two-hour booking."""
+    two = lift("rental_2h_arms", REPO=str(ROOT)).stdout.split()
+    three = lift("rental_3h_arms", REPO=str(ROOT)).stdout.split()
+    for names in (two, three):
+        assert "alias_ablation" in names and "bn_g16" in names
+        assert "noise_floor" not in names
+        # The calibration gate is deliberately NOT scoped to --only and refuses
+        # the session without arm 0, and an unhonoured pin makes every
+        # forced-tile arm below worthless, so both are in every set.
+        assert "calibrate" in names
+        assert {"pin_probe-n64-g1", "pin_probe-n256-g16"} <= set(names)
+    assert set(two) < set(three)
+    body = gaps_dry[1].stdout.split(
+        "WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
+    assert "WHAT A RENTAL OF A GIVEN LENGTH ACTUALLY REACHES" in body
+    assert "NEITHER SET CONTAINS THE NOISE FLOOR" in body
+    # The --only lines are printed ready to paste, not described.
+    for names in (two, three):
+        assert f"--only {','.join(names)}" in body, names
+    # And both totals are in the banner, so the operator never has to add the
+    # column back up to find out whether a booking reaches the payload.
+    for fn in ("rental_2h_arms", "rental_3h_arms"):
+        priced, bound = lift(f"session_bound $({fn})",
+                             REPO=str(ROOT)).stdout.split()
+        assert f"~{priced} priced / ~{bound} bounded min" in body, fn
+
+
+def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(gaps_dry):
+    """The roofline verdict is a fraction of a roof, and the alias ablation is
+    what says the fraction is a fraction of the right thing. So it is read
+    first among the arms about the ROOF, and the block says why rather than
+    just listing it.
+
+    AND THE TWO INTERPRETATION ARMS COME ABOVE IT, since 2026-09-16. Their whole
+    justification is that an operator cutting the rental short has to see them
+    before spending the session's longest arm on another alpha, which is this
+    block's own criterion, and leaving them out of it while the arm comments
+    said that was the same contradiction the rental subsets carried. The
+    heading no longer counts its own entries."""
+    got = gaps_dry[1].stdout
+    block = got.split("READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
+    assert block.index("alias_ablation") < block.index("roofline-n256-g16")
+    assert "BEFORE the roofline verdict" in block
+    for name in ("private-mixtral-bm32", "elasticity-m32-n64-g16",
+                 "alias_ablation", "roofline-n256-g16", "noise_floor",
+                 "bn_g16"):
+        assert name in block, name
+    # The two arms whose result changes what every alpha below MEANS are read
+    # before the arms whose alphas they qualify.
+    for early in ("private-mixtral-bm32", "elasticity-m32-n64-g16"):
+        assert block.index(early) < block.index("bn_g16"), early
+    # And no count in the heading to fall out of step with the list.
+    assert "READ THESE FOUR FIRST" not in got
+    # And the commit block says the arm writes nothing tracked, because an arm
+    # with no --publish flag is one an operator can release a pod on top of.
+    commit = got.split("WHAT TO COMMIT, AND WHAT NOT TO")[1]
+    assert "THE ALIAS ABLATION WRITES NOTHING TRACKED" in commit
+    assert "alias_ablation/<run id>" in commit
+
+
+def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(gaps_dry):
+    """THE RECURRING DEFECT AGAIN, at the two surfaces read at the END of a
+    rental. The body comment above the arm always disclosed what
+    `--dot-fallback allow` buys: a dot ladder measures a LOWER BOUND, leaves P1
+    UNKNOWN, exits 1 CLAIM_FAIL and is LATCHED by `arm`. The two surfaces the
+    operator actually reads once the pod is nearly out of hours -- `arm_closes`
+    and the READ-FIRST block -- enumerated three states (P1 PASS, P1 FAIL,
+    headroom/attribution INVALID) and glossed exit 1 as the FAIL: "the interval
+    says which of 0.10 or 0.33 it landed on instead". `choose_pinning` calls the
+    fall to dot mode the LIKELY case rather than the corner, because the
+    0.61-of-roof ceiling this arm exists to escape has the signature of the
+    cross-lane `tl.sum` tree that `dot` removes. So the likeliest single reading
+    of this arm's exit code was the state neither surface named, and the gloss
+    they did carry is the retraction -- "alpha is not 0.558" for a run in which
+    alpha was not asked -- that the sibling script exists to prevent. The state
+    was documented where the arm is PLANNED and not where it is REPORTED.
+
+    THE TWO EXIT-1 STATES ARE SEPARATED BY EXECUTION, NOT BY PROSE. The same
+    gate builder renders FAIL in `sum` mode and UNKNOWN in `dot` mode, both
+    classify to CLAIM_FAIL, and the verdict WORD is the only thing between a
+    finding and an unasked question. That is why both surfaces have to send the
+    operator to the RESULT line rather than to the exit code.
+
+    SINCE 2026-09-09 THE ARM IS BOOKED `--dot-fallback refuse`, and the two
+    surfaces have to disclose THAT: the fourth state was reached on 2026-09-09
+    (308 s, P1 UNKNOWN at alpha >= 0.229, latched INVALID: the ledger reads
+    `alias_ablation INVALID 3 308` and four validity gates failed), the bound it
+    buys has been bought, and a probe miss now costs 2.0 min and exits 3. The
+    state is still described, because an operator reading the page has to know
+    what the flag is protecting them from; what may not stand is a surface
+    saying the arm is booked at a flag it is not."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import alias_ablation as aa
+
+    # The FAIL branch is planted beside the UNKNOWN one: a disjoint interval in
+    # sum mode is the outcome the surfaces describe, and it is a different word
+    # on the same line from the same builder.
+    fail = aa.prediction_gate((0.05, 0.14), (0.04, 0.15), "sum")
+    unknown = aa.prediction_gate((0.41, 0.62), (0.40, 0.63), "dot")
+    assert fail.scored()[2] == exit_codes.FAIL
+    assert unknown.scored()[2] == exit_codes.UNKNOWN
+    assert unknown.result_line().startswith(
+        f"RESULT: {exit_codes.CLAIM} P1-")
+    assert "NOT A REFUTATION" in unknown.result_line()
+    sound = exit_codes.result_line(exit_codes.VALIDITY, "headroom",
+                                   exit_codes.PASS, "the pinning cleared")
+    for gate in (fail, unknown):
+        text = f"{sound}\n{gate.result_line()}\n"
+        assert exit_codes.classify_text(text) == exit_codes.CLAIM_FAIL
+    # And the state is REACHABLE from this driver: all three branches of the arm
+    # name the flag that allows the fall, so it is not a corner of some other
+    # invocation.
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm alias_ablation\s", ln)]
+    assert lines and all("--dot-fallback refuse" in ln for ln in lines), lines
+
+    closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
+    block = gaps_dry[1].stdout.split(
+        "READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
+    entry = block.split("roofline-n256-g16")[0]
+    for surface in (closes, entry):
+        # Flattened, because one surface is a heredoc wrapped at 76 columns and
+        # a phrase that straddles two of its lines is still the phrase.
+        flat = " ".join(surface.split())
+        low = flat.lower()
+        assert "--dot-fallback refuse" in flat, surface
+        # The PAGE's figure for the probe, not a rounding of it: the plan prints
+        # "PLUS 2.0 min charged outright for the probe". Both surfaces said 1.3
+        # while arm_basis said 1.2, off the same page.
+        assert "2.0 min" in flat, surface
+        # The branch it replaced is named as history, not as the booking.
+        assert "allow" in low, surface
+        assert "unknown" in low and "not a refutation" in low, surface
+        assert "lower bound" in low, surface
+        assert "latch" in low, surface
+        # The one instruction that separates the two exit-1 states, and the
+        # guard on the gloss that was the misreading.
+        assert "read the p1 result line" in low, surface
+        assert "0.10-or-0.33" in flat, surface
+    # The other two states are still stated, so the fourth was ADDED and did not
+    # displace the ones that were right.
+    assert "THE THIRD STATE IS NOT AN OUTCOME" in closes
+    assert "P1 PASS" in closes and "P1 FAIL" in closes
+    for word in ("P1 PASS", "P1 FAIL", "headroom or attribution FAIL"):
+        assert word in entry, word
+
+
+# --------------------------------------------------------------------------
+# 16. the second opinion: the page is compared with the exit code, and no word
+#     the page does not support is latched
+# --------------------------------------------------------------------------
+
+def arm_lift(script, repo, ledger, logs, **extra):
+    """`lift` with every global `arm()` reads, in measuring mode."""
+    return lift(script, REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs),
+                ONLY="", DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0,
+                PY_BASE=sys.executable, **extra)
+
+
+def test_every_child_this_file_spawns_is_a_laptop():
+    """STRUCTURAL: every process this file starts goes through `_spawn`, which
+    lays `LAPTOP_ENV` over the caller's environment. A `subprocess.run` anywhere
+    else in this file is a child that inherits the box, which on a pod planned
+    under the vllm venv for a minute per test and could measure."""
+    import ast
+    tree = ast.parse(Path(__file__).read_text())
+    direct = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_spawn":
+            continue
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "run"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "subprocess"):
+            direct.append(node.lineno)
+    spawn = next(n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef) and n.name == "_spawn")
+    inside = {n.lineno for n in ast.walk(spawn) if hasattr(n, "lineno")}
+    assert all(ln in inside for ln in direct), direct
+    assert LAPTOP_ENV["CUDA_VISIBLE_DEVICES"] == ""
+    assert LAPTOP_ENV["PY_VLLM"] == sys.executable
+    # And the merge is a merge: the caller's own variables survive.
+    probe = _spawn([sys.executable, "-c",
+                    "import os; print(os.environ['KEEP'], "
+                    "os.environ['CUDA_VISIBLE_DEVICES'] == '')"],
+                   capture_output=True, text=True,
+                   env={"KEEP": "yes", "PATH": os.environ["PATH"]})
+    assert probe.stdout.strip() == "yes True"
+
+
+def test_the_second_opinion_is_actually_called_and_not_only_described():
+    """THE VERDICT OF THE 2026-09-03 REVIEW, PINNED. `classify_text` had four
+    mentions in the driver and every one was a comment or an echo; `arm()`
+    decided the state from the integer alone. The function has to be CALLED,
+    from the one place a state is written, and the mention that matters is the
+    one inside `log_verdict`'s python rather than in prose."""
+    body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
+    assert 'second_opinion "$rc" "$state" "$(log_verdict "$log")" "$adopts"' in body
+    verdict = CODE.split("\nlog_verdict() {", 1)[1].split("\n}", 1)[0]
+    assert "EC.classify_text(text)" in verdict
+    assert "NoGatesScored" in verdict
+    # ...and only in measuring mode: a plan scores no gate and gets planning
+    # words, so a dry run must never reach the second opinion.
+    assert 'if (( DRY )); then\n    state="$(dry_state "$rc" "$log")"\n  else' in body
+
+
+@pytest.mark.parametrize("text,want", [
+    ("RESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 PASS fine\n", "0"),
+    ("prose\nRESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 FAIL gap\n", "1"),
+    ("RESULT: VALIDITY V0 FAIL broke\nRESULT: CLAIM C1 PASS fine\n", "3"),
+    ("RESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 UNKNOWN NOT A REFUTATION\n", "1"),
+    ("C1 ... [PASS]  a pre-registered expectation\nfloor: 0.0905\n", "NONE"),
+    ("", "NONE"),
+])
+def test_log_verdict_reads_the_result_lines_through_the_module(tmp_path, text, want):
+    """The integer, or NONE, and the module's own regex rather than a shell
+    copy of it: the prose log is the one the old summary matched eighteen
+    times, and it must read as no gate at all."""
+    log = tmp_path / "arm.log"
+    log.write_text(text)
+    got = lift(f"log_verdict {log}", REPO=str(ROOT), PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == want
+
+
+def test_log_verdict_says_unreadable_rather_than_none_when_it_cannot_ask(tmp_path):
+    """"COULD NOT CHECK" IS NOT "CHECKED AND FOUND NOTHING". A missing log, and
+    a REPO with no moe/bench/exit_codes to import, both answer UNREADABLE, and
+    `second_opinion` refuses to latch on that word in every state."""
+    gone = lift(f"log_verdict {tmp_path}/gone.log", REPO=str(ROOT),
+                PY_BASE=sys.executable)
+    assert gone.stdout.strip() == "UNREADABLE"
+    log = tmp_path / "arm.log"
+    log.write_text("RESULT: CLAIM C1 PASS fine\n")
+    # A REPO whose exit_codes will not import. Planted as a regular package so
+    # it shadows the `moe` the venv has installed; a bare tmp_path would not,
+    # and the driver would quietly read the installed module and answer 0.
+    broken = plant_exit_codes(tmp_path / "broken")
+    (broken / "moe" / "bench" / "exit_codes.py").unlink()
+    (broken / "moe" / "bench" / "exit_codes.py").write_text(
+        "raise ImportError('planted: this checkout has no readable table')\n")
+    bare = lift(f"log_verdict {log}", REPO=str(broken), PY_BASE=sys.executable)
+    assert bare.stdout.startswith("UNREADABLE"), bare.stdout
+    assert "ImportError" in bare.stdout
+    # ...and the same page from a repo whose module DOES import reads 0.
+    assert lift(f"log_verdict {log}", REPO=str(plant_exit_codes(tmp_path / "ok")),
+                PY_BASE=sys.executable).stdout.strip() == "0"
+    for rc in (0, 1, 2, 3):
+        got = lift(f'second_opinion {rc} "$(ledger_state {rc})" '
+                   f'{shlex.quote(bare.stdout.strip())} 0', REPO=str(ROOT))
+        word, _, note = got.stdout.rstrip("\n").partition("\t")
+        assert word == "UNKNOWN", (rc, got.stdout)
+        assert "SECOND OPINION UNAVAILABLE" in note
+
+
+#: The printed table in `second_opinion`'s own comment, row for row, plus the
+#: adoption split. (rc, what the log implied, adopts_exit_codes rc) -> (state,
+#: a phrase the note must carry). Every latched word here is EARNED by an
+#: agreeing page; every other row is UNKNOWN or RETRY and says why.
+def defect(rc, implied):
+    """The note a DEFECT row carries: both codes, both words, in that order."""
+    return (f"DEFECT: the process exited {rc} {exit_codes.ledger_state(rc)} but its "
+            f"RESULT lines imply {implied} {exit_codes.ledger_state(implied)}")
+
+
+SECOND_OPINION = [
+    (0, "0", 0, "DONE", "log agrees"),
+    (1, "1", 0, "CLAIM_FAIL", "log agrees"),
+    (3, "3", 0, "INVALID", "log agrees"),
+    (0, "1", 0, "UNKNOWN", defect(0, 1)),
+    (1, "0", 0, "UNKNOWN", defect(1, 0)),
+    (2, "0", 0, "UNKNOWN", defect(2, 0)),
+    (3, "1", 0, "UNKNOWN", defect(3, 1)),
+    (0, "3", 0, "UNKNOWN", defect(0, 3)),
+    (0, "NONE", 0, "UNKNOWN", "UNEARNED DONE"),
+    (1, "NONE", 0, "RETRY", "CRASH"),
+    (1, "NONE", 1, "UNKNOWN", "1 is three things"),
+    (1, "NONE", 2, "UNKNOWN", "1 is three things"),
+    (1, "1", 1, "UNKNOWN", "has not adopted"),
+    (2, "NONE", 0, "REFUSED", ""),
+    (3, "NONE", 0, "UNKNOWN", "UNEARNED INVALID"),
+    (4, "0", 0, "RETRY", "process code wins"),
+    (4, "NONE", 0, "RETRY", ""),
+    (127, "1", 0, "RETRY", "process code wins"),
+    (130, "NONE", 0, "RETRY", ""),
+]
+
+
+@pytest.mark.parametrize("rc,implied,adopts,state,tell", SECOND_OPINION)
+def test_the_second_opinion_table(rc, implied, adopts, state, tell):
+    """Every row of the table, through the shipped function. The three rows
+    that LATCH all carry an agreeing page; the DEFECT rows carry both codes in
+    the note so the ledger says what disagreed with what; the crash row is
+    RETRY only for a file that speaks the table, because from one that does not
+    a 1 is still three things."""
+    got = lift(f'second_opinion {rc} "$(ledger_state {rc})" {shlex.quote(implied)} {adopts}',
+               REPO=str(ROOT))
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.count("\n") == 1, "one line, read by one `read`"
+    word, _, note = got.stdout.rstrip("\n").partition("\t")
+    assert word == state, got.stdout
+    assert tell in note, note
+    if state in ("DONE", "CLAIM_FAIL", "INVALID"):
+        assert note.startswith("log agrees"), note
+    elif state == "UNKNOWN":
+        assert "NOT latched" in note, note
+    if note.startswith("DEFECT:"):
+        assert f"exited {rc}" in note and f"imply {implied}" in note
+
+
+@pytest.mark.parametrize("label,page,rc,state,tell,latched", [
+    ("fail_line_exit_0", "RESULT: CLAIM C1 FAIL gap 0.05 < 0.10",
+     0, "UNKNOWN", "DEFECT", False),
+    ("no_line_exit_0", "measured something and printed no gate",
+     0, "UNKNOWN", "UNEARNED DONE", False),
+    ("pass_lines_exit_1", "RESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 PASS fine",
+     1, "UNKNOWN", "DEFECT", False),
+    ("no_line_exit_3", "nothing scored",
+     3, "UNKNOWN", "UNEARNED INVALID", False),
+    ("fail_line_exit_1", "RESULT: CLAIM C1 FAIL gap",
+     1, "CLAIM_FAIL", "log agrees", True),
+    ("pass_line_exit_0", "RESULT: CLAIM C1 PASS fine",
+     0, "DONE", "log agrees", True),
+    ("validity_fail_exit_3", "RESULT: VALIDITY V0 FAIL broke",
+     3, "INVALID", "log agrees", True),
+    ("scored_then_crash_4", "RESULT: CLAIM C1 PASS fine\nTraceback: boom",
+     4, "RETRY", "process code wins", False),
+])
+def test_arm_latches_only_a_word_the_page_earned(tmp_path, label, page, rc, state,
+                                                 tell, latched):
+    """THE THREE PROOFS THE REVIEW RAN, PLUS THE ROWS AROUND THEM, through the
+    shipped `arm()`. `RESULT: CLAIM C1 FAIL` under exit 0 used to land DONE and
+    be SKIPPED on the next pass; no RESULT line under exit 0 landed DONE and
+    was latched; all-PASS lines under exit 1 landed CLAIM_FAIL and was latched.
+    Each is UNKNOWN now, carries its reason in the ledger note, and is
+    re-attempted. The honest rows still latch, which is the branch that must
+    not move: a CLAIM_FAIL with its FAIL line on the page is the most valuable
+    outcome this study has and re-running it is the failure mode
+    exit_codes.py is named against."""
+    stub = tmp_path / f"{label}.sh"
+    stub.write_text(f"#!/bin/bash\nprintf '%s\\n' {shlex.quote(page)}\nexit {rc}\n")
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    first = arm_lift(f"arm cap_test bash {stub}", ROOT, ledger, logs)
+    assert first.returncode == 0, first.stderr
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[1] == state, (row, first.stdout)
+    assert row[2] == str(rc)
+    assert tell in row[6], row
+    assert tell in first.stdout
+    if row[6].startswith("DEFECT:"):
+        assert f"exited {rc}" in row[6] and "imply" in row[6]
+    if state == "RETRY":
+        assert "last 5 lines of" in first.stdout
+        assert "RETRY_ARMS=1" in arm_lift(
+            f"arm cap_test bash {stub}; echo RETRY_ARMS=$RETRY_ARMS",
+            ROOT, tmp_path / "again.tsv", logs).stdout
+    # The lifted `arm()` writes rows only; the header is the session's. One
+    # row after a latched pass, two after a re-attempted one.
+    again = arm_lift(f"arm cap_test bash {stub}", ROOT, ledger, logs)
+    if latched:
+        assert f"SKIP cap_test (already {state}" in again.stdout
+        assert len(ledger.read_text().splitlines()) == 1
+    else:
+        assert "SKIP cap_test" not in again.stdout
+        assert len(ledger.read_text().splitlines()) == 2
+
+
+def test_an_import_time_crash_is_retry_not_a_refuted_claim(tmp_path):
+    """THE POD'S REAL 2026-09-01 SHAPE, through the real `arm()` with the real
+    pod command lines. Python exits 1 for an exception that escapes, the
+    scripts' ERROR(4) guards wrap `_main()` and cannot catch a failure at
+    import, and every measuring arm has adopted the table, so the third pass's
+    "UNKNOWN for a non-adopter" covered none of them: alias_ablation,
+    pin_probe, calibrate and dtype all landed CLAIM_FAIL, latched, and were
+    skipped on every resume. For calibrate that made the calibration gate say
+    ARM CLAIM_FAIL and refuse every resume until the row was deleted by hand.
+
+    A `torch.py` that raises ImportError is planted on PYTHONPATH, which is
+    what an ABI drift looks like to the interpreter; each script crashes at
+    `<module>` with zero RESULT lines, and the tracked tree is never touched
+    because nothing gets past the import."""
+    broken = tmp_path / "pp"
+    broken.mkdir()
+    (broken / "torch.py").write_text(
+        "raise ImportError('planted ABI drift: torch was built for a different runtime')\n")
+    session = tmp_path / "session"
+    session.mkdir()
+    logs = session / "logs"
+    logs.mkdir()
+    ledger = session / "ARMS.tsv"
+    values = {
+        "PY_VLLM": sys.executable, "PY_BASE": sys.executable, "REPO": str(ROOT),
+        "SESSION": str(session),
+        "PIN_SWEPT": re.search(r"^PIN_SWEPT='([^']*)'", CODE, re.M).group(1),
+        "ALIAS_MODELS": re.search(r"^ALIAS_MODELS=(\S+)$", CODE, re.M).group(1),
+    }
+
+    def expand(word):
+        def one(m):
+            name = m.group(1)
+            assert name in values, f"{word}: no planted value for ${name}"
+            return values[name]
+        return re.sub(r"\$\{?(\w+)\}?", one, word)
+
+    tracked = ["git", "-C", str(ROOT), "status", "--porcelain", "--",
+               "moe/bench/hardware", "results/published"]
+    before = _spawn(tracked, capture_output=True, text=True, timeout=60).stdout
+    for arm_name in ("alias_ablation", "pin_probe-n64-g1", "calibrate", "dtype"):
+        words = [expand(w) for w in measuring_invocation(arm_name)]
+        assert words[0] == "arm" and words[1] == arm_name, words
+        command = ["env", f"PYTHONPATH={broken}",
+                   f"MOE_RESULTS_DIR={tmp_path}/gaps-nocard", *words[2:]]
+        got = arm_lift(f"arm {arm_name} {shlex.join(command)}", ROOT, ledger, logs)
+        assert got.returncode == 0, got.stderr
+        log = (logs / f"{arm_name}.log").read_text()
+        assert "Traceback" in log and "planted ABI drift" in log, (arm_name, log[-1500:])
+        assert "RESULT: " not in log, arm_name
+        row = ledger.read_text().splitlines()[-1].split("\t")
+        assert row[0] == arm_name and row[2] == "1", row
+        assert row[1] == "RETRY", (arm_name, row)
+        assert row[6].startswith("CRASH:"), row
+        assert "planted ABI drift" in got.stdout, "the tail of the log is printed"
+        again = arm_lift(f"arm {arm_name} {shlex.join(command)}", ROOT, ledger, logs)
+        assert f"SKIP {arm_name}" not in again.stdout, "a crash is not latched"
+    after = _spawn(tracked, capture_output=True, text=True, timeout=60).stdout
+    assert before == after, "an import-time crash wrote into the tracked tree"
+    # And the calibration gate no longer blocks every resume: the row is RETRY,
+    # the gate refuses THIS pass (arm 0 did not stand behind a ruler) and the
+    # next pass re-runs arm 0 instead of skipping a latched CLAIM_FAIL forever.
+    verdict = lift('calibration_verdict "$(ledger_arm_state calibrate)" PUBLISHED; echo "rc=$?"',
+                   REPO=str(ROOT), LEDGER=str(ledger))
+    assert verdict.stdout.splitlines()[0] == "ARM RETRY", verdict.stdout
+    assert verdict.stdout.strip().endswith("rc=1")
+
+
+def test_a_defective_page_is_printed_under_its_own_heading_and_fails_the_session(tmp_path):
+    """RECORDING THE WORD AND EXITING 0 WOULD LEAVE IT IN A FILE NOBODY READS.
+    `defect_rows` is the one source for the heading and the exit code; last row
+    per arm wins, so a defect that a later pass re-ran cleanly is gone and one
+    a later pass did not touch is still shown."""
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text(
+        "arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+        f"cap_test\tUNKNOWN\t0\t9\t0\t/a.log\t{defect(0, 1)}. x\n"
+        f"ruler\tUNKNOWN\t1\t9\t0\t/b.log\t{defect(1, 0)}. y\n"
+        "ruler\tDONE\t0\t9\t0\t/b.log\tlog agrees: RESULT lines imply 0\n"
+        "dtype\tUNKNOWN\t0\t9\t0\t/c.log\tUNEARNED DONE: exit 0 with no RESULT line. z\n"
+        "span\tREFUSED\t2\t0\t0\t/d.log\t\n")
+    got = lift(f"defect_rows {ledger}", REPO=str(ROOT))
+    lines = got.stdout.splitlines()
+    assert len(lines) == 1, got.stdout
+    assert lines[0].startswith("  cap_test") and "exit 0" in lines[0]
+    assert "imply 1 CLAIM_FAIL" in lines[0]
+    clean = tmp_path / "CLEAN.tsv"
+    clean.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                     "ruler\tDONE\t0\t9\t0\t/z.log\tlog agrees: RESULT lines imply 0\n")
+    assert lift(f"defect_rows {clean}", REPO=str(ROOT)).stdout == ""
+    # The UNEARNED DONE row is not a defect; it is OWED, under the other
+    # heading, and the same last-row rule applies (ruler re-ran cleanly).
+    owed = lift(f"owed_rows {ledger}", REPO=str(ROOT)).stdout.splitlines()
+    assert len(owed) == 1 and owed[0].startswith("  dtype") and "UNEARNED DONE" in owed[0]
+    assert lift(f"owed_rows {clean}", REPO=str(ROOT)).stdout == ""
+    # The shipped session reads both functions, prints both headings, and
+    # exits through `session_rc` over the same ledger, so the summary and the
+    # code have one source. Nothing on such a page is a verdict.
+    assert 'DEFECTS="$(defect_rows "$LEDGER")"' in CODE
+    assert 'OWED="$(owed_rows "$LEDGER")"' in CODE
+    assert 'say "THE ROWS WHOSE PAGE AND EXIT CODE DISAGREE"' in CODE
+    assert 'say "THE ROWS THIS SESSION STILL OWES"' in CODE
+    tail = CODE.split('OWED="$(owed_rows "$LEDGER")"', 1)[1]
+    assert 'SESSION_RC="$(session_rc "$LEDGER" "$RETRY_ARMS")"' in tail
+    assert tail.count('exit "$SESSION_RC"') == 1
+    # and no branch of the measuring tail exits by a constant any more
+    measuring_tail = tail.split('SESSION_RC="$(session_rc', 1)[1].split("\nexit 0", 1)[0]
+    assert 'exit "$RC_INVALID"' not in measuring_tail
+    assert 'exit "$RC_RETRY"' not in measuring_tail
+
+
+def test_the_summary_prints_the_reason_a_row_is_unknown_rather_than_one_paraphrase(tmp_path):
+    """THE PARAPHRASE WAS THE RECURRING DEFECT. `summarize_arm` used to say
+    "this arm exited 1 and the file it ran has not adopted ...", which was one
+    of the five reasons a row can be UNKNOWN and wrong for the other four the
+    moment they existed. The note on the ledger row is printed instead."""
+    log = tmp_path / "arm.log"
+    log.write_text(RESULT_LOG)
+    note = "DEFECT: the process exited 0 DONE but its RESULT lines imply 1 CLAIM_FAIL."
+    got = lift(f"summarize_arm cap_test {log} UNKNOWN {shlex.quote(note)}", REPO=str(ROOT))
+    assert "STATE UNKNOWN, NOT LATCHED" in got.stdout
+    assert note in got.stdout
+    assert "has not adopted" not in got.stdout, "the old paraphrase is gone"
+    # The RESULT lines are still printed after it: which gate disagreed with
+    # the exit code is the whole content of a DEFECT row.
+    assert "RESULT: CLAIM C1 FAIL" in got.stdout
+    # A row with no note says so rather than inventing one.
+    bare = lift(f"summarize_arm cap_test {log} UNKNOWN", REPO=str(ROOT))
+    assert "the reason was not recorded" in bare.stdout
+    # And the shipped loop passes the note through.
+    assert 'summarize_arm "$n" "$log" "$state" "$reason"' in CODE
+
+
+@pytest.mark.parametrize("arm_name", ARMS)
+def test_every_measuring_invocation_runs_a_script_the_second_opinion_can_read(arm_name):
+    """THE WALKER, EXTENDED TO THE SECOND OPINION. For every arm the pod runs:
+    the file it runs speaks the table (so a 1 with no gate line is a crash and
+    not "three things"), renders RESULT lines (so `log_verdict` has something
+    to read and DONE can be earned), and exits through `classify` (so agreement
+    is the expected shape and a disagreement is a defect in that file).
+
+    counter_plan is the one arm that fails the middle check today, and the
+    check is written to go RED when it stops failing: dram_counter_route.py
+    prints no RESULT line in any mode (review finding 4, in a file this slice
+    does not own), so on the pod its exit 0 is an UNEARNED DONE and lands
+    UNKNOWN. `arm_closes counter_plan` says so; when that script prints one
+    line per verdict, delete the special case here and that sentence there."""
+    words = measuring_invocation(arm_name)
+    rel = lift(f"arm_script {shlex.quote(arm_name)}", REPO=str(ROOT)).stdout.strip()
+    assert rel and (ROOT / rel).exists(), (arm_name, rel)
+    if rel == "moe/bench/cli.py":
+        assert "-m" in words and words[words.index("-m") + 1] == "moe.bench.cli", words
+    else:
+        assert any(w.endswith(rel) for w in words), (arm_name, rel, words)
+    adopts = lift(f"adopts_exit_codes {shlex.quote(rel)}; echo rc=$?",
+                  REPO=str(ROOT)).stdout.strip()
+    assert adopts.endswith("rc=0"), (arm_name, rel, adopts)
+    source = (ROOT / rel).read_text()
+    renders = "result_line(" in source or "RESULT: " in source
+    assert "classify(" in source, (arm_name, rel)
+    # counter_plan was special-cased here while dram_counter_route.py rendered
+    # its gates as prose; since the gates slice it prints RESULT lines like every
+    # other arm, so the second opinion can read it and no exemption remains.
+    assert renders, (arm_name, rel, "the second opinion would read NONE on every run")
+
+
+# --------------------------------------------------------------------------
+# 17. the ledger is reachable: SESSION=, --resume-latest, --new
+# --------------------------------------------------------------------------
+
+def planted_root(tmp_path):
+    """A session root with a dry-only directory, two measuring sessions for
+    this card and one for another card. The newest for THIS card is the one
+    with the March stamp; the April one is another card's and must never be
+    picked."""
+    root = tmp_path / "root"
+    (root / "session-nocard-20260101T000000Z").mkdir(parents=True)
+    for stamp in ("20260201T000000Z", "20260301T000000Z"):
+        d = root / f"session-nocard-{stamp}"
+        d.mkdir()
+        (d / "ARMS.tsv").write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    other = root / "session-othercard-20260401T000000Z"
+    other.mkdir()
+    (other / "ARMS.tsv").write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    return root
+
+
+def choose(dry, resume, new, explicit, root):
+    got = lift(f'session_choice {dry} {resume} {new} {shlex.quote(explicit)} '
+               f'{shlex.quote(str(root))} session-nocard-; echo "rc=$?"',
+               REPO=str(ROOT))
+    assert got.returncode == 0, got.stderr
+    lines = got.stdout.rstrip("\n").splitlines()
+    how, _, what = lines[0].partition("\t")
+    return how, what, lines[-1]
+
+
+def test_latest_session_is_the_newest_for_this_card_with_a_measuring_ledger(tmp_path):
+    root = planted_root(tmp_path)
+    got = lift(f"latest_session {root} session-nocard-; echo rc=$?", REPO=str(ROOT))
+    assert got.stdout.splitlines() == [str(root / "session-nocard-20260301T000000Z"), "rc=0"]
+    # A dry-only directory is not a session to resume into, and an empty root
+    # is nothing at all rather than the literal glob.
+    (root / "session-nocard-20260201T000000Z" / "ARMS.tsv").unlink()
+    (root / "session-nocard-20260301T000000Z" / "ARMS.tsv").unlink()
+    got = lift(f"latest_session {root} session-nocard-; echo rc=$?", REPO=str(ROOT))
+    assert got.stdout.strip() == "rc=1", got.stdout
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert lift(f"latest_session {empty} session-nocard-; echo rc=$?",
+                REPO=str(ROOT)).stdout.strip() == "rc=1"
+
+
+def test_session_choice_every_branch(tmp_path):
+    """EVERY BRANCH, PLANTED, because the one that matters (a measuring run
+    finding a session it would have silently ignored) cannot be reached end to
+    end on a box with no card: the driver refuses before it chooses."""
+    root = planted_root(tmp_path)
+    latest = str(root / "session-nocard-20260301T000000Z")
+    # A measuring run without --new, with a latest: refused, naming it.
+    assert choose(0, 0, 0, "", root) == ("LATEST_EXISTS", latest, "rc=1")
+    # A dry run is free and skips nothing, so it opens a fresh one.
+    how, what, rc = choose(1, 0, 0, "", root)
+    assert (how, rc) == ("NEW", "rc=0") and what.startswith(f"{root}/session-nocard-2")
+    assert what != latest
+    # --new says so on purpose.
+    how, what, rc = choose(0, 0, 1, "", root)
+    assert (how, rc) == ("NEW", "rc=0") and what != latest
+    # --resume-latest lands in the newest measuring session for THIS card.
+    assert choose(0, 1, 0, "", root) == ("RESUMED", latest, "rc=0")
+    assert choose(1, 1, 0, "", root) == ("RESUMED", latest, "rc=0")
+    # SESSION= names it outright and wins.
+    assert choose(0, 0, 0, "/x/y", root) == ("NAMED", "/x/y", "rc=0")
+    # Contradictions are refused, not resolved.
+    how, what, rc = choose(0, 1, 1, "", root)
+    assert (how, rc) == ("REFUSED", "rc=1") and "contradict" in what
+    for resume, new in ((1, 0), (0, 1)):
+        how, what, rc = choose(0, resume, new, "/x/y", root)
+        assert (how, rc) == ("REFUSED", "rc=1") and "names the directory" in what
+    # Nothing to resume is a refusal that says so.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    how, what, rc = choose(0, 1, 0, "", empty)
+    assert (how, rc) == ("REFUSED", "rc=1") and "found no session" in what
+    # With no latest, a measuring run opens a new one without being asked.
+    how, what, rc = choose(0, 0, 0, "", empty)
+    assert (how, rc) == ("NEW", "rc=0")
+
+
+def test_resume_latest_and_new_end_to_end_in_dry_mode(tmp_path):
+    """The flags reach the shipped driver, and the resumed directory is the one
+    the ledger is read from and written into."""
+    root = planted_root(tmp_path)
+    latest = root / "session-nocard-20260301T000000Z"
+    env = {"SESSION_ROOT": str(root)}
+    got = run(["--dry-run", "--resume-latest", "--only", "counter_plan"], env_extra=env)
+    assert got.returncode == 0, got.stdout[-2000:]
+    assert f"session   {latest}" in got.stdout
+    assert (latest / "ARMS-dryrun.tsv").exists()
+    assert "(RESUMED)" in got.stdout
+    assert "--resume-latest" in got.stdout.split("THE SESSION DIRECTORY IS")[1]
+    # A bare dry run beside it opens a fresh directory, and says NEW.
+    bare = run(["--dry-run", "--only", "counter_plan"], env_extra=env)
+    assert bare.returncode == 0, bare.stdout[-2000:]
+    assert f"session   {latest}" not in bare.stdout and "(NEW)" in bare.stdout
+    # Refusals: nothing to resume, contradictory flags, SESSION= plus a flag.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    none = run(["--dry-run", "--resume-latest"], env_extra={"SESSION_ROOT": str(empty)})
+    assert none.returncode == exit_codes.REFUSED
+    assert "REFUSED: --resume-latest found no session" in none.stdout
+    both = run(["--dry-run", "--resume-latest", "--new"], env_extra=env)
+    assert both.returncode == exit_codes.REFUSED and "contradict" in both.stdout
+    named = run(["--dry-run", "--resume-latest"], session=tmp_path / "s", env_extra=env)
+    assert named.returncode == exit_codes.REFUSED and "names the directory" in named.stdout
+    assert not (tmp_path / "s").exists()
+    # And the usage block, which is also --help, documents all three.
+    helped = run(["--help"]).stdout
+    for word in ("SESSION=", "--resume-latest", "--new"):
+        assert word in helped, word
+    assert "SESSION=" in TEXT.split("set -uo pipefail", 1)[0]
+
+
+def test_the_measuring_refusal_names_all_three_ways_out():
+    """The refusal's words, since the branch itself cannot run off GPU: an
+    operator who reads it has to be able to paste the way forward."""
+    block = CODE.split("LATEST_EXISTS)", 1)[1].split("exit \"$RC_REFUSED\"", 1)[0]
+    assert "--resume-latest" in block and "--new" in block and "SESSION=" in block
+    assert "EMPTY ledger" in block
+    assert 'read -r SESSION_HOW SESSION_WHAT' in CODE
+    assert 'session_choice "$DRY" "$RESUME_LATEST" "$NEW_SESSION" "${SESSION:-}"' in CODE
+
+
+# --------------------------------------------------------------------------
+# 18. descriptions of behaviour that has since changed are told as history
+# --------------------------------------------------------------------------
+
+def test_the_caveat_tells_the_adopters_old_codes_as_history():
+    """THE RECURRING DEFECT, INSIDE THE FUNCTION THAT EXISTS TO DISCLOSE IT.
+    `contract_caveat` said check_mma_path.sh spends 1 on refusals (2 since it
+    adopted), that its --dry-run exits 0 (2), that cli.py returns 4 on a pin
+    miss (INVALID through classify) and that dram_counter_route.py returns 3 on
+    BLOCKED (DONE). Each is checked against the file it describes, not against
+    memory."""
+    caveat = CODE.split("\ncontract_caveat() {", 1)[1].split("\n}", 1)[0]
+    for stale in ('documents "1 a gate failed"',
+                  "returns 4 when the implementations",
+                  "exits 0 from\\n",
+                  "returns 3 for\\n"):
+        assert stale not in caveat, stale
+    for history in ('used to document "1 a gate failed"',
+                    "used to return 4",
+                    "used to exit 0",
+                    "used to return 3",
+                    "no longer reaches this caveat"):
+        assert history in caveat, history
+    mma = (ROOT / "scripts" / "check_mma_path.sh").read_text()
+    assert 'refuse() { echo "[mma] REFUSED: $*" >&2; exit "$EXIT_REFUSED"; }' in mma
+    assert 'exit "$EXIT_REFUSED"' in mma.split("--dry-run scored no gate", 1)[1][:400]
+    cli = (ROOT / "moe" / "bench" / "cli.py").read_text()
+    assert "rc = EC.classify(scored)" in cli
+    route = (ROOT / "scripts" / "dram_counter_route.py").read_text()
+    # The route used to spell its own two codes; since the gates slice it
+    # exits through the table over the same Gate objects that print its lines.
+    assert "exit_codes.classify(" in route
+    assert "return exit_codes.REFUSED if verdict == REFUSE else exit_codes.DONE" not in route
+
+
+def test_the_alias_booking_gap_survives_only_as_closed_history():
+    """prose.md items 1 and 34. The 11.6-versus-13.0 gap was closed at
+    00f3324; a heading in the alias arm's own body comment still stated it as
+    current ("UNDER-BOOKS ITSELF BY 1.4 MINUTES") over a paragraph that said it
+    was closed. Every remaining mention of 11.6 in the driver sits within two
+    lines of a word that dates it, and the row states the agreement."""
+    assert "UNDER-BOOKS ITSELF BY" not in TEXT
+    assert "reads the difference rather than absorbing it" not in TEXT
+    lines = TEXT.splitlines()
+    hits = [i for i, ln in enumerate(lines) if "11.6" in ln]
+    assert hits, "the history should still be told"
+    for i in hits:
+        window = " ".join(lines[max(0, i - 2): i + 3])
+        assert re.search(r"[Uu]ntil|used to|closed", window), lines[i]
+    basis = lift("arm_basis alias_ablation", REPO=str(ROOT)).stdout
+    assert "the two agree" in basis and "the gap is closed" in basis
+    assert "NO LONGER\n# UNDER-BOOKS ITSELF" in TEXT
+
+
+# --------------------------------------------------------------------------
+# 18. the fifteenth instance: the LEVEL side, and the four fixes beside it
+# --------------------------------------------------------------------------
+
+HEADER = "arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+
+
+def session_rc_of(tmp_path, rows: str, retry: int = 0) -> str:
+    ledger = tmp_path / f"L{abs(hash(rows)) % 10**8}.tsv"
+    ledger.write_text(HEADER + rows)
+    got = lift(f"session_rc {ledger} {retry}", REPO=str(ROOT), RC_INVALID=3, RC_RETRY=4)
+    assert got.returncode == 0, got.stderr
+    return got.stdout.strip()
+
+
+def test_the_session_exits_invalid_over_any_unknown_row_not_only_a_defect(tmp_path):
+    """F10. The session's closing exit code reached INVALID only through
+    `defect_rows`, whose awk selected UNKNOWN rows whose note begins DEFECT:.
+    An UNEARNED DONE (exit 0, no RESULT line: the case the second opinion was
+    written to demote), an exit 1 from a non-adopting file, a log the second
+    opinion could not read: each left the pod session at exit 0, the runbook's
+    next line was the exfil tar, and nothing machine-readable said an arm was
+    still owed. The rule is one lifted function over the ledger now, planted in
+    every direction: any UNKNOWN row is 3, a crash with no UNKNOWN row is 4,
+    a clean ledger is 0, and last row per arm wins."""
+    assert re.search(r"^RC_INVALID=3$", TEXT, re.M) and re.search(r"^RC_RETRY=4$", TEXT, re.M)
+    done = "calibrate\tDONE\t0\t9\t1\t/a.log\tlog agrees: RESULT lines imply 0\n"
+    unearned = ("dtype\tUNKNOWN\t0\t9\t0\t/c.log\tUNEARNED DONE: exit 0 with no RESULT "
+                "line. A check that examined nothing reports no failures. NOT latched.\n")
+    assert session_rc_of(tmp_path, done + unearned) == "3"
+    assert session_rc_of(tmp_path,
+                         done + f"cap_test\tUNKNOWN\t0\t9\t0\t/a.log\t{defect(0, 1)}.\n") == "3"
+    assert session_rc_of(tmp_path, done + "ruler\tUNKNOWN\t1\t9\t0\t/b.log\texit 1 with no "
+                         "RESULT line from a file that has not adopted moe/bench/exit_codes, "
+                         "where 1 is three things at once. NOT latched.\n") == "3"
+    assert session_rc_of(tmp_path, done + "span\tUNKNOWN\t3\t9\t0\t/d.log\tUNEARNED INVALID: "
+                         "exit 3 with no RESULT line. NOT latched.\n") == "3"
+    assert session_rc_of(tmp_path, done + "occupancy\tUNKNOWN\t0\t9\t0\t/e.log\tSECOND "
+                         "OPINION UNAVAILABLE: exit 0, but classify_text could not run.\n") == "3"
+    # an UNKNOWN row takes precedence over a crash count, and a crash alone is 4
+    assert session_rc_of(tmp_path, done + unearned, retry=2) == "3"
+    assert session_rc_of(tmp_path, done, retry=1) == "4"
+    assert session_rc_of(tmp_path, done) == "0"
+    # CLAIM_FAIL, INVALID and REFUSED are results or free, never owed
+    assert session_rc_of(tmp_path, done + "ruler\tCLAIM_FAIL\t1\t9\t0\t/b.log\tlog agrees\n"
+                         "span\tREFUSED\t2\t0\t0\t/d.log\t\n"
+                         "bm128_depth\tINVALID\t3\t9\t0\t/f.log\tlog agrees\n") == "0"
+    # last row per arm wins: an owed arm that a resume re-ran cleanly is paid
+    paid = done + unearned + "dtype\tDONE\t0\t9\t0\t/c.log\tlog agrees: RESULT lines imply 0\n"
+    assert session_rc_of(tmp_path, paid) == "0"
+    # the constants are read, not defaulted: a lift that forgets them fails
+    ledger = tmp_path / "unbound.tsv"
+    ledger.write_text(HEADER + done + unearned)
+    bare = lift(f"session_rc {ledger} 0", REPO=str(ROOT))
+    assert bare.returncode != 0 and "RC_INVALID" in bare.stderr, bare
+
+
+def test_the_owed_rows_are_printed_under_their_own_heading_by_the_shipped_tail():
+    tail = CODE.split('OWED="$(owed_rows "$LEDGER")"', 1)[1]
+    assert 'if [[ -n "$OWED" ]]; then' in tail
+    assert ("STILL OWED: UNKNOWN, not latched, not a result. --resume-latest re-attempts them"
+            in TEXT)
+    assert "re-attempts every one. The session exits INVALID over these rows" in TEXT
+
+
+def calibrate_stub(repo: Path, body: str) -> Path:
+    (repo / "scripts").mkdir(parents=True, exist_ok=True)
+    yaml = repo / "moe" / "bench" / "hardware" / "measured_testcard.yaml"
+    yaml.parent.mkdir(parents=True, exist_ok=True)
+    plant_exit_codes(repo)
+    fake = repo / "scripts" / "calibrate_hardware.py"
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -uo pipefail\n"
+        f'printf "name: T\\nprovenance:\\n  utc: \'$(date -u '
+        '+%Y-%m-%dT%H:%M:%S)+00:00\'\\n" > '
+        f'"{yaml}"\n'
+        f'echo "[calibrate] PUBLISHED to {yaml}"\n'
+        + body)
+    return fake
+
+
+def test_the_calibration_refusal_prints_the_ledger_note_for_an_unknown_row(tmp_path):
+    """F5, PROVED THROUGH `arm()`. A calibrate that publishes a fresh yaml,
+    prints `RESULT: VALIDITY clock_established FAIL` and exits 0 lands UNKNOWN
+    with a DEFECT note (page and exit code disagree), and the gate correctly
+    refuses. Until 2026-09-08 the refusal then said "It exited 1 from a file
+    this driver could not confirm speaks moe/bench/exit_codes" -- rc was 0 and
+    calibrate_hardware.py adopts -- and sent the operator to the wrong cause
+    at minute 3. The note on the row is printed instead, the way summarize_arm
+    already does."""
+    repo = tmp_path / "repo"
+    fake = calibrate_stub(
+        repo, "echo 'RESULT: VALIDITY clock_established FAIL samples disagree with the plateau'\n"
+              "exit 0\n")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text(HEADER)
+    yaml = repo / "moe" / "bench" / "hardware" / "measured_testcard.yaml"
+    got = lift('SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"\n'
+               f'arm calibrate bash {fake} --publish >/dev/null\n'
+               'ROW="$(ledger_arm_state calibrate)"\n'
+               f'STATE="$(calibration_state {yaml} "$SESSION_SINCE")"\n'
+               'V="$(calibration_verdict "$ROW" "$STATE")"; echo "verdict=$V"\n'
+               f'calibration_refusal "$V" testcard {yaml} "$STATE"',
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    assert "verdict=ARM UNKNOWN" in got.stdout, got.stdout
+    assert "The ledger note says why:" in got.stdout
+    assert ("DEFECT: the process exited 0 DONE but its RESULT lines imply 3 INVALID"
+            in got.stdout), got.stdout
+    assert "could not confirm speaks" not in got.stdout, "the stale one-reason paraphrase"
+    assert "It exited 1" not in got.stdout
+    # The other direction: a different UNKNOWN reason prints THAT note, and a
+    # row with no note says so rather than inventing one.
+    ledger.write_text(HEADER + "calibrate\tUNKNOWN\t0\t9\t1\t/a.log\tUNEARNED DONE: exit 0 "
+                      "with no RESULT line. NOT latched.\n")
+    got = lift(f'calibration_refusal "ARM UNKNOWN" testcard {yaml} PUBLISHED',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "UNEARNED DONE: exit 0 with no RESULT line" in got.stdout, got.stdout
+    ledger.write_text(HEADER + "calibrate\tUNKNOWN\t0\t9\t1\t/a.log\t\n")
+    got = lift(f'calibration_refusal "ARM UNKNOWN" testcard {yaml} PUBLISHED',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "(the reason was not recorded on the row)" in got.stdout, got.stdout
+
+
+def test_the_contract_caveat_reads_the_rows_exit_code_and_note_rather_than_typing_1(tmp_path):
+    """The second call site of F5: the CLAIM_FAIL|UNKNOWN caveat said "The
+    command exited 1" for a state that can be reached at 0 and 3."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "scripts" / "check_mma_path.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text(HEADER + "mma_switch\tUNKNOWN\t3\t9\t0\t/m.log\tUNEARNED INVALID: exit 3 "
+                      "with no RESULT line. NOT latched.\n")
+    got = lift("contract_caveat mma_switch UNKNOWN", REPO=str(repo), LEDGER=str(ledger))
+    assert "The command exited 3; the ledger note reads: UNEARNED INVALID" in got.stdout, got.stdout
+    assert "The command exited 1." not in got.stdout
+
+
+def planted_ruler(directory: Path, clock: dict) -> Path:
+    """A calibration yaml `roofline.load_hardware` accepts, carrying `clock`
+    under `detail`, so `reference_clock` grades it the way it grades the real
+    ones."""
+    import yaml as _yaml
+    doc = {"name": "testcard (measured)", "verified": True, "source": "planted",
+           "memory": {"bandwidth_tb_s": 4.0},
+           "compute_dense_tflops": {"bf16": 700.0},
+           "detail": {"gpu_name": "testcard", **clock}}
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "measured_testcard.yaml"
+    path.write_text(_yaml.safe_dump(doc))
+    return path
+
+
+def grade_of(directory: Path) -> list[str]:
+    got = lift(f"reference_grade testcard {directory}", REPO=str(ROOT), PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    return got.stdout.strip().split("|", 3)
+
+
+def test_the_reference_grade_gate_passes_an_under_load_ruler_and_refuses_the_rest(tmp_path):
+    """F4, THE DRIVER'S HALF. The calibration gate asked WHEN the yaml was
+    written and whether arm 0 stood behind it, never what KIND of clock it
+    carries. roofline.reference_clock grades the field it read, and only the
+    under-load median may rescale the roof per row; against an idle scalar the
+    driver refuses roof_at_cell_clock on every row and LEVEL is provisional,
+    so nothing normalised by the clock is quotable, and no driver gate said
+    so. Every grade is planted here, and the committed ruler is read rather
+    than described: until 2026-09-09 this test asserted that the H200's own
+    yaml was the REFUSED shape (idle-scalar, 1515 MHz), which was true of the
+    2026-09-02 calibration and false the moment the 2026-09-09 one landed
+    carrying `detail.gemm_clock.median_mhz`. The assertion is now that the
+    committed ruler's grade agrees with what the file holds, whichever way
+    that falls."""
+    grade, mhz, usable, source = grade_of(
+        tmp_path / "under" if planted_ruler(tmp_path / "under",
+                                            {"gemm_clock": {"median_mhz": 1470}}) else None)
+    assert (grade, mhz, usable) == ("under-load", "1470", "True"), (grade, mhz, usable, source)
+    assert "median of the samples taken while the calibration" in source
+    planted_ruler(tmp_path / "idle", {"gemm_clock_mhz": 1515})
+    grade, mhz, usable, source = grade_of(tmp_path / "idle")
+    assert (grade, mhz, usable) == ("idle-scalar", "1515", "False"), (grade, mhz, usable)
+    assert "DISOWNED" in source
+    planted_ruler(tmp_path / "settle", {"settle": {"final_mhz": 1470}})
+    grade, mhz, usable, _ = grade_of(tmp_path / "settle")
+    assert (grade, usable) == ("settle-plateau", "False"), (grade, mhz, usable)
+    planted_ruler(tmp_path / "none", {})
+    grade, mhz, usable, _ = grade_of(tmp_path / "none")
+    assert (grade, mhz, usable) == ("NONE", "0", "False")
+    (tmp_path / "empty").mkdir()
+    grade, mhz, usable, source = grade_of(tmp_path / "empty")
+    assert (grade, usable) == ("NONE", "False") and "no calibration for" in source
+    # The committed H200 ruler, graded against what the file actually carries.
+    # An under-load median is the one usable shape and the 2026-09-09
+    # calibration carries one (1485 MHz, the clock its dense GEMM held); the
+    # 2026-09-02 one carried only the idle scalar and was refused.
+    import yaml as _yaml
+    committed = _yaml.safe_load(
+        (ROOT / "moe" / "bench" / "hardware" / "measured_nvidia_h200.yaml").read_text())
+    detail = committed.get("detail") or {}
+    got = lift(f"reference_grade nvidia_h200 {ROOT / 'moe' / 'bench' / 'hardware'}",
+               REPO=str(ROOT), PY_BASE=sys.executable).stdout.strip().split("|", 3)
+    if (detail.get("gemm_clock") or {}).get("median_mhz"):
+        expect = ("under-load",
+                  str(int(detail["gemm_clock"]["median_mhz"])), "True")
+    elif detail.get("gemm_clock_mhz"):
+        expect = ("idle-scalar", str(int(detail["gemm_clock_mhz"])), "False")
+    else:
+        expect = ("settle-plateau", got[1], "False")
+    assert tuple(got[:3]) == expect, (got, expect)
+    # And the refusal says the consequence in the words that matter.
+    refusal = lift('reference_grade_refusal testcard /x/measured_testcard.yaml idle-scalar 1515 '
+                   '"detail.gemm_clock_mhz = 1515 MHz, DISOWNED"',
+                   REPO=str(ROOT), LOGS="/x/logs", LEDGER="/x/ARMS.tsv",
+                   PY_BASE=sys.executable).stdout
+    assert refusal.startswith(
+        "REFUSED: the ruler for testcard carries no clock the roof can be rescaled against")
+    assert "NOTHING NORMALISED BY THE CLOCK IS QUOTABLE" in refusal
+    assert "usable_for_roof False" in refusal and "grade 'idle-scalar'" in refusal
+    assert "calibrate_hardware.py --publish" in refusal
+
+
+def test_the_reference_grade_gate_is_wired_after_the_calibration_gate_and_refuses():
+    gate = CODE.split('scripts/calibrate_hardware.py" --publish', 1)[1].split("\nsay ", 1)[0]
+    after = gate.split('calibration_refusal "$CALIB_VERDICT"', 1)[1]
+    assert 'GRADE_LINE="$(reference_grade "$CARD" "$(dirname "$CALIB_YAML")")"' in after
+    assert '[[ "${GRADE_USABLE:-}" == "True" ]]' in after
+    branch = after.split("reference_grade_refusal", 1)[1]
+    assert 'exit "$RC_REFUSED"' in branch.split("fi", 1)[0]
+    # The PASS branch tells the operator which column and which side to read.
+    assert "pct_of_roof_at_cell_clock beside pct_of_achieved_tflops" in TEXT
+    assert "read clock_level_side on every LEVEL failure" in TEXT
+    # The rule, in the words the instrument applies it in. Until 2026-09-09
+    # this line said "only LOW or DRIFT excludes", which on this card excluded
+    # the two tiles the study is about.
+    assert "ONLY DRIFT EXCLUDES A ROW, since 2026-09-09" in TEXT
+    assert "only LOW or DRIFT excludes" not in TEXT
+
+
+#: What each KERNEL plan prints its figure as, in its own words. Three shapes,
+#: because three scripts print three sentences; a fourth shape is a test
+#: failure, not a fourth pattern added quietly.
+PLAN_SECONDS = (r"estimate\s+(\d+) s of GPU", r"estimated GPU time (\d+) s",
+                r"(\d+) s of timed kernel", r"Estimated KERNEL time (\d+) s")
+
+#: The line a plan run at a duty below 1 prints BESIDE its kernel figure, added
+#: 2026-09-22 when the private-weight reference moved to --duty 0.25. Not a
+#: fifth shape of the kernel figure: a second figure, the wall clock of the
+#: ladder's kernel time once the idle gaps are in it. Where a plan prints it the
+#: booking is the kernel figure with the ladder's kernel time swapped for that
+#: wall time, because the gaps are the experiment and the pod pays for them.
+PLAN_DUTY_WALL = (r"WALL CLOCK at duty [\d.]+: the ladder's (\d+) s of kernel "
+                  r"time takes about (\d+) s")
+
+
+def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(gaps_dry):
+    """F6. dtype was booked 6 KERNEL minutes "from ... 315 s of timed kernel"
+    while its plan, run exactly as this driver runs it, prints 454 s (7.6
+    min): d789b5f charged the warmup as time and the driver's three copies of
+    the old figure were not updated, and no test pinned arm_minutes to the
+    figure its plan prints. Every KERNEL booking is now read off the plan the
+    dry run itself produced and must be that figure's ceiling in minutes."""
+    session, got = gaps_dry
+    assert got.returncode == 0, got.stdout[-3000:]
+    at_duty = []
+    for name in KERNEL_ARMS:
+        plan = (session / "logs" / f"{name}.log").read_text()
+        hits = [m for pat in PLAN_SECONDS for m in re.finditer(pat, plan)]
+        assert len(hits) == 1, (name, [h.group(0) for h in hits])
+        seconds = int(hits[0].group(1))
+        basis = lift(f"arm_basis {shlex.quote(name)}", REPO=str(ROOT)).stdout
+        assert str(seconds) in basis, (name, seconds)
+        # A DUTY-CYCLED PLAN IS BOOKED ON ITS WALL LINE. At most one such line
+        # per plan, and the ladder's kernel time it names must be inside the
+        # kernel figure, or the swap below would be arithmetic over two plans.
+        walls = list(re.finditer(PLAN_DUTY_WALL, plan))
+        assert len(walls) <= 1, (name, [w.group(0) for w in walls])
+        if walls:
+            ladder, wall = int(walls[0].group(1)), int(walls[0].group(2))
+            assert ladder <= seconds < seconds - ladder + wall, (name, ladder, wall)
+            seconds = seconds - ladder + wall
+            assert str(wall) in basis, (name, wall)
+            at_duty.append(name)
+        booked = int(lift(f"arm_minutes {shlex.quote(name)}", REPO=str(ROOT)).stdout.strip())
+        assert booked == math.ceil(seconds / 60), (name, seconds, booked)
+    # The one arm the driver runs at a duty below 1 is the one priced that way.
+    assert at_duty == ["private-mixtral-bm32"], at_duty
+    assert lift("arm_minutes dtype", REPO=str(ROOT)).stdout.strip() == "8"
+    assert "454 s of timed kernel" in (session / "logs" / "dtype.log").read_text()
+    # The retired figure survives only on lines that retract it.
+    for line in TEXT.splitlines():
+        if "315 s" in line:
+            assert "until d789b5f" in line, line
+
+
+def test_the_production_arms_no_longer_promise_a_confirmation_no_card_can_give(gaps_dry):
+    """F7. `--list` still explained the BLOCK_N=256 refusal by its OLD reason
+    (256 registers per thread against 255 at 8 warps; 256 KiB of shared memory
+    against 227 at 16), said "one fix unblocks both", and the closing summary
+    told the operator to read "the only arm here that can CONFIRM". The script
+    itself says REFUSED AT EVERY WARP AND STAGE COUNT, 65536 of 65536 registers
+    per block, NO BLOCK_SIZE_N confirms the headline on sm_90; the same command
+    with --num-warps 16 --num-stages 3 also exits 2. The plan the owner books
+    against may not promise a confirmation no reachable hardware can give."""
+    listing = run(["--list"]).stdout
+    assert not re.search(r"one fix unblocks|255 at 8 warps", listing)
+    assert "NO ARM CAN CONFIRM IT ON sm_90" in listing
+    assert "NO BLOCK_SIZE_N confirms the headline on this card" in listing
+    assert "REFUSES AT EVERY WARP AND STAGE COUNT" in listing
+    assert "65536 of 65536 registers per block" in listing
+    assert "there is no fix on sm_90 that unblocks either" in listing
+    assert "the only arm that can confirm it" not in listing
+    body = gaps_dry[1].stdout
+    block = body.split("READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
+    assert "only arm here that can CONFIRM" not in block
+    assert "CANNOT be confirmed on sm_90" in block
+    assert "the paper has no confirming arm" in block
+    # The header comments carry the same correction, and the retired reason
+    # survives only on a line that retracts it.
+    for line in TEXT.splitlines():
+        if "255 at 8 warps" in line or "one fix unblocks" in line:
+            assert "RETRACTED" in line, line
+    assert "which can confirm." not in TEXT
+    assert "no BLOCK_SIZE_N confirms the headline on this card" in TEXT
+
+
+def test_the_help_and_the_closes_text_agree_on_what_the_counter_probe_exits():
+    """F7, the other contradiction. --help said dram_counter_route.py exits DONE
+    on BLOCKED and prints no RESULT line, so its exit 0 is UNEARNED; arm_closes
+    said since 2026-09-03 it scores one gate per verdict and OPEN and BLOCKED
+    land as the words the table gives them. Two surfaces in one file, one of
+    them describing retracted behaviour, and --help is the one an operator
+    reads first."""
+    help_text = run(["--help"]).stdout
+    assert "What it still does not do is print a RESULT line" not in help_text
+    assert "its exit 0 is an UNEARNED DONE" not in help_text
+    assert "OPEN lands DONE, BLOCKED lands CLAIM_FAIL" in help_text
+    assert "exits 2 with no RESULT line and is re-attempted on every" in help_text
+    # AND THE LATCH SENTENCE AGREES WITH `arm()`. --help said BLOCKED was
+    # "LATCHED as the answer" after counter_plan joined `never_latches`, which
+    # is the same shape of contradiction one paragraph down: a surface an
+    # operator reads first describing behaviour the code no longer has.
+    assert "never_latches" in help_text
+    assert "LATCHED as the answer" not in help_text
+    assert "never_latches" in lift("arm_closes counter_plan", REPO=str(ROOT)).stdout
+    caveat = CODE.split("contract_caveat() {", 1)[1].split("\n}\n", 1)[0]
+    assert "it exits DONE on BLOCKED" not in caveat
+    assert "OPEN DONE" in caveat and "BLOCKED CLAIM_FAIL" in caveat
+
+
+def test_the_mma_arm_runs_under_the_drivers_vllm_interpreter():
+    """F9. check_mma_path.sh chooses its interpreter from MOE_PYTHON or
+    /workspace/venvs/vllm/bin/python, and the driver resolved PY_VLLM with
+    fallbacks for every vLLM arm but this one: off a GPU the MMA arm refused
+    on a missing /workspace path while every other arm refused on CUDA, and on
+    a pod with PY_VLLM overridden it compiled under a different interpreter
+    from the pin probes it is read beside."""
+    words = measuring_invocation("mma_switch")
+    assert words[:2] == ["arm", "mma_switch"], words
+    assert words[2:5] == ["env", "MOE_PYTHON=$PY_VLLM", "bash"], words
+    assert any(w.endswith("scripts/check_mma_path.sh") for w in words), words
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    dry = [ln for ln in joined.splitlines()
+           if re.match(r"\s*arm mma_switch\s", ln) and "--dry-run" in ln]
+    assert len(dry) == 1 and 'env MOE_PYTHON="$PY_VLLM" bash' in dry[0], dry
+
+
+def test_the_empty_stage_array_is_guarded_for_bash_3():
+    """F9's second half. `STAGES=()` followed by `"${STAGES[@]}"` is "unbound
+    variable" under set -u on bash before 4.4 and would end the session at
+    bn_g16. Both directions are executed on this machine's /bin/bash, which is
+    3.2: the guard expands to nothing, the bare form dies."""
+    assert '${STAGES[@]+"${STAGES[@]}"}' in CODE
+    assert '"${STAGES[@]}"' not in CODE.replace('${STAGES[@]+"${STAGES[@]}"}', "")
+    guarded = _spawn(
+        ["/bin/bash", "-uc", 'STAGES=(); printf "[%s]" a ${STAGES[@]+"${STAGES[@]}"} b'],
+        capture_output=True, text=True)
+    assert guarded.returncode == 0 and guarded.stdout == "[a][b]", guarded
+    filled = _spawn(
+        ["/bin/bash", "-uc",
+         'STAGES=(--num-stages 3); printf "[%s]" a ${STAGES[@]+"${STAGES[@]}"} b'],
+        capture_output=True, text=True)
+    assert filled.stdout == "[a][--num-stages][3][b]", filled
+    version = _spawn(["/bin/bash", "-c", 'echo "${BASH_VERSINFO[0]}"'],
+                             capture_output=True, text=True).stdout.strip()
+    if version and int(version) < 4:
+        bare = _spawn(["/bin/bash", "-uc", 'STAGES=(); printf "[%s]" a "${STAGES[@]}" b'],
+                              capture_output=True, text=True)
+        assert bare.returncode != 0 and "unbound variable" in bare.stderr, bare
+
+
+# --------------------------------------------------------------------------
+# 22. what the 2026-09-09 session changed: the arm lines, the clock probe, the
+#     rerun booking, and the two sentences that named the wrong gate
+# --------------------------------------------------------------------------
+
+def test_the_cap_test_arm_carries_the_r_max_that_makes_its_own_v1_satisfiable():
+    """THE ARM THAT WAS UNSATISFIABLE FROM ITS PLAN PAGE. `tile_cap_test.py`
+    takes `r_max` from `depth.rows` when it is not given one; on the H200 band
+    that is 688, 688 % 32 = 16 so the grid stops at 672, and the grid then holds
+    two exactly-full BLOCK_M=256 stacks against V1's requirement of three
+    aligned treads per tile. The 2026-09-09 run printed "BM=256:2" on its plan
+    page and spent 141 s to fail V1.
+
+    Both branches carried --r-max 1024 from 2026-09-09 until now, and that is
+    the value the script's own plan-time V4 check REFUSES: it wants a 132-tile
+    BLOCK_M=16 stack, 1024 gives 66, and the plan prints "raise --r-max to at
+    least 2112" and no cost line at all. They carry 2112, the printed minimum,
+    because r_max is in the grid, the cost and the run id."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm cap_test\s", ln)]
+    assert len(lines) == 2, lines
+    for ln in lines:
+        assert "--r-max 2112" in ln, ln
+    measuring = [ln for ln in lines if "--dry-run" not in ln]
+    assert len(measuring) == 1 and "--fail-on-gate" in measuring[0], measuring
+    # And the booking is the figure that plan prints, not the one it replaced.
+    assert lift("arm_minutes cap_test", REPO=str(ROOT)).stdout.strip() == "5"
+    basis = lift("arm_basis cap_test", REPO=str(ROOT)).stdout
+    assert "--r-max 2112" in basis and "242 s" in basis, basis
+    assert "688" in basis, "the row does not say what the default did"
+    assert "143 s" in basis and "2026-09-09" in basis, (
+        "the row does not retract the 1024 booking it replaced")
+
+
+def test_the_alias_arm_refuses_at_the_probe_rather_than_buying_a_bound_twice():
+    """--dot-fallback refuse on all three branches, and the dot lower bound
+    named as the separate booking it is. The allow branch was bought on
+    2026-09-09: 308 s, P1 UNKNOWN at alpha >= 0.229, latched INVALID (rc 3,
+    four validity gates failed after measuring)."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm alias_ablation\s", ln)]
+    assert len(lines) == 3, lines
+    for ln in lines:
+        assert "--dot-fallback refuse" in ln, ln
+    closes = " ".join(lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout.split())
+    for needle in ("--cell-budget-ms 200", "--replicates 18", "33.4 WALL min",
+                   "5500 GB/s", "6151"):
+        assert needle in closes, needle
+
+
+def test_the_depth_arm_books_r_max_and_leaves_the_partner_to_the_script():
+    """Without a small tile in the SWEPT set the arm's own non-vacuity floor is
+    0.838 of the roof and no BLOCK_M=256 ladder in the corpus reaches it, so the
+    arm refuses its own reference on every card and under every clock rule: it
+    is pre-registered INVALID, which is what 292 s bought on 2026-09-09.
+
+    The partner that fixes that is UNCONDITIONAL in `scripts/bm128_depth.py`
+    (`SMALL_TILE_BLOCK_M`, in `BLOCK_SIZES`) and there is no flag for it. Both
+    arm lines carried `--partner-block-m 32` until now, which argparse rejects,
+    so this asserts the flag is gone from both and that the driver still says
+    where the partner actually lives. `--r-max` IS a flag and is still on both
+    lines, because it is in the grid, the cost and the run id."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm bm128_depth\s", ln)]
+    assert len(lines) == 2, lines
+    for ln in lines:
+        assert "--partner-block-m" not in ln, ln
+        assert "--r-max 2048" in ln, ln
+    # And the reason is on the page rather than in a commit message.
+    assert "THE BM=32 PARTNER IS NOT A FLAG" in TEXT
+    unpriced = lift("arm_unpriced bm128_depth", REPO=str(ROOT)).stdout
+    assert "BM=32 scaling partner" in unpriced, unpriced
+    assert "is not a flag" in unpriced, unpriced
+
+
+def test_the_clock_probe_checks_what_it_says_and_survives_pipefail():
+    """IT PRINTED THE OPPOSITE OF WHAT IT MEASURED. `nvidia-smi -q -d CLOCK |
+    grep -q ...` under `set -o pipefail` returns 141 on a MATCH, because grep
+    exits at the first hit and nvidia-smi takes SIGPIPE writing the rest: on
+    2026-09-09 the session reported "does NOT report clocks" on a pod where the
+    query reports four. And it probed the wrong reader: every LEVEL and DRIFT
+    verdict comes from `torch.cuda.clock_rate()` in the arm's own interpreter,
+    not from nvidia-smi. The shipped matcher is lifted and run over a large
+    planted query, and the pipeline version is re-planted beside it to show the
+    two disagree."""
+    matcher = re.search(r'if \[\[ "\$SMI_CLOCK_Q" =~ ([^\n]+) \]\]; then', TEXT)
+    assert matcher, "the clock probe no longer matches with bash's own regex"
+    body = (
+        'set -uo pipefail\n'
+        'big() { for i in $(seq 1 5000); do '
+        'echo "        Graphics                          : 1980 MHz"; done; }\n'
+        'SMI_CLOCK_Q="$(big)"\n'
+        f'if [[ "$SMI_CLOCK_Q" =~ {matcher.group(1)} ]]; then echo SHIPPED_OK; '
+        'else echo SHIPPED_MISSED; fi\n'
+        'if big | grep -qE "Graphics[[:space:]]*:[[:space:]]*[0-9]+ MHz"; '
+        'then echo PIPE_OK; else echo "PIPE_MISSED $?"; fi\n')
+    done = _spawn(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=120)
+    assert "SHIPPED_OK" in done.stdout, done.stdout
+    assert "PIPE_MISSED 141" in done.stdout, (
+        "the pipefail artefact no longer reproduces; if bash changed, the "
+        "shipped probe must still be the one that does not use a pipeline")
+    # No pipeline in the shipped probe, and the reader the arms use is asked.
+    probe = TEXT.split("# CLOCK VISIBILITY")[1].split("# The session and results root")[0]
+    assert "nvidia-smi -q -d CLOCK 2>/dev/null | grep" not in probe
+    assert "torch.cuda.clock_rate()" in probe
+    assert "$PY_VLLM" in probe, "the probe asks an interpreter no arm runs"
+
+
+def test_the_next_session_booking_names_new_and_a_state_per_arm():
+    """AN INVALID ROW IS LATCHED AND NO RESUME RE-RUNS IT, so a session that
+    landed INVALID arms resumes into nothing. The closing summary prints the
+    --new command and what each arm is expected to reach, priced through the
+    same `arm_minutes` and `arm_clock` as the cost table so a re-booked arm
+    moves it by itself.
+
+    THE ARM LIST IS READ OFF `rerun_arms` AND IS NOT COPIED HERE. Until
+    2026-09-10 it was the literal 2026-09-09 set, so this test failed the day
+    the booking was updated for the session that had actually run, which is a
+    second copy of the driver's list kept in the test file and is the defect
+    this repository keeps meeting. WHICH arms belong in the set is asserted on
+    the 2026-09-10 ledger's own evidence in
+    `test_the_next_session_books_the_arms_the_2026_09_10_ledger_left`; this
+    test asserts the SHAPE of the block."""
+    arms = lift("rerun_arms", REPO=str(ROOT)).stdout.split()
+    assert arms, "the rerun set is empty"
+    out = lift("next_session_booking", REPO=str(ROOT)).stdout
+    assert "--new" in out and "--only " + ",".join(arms) in out, out
+    priced, bound = lift(f"session_bound {' '.join(arms)}",
+                         REPO=str(ROOT)).stdout.split()
+    assert f"~{priced} priced / ~{bound} bounded minutes" in out, (out, priced)
+    for arm in arms:
+        expectation = lift(f"rerun_expectation {shlex.quote(arm)}",
+                           REPO=str(ROOT)).stdout.strip()
+        assert expectation, arm
+        assert expectation in " ".join(out.split()), arm
+    # An arm expected to exit 1 is named as a RESULT, not as a failure.
+    assert "CLAIM_FAIL" in out and "is a RESULT" in out
+    assert "re-runs no INVALID and no CLAIM_FAIL row" in out
+
+
+def test_the_commit_advice_names_the_ruler_gate_that_exists_and_its_polarity():
+    """TWO THINGS WRONG IN ONE SENTENCE. It said "arm 9 (ruler) P1 FAILED" and
+    `ruler_rebaseline.py` scores V1-V3 and C1-C5 with no P1 at all, so the
+    operator was sent to a gate that is not on the page; and it read the verdict
+    backwards. C1 is "the GEMM clock was sampled in the wrong state", gated
+    above a 5% post-hoc-versus-under-load delta, so a PASS is the arm
+    sustaining the charge and a FAIL is the designed null. On 2026-09-09 C1
+    read FAIL at a measured delta of 0.0%, which is the state in which the
+    calibration is committable."""
+    ruler = (ROOT / "scripts" / "ruler_rebaseline.py").read_text()
+    assert "P1" not in re.sub(r"P1[0-9]", "", ruler), "ruler now has a P1 gate"
+    body = TEXT.split("WHAT TO COMMIT, AND WHAT NOT TO")[1]
+    assert "arm 9 (ruler) C1 PASSED" in body, body[:1500]
+    assert "P1 FAILED" not in body
+    assert "a C1 FAIL is the designed null" in " ".join(body.split()).lower() or \
+        "A C1 FAIL is the designed null" in " ".join(body.split()), body[:1500]
+
+
+def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(gaps_dry):
+    """The latch is right and the advice around it was not: "to resume it" was
+    the only route named, and a resume re-runs no INVALID row."""
+    _, got = gaps_dry
+    flat = " ".join(got.stdout.split())
+    assert "A RESUME RE-RUNS NO INVALID ROW AND NO CLAIM_FAIL ROW" in flat, flat[-3000:]
+    assert "A rerun of those arms on this driver is --new" in flat
+    assert "The next session for those arms" not in flat, "two next sessions in one paragraph"
+
+
+# --------------------------------------------------------------------------
+# 9. the counter arms, and the next session they are booked into
+# --------------------------------------------------------------------------
+
+def test_the_counter_arms_are_gated_on_the_probe_that_costs_fifteen_seconds():
+    """A BLOCKED probe retires 240 minutes. `counter_plan` is about fifteen
+    seconds and answers exactly one question, CAN A COUNTER BE READ on this
+    box, so running either counter arm ahead of it would spend four pod-hours
+    to discover what the probe already knows. It was "ten seconds" and "does
+    ncu attach" until 2026-09-15: attaching is not reading, the probe profiled
+    `/bin/true` and so never attempted a counter, and the two arms below were
+    booked twice on that false OPEN. The order is asserted in
+    `test_the_arms_whose_result_changes_a_later_reading_come_first`; this is
+    the rest of the contract: both counter arms run the same file as the probe,
+    they are the session's largest booking after the noise floor, and each
+    arm's own `closes` text names both verdicts so an operator reading the
+    ledger knows which one licenses the spend.
+
+    ONE GATE, TWO ARMS. The card, the probe check and the runner check are
+    written once in `counter_arm` and both rows go through it, because a gate
+    written twice is where a fix lands on one of two call sites."""
+    for name in ("counter_plan", *COUNTER_ARMS):
+        assert lift(f"arm_script {shlex.quote(name)}", REPO=str(ROOT)).stdout.strip() == \
+            "scripts/dram_counter_route.py", name
+    for name in COUNTER_ARMS:
+        closes = lift(f"arm_closes {shlex.quote(name)}", REPO=str(ROOT)).stdout
+        assert "OPEN" in closes and "BLOCKED" in closes, closes[:200]
+        # And what each verdict MEANS, not just the words.
+        assert "returning a NUMBER for dram__bytes_read.sum" in closes
+        assert "FACT ABOUT THE POD" in closes
+        # The contrast that decides traffic versus time, with both readings
+        # named, and the BLOCK_M it is registered at.
+        assert "TRAFFIC" in closes and "TIME" in closes
+        assert "3.85 GB" in closes and "2.06 GB" in closes
+        assert f"BLOCK_M={COUNTER_BLOCK_M}" in closes
+        # Each row says WHICH half of the pair it is, so a ledger row is not
+        # readable as the whole contrast.
+        assert f"AT BLOCK_N={name.split('-')[1][1:]}" in closes, closes[:200]
+        # And the axis the pair still pins is named rather than left implied.
+        assert "THE AXIS STILL PINNED IS GROUP_SIZE_M" in closes
+    # THE GATE IS CODE, NOT ADVICE. The measuring branch reads the counter_plan
+    # row and skips the arm unless it says DONE. It reads the ledger rather
+    # than the log, and the row it reads is THIS pod's because counter_plan is
+    # in `never_latches` and re-probes on every pass: a counter route is a
+    # property of the pod, and --resume-latest onto a shared /workspace can be
+    # a different pod. Pinned by
+    # `test_counter_plan_is_never_latched_because_a_resume_can_be_on_another_pod`.
+    # It is read out of `counter_arm` rather than out of the say-block, because
+    # the ONE gate function is the thing being asserted.
+    assert "\ncounter_arm() {" in CODE, "the counter gate is no longer one function"
+    body = CODE.split("\ncounter_arm() {", 1)[1].split("\n}", 1)[0]
+    assert 'skip_arm "$name"' in body
+    # Written ONCE: one gate branch, and every counter arm dispatched through
+    # it. A second copy of this branch is the defect this file is built
+    # against, so the count is asserted and not the presence.
+    gate = 'elif [[ "$(ledger_arm_state counter_plan)" != DONE ]]; then'
+    assert body.count(gate) == 1, body
+    assert body.count("--run ") == 1, body
+    dispatch = [ln.split() for ln in CODE.splitlines()
+                if ln.startswith("counter_arm ")]
+    assert [d[1] for d in dispatch] == list(COUNTER_ARMS), dispatch
+    assert [int(d[2]) for d in dispatch] == list(COUNTER_BLOCK_NS), dispatch
+    # And the three verdicts are translated where the operator reads the skip,
+    # so a BLOCKED pod does not read as a broken arm.
+    assert "CLAIM_FAIL is BLOCKED" in body and "REFUSED is no ncu on PATH" in body
+
+
+def test_the_counter_arms_run_the_two_block_n_contrast_they_are_described_as_running():
+    """THE DEFECT THIS PAIR EXISTS TO CLOSE, asserted against the code rather
+    than against the prose.
+
+    Until 2026-09-10 the driver booked ONE arm named `counter` whose measuring
+    line was `dram_counter_route.py --run --card ... --out ...` and passed no
+    `--block-n`, no `--block-m` and no `--group-m`. Those flags default to 64,
+    32 and 16 (`scripts/dram_counter_route.py`), so the arm ran the single
+    pinned cell the 2026-09-10 analysis named as the second of two defects to
+    fix before running, while `arm_closes` in the same file said it ran "at
+    TWO BLOCK_N at fixed BLOCK_M rather than at one" and `arm_basis` said the
+    opposite again, that a second BLOCK_N is a booking the operator makes.
+
+    So this asserts the behaviour: two arms, one BLOCK_M, two BLOCK_N, on
+    BOTH the planning and the measuring branch, and the BLOCK_M is the one the
+    pre-registered discriminator is quoted at."""
+    # THE FLAGS ARE ASSERTED, THE DEFAULTS ARE NOT. Both arguments have a
+    # default in `dram_counter_route.py`, which is why an arm that passes
+    # neither runs a cell nobody chose; what that default IS belongs to that
+    # file's own slice and has already moved once, so pinning its value here
+    # would be this driver asserting another file's booking.
+    src = (ROOT / "scripts" / "dram_counter_route.py").read_text()
+    for flag in ("--block-n", "--block-m"):
+        assert re.search(rf'"{flag}", type=int, default=\d+', src), flag
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    # SCOPED TO `counter_arm`'S OWN BODY, which it was not until the zero-minute
+    # `counter_contrast` arm landed with an `arm "$name"` line of its own and
+    # made a file-wide count read 3 where this test means "this dispatcher's own
+    # two branches". A count over the whole file was never what was meant.
+    dispatcher = joined.split("\ncounter_arm() {", 1)[1].split("\n}", 1)[0]
+    lines = [ln for ln in dispatcher.splitlines()
+             if re.match(r'\s*arm "\$name"\s', ln)]
+    assert len(lines) == 2, lines          # one planning, one measuring
+    planning = [ln for ln in lines if "--dry-run" in ln]
+    measuring = [ln for ln in lines if "--dry-run" not in ln]
+    assert len(planning) == 1 and len(measuring) == 1, lines
+    for ln in lines:
+        words = shlex.split(ln)
+        assert "--block-m" in words, ln
+        assert "--block-n" in words, ln
+        # The BLOCK_M is ONE function read by both branches, by the skip
+        # reason and by the closes text, so a change cannot reach one of them.
+        assert words[words.index("--block-m") + 1] == "$(counter_block_m)", ln
+        assert words[words.index("--block-n") + 1] == "$bn", ln
+    pinned = lift("counter_block_m", REPO=str(ROOT)).stdout.strip()
+    assert int(pinned) == COUNTER_BLOCK_M, pinned
+    # `arm_basis` and `arm_offgpu_gates` print the commands an operator
+    # re-derives the booking and checks the gates with, so they read the same
+    # function: a page that says --block-m 64 while the arm passes something
+    # else advertises a cell nobody runs, which is this file's standing defect
+    # in the form it took on the gate lines of the two bn arms.
+    for reader in ("arm_basis", "arm_offgpu_gates"):
+        for name in COUNTER_ARMS:
+            out = lift(f"{reader} {shlex.quote(name)}", REPO=str(ROOT)).stdout
+            assert f"--block-m {COUNTER_BLOCK_M} " in out, (reader, name)
+    # And there is exactly ONE source for it: no literal anywhere in the file.
+    assert f"--block-m {COUNTER_BLOCK_M}" not in CODE, (
+        "a second copy of the pinned BLOCK_M is written into the driver; "
+        "every reader has to go through counter_block_m")
+    # And the prose quotes that function rather than a second copy of 64.
+    for name in COUNTER_ARMS:
+        closes = lift(f"arm_closes {shlex.quote(name)}", REPO=str(ROOT)).stdout
+        assert f"BLOCK_M={COUNTER_BLOCK_M}" in closes, name
+    body = CODE.split("\ncounter_arm() {", 1)[1].split("\n}", 1)[0]
+    assert "64" not in body, body
+    assert "--run" in shlex.split(measuring[0]), measuring[0]
+    # Each arm writes its own result file: one --out for two arms would have
+    # the second overwrite the first, and the contrast is between the two.
+    out = [w for w in shlex.split(measuring[0]) if w.startswith("$SESSION/")]
+    assert out and "$bn" in out[0], measuring[0]
+
+
+def test_the_counter_arms_refuse_by_name_when_the_runner_they_need_is_absent():
+    """THE 2026-09-09 --partner-block-m DEFECT, not repeated. That flag was
+    written on two `arm` lines of a file that never defined it, so the pod
+    would have spent an argparse exit 2 and filed the arm REFUSED having
+    measured nothing. `dram_counter_route.py` gains `--run` in a separate
+    slice; until it lands, the driver asks the FILE and names the absence
+    instead of discovering it on a rented card.
+
+    `test_no_arm_is_given_a_flag_its_own_script_does_not_define` is the gate
+    that fails while the runner is absent, and it is deliberately not
+    exempted here: this test asserts the driver degrades safely, not that the
+    forward reference is acceptable."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    # The guard greps the very file `arm_script` names, for the argparse
+    # spelling of the flag, and skips the arm by name with a reason. ONE guard
+    # for both arms, because `counter_arm` is one function.
+    rel = lift(f"arm_script {COUNTER_ARMS[0]}", REPO=str(ROOT)).stdout.strip()
+    guard = [ln for ln in joined.splitlines()
+             if "grep -q" in ln and rel in ln and '"--run"' in ln]
+    assert len(guard) == 1, joined[joined.index("counter_arm() {"):][:1500]
+    assert 'skip_arm "$name"' in joined
+    # The skip tells the operator to run BOTH BLOCK_N by hand, because a
+    # recipe run at one of them answers the half either arm answers alone.
+    skip = joined[joined.index("defines no --run:"):][:900]
+    assert "BOTH --block-n 32 and 128" in skip, skip
+
+
+def test_the_counter_arms_are_booked_at_the_figure_their_own_plan_prints():
+    """THE COST TABLE'S RULE, applied to the counter pair, and re-derived
+    rather than transcribed.
+
+    Until 2026-09-10 this test and `arm_basis` both quoted `'12 profiled
+    invocations'` and `'two pod-hours end to end'` off the plan page, and the
+    page stopped printing either when the plan was extended to five cells. A
+    booking whose only support is a sentence that no longer exists is the
+    defect this file was written to catch, so the derivation is done here from
+    the page's own per-invocation rate and from the runner's own defaults:
+
+      one `--run` is one cell at one cache mode, so it is len(DEFAULT_TILES)
+      profiled invocations; the pair is two of those, and the page prices an
+      invocation at 5 minutes.
+
+    The COST block being identical at every BLOCK_N is still true and is still
+    checked, but it no longer carries the booking: the block prices the
+    five-cell extended plan, so it is BLOCK_N-independent for a reason that
+    says nothing about what one cell costs. A BLOCK_N no arm runs is included
+    below to make exactly that point.
+    """
+    import scripts.dram_counter_route as dcr
+    per_run = len(dcr.DEFAULT_TILES)          # one cell, one cache mode
+    pair_invocations = per_run * len(COUNTER_ARMS)
+
+    pages = {}
+    # 64 is on this list and is NOT an arm: it is the control that shows the
+    # COST block does not vary with the cell, which is why it cannot price one.
+    for bn in (*COUNTER_BLOCK_NS, 64):
+        plan = _spawn(
+            [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
+             "--dry-run", "--card", "nvidia_h200",
+             "--block-m", str(COUNTER_BLOCK_M), "--block-n", str(bn)],
+            capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+        assert plan.returncode == 0, plan.stderr[-800:]
+        # What the page prices, in its own words, and what it says the escape
+        # hatch is. Both are the extended plan's figures, not this pair's.
+        # Matched against the page with its wrapping collapsed, because a
+        # sentence that survives a re-wrap is the sentence, and a test that
+        # breaks on one is a test nobody keeps.
+        flat = " ".join(plan.stdout.split())
+        for said in (
+                "5 cells x 6 tile counts x 2 cache modes = 60 profiled invocations",
+                "5.0 GPU-hours for the whole extended plan",
+                "DROP TO 36 INVOCATIONS (3.0 GPU-hours) by running contrast A alone"):
+            assert said in flat, (said, plan.stdout[-1500:])
+        # The cell the plan registers is the cell the arm line pins.
+        assert (f"GROUP_SIZE_M=16 BLOCK_SIZE_N={bn} "
+                f"BLOCK_SIZE_M={COUNTER_BLOCK_M}") in plan.stdout, plan.stdout[:900]
+        pages[bn] = plan.stdout
+
+    def cost_block(page: str) -> str:
+        lines = page.splitlines()
+        i = next(k for k, ln in enumerate(lines) if ln.startswith("COST"))
+        j = i + 1
+        while lines[j].strip():
+            j += 1
+        return "\n".join(lines[i:j + 1]) + "\n"
+
+    blocks = {bn: cost_block(page) for bn, page in pages.items()}
+    assert len(set(blocks.values())) == 1, "the plans no longer price the same"
+    # The rate the derivation below rests on is read off that block, not typed.
+    minutes_each = int(re.search(r"At (\d+) minutes per profiled invocation",
+                                 " ".join(blocks[32].split())).group(1))
+    # Two different run ids, so the two arms cannot land in one directory.
+    ids = {bn: page.splitlines()[0] for bn, page in pages.items()}
+    assert ids[32] != ids[128], ids
+    # The seven lines that differ, and nothing else: the run id, the pinned
+    # line, three corrected-cap rows, the recipe line and the schema's block_n.
+    differing = [a for a, b in zip(pages[32].splitlines(), pages[128].splitlines(),
+                                   strict=True)
+                 if a != b]
+    assert len(differing) == 7, differing
+    # One of the cap rows differs in KIND, not in value, and the driver says so.
+    assert any("REFUSED" in ln for ln in differing), differing
+
+    total = 0
+    for name in COUNTER_ARMS:
+        booked = int(lift(f"arm_minutes {shlex.quote(name)}",
+                          REPO=str(ROOT)).stdout.strip())
+        # Booked ABOVE what the page prices an arm at, never below and never
+        # at it: ncu replay's save and restore of the weight buffers is the one
+        # term in the wall clock this repo has never timed.
+        assert booked >= per_run * minutes_each, (name, booked, per_run, minutes_each)
+        total += booked
+        # A WALL figure: the page charges ncu replay outright rather than
+        # leaving it to a ratio, so nothing about these rows is unpriced.
+        assert lift(f"arm_clock {shlex.quote(name)}",
+                    REPO=str(ROOT)).stdout.strip() == "WALL"
+        assert not lift(f"arm_unpriced {shlex.quote(name)}",
+                        REPO=str(ROOT)).stdout.strip()
+    assert total >= pair_invocations * minutes_each, total
+    # And the row an operator re-derives it from says the same thing.
+    basis = lift(f"arm_basis {shlex.quote(COUNTER_ARMS[0])}", REPO=str(ROOT)).stdout
+    assert f"{pair_invocations} invocations and 1.0 GPU-hour" in basis, basis
+    assert "THAT PAGE PRICES FIVE CELLS AND THIS SESSION BOOKS TWO" in basis, basis
+    for stale in ("12 profiled invocations", "two pod-hours end to end"):
+        assert stale not in "".join(pages.values()), stale
+
+
+def test_the_counter_route_card_is_resolved_once_and_reaches_every_call_site():
+    """THE RECURRING DEFECT, IN THE FORM IT TOOK ON 2026-09-10.
+    `dram_counter_route.py` takes `--card` from a hard default of
+    `nvidia_a100_sxm4_80gb` and never from the attached device, so the probe
+    reported OPEN on an H200 and the plan printed underneath it named an A100
+    and an A100 ridge of 145.81: one page, two machines. The fix is one
+    resolver read by every call site, not a flag added to whichever one was
+    noticed.
+
+    It also has to REFUSE to pass a card the script does not list, because that
+    argument is a closed set and an unlisted slug is an argparse exit 2 on a
+    rented pod."""
+    src = (ROOT / "scripts" / "dram_counter_route.py").read_text()
+    def resolve(card, override=""):
+        return lift("counter_route_card", REPO=str(ROOT), CARD=card,
+                    COUNTER_ROUTE_CARD=override).stdout.strip()
+    # The attached card, where the script names it.
+    assert resolve("nvidia_a100_sxm4_80gb") == "nvidia_a100_sxm4_80gb"
+    assert resolve("nvidia_h200") == "nvidia_h200"
+    # A card it does not list falls back to the labelled hypothetical rather
+    # than being passed through into an argparse failure.
+    assert '"nvidia_b200"' not in src, "update this test: the script now lists b200"
+    assert resolve("nvidia_b200") == "nvidia_h200"
+    assert resolve("nocard") == "nvidia_h200"
+    # And an operator override wins, when it is a card the script lists.
+    assert resolve("nocard", "nvidia_a100_sxm4_80gb") == "nvidia_a100_sxm4_80gb"
+    # EVERY call site reads the one value, and there is exactly one assignment.
+    # FIVE LINES, SEVEN INVOCATIONS since 2026-09-10: arm 13's two branches,
+    # `counter_arm`'s two, which each run for both counter arms, and the
+    # zero-minute contrast, which scores the two payloads they wrote and needs
+    # the same card to read the rate its bandwidth column is against. The count
+    # is of LINES, because `counter_arm` is the thing that stops a card from
+    # reaching one arm and not the other.
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    users = [ln for ln in joined.splitlines() if "COUNTER_PLAN_CARD" in ln]
+    assert sum(1 for ln in users if 'COUNTER_PLAN_CARD="$(counter_route_card)"' in ln) == 1, users
+    assert sum(1 for ln in users if '--card "$COUNTER_PLAN_CARD"' in ln) == 5, users
+    # And NO invocation of that script is left carrying the hard A100 default.
+    # `--probe` takes no card and prints no cell, so it is the one exemption;
+    # the runner guard greps the file rather than running it.
+    bare = [ln for ln in joined.splitlines()
+            if '"$REPO/scripts/dram_counter_route.py"' in ln
+            and "--card" not in ln and "--probe" not in ln
+            and not ln.lstrip().startswith(("elif ", "if ", "#"))]
+    assert bare == [], bare
+
+
+def test_the_next_session_books_the_arms_the_2026_09_10_ledger_left():
+    """THE BLOCK IS A BOOKING, NOT A WISH. Every arm in it is an arm this
+    driver knows, every one has a stated expectation, and the priced and
+    bounded figures come through the same `session_bound` the cost table uses
+    rather than being typed into the prose. The set it replaced was the
+    2026-09-09 one; eight of those eight arms have since been spent, and a
+    rerun list that outlives its session re-books arms that already hold a
+    result."""
+    listed = lift("rerun_arms", REPO=str(ROOT)).stdout.split()
+    assert listed, "the rerun set is empty"
+    for name in listed:
+        assert name in ARMS, name
+        exp = lift(f"rerun_expectation {shlex.quote(name)}",
+                   REPO=str(ROOT)).stdout.strip()
+        assert exp, f"{name} is booked with no expected state"
+    # The arms this round exists for are in it, and the probe is ahead of the
+    # runs it gates. BOTH counter arms are booked: the contrast is between
+    # them, so a set carrying one of the two spends 120 minutes and cannot ask
+    # the question the session is renting the card for.
+    assert "bn_g16" in listed
+    for name in COUNTER_ARMS:
+        assert name in listed, name
+        assert listed.index("counter_plan") < listed.index(name), name
+    # Nothing that already holds a RESULT is re-booked. cap_test and
+    # mma_switch read DONE on 2026-09-10 and bm128_depth, anchor_measure,
+    # anchor_rescore and ruler read CLAIM_FAIL.
+    for done in ("cap_test", "mma_switch", "bm128_depth", "anchor_measure",
+                 "anchor_rescore", "ruler"):
+        assert done not in listed, done
+    printed = lift("next_session_booking", REPO=str(ROOT)).stdout
+    assert f"--only {','.join(listed)}" in printed, printed[:1200]
+    priced, bound = lift(f"session_bound {' '.join(listed)}",
+                         REPO=str(ROOT)).stdout.split()
+    assert f"~{priced} priced / ~{bound} bounded minutes" in printed
+    for name in listed:
+        assert re.search(rf"^    {re.escape(name)}\s+\S", printed, re.M), name
+    # The three arms left OUT are named with the reason, because an absent arm
+    # in a booking reads as an oversight and here it is the decision.
+    for out in ("roofline-n64-g1", "alias_ablation", "noise_floor"):
+        assert out in printed, out
+
+
+def test_bn_g16_is_booked_at_the_plan_its_own_arm_line_prints():
+    """THE THIRD SUBJECT TILE, PRICED BY RE-DERIVATION. The arm went from 36
+    to 46 booked minutes when `--tiles 16,32,64,128` reached both branches,
+    and this runs that exact plan and checks the booking against the seconds
+    it prints. The flag has to be on BOTH branches: a dry branch that previews
+    a different swept set from the one the pod runs prices the wrong arm, and
+    the plan is where the cost table reads its figure."""
+    lines = [ln for ln in re.sub(r"\\\n\s+", " ", CODE).splitlines()
+             if re.match(r"\s*arm bn_g16\s", ln)]
+    assert len(lines) == 2, lines
+    for ln in lines:
+        assert "--tiles 16,32,64,128" in ln, ln
+    plan = _spawn(
+        [sys.executable, str(ROOT / "scripts" / "bn_decomposition.py"),
+         "--dry-run", "--capability", "9.0", "--group-m", "16", "--reps", "17",
+         "--tiles", "16,32,64,128"],
+        capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+    assert plan.returncode == 0, plan.stderr[-800:]
+    seconds = re.search(r"estimate\s+(\d+) s of GPU", plan.stdout)
+    assert seconds, plan.stdout[-1500:]
+    booked = int(lift("arm_minutes bn_g16", REPO=str(ROOT)).stdout.strip())
+    assert booked == -(-int(seconds.group(1)) // 60), (booked, seconds.group(1))
+    # And the swept set really did gain a height that was not there before.
+    assert re.search(r"^  BN=\s*32 BM=\s*16\s", plan.stdout, re.M), plan.stdout[-2000:]
+
+
+# --------------------------------------------------------------------------
+# the thermal gate: arm 0 of arm 0 (2026-09-11)
+# --------------------------------------------------------------------------
+
+#: What the probe's page has to say for the card to be accepted, and every
+#: other word it can say. `thermal_state` reads the C1 RESULT line rather than
+#: the exit code, because the exit code is one integer over four gates and this
+#: gate is about ONE of them: a run that is INVALID on its sampler said nothing
+#: about the card in either direction, and a DONE with no C1 line on the page
+#: is the UNEARNED DONE `second_opinion` already hunts.
+THERMAL_PAGES = (
+    ("RESULT: CLAIM C1 PASS the card holds a clock above its own thermal "
+     "floor: measured 1470 MHz median over the window\n", "HELD"),
+    ("RESULT: CLAIM C1 FAIL the card holds a clock above its own thermal "
+     "floor: measured 345 MHz median over the window\n", "FLOORED"),
+    ("RESULT: CLAIM C1 UNKNOWN the card holds a clock above its own thermal "
+     "floor: measured no usable clock sample\n", "FLOORED"),
+    ("RESULT: VALIDITY V1 FAIL the probe watched a loaded card\n", "UNREADABLE"),
+    ("[thermal] loading this card for 150 s and watching the clock\n",
+     "UNREADABLE"),
+)
+
+
+@pytest.mark.parametrize("page,word", THERMAL_PAGES)
+def test_the_thermal_page_word_is_read_off_the_c1_result_line(tmp_path, page, word):
+    log = tmp_path / "thermal.log"
+    log.write_text(page)
+    got = lift(f'thermal_state {log}', REPO=str(ROOT))
+    assert got.stdout.strip() == word, got.stdout
+
+
+def test_a_thermal_log_that_is_not_there_is_missing_and_not_held(tmp_path):
+    """A row in the ledger over a page that is gone is not an acceptance. The
+    empty-string branch matters too: called with no argument at all, this must
+    not fall through to HELD."""
+    assert lift(f'thermal_state {tmp_path / "absent.log"}',
+                REPO=str(ROOT)).stdout.strip() == "MISSING"
+    assert lift('thermal_state ""', REPO=str(ROOT)).stdout.strip() == "MISSING"
+
+
+@pytest.mark.parametrize("row,page,verdict,rc", [
+    ("DONE", "HELD", "OK", 0),
+    ("DONE", "FLOORED", "PAGE FLOORED", 1),
+    ("DONE", "UNREADABLE", "PAGE UNREADABLE", 1),
+    ("DONE", "MISSING", "PAGE MISSING", 1),
+    ("CLAIM_FAIL", "FLOORED", "ARM CLAIM_FAIL", 1),
+    ("CLAIM_FAIL", "HELD", "ARM CLAIM_FAIL", 1),
+    ("INVALID", "HELD", "ARM INVALID", 1),
+    ("REFUSED", "MISSING", "ARM REFUSED", 1),
+    ("UNKNOWN", "HELD", "ARM UNKNOWN", 1),
+    ("", "HELD", "ARM NO_ROW", 1),
+])
+def test_one_pair_of_words_accepts_the_card_and_every_other_pair_refuses(
+        row, page, verdict, rc):
+    """BOTH HALVES, AND THE FAIL BRANCH OF EACH. DONE alone is an exit code
+    over four gates; HELD alone is a page whose arm this session may never have
+    run. Only the pair means "this card, watched under load by an arm that
+    stood behind what it printed". The empty row prints NO_ROW rather than
+    nothing, because an empty word inside a refusal reads as a bug in the
+    refusal. THE ARM HALF IS ASKED FIRST, deliberately: when --only leaves the
+    probe out, asking the page first would report on a log this session never
+    wrote and name the wrong problem."""
+    got = lift(f'thermal_verdict {row!r} {page!r}; echo "rc=$?"', REPO=str(ROOT))
+    assert got.stdout.split("\n")[0] == verdict, got.stdout
+    assert got.stdout.strip().splitlines()[-1] == f"rc={rc}", got.stdout
+
+
+def test_the_thermal_gate_is_not_scoped_to_only_and_the_refusal_says_which_flag(
+        tmp_path):
+    """THE GATE IS UNCONDITIONAL AND THE ARM IS NOT, exactly as the calibration
+    gate below it. `arm thermal` returns early through `wanted` when --only
+    names other arms; the gate runs anyway, because every subset of this
+    session runs kernels on this card and there is no subset a card that
+    cannot clock can serve. The cost of keeping it unconditional is that the
+    file's own documented invocation must name it, so it does."""
+    assert "--only thermal,calibrate,roofline-n256-g16,noise_floor" in TEXT
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('V="$(thermal_verdict "$(ledger_arm_state thermal)" MISSING)"\n'
+               'echo "$V"\n'
+               f'thermal_refusal "$V" testcard {tmp_path / "thermal.log"} MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path),
+               ONLY="occupancy", PY_BASE="/usr/bin/python3")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.splitlines()[0] == "ARM NO_ROW", got.stdout
+    assert "--only occupancy left the first arm out" in got.stdout
+    assert "--only thermal,occupancy" in got.stdout
+    alone = lift(f'thermal_refusal "ARM NO_ROW" testcard {tmp_path / "t.log"} MISSING',
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+                 PY_BASE="/usr/bin/python3")
+    assert "left the first arm out" not in alone.stdout, alone.stdout
+    assert "no --only to explain it" in alone.stdout, alone.stdout
+
+
+def test_the_claim_fail_refusal_quotes_the_page_and_says_return_the_pod(tmp_path):
+    """A CLAIM_FAIL here is THE ANSWER and not a broken arm, and the refusal has
+    to say so: the ledger latches the row, so re-running the arm measures the
+    same silicon and the operator's move is to return the card. The failing
+    line is read OFF THE PAGE rather than named here, the same fix the
+    calibration refusal took on 2026-09-09 after describing the wrong gate for
+    three of its four."""
+    log = tmp_path / "thermal.log"
+    log.write_text(
+        "RESULT: VALIDITY V1 PASS the probe watched a loaded card\n"
+        "RESULT: CLAIM C1 FAIL the card holds a clock above its own thermal "
+        "floor: measured 345 MHz median over the window\n")
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      f"thermal\tCLAIM_FAIL\t1\t160\t0\t{log}\t\n")
+    got = lift(f'thermal_refusal "ARM CLAIM_FAIL" testcard {log} FLOORED',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+               PY_BASE="/usr/bin/python3")
+    assert got.returncode == 0, got.stderr
+    # Flattened: these refusals wrap, and a sentence that straddles a wrap is
+    # still the sentence. The same reading `tests/test_docs.py` gives the docs.
+    flat = " ".join(got.stdout.split())
+    assert "THIS IS THE ANSWER, NOT A BROKEN ARM" in flat
+    assert "345 MHz median over the window" in flat, "the page, verbatim"
+    assert "RETURN THE POD AND RENT ANOTHER CARD" in flat
+    assert "measures the WRONG one" in flat, "thermal_stakes"
+    # And an INVALID says the opposite: the apparatus, not the pod.
+    other = lift(f'thermal_refusal "ARM INVALID" testcard {log} HELD',
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+                 PY_BASE="/usr/bin/python3")
+    flat = " ".join(other.stdout.split())
+    assert "said nothing about the card in either direction" in flat
+    assert "this is the apparatus, not the pod" in flat
+
+
+def test_a_word_the_thermal_gate_cannot_read_refuses_rather_than_proceeding():
+    """There is no safe default: the two states this gate decides between are
+    "this card can be used" and "this card cannot", and guessing either is what
+    the gate exists to prevent."""
+    got = lift('thermal_refusal "SOMETHING ELSE" testcard /nowhere/t.log ODD',
+               REPO=str(ROOT), LEDGER="/nowhere/ARMS.tsv", LOGS="/nowhere",
+               ONLY="", PY_BASE="/usr/bin/python3")
+    assert got.stdout.startswith("REFUSED: thermal_verdict said"), got.stdout
+
+
+def test_the_thermal_arm_and_its_gate_run_before_the_calibration_arm():
+    """ORDER IS THE ARGUMENT, and here it is the whole argument: the ruler is
+    measured ON the clock, so a card pinned at its floor publishes a ceiling
+    that is wrong rather than low, and arm 0 cannot tell the difference from
+    inside itself -- on 2026-09-11 it PASSED on such a card, because it scored
+    DRIFT and a flat clock does not drift. Read off the shipped source, so the
+    two cannot be reordered without this failing."""
+    probe = CODE.index('scripts/thermal_acceptance.py" \\')
+    gate = CODE.index('thermal_refusal "$THERMAL_VERDICT"')
+    publish = CODE.index('scripts/calibrate_hardware.py" --publish')
+    assert probe < gate < publish, (probe, gate, publish)
+    # The gate is straight-line top level, never inside `arm()`, which is what
+    # makes it survive --only.
+    block = CODE[probe:publish]
+    assert 'exit "$RC_REFUSED"' in block
+    assert "wanted thermal" not in CODE
+    # And the measuring branch pins its own window rather than inheriting the
+    # script's defaults, the standing defect this driver keeps meeting.
+    words = measuring_invocation("thermal")
+    for flag in ("--seconds", "--settle-seconds", "--poll-seconds"):
+        assert flag in words, (flag, words)
+
+
+def test_the_thermal_arm_is_in_every_named_rental_set():
+    """A set that omits a gating arm refuses the whole session it prices."""
+    for setter in ("rental_2h_arms", "rental_3h_arms", "rerun_arms"):
+        named = lift(setter, REPO=str(ROOT)).stdout.split()
+        assert "thermal" in named, setter
+        assert named[0] == "thermal", (setter, named)
+
+
+
+#: Spelled out because the gate lines are read by a human before a rental, and
+#: "TWELVE planted worlds" is what one of them says. The test below derives the
+#: NUMBER from the script and only uses this to render it; it is not a count.
+_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+                 11: "eleven", 12: "twelve", 13: "thirteen", 14: "fourteen"}
+
+
+def _load_script_module(stem: str):
+    """Import a `scripts/<stem>.py` for its own registrations.
+
+    The point of reaching into the module rather than parsing its output is
+    that the WORLD TABLES are the registration: a test that re-typed them here
+    would be the fourth hand-maintained copy of the thing this file is checking.
+    """
+    path = ROOT / "scripts" / f"{stem}.py"
+    spec = importlib.util.spec_from_file_location(f"_driver_check_{stem}", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_advertised_elasticity_world_count_is_the_scripts_own():
+    """THE RECURRING DEFECT, on the arm added 2026-09-16: a count typed into
+    prose at one of N sites, left standing after the set under it grew.
+
+    `clock_elasticity.py` carried its planted-world count in THREE places. One
+    COMPUTES it -- `self_test` prints `len()` of the list and counts the
+    refusals off the `why` strings -- one docstring was updated when a twelfth
+    world (`slower-at-speed`, the one that makes V7's FAIL branch reachable)
+    was added, and two were not: the `--self-test` argparse help said "eleven
+    planted worlds, six of them refusals", and `arm_offgpu_gates
+    elasticity-m32-n64-g16` said the same while also naming only FOUR carrying
+    worlds. That gate line is what an operator reads to verify the arm BEFORE
+    renting the pod. The docstring meanwhile asserted that "the count is not
+    carried in prose anywhere else".
+
+    So this derives both counts from the script's own world list, and pins that
+    no typed copy came back into the argparse help."""
+    elasticity = _load_script_module("clock_elasticity")
+    args = elasticity.build_parser().parse_args(["--self-test"])
+    worlds = elasticity.self_test_worlds(args)
+    refusals = [w for w in worlds if w.why.startswith("A REFUSAL")]
+    assert len(worlds) > len(refusals) > 0, (len(worlds), len(refusals))
+
+    advertised = lift("arm_offgpu_gates elasticity-m32-n64-g16",
+                      REPO=str(ROOT)).stdout.upper()
+    assert f"{_NUMBER_WORDS[len(worlds)]} PLANTED WORLDS".upper() in advertised, (
+        len(worlds), advertised)
+    assert f"{_NUMBER_WORDS[len(refusals)]} OF THEM REFUSALS".upper() in advertised, (
+        len(refusals), advertised)
+
+    # AND EVERY WORLD THE SCRIPT ITSELF FLAGS AS CARRYING A GATE'S ONLY
+    # REACHABLE FAIL BRANCH IS NAMED ON THAT LINE. `slower-at-speed` was the
+    # one that was not, which is how the line came to say FOUR.
+    carrying = [w.name for w in worlds
+                if "THE WORLD THAT MAKES" in w.why.upper()]
+    assert carrying, [w.name for w in worlds]
+    for name in carrying:
+        assert name.upper() in advertised, (name, advertised)
+
+    # NO COUNT SURVIVES IN THE ARGPARSE HELP, which is where the stale one was.
+    # The run prints both off its own list; a second typed copy is the defect,
+    # not a second source.
+    help_text = elasticity.build_parser().format_help().lower()
+    self_test_help = help_text.split("--self-test", 1)[1].split("--model", 1)[0]
+    for stale in _NUMBER_WORDS.values():
+        assert f"{stale} planted" not in self_test_help, (stale, self_test_help)
+        assert f"{stale} of them" not in self_test_help, (stale, self_test_help)
+
+
+def test_the_advertised_private_world_exits_are_the_scripts_own():
+    """THE SAME DEFECT ONE ARM OVER, and this one would have read a WORKING arm
+    as a broken one.
+
+    `private_weight_reference.py`'s WORLDS table registers
+    `faster-than-its-ruler` as `dict(ALL_PASS, C2=FAIL)`, which classifies to
+    exit 1 CLAIM_FAIL, and `ragged` as `{"V0": FAIL, "V1": FAIL}`, which is TWO
+    validity gates. The driver's gate line said "the rest 3 INVALID on the one
+    validity gate each is planted to break" -- so an operator running the
+    advertised eleven-world sweep before renting would get a 1 where the line
+    promised a 3, on a world whose CLAIM_FAIL is the registered answer.
+
+    Both counts and both exits are derived from the WORLDS table here. Nothing
+    in this test names a world's verdict."""
+    private = _load_script_module("private_weight_reference")
+    by_code: dict[int, list[str]] = {}
+    for name, world in private.WORLDS.items():
+        # THROUGH `exit_codes.classify`, NOT A SECOND COPY OF ITS RULE. This
+        # loop used to compute the class itself from `v == FAIL`, and that copy
+        # drifted the moment a world registered a VALIDITY gate as UNKNOWN:
+        # `host-bound-probe` is `dict(ALL_PASS, V8=UNKNOWN)`, which classify()
+        # lands on INVALID because ANY validity gate not PASS is INVALID
+        # (exit_codes.py: "'not PASS' covers FAIL and UNKNOWN alike"), while
+        # the FAIL-only copy landed it on DONE and then demanded the driver
+        # line say NINE where the script's own binaries produce TEN. The rule
+        # has one home; this asks it rather than restating it.
+        code = exit_codes.classify(
+            [(private.VALIDITY if k.startswith("V") else private.CLAIM, v)
+             for k, v in world.expect.items()])
+        by_code.setdefault(code, []).append(name)
+
+    line = lift("arm_offgpu_gates private-mixtral-bm32", REPO=str(ROOT)).stdout
+    # Every world is still on the advertised --self-test choice list.
+    for name in private.WORLDS:
+        assert name in line, (name, line)
+    # The one CLAIM_FAIL that is NOT about C1 has to be named as a CLAIM_FAIL.
+    assert "faster-than-its-ruler" in by_code[exit_codes.CLAIM_FAIL], by_code
+    assert "faster-than-its-ruler 1 CLAIM_FAIL" in line, line
+    invalid = by_code[exit_codes.INVALID]
+    assert f"{_NUMBER_WORDS[len(invalid)]} 3 INVALID".upper() in line.upper(), (
+        invalid, line)
+    # And `ragged` breaks TWO validity gates, which "the one validity gate each
+    # is planted to break" denied.
+    broken = [k for k, v in private.WORLDS["ragged"].expect.items()
+              if k.startswith("V") and v == private.FAIL]
+    assert len(broken) == 2, broken
+    assert "TWO of them" in line, line
+
+
+# --------------------------------------------------------------------------
+# the private-weight arm's prose, pinned to the code it describes
+# --------------------------------------------------------------------------
+
+#: `docs/POD_RUNBOOK.md`, as the two tests that read its prose see it.
+_RUNBOOK = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
+
+#: `_NUMBER_WORDS` above stops at fourteen and the private arm's table is at
+#: FIFTEEN worlds, so these tests cannot spell their own counts out of it: the
+#: partition below reads a count word for `WORLDS`, for what the partition
+#: leaves over and for a page's RESULT lines, and the first of those is already
+#: past the end. Extended here rather than in the shared table because the
+#: tests that share it count other things and are not the ones that moved. A
+#: number past the end asserts with the missing entry named, because a bare
+#: KeyError inside a test about miscounted prose says nothing about which
+#: count ran off the end, which is the shape of the defect being tested.
+_COUNT_WORDS = dict(_NUMBER_WORDS)
+_COUNT_WORDS.update({15: "fifteen", 16: "sixteen", 17: "seventeen",
+                     18: "eighteen", 19: "nineteen", 20: "twenty",
+                     21: "twenty-one", 22: "twenty-two", 23: "twenty-three"})
+
+
+def _count_word(n: int) -> str:
+    """The word the driver's prose spells a count of `n` as."""
+    assert n in _COUNT_WORDS, (
+        f"no count word for {n}: extend _COUNT_WORDS before asserting against "
+        f"a sentence that has to spell {n} out")
+    return _COUNT_WORDS[n]
+
+
+def _private_gate_line() -> str:
+    """The `arm_offgpu_gates private-mixtral-bm32` line, from the shipped case.
+
+    Lifted rather than grepped so the line under test is the one an operator
+    gets out of `--list`, expansions and all.
+    """
+    done = lift("arm_offgpu_gates private-mixtral-bm32", REPO=str(ROOT))
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def _private_closes_line() -> str:
+    """The `arm_closes private-mixtral-bm32` paragraph, same source."""
+    done = lift("arm_closes private-mixtral-bm32", REPO=str(ROOT))
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def _private_plan() -> str:
+    """`private_weight_reference.py --dry-run --duty D --device-memory-gb 140`.
+
+    The same flags the driver's own gate line advertises, the duty read from
+    the one function both arm lines read, so the numbers this file checks the
+    prose against are the numbers an operator reads off the advertised command
+    and not a second parameterisation of it.
+    """
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    assert duty, "private_duty printed nothing"
+    done = _spawn(
+        [sys.executable, str(ROOT / "scripts" / "private_weight_reference.py"),
+         "--dry-run", "--duty", duty, "--device-memory-gb", "140"],
+        capture_output=True, text=True, timeout=300, cwd=str(ROOT),
+        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home()),
+             "PYTHONPATH": str(ROOT)})
+    # 2 REFUSED is the plan's own code: `--dry-run` measured nothing, and a
+    # refusal is not a failure of the plan it printed.
+    assert done.returncode == exit_codes.REFUSED, (
+        done.stdout[-3000:] + done.stderr[-2000:])
+    return done.stdout
+
+
+def _world_exit_codes(private) -> dict[str, int]:
+    """`{world name: the exit code its REGISTERED verdicts classify to}`.
+
+    Taken through `exit_codes.classify` and not by counting `== FAIL` here,
+    because the rule that decides this is one-directional: a VALIDITY gate
+    that came back UNKNOWN latches INVALID exactly as a FAIL does, and
+    `host-bound-probe` registers `dict(ALL_PASS, V8=UNKNOWN)` and no FAIL at
+    all. A local re-implementation that asked for FAIL would read that world
+    as 0 DONE and agree with the driver's prose for the wrong reason.
+
+    `expect` is a registration and not a prediction this file is trusting on
+    its own: `main` runs `World.check` against the report every `--self-test`
+    produces and refuses a world whose gates came back other than registered,
+    so a table that drifted from the binary fails there rather than quietly
+    here. The test below spends one process proving that tie on the one world
+    whose registration this round added.
+    """
+    codes: dict[str, int] = {}
+    for name, world in private.WORLDS.items():
+        gates = []
+        for tag, verdict in world.expect.items():
+            # `tag[:1]`, not `tag[0]`: an empty tag is a malformed
+            # registration and has to assert as one, not IndexError.
+            assert tag[:1] in ("V", "C"), (name, tag)
+            kind = exit_codes.VALIDITY if tag.startswith("V") else exit_codes.CLAIM
+            gates.append((kind, verdict))
+        codes[name] = exit_codes.classify(gates)
+    return codes
+
+
+def test_the_gate_lines_exit_code_sentence_partitions_every_planted_world():
+    """THE RECURRING DEFECT, in its exact 2026-09-17 form: the sentence that
+    tells an operator what the advertised `--self-test` sweep should exit
+    partitioned 13 of the 14 worlds and left one out, in silence.
+
+    `arm_offgpu_gates private-mixtral-bm32` is what a renter reads to verify
+    this arm BEFORE paying for a pod, and it separates the worlds by exit
+    code: some named world by world, the rest swept up as "the remaining N 3
+    INVALID". `alignment-step` registers `dict(ALL_PASS)` -- it is the world
+    V5's step-aware fit exists FOR, so every gate passes and it exits 0 DONE
+    -- and it was named in neither half. It fell into "the remaining", whose
+    count word was derived from the INVALID worlds rather than from what was
+    left over, so the two errors hid each other: NINE was the right count of
+    INVALID worlds and the wrong count of unnamed ones, and an operator
+    running the sweep would have scored a 0 as a missing 3.
+
+    So this reads the sentence as a PARTITION. Every world named in a clause
+    must carry the code its own registered verdict set classifies to, every
+    world left over must be in the remaining clause's bucket with the
+    remaining clause's code, and the count word must be the size of what is
+    actually left. A sixteenth world added to `WORLDS` and left out of the
+    sentence moves `len(remaining)` and fails here, whatever code it exits.
+    """
+    private = _load_script_module("private_weight_reference")
+    codes = _world_exit_codes(private)
+    line = _private_gate_line()
+
+    # THE ADVERTISED SET IS THE REGISTERED SET. The alternation is what an
+    # operator pastes, so it is the list the partition below is taken over. As
+    # a SET: the line runs the worlds in the order they are read rather than
+    # the order they are registered, and that ordering is the line's to choose.
+    alternation = re.search(r"--self-test ([\w|-]+)", line)
+    assert alternation, line
+    assert set(alternation.group(1).split("|")) == set(private.WORLDS), (
+        alternation.group(1), list(private.WORLDS))
+    assert f"{_count_word(len(private.WORLDS))} planted worlds" in line, (
+        len(private.WORLDS), line)
+
+    sentence = line.split("SEPARATE by exit code:", 1)[1].split(
+        "Every gate FAIL branch", 1)[0]
+    named: dict[str, int] = {}
+    remaining_clause = None
+    for clause in sentence.split(";"):
+        if "the remaining" in clause:
+            assert remaining_clause is None, sentence
+            remaining_clause = clause
+            continue
+        code = re.search(r"\b([0-3]) (DONE|CLAIM_FAIL|INVALID)\b", clause)
+        assert code, clause
+        assert exit_codes.CODE_NAMES[int(code.group(1))] == code.group(2), clause
+        for name in private.WORLDS:
+            if re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", clause):
+                assert name not in named, (name, sentence)
+                named[name] = int(code.group(1))
+    assert remaining_clause is not None, sentence
+    for name, code in sorted(named.items()):
+        assert codes[name] == code, (name, code, codes[name], sentence)
+
+    remaining = [n for n in private.WORLDS if n not in named]
+    bucket = re.search(r"the remaining (\w+) ([0-3]) (DONE|CLAIM_FAIL|INVALID)\b",
+                       remaining_clause)
+    assert bucket, remaining_clause
+    assert bucket.group(1).lower() == _count_word(len(remaining)), (
+        bucket.group(1), remaining)
+    for name in remaining:
+        assert codes[name] == int(bucket.group(2)), (name, codes[name], sentence)
+    assert set(named) | set(remaining) == set(private.WORLDS)
+    assert not set(named) & set(remaining)
+
+
+def test_the_world_that_reaches_a_validity_gates_unknown_branch_is_named_and_run():
+    """`gate_v8_alignment` returns UNKNOWN on four separate branches and no
+    planted world reached any of them, so the driver's own gate line could
+    describe the sweep as separating on FAIL alone and be right about every
+    world in the table.
+
+    That matters because `exit_codes.classify` latches INVALID on a VALIDITY
+    UNKNOWN exactly as it does on a FAIL, so a world registering V8=UNKNOWN
+    is INVALID although it breaks nothing -- and
+    "the remaining N 3 INVALID on the validity gates each is planted to
+    break" is false for a world that breaks nothing and is merely not
+    resolved by it. `host-bound-probe` registers `V8=UNKNOWN`, which
+    `exit_codes.classify` maps to 3 INVALID under the one-directional
+    not-PASS rule.
+
+    This derives the UNKNOWN-registering worlds from `WORLDS`, requires at
+    least one, requires the gate line to name each as reading UNKNOWN rather
+    than FAIL, and RUNS it: the exit code, the second opinion off the printed
+    lines, the advertised RESULT-line count and the V8 line's own verdict all
+    come back from the process rather than from this file.
+
+    It is also the one place the partition test's METHOD is paid for. That
+    test never starts a process: it classifies `expect` and compares the
+    result with prose. So the code this file derives for `host-bound-probe`
+    is asserted against the code the binary actually returns, which is the
+    step that turns the derivation into a measurement for the world whose
+    registration this round added. Only one of `gate_v8_alignment`'s four
+    UNKNOWN branches is reachable from the table; the other three are still
+    covered by nothing, and that is a gap this test does not close."""
+    private = _load_script_module("private_weight_reference")
+    codes = _world_exit_codes(private)
+    unknown_worlds = [
+        name for name, world in private.WORLDS.items()
+        if any(tag.startswith("V") and verdict == private.UNKNOWN
+               for tag, verdict in world.expect.items())]
+    assert unknown_worlds, list(private.WORLDS)
+
+    line = _private_gate_line()
+    assert "reads UNKNOWN rather than FAIL" in line, line
+    for name in unknown_worlds:
+        assert name in line.split("the remaining", 1)[1], (name, line)
+
+    advertised = re.search(r"(\w+) RESULT lines each", line)
+    assert advertised, line
+
+    for name in unknown_worlds:
+        done = _spawn(
+            [sys.executable, str(ROOT / "scripts" / "private_weight_reference.py"),
+             "--self-test", name],
+            capture_output=True, text=True, timeout=600, cwd=str(ROOT),
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home()),
+                 "PYTHONPATH": str(ROOT)})
+        assert done.returncode == codes[name], (
+            name, done.returncode, codes[name], done.stdout[-2000:])
+        assert exit_codes.classify_text(done.stdout) == codes[name], name
+        results = [ln for ln in done.stdout.splitlines()
+                   if ln.startswith(exit_codes.RESULT_PREFIX)]
+        assert _count_word(len(results)) == advertised.group(1).lower(), (
+            name, len(results), advertised.group(1))
+        v8 = [ln for ln in results if " V8 " in ln]
+        assert len(v8) == 1, results
+        assert f" V8 {exit_codes.UNKNOWN} " in v8[0], v8[0]
+
+
+def test_the_driver_and_the_runbook_name_every_verdict_that_skips_the_sweep():
+    """The skip is on FAIL ONLY, and both pages say so.
+
+    `run_sweep` guards the skip with `if early.verdict == FAIL:`. It skipped
+    on FAIL and UNKNOWN for one commit, which threw away the ladder and every
+    other gate's number over an inconclusive probe; with NATIVE's switch as
+    V8's positive control, an UNKNOWN is a statement about the instrument and
+    the sweep runs past it. The guard is READ out of the source (the branch
+    needs a CUDA device to reach) and PINNED to FAIL, and both pages must
+    name FAIL as the skip and say an UNKNOWN still runs the ladder."""
+    source = (ROOT / "scripts" / "private_weight_reference.py").read_text()
+    assert not re.findall(r"if early\.verdict in \(", source)
+    guards = re.findall(r"if early\.verdict == (\w+):", source)
+    assert guards == ["FAIL"], guards
+    body = source.split("if early.verdict == FAIL:", 1)[1].split("\ndef ", 1)[0]
+    assert "SWEEP SKIPPED" in body
+
+    closes = _private_closes_line()
+    assert "skipping the sweep" in closes, closes
+    driver_clause = closes.split("skipping the sweep", 1)[1].split(";", 1)[0]
+    runbook_paragraphs = [p for p in _RUNBOOK.split("\n\n")
+                          if "SKIPS the sweep" in p]
+    assert len(runbook_paragraphs) == 1, len(runbook_paragraphs)
+    for where, prose in (("arm_closes", driver_clause),
+                         ("POD_RUNBOOK.md", runbook_paragraphs[0])):
+        assert "FAIL" in prose and "ONLY" in prose, (where, prose)
+        assert "UNKNOWN" in prose, (where, prose)
+        assert "still runs" in prose, (where, prose)
+
+
+def test_the_exfil_line_archives_the_results_root_and_not_only_the_session(tmp_path):
+    """The one command that gets the measurements off a pod before it is
+    released tarred `$SESSION` alone.
+
+    `$SESSION` holds `ARMS.tsv` and `logs/<arm>.log`; every arm's `cells.csv`,
+    `report.json`, `DEVICE` file and `triton-cache/` are written under
+    `$RESULTS`, which `MOE_RESULTS_DIR` exports to every arm and which is
+    keyed to the CARD and not to the session. So the tarball carried the
+    RESULT lines and not one of the rows they were scored from, and the pod
+    that held them is gone by the time anyone notices.
+
+    This does not read the line for two variable names: it EVALUATES the
+    shipped command against two planted directories and asks `tar` what came
+    back, because `-C` takes its argument positionally and a second `-C`
+    written in the wrong place archives the same tree twice."""
+    command = re.search(r"(tar czf (?:[^\n]*\\\n)*[^\n]*)", TEXT)
+    assert command, "no tar line in the driver"
+    line = command.group(1).replace("\\\n", " ")
+    for variable in ("$SESSION", "$RESULTS"):
+        assert variable in line, (variable, line)
+
+    session = tmp_path / "session" / "gaps-h200-20260917T000000Z"
+    results = tmp_path / "results" / "gaps-h200"
+    (session / "logs").mkdir(parents=True)
+    (session / "ARMS.tsv").write_text("arm\tstate\n")
+    (results / "private_weight_reference").mkdir(parents=True)
+    (results / "private_weight_reference" / "cells.csv").write_text("arm\n")
+    planted = line.replace("/workspace/", f"{tmp_path}/")
+    done = _spawn(
+        ["bash", "-c", "set -euo pipefail\n" + planted],
+        capture_output=True, text=True, timeout=120,
+        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CARD": "h200",
+             "SESSION": str(session), "RESULTS": str(results)})
+    assert done.returncode == 0, done.stderr
+    tarball = tmp_path / "exfil-gaps-h200.tar.gz"
+    assert tarball.exists(), sorted(p.name for p in tmp_path.iterdir())
+    listing = _spawn(["tar", "tzf", str(tarball)],
+                             capture_output=True, text=True, timeout=120)
+    assert listing.returncode == 0, listing.stderr
+    members = listing.stdout.split()
+    # The ledger comes from $SESSION and a cells row comes from $RESULTS.
+    assert any(m.endswith("ARMS.tsv") for m in members), members
+    assert any(m.endswith("cells.csv") for m in members), members
+    # BOTH ROOTS ONCE. A misplaced second `-C` archives one tree twice, and a
+    # tarball holding two copies of $SESSION and no $RESULTS is caught above;
+    # one holding $RESULTS twice beside $SESSION is not, so count the tops.
+    tops = {m.removeprefix("./").split("/", 1)[0] for m in members}
+    assert tops == {session.name, results.name}, tops
+
+
+def test_the_gate_line_names_the_padded_declaration_the_layout_actually_uses():
+    """The driver printed the slot arithmetic with the WRONG factor in it.
+
+    `copy_slot` puts copy `c` of expert `e` at `e x n_decl + c`, where
+    `n_decl` is `declared_copies_for`'s PADDED count and `n_max` is the
+    deepest tread's copy count. The two are not equal at the booked ladder --
+    the plan prints them side by side -- because the padding is what keeps
+    SHARED and PRIVATE on one `moe_align_block_size` kernel, and the gate
+    line said `e x n_max + c`, which is a different address map: it would
+    stride the copies of one expert over the slots of the next.
+
+    Every number here is read off `--dry-run --device-memory-gb 140`, the
+    command the same gate line advertises, so the padding the prose explains
+    is the padding the plan commits to. Both SYMBOLS come off the plan too:
+    the factor the slot formula uses has to be the one the plan calls the
+    declared count, and the one it calls the read count is the string that
+    must not appear."""
+    plan = _private_plan()
+    slot = re.search(r"copy c of expert e at slot e x (\w+) \+ c", plan)
+    assert slot, plan
+    counts = re.search(r"(\w+) = (\d+) against (\w+) = (\d+) read", plan)
+    assert counts, plan
+    decl_name, n_decl = counts.group(1), int(counts.group(2))
+    max_name, n_max = counts.group(3), int(counts.group(4))
+    # The plan's own two mentions have to agree before the prose is judged
+    # against either: the formula's factor IS the declared count.
+    assert decl_name == slot.group(1), (decl_name, slot.group(1))
+    assert decl_name != max_name, counts.groups()
+    assert n_decl > n_max, (n_decl, n_max)
+    slots = re.search(r"declare E x n_decl = (\d+) at EVERY tread", plan)
+    assert slots, plan
+    filled = re.search(r"x (\d+) copies declared and filled "
+                       r"\((\d+) read at the deepest tread, (\d+) never read\)", plan)
+    assert filled, plan
+    assert (int(filled.group(1)), int(filled.group(2)), int(filled.group(3))) == (
+        n_decl, n_max, n_decl - n_max), filled.groups()
+
+    closes = _private_closes_line()
+    assert f"expert slot e x {decl_name} + c" in closes, (decl_name, closes)
+    # THE WRONG FACTOR, BY THE NAME THE PLAN GIVES IT. The 2026-09-17 line read
+    # `e x n_max + c`, a SYMBOL, so the numeric form `e x 6 + c` was never on
+    # the page and an assert against the digit alone would have passed over the
+    # defect it is named for. Both forms are refused: they are one address map
+    # written two ways.
+    assert f"e x {max_name} + c" not in closes, (max_name, closes)
+    assert f"e x {n_max} + c" not in closes, (n_max, closes)
+    assert f"{n_decl} copies and {slots.group(1)} slots" in closes, closes
+    assert f"{n_max} read, {n_decl - n_max} filled and never read" in closes, closes
+
+
+def test_the_runbook_counts_the_arms_the_private_reference_precedes():
+    """The runbook told an operator to run `private-mixtral-bm32` "BEFORE the
+    two interpretation arms it shares `three-arms` with", and named
+    `elasticity-m32-n64-g16` and `blockk-w4` in the parenthesis beside it.
+
+    The driver's own rental-set comment is where "the interpretation arms"
+    comes from, and it names the PAIR `private-mixtral-bm32` and
+    `elasticity-m32-n64-g16` -- `blockk-w4` is not one of them, and
+    `private-mixtral-bm32` is, so the sentence ordered the arm before itself
+    and mislabelled the set it actually points at. The fix is a COUNT of what
+    is left rather than a category name, so this derives the count from the
+    names in the parenthesis and checks the label is gone from both pages.
+
+    WHAT THIS DOES NOT CHECK, because the repository cannot supply it: which
+    arms `three-arms` carries. That is a branch, not a set this driver
+    defines, so the parenthesis is checked for self-consistency and for
+    naming real arms, and its MEMBERSHIP is checked by nobody. A runbook that
+    named two other real arms would pass here."""
+    paragraph = re.sub(r"\s+", " ", _RUNBOOK)
+    phrase = re.search(r"run BEFORE the other (\w+) arms it shares "
+                       r"`three-arms` with \(([^)]*)\)", paragraph)
+    assert phrase, "the runbook no longer names the arms three-arms carries"
+    others = re.findall(r"`([\w.-]+)`", phrase.group(2))
+    assert phrase.group(1) == _count_word(len(others)), (phrase.group(1), others)
+    assert "private-mixtral-bm32" not in others, others
+    for name in others:
+        assert name in ARMS, (name, ARMS)
+
+    # AND THE LABEL IS GONE, not merely joined by a count. The driver's comment
+    # is the only place the phrase is defined, and it defines it over a pair
+    # that CONTAINS the subject of this sentence.
+    pair = TEXT.split("AND THE INTERPRETATION ARMS", 1)[1].split("\nrental_2h_arms", 1)[0]
+    interpretation = {n for n in ARMS
+                      if re.search(rf"`{re.escape(n)}`", pair)}
+    # PIN THE DEFINITION, because this sentence's whole justification is that
+    # the label named a set the subject is IN. `interpretation != set(others)`
+    # stood here and could never fire: it follows from the subject being in the
+    # one set and out of the other, and both of those are asserted already. A
+    # comment rewritten to drop the subject, or widened past a pair, makes the
+    # old label defensible again and this test should be the thing that says so.
+    assert len(interpretation) == 2, interpretation
+    assert "private-mixtral-bm32" in interpretation, interpretation
+    assert "interpretation arms" not in _RUNBOOK
+
+
+# --------------------------------------------------------------------------
+# 23. the two interpretation arms once the alpha(G) chain exists: one duty for
+#     R3 at both of its call sites, and a session tag on R1's
+# --------------------------------------------------------------------------
+
+#: Session 4's published R1 directory, on origin/pod-h200-session4 under
+#: results/published/2026-09-21-nvidia_h200-session4/results/gaps-nvidia_h200/
+#: clock_elasticity/. A directory NAME and not a measured quantity: it is the id
+#: this driver's elasticity line produced on an H200 before it carried a tag,
+#: and so the id a later session on the same shared volume must not reproduce.
+SESSION4_ELASTICITY_ID = ("nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25_0.1"
+                          "-l2flushtrue-modelmixtral_8x7b-repeats13-s-9f91fa91")
+
+#: Session 4's published R3 pages, one row each, with the V7 gate as its
+#: report.json on origin/pod-h200-session4 records it (results/published/
+#: 2026-09-21-nvidia_h200-session4/results/gaps-nvidia_h200/
+#: private_weight_reference/<run id>/report.json, the gate tagged V7, its
+#: "verdict" and the percentage in its "measured" line). Measured values
+#: transcribed as a fixture: (run id suffix, --model, G, V7 verdict, the worst
+#: tread's clock difference between the shared and private arms in percent).
+#: Every one ran at full duty, before R3 had --duty.
+SESSION4_R3_V7 = (
+    ("d2e4dae0", "mixtral-8x7b", 1, "FAIL", 2.06),
+    ("efd9a3d6", "mixtral-8x7b", 1, "FAIL", 2.06),
+    ("17d3b789", "qwen2-57b-a14b", 1, "FAIL", 12.21),
+    ("6e27da91", "mixtral-8x7b", 16, "FAIL", 18.10),
+)
+
+
+def _arm_words(name: str) -> tuple[list[list[str]], list[list[str]]]:
+    """`(planning, measuring)`: each `arm <name>` line, continuations joined and
+    split into shell words, sorted by whether it carries `--dry-run`."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [shlex.split(ln) for ln in joined.splitlines()
+             if re.match(rf"\s*arm {re.escape(name)}\s", ln)]
+    return ([w for w in lines if "--dry-run" in w],
+            [w for w in lines if "--dry-run" not in w])
+
+
+def _flag(words: list[str], flag: str) -> str:
+    assert flag in words, (flag, words)
+    return words[words.index(flag) + 1]
+
+
+@pytest.fixture(scope="session")
+def interpretation_dry(request, tmp_path_factory):
+    """ONE laptop dry session for the tests below, `(session dir, stdout)`.
+    Named the way the driver names its own, so the tag its arms carry is the
+    shape a pod's is. Shared across xdist workers (tests/_shared_run.py): as a
+    module fixture it ran once per worker that took one of its tests."""
+    name = "gaps-nocard-20260922T000000Z"
+    where, got = shared(request, tmp_path_factory, "gaps-dry-stamped",
+                        lambda d: run(["--dry-run"], session=d / name))
+    assert got.returncode == 0, got.stdout[-3000:]
+    return where / name, got.stdout
+
+
+def test_the_private_reference_runs_at_the_owners_duty_on_both_branches(interpretation_dry):
+    """DESIGN DECISION 15 REACHED ONE OF ITS TWO CALL SITES. 5b7b719 gave R3
+    `--duty` and the alpha(G) chain passed it; this driver's own private arm
+    still ran at the script's default of 1.0, where session 4's four ratio
+    pages were INVALID on V7 (the power cap boosting whichever arm read fewer
+    bytes). The runbook meanwhile said both "run it at --duty 0.5" and "the
+    driver runs seed 0", and a seed 1 following the first sentence would have
+    been REFUSED by --replicate-of against a seed 0 following the second,
+    because duty is a design key.
+
+    The owner decided 0.25 on 2026-09-22 (at 0.5 session 4's clock still
+    tracked board power; at 0.25 it sat flat). So: both branches read ONE
+    function, the plan the dry branch prints is at that duty with the duty in
+    its run id, every description of the arm quotes the same duty, and the
+    SCRIPT'S OWN default is still 1.0, since moving a design key's default
+    would re-label every full-duty report on disk."""
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    assert float(duty) == 0.25, duty          # the owner's decision, 2026-09-22
+    planning, measuring = _arm_words("private-mixtral-bm32")
+    assert len(planning) == 1 and len(measuring) == 1, (planning, measuring)
+    for words in planning + measuring:
+        assert _flag(words, "--duty") == "$(private_duty)", words
+    assert CODE.count("private_duty() {") == 1
+
+    session, stdout = interpretation_dry
+    plan = (session / "logs" / "private-mixtral-bm32.log").read_text()
+    assert re.search(rf"^duty\s+{re.escape(duty)}:", plan, re.M), plan[:3000]
+    experiment = re.search(r"^experiment\s+private_weight_reference / (\S+)$",
+                           plan, re.M)
+    assert experiment, plan[:500]
+    assert f"-duty{duty}-" in experiment.group(1), experiment.group(1)
+
+    private = _load_script_module("private_weight_reference")
+    assert private.build_parser().parse_args([]).duty == 1.0
+
+    # EVERY DESCRIPTION QUOTES THE DUTY THE LINES RUN, and no other one.
+    for reader in ("arm_basis", "arm_offgpu_gates", "arm_closes"):
+        text = lift(f"{reader} private-mixtral-bm32", REPO=str(ROOT)).stdout
+        quoted = set(re.findall(r"--duty ([\d.]+)", text))
+        assert quoted == {duty}, (reader, quoted)
+    first = re.sub(r"\s+", " ", stdout.split("READ THESE FIRST", 1)[1]
+                   .split("elasticity-m32-n64-g16", 1)[0])
+    assert f"--duty {duty}" in first, first
+    # And the retired premise is not restated anywhere in the driver: V7 does
+    # not hold "by construction" at a duty below 1, it is expected to.
+    assert "holds by construction" not in TEXT
+
+
+def test_every_description_of_the_ratio_names_its_window_and_its_gap_sizing(
+        interpretation_dry):
+    """THE RECURRING DEFECT, ONE LEVEL UP (finding R3W-4). Since DESIGN
+    DECISION 16 the ratio's two slopes, C2 and V5 are fitted over treads
+    CLAIM_MIN_TREAD and deeper, V4 and V0's floor count those treads and V8
+    prices its step over them; and since the same change each idle gap below
+    full duty is sized from the burst it follows. The driver's R1 paragraph
+    named its window; R3's arm_closes, its READ THESE FIRST entry and the
+    runbook's arm-table row described "slope(shared)/slope(private)" and
+    "idle gaps" with neither. Every one now names the window, read off the
+    script, the gates that read it, and the gap sizing."""
+    private = _load_script_module("private_weight_reference")
+    window = f"treads {private.CLAIM_MIN_TREAD} and deeper"
+    _, stdout = interpretation_dry
+    first = stdout.split("READ THESE FIRST", 1)[1].split(
+        "elasticity-m32-n64-g16", 1)[0]
+    row = re.search(r"^\| `private-mixtral-bm32` \|.*$", _RUNBOOK, re.M)
+    assert row, "no runbook row for the private arm"
+    places = {"arm_closes": _private_closes_line(),
+              "READ THESE FIRST": first,
+              "runbook row": row.group(0)}
+    for where, text in places.items():
+        flat = " ".join(text.split())
+        # IN THE SENTENCE ABOUT THE RATIO'S SLOPES: arm_closes already said
+        # "treads 2 and deeper" of R1's elasticity, which is not this window.
+        assert any("both slopes" in sentence.lower()
+                   and window in sentence.lower()
+                   for sentence in _sentences(flat, ".;")), (where, flat[:1500])
+        for gate in ("C2", "V5", "V4", "V0", "V8"):
+            assert gate in flat, (where, gate)
+        assert "printed beside" in flat and "gate nothing" in flat, where
+        assert "sized from the burst it follows" in flat, (where, flat[:1500])
+
+
+def test_the_elasticity_arm_measures_under_this_sessions_tag(interpretation_dry):
+    """THE DRIVER'S R1 LINE REPRODUCED SESSION 4'S RUN ID. 8d4eb78 gave
+    clock_elasticity `--session-tag` and the chain passed it; this driver's
+    elasticity arm passed nothing, so on an H200 its id was byte-identical to
+    session 4's published directory, and `$RESULTS` is keyed on the card and
+    not the session. On the shared volume the arm would find all 416 of
+    session 4's cells, time nothing, and re-score them as this session's; the
+    CARD file compares only the card NAME, which every H200 shares.
+
+    Both branches now carry the private arm's own tag expression, the run id
+    the measuring line produces differs from one session to the next and is
+    never session 4's, and the dry page names the dry session. --group-m is on
+    the line at the G the arm's name carries."""
+    planning, measuring = _arm_words("elasticity-m32-n64-g16")
+    assert len(planning) == 1 and len(measuring) == 1, (planning, measuring)
+    tag = _flag(_arm_words("private-mixtral-bm32")[1][0], "--session-tag")
+    named_g = re.search(r"-g(\d+)$", "elasticity-m32-n64-g16").group(1)
+    for words in planning + measuring:
+        assert _flag(words, "--session-tag") == tag, words
+        assert _flag(words, "--group-m") == named_g, words
+
+    elasticity = _load_script_module("clock_elasticity")
+    words = measuring[0]
+    script = next(i for i, w in enumerate(words) if w.endswith("clock_elasticity.py"))
+    flags = words[script + 1:]
+
+    def run_id(session_name: str) -> str:
+        argv = [session_name if w == tag else w for w in flags]
+        args = elasticity.build_parser().parse_args(argv + ["--card", "NVIDIA H200"])
+        return elasticity.default_run_id(args)
+
+    one = run_id("gaps-nvidia_h200-20260922T000000Z")
+    two = run_id("gaps-nvidia_h200-20260923T000000Z")
+    assert one != two, one
+    assert SESSION4_ELASTICITY_ID not in (one, two), (one, two)
+
+    session, _ = interpretation_dry
+    plan = (session / "logs" / "elasticity-m32-n64-g16.log").read_text()
+    assert re.search(rf"^session\s+{re.escape(session.name)}$", plan, re.M), plan[:1500]
+
+    # THE STANDALONE DECISION IS WRITTEN WHERE AN OPERATOR READS THE ARM: this
+    # arm keeps session 4's design and is not the chain's per-G elasticity.
+    closes = lift("arm_closes elasticity-m32-n64-g16", REPO=str(ROOT)).stdout
+    assert "STANDALONE ARM AND NOT THE CHAIN'S" in closes, closes[:500]
+    assert "scripts/alpha_g_chain.sh" in closes
+    for reader in ("arm_basis", "arm_offgpu_gates"):
+        text = lift(f"{reader} elasticity-m32-n64-g16", REPO=str(ROOT)).stdout
+        assert f"--group-m {named_g} " in text, reader
+    # The basis no longer promises a dry command reproduces the pod's run id.
+    basis = lift("arm_basis elasticity-m32-n64-g16", REPO=str(ROOT)).stdout
+    assert "gets the same run id:" not in basis, basis
+
+
+def test_the_runbooks_private_reference_section_says_one_thing_about_v7():
+    """The section contradicted itself twice. V7 "FAILS by construction" in
+    one paragraph and "holds by construction" three paragraphs down; "Run it
+    at --duty 0.5" and then "the driver runs seed 0" with a driver that passed
+    no --duty. It is rewritten to the owner's decision: the driver runs R3 at
+    `private_duty`, "fails by construction" is the FULL-duty statement, the
+    booking is the driver's, and the hand-run second seed carries the duty
+    its seed 0 was run at."""
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    section = _RUNBOOK.split("## The private-weight reference alone", 1)[1]
+    section = section.split("\n## ", 1)[0]
+    flat = re.sub(r"\s+", " ", section)
+    assert f"**The driver runs it at `--duty {duty}`**" in flat, flat[:3000]
+    # Only this duty, the script's own full-duty default named as such, and
+    # the V7 follow-up's lower duty, read from the chain that registers it.
+    chain = (ROOT / "scripts" / "alpha_g_chain.sh").read_text()
+    followup = re.search(r"^R3_FOLLOWUP_DUTY=([\d.]+)$", chain, re.M).group(1)
+    assert set(re.findall(r"--duty ([\d.]+)", flat)) <= {duty, "1.0", followup}, flat
+    assert {duty, "1.0"} <= set(re.findall(r"--duty ([\d.]+)", flat)), flat
+    assert "0.5" not in set(re.findall(r"--duty ([\d.]+)", flat)), "the retired pod duty"
+    assert "holds by construction" not in flat
+    for sentence in re.split(r"(?<=[.;])\s", flat):
+        if "by construction" in sentence.lower() and "fail" in sentence.lower():
+            assert "full duty" in sentence, sentence
+    booked = lift("arm_minutes private-mixtral-bm32", REPO=str(ROOT)).stdout.strip()
+    assert f"(`private-mixtral-bm32`, {booked} min)" in flat, flat[:600]
+    # The hour it books is priced by the driver over the section's own --only.
+    only = re.search(r"--only ([\w,-]+)", section).group(1).split(",")
+    assert "private-mixtral-bm32" in only, only
+    priced, bound = lift(f"session_bound {' '.join(only)}",
+                         REPO=str(ROOT)).stdout.split()
+    assert f"the driver prices the {_count_word(len(only))} at ~{priced} minutes " \
+           f"(~{bound} bounded)" in flat, (priced, bound, flat[:900])
+    # The hand-run seed 1 is the driver's measuring line plus the replicate
+    # flags, and it keeps the duty: --replicate-of refuses one at another.
+    block = re.search(r"```\n(MOE_RESULTS_DIR=[^`]*)```", section)
+    assert block, section
+    command = block.group(1).replace("\\\n", " ")
+    words = shlex.split(command)
+    assert words[words.index("--duty") + 1] == duty, command
+    assert "--seed" in words and "--replicate-of" in words, command
+    measuring = _arm_words("private-mixtral-bm32")[1][0]
+    for flag in ("--model", "--block-m", "--treads", "--repeats"):
+        assert words[words.index(flag) + 1] == _flag(measuring, flag), flag
+    # There is no arms.sh; the section used to send the operator to one.
+    assert "arms.sh" not in section
+
+
+def test_session_4s_ratio_pages_are_counted_and_quoted_as_published():
+    """THE PROSE COUNTED THREE PAGES WHERE SESSION 4 PUBLISHED FOUR. The duty
+    rewrite cited session 4's R3 pages as the reason R3 is duty-cycled, and
+    said "three ratio pages" in the 0c comment and twice in the runbook, and
+    quoted their V7 reading as "2% at G=1, 18% at G=16" there and in the arm's
+    own description. Session 4 published four, all V7 FAIL at full duty: two
+    mixtral pages at G=1 (2%), one mixtral page at G=16 (18%), and a qwen2
+    page at G=1 that read 12%, so "2% at G=1" was wrong for one of the two
+    models it covered. Every count of those pages is checked against the
+    published set, every one carries the range, and every percentage quoted
+    against a G names its model and is that model's page at that G."""
+    assert {verdict for _, _, _, verdict, _ in SESSION4_R3_V7} == {"FAIL"}
+    worst: dict[tuple[str, int], int] = {}
+    for _, model, g, _, pct in SESSION4_R3_V7:
+        worst[(model, g)] = max(worst.get((model, g), 0), round(pct))
+    lo, hi = min(worst.values()), max(worst.values())
+    word = _count_word(len(SESSION4_R3_V7))
+    counts = "|".join([r"\d+", *_COUNT_WORDS.values()])
+    mention = re.compile(
+        rf"session 4(?:'s|:) ({counts}) (?:ratio |R3 )?pages", re.I)
+    quote = re.compile(r"(\d+)% (?:on (\S+) )?at G=(\d+)")
+
+    driver = re.sub(r"\s+", " ", re.sub(r"(?m)^\s*#+", " ", TEXT))
+    runbook = re.sub(r"\s+", " ", _RUNBOOK)
+    for name, flat, least in (("driver", driver, 2), ("runbook", runbook, 2)):
+        found = list(mention.finditer(flat))
+        assert len(found) >= least, (name, [m.group(0) for m in found])
+        for m in found:
+            assert m.group(1).lower() == word, (name, m.group(0))
+            window = flat[m.start():m.start() + 400]
+            assert f"{lo}-{hi}%" in window, (name, window)
+        quoted = set()
+        for q in quote.finditer(flat):
+            pct, model, g = int(q.group(1)), q.group(2), int(q.group(3))
+            assert model is not None, (name, "no model named", q.group(0))
+            assert worst.get((model, g)) == pct, (name, q.group(0), worst)
+            quoted.add((model, g))
+        assert quoted == set(worst), (name, quoted, set(worst))
+
+
+def test_the_runbooks_rental_figures_are_the_drivers_own(interpretation_dry):
+    """"this page is a copy", and the copy was two sessions stale: it read
+    515 / 119 / 676 while the driver printed 576 / 137 / 761, and its two-hour
+    `--only` line had neither `thermal` nor the private-weight reference that
+    the driver's own two-hour set carries. The private arm's move to a duty
+    cycle moved all three figures again. The copy is checked here against the
+    dry page it is a copy of."""
+    _, stdout = interpretation_dry
+    priced = re.search(r"TOTAL ~(\d+) minutes", stdout).group(1)
+    kernel = re.search(r"of which ~(\d+) are KERNEL minutes", stdout).group(1)
+    bound = re.search(r"~(\d+) minutes \(~\d+h \d+m\), the same table", stdout).group(1)
+    reaches = _RUNBOOK.split("**What a rental reaches.**", 1)[1]
+    para = re.sub(r"\s+", " ", reaches.split("\n\n", 1)[0])
+    assert f"~{priced} priced minutes (~{kernel} of them KERNEL" in para, para
+    assert f"become ~{bound} once" in para, para
+    two = lift("rental_2h_arms", REPO=str(ROOT)).stdout.split()
+    listed = re.search(r"`--only ([\w,-]+)`", reaches)
+    assert listed and listed.group(1).split(",") == two, (listed, two)
+
+
+def test_the_runbooks_arm_table_books_what_the_driver_books():
+    """The runbook's arm ledger quotes each row's minutes and clock from the
+    driver's own table and says so, and until 2026-09-22 it had no row for
+    either interpretation arm, so the one whose booking moved (3 to 10 minutes
+    at --duty 0.25) and the one whose run id moved had nothing on the page an
+    operator books from. Both have rows now, and every row's two numbers are
+    the ones `--list` prints."""
+    listing = run(["--list"]).stdout
+    listed = {m.group(1): (int(m.group(2)), m.group(3)) for m in re.finditer(
+        r"^  ([a-z0-9_-]+)\s+~\s*(\d+) min (\w+)$", listing, re.M)}
+    rows = {m.group(1): (int(m.group(2)), m.group(3)) for m in re.finditer(
+        r"^\| `([a-z0-9_-]+)` \| *(\d+) \| (\w+) \|", _RUNBOOK, re.M)}
+    assert {"private-mixtral-bm32", "elasticity-m32-n64-g16"} <= set(rows), rows
+    for name, booked in rows.items():
+        assert listed.get(name) == booked, (name, booked, listed.get(name))
+
+
+# --------------------------------------------------------------------------
+# the post-merge recheck of 2026-09-22: one reading of a V7 FAIL at the
+# registered duty, the elasticity the clock correction takes, and one next
+# session
+# --------------------------------------------------------------------------
+
+#: The owner's reading of a V7 FAIL at the registered duty, in the words every
+#: page that states it uses. R3's own page names a lower duty on that FAIL
+#: (`v7_remedy`), and the chain skips the G's later seeds and prints the hand
+#: command for the follow-up; the driver and the runbook said the opposite of
+#: the page, "a finding about the card, not a setting to change".
+_V7_READING = ("the page names a lower duty",
+               "skips the G's later seeds and prints the follow-up command")
+_V7_RETIRED = ("finding about the card", "finding about this card",
+               "not a setting to change")
+
+
+def _runbook_section(heading: str) -> str:
+    """One `## ` section of the runbook, heading line excluded."""
+    return _RUNBOOK.split(heading, 1)[1].split("\n## ", 1)[0]
+
+
+def _sentences(text: str, ends: str = ".;:") -> list[str]:
+    """`text` with its whitespace collapsed, cut after each of `ends`."""
+    return re.split(rf"(?<=[{re.escape(ends)}])\s", " ".join(text.split()))
+
+
+def test_a_v7_fail_at_the_registered_duty_is_read_the_way_r3s_page_reads_it(
+        interpretation_dry):
+    """TWO OPPOSITE INSTRUCTIONS FOR ONE FAIL (finding XS-1). At the duty the
+    driver runs R3 at, R3's page answers a V7 FAIL with "the remedy is a lower
+    --duty", while the driver's READ THESE FIRST said "a finding about this
+    card, not a setting to change", its arm_closes said the page "reports [it]
+    as one", and the runbook agreed with the driver. The page is right about
+    the physics; the chain does not act on it by itself (it skips the G's
+    later seeds, D3), and the follow-up at a lower duty is a new design key and
+    its own runs. The page's behaviour is asked, not assumed, and each of the
+    three places that states the reading is checked for the same words."""
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    private = _load_script_module("private_weight_reference")
+    assert "lower --duty" in private.v7_remedy(float(duty)), \
+        private.v7_remedy(float(duty))
+
+    _, stdout = interpretation_dry
+    first = stdout.split("READ THESE FIRST", 1)[1].split("elasticity-m32-n64-g16", 1)[0]
+    places = {"READ THESE FIRST": first,
+              "arm_closes": _private_closes_line(),
+              "runbook": _runbook_section("## The private-weight reference alone")}
+    for where, text in places.items():
+        flat = " ".join(text.split())
+        assert (f"V7 FAIL at {duty} means that duty is not yet flat for that arm "
+                "on this card") in flat, (where, flat[:4000])
+        for words in _V7_READING:
+            assert words in flat, (where, words)
+        # A follow-up is its own design key and is read on the laptop.
+        assert "new design key" in flat and "--read" in flat, where
+    for where, text in (("driver", TEXT), ("runbook", _RUNBOOK)):
+        flat = " ".join(re.sub(r"(?m)^\s*#+", " ", text).split())
+        for words in _V7_RETIRED:
+            assert words not in flat, (where, words)
+
+
+def test_the_clock_correction_is_fed_the_per_m_tile_claim_and_names_its_key():
+    """THE RECIPE DID NOT SAY WHICH ELASTICITY (finding XS-5). R3's
+    `--clock-elasticity` takes R1's per-M-tile claim, and R1's report says
+    which shape it is by its keys: `claim_min_tread` marks the current claim,
+    fitted over treads CLAIM_MIN_TREAD and deeper, and session 4's reports,
+    the only committed ones, carry the pooled per-call reading under the same
+    `elasticity.value`. The runbook said only "a committed clock_elasticity
+    report" with a source of '<report>@<sha>', which is session 4's per-call
+    eta by the shortest route, and the driver's arm_closes said the same. Both
+    now name the claim, the treads, the key and the marker, and the source
+    format carries the key R3's --help asks for. Every name is read off the
+    two scripts rather than typed here."""
+    elasticity = _load_script_module("clock_elasticity")
+    private = _load_script_module("private_weight_reference")
+    fields = {f.name for f in elasticity.Elasticity.__dataclass_fields__.values()}
+    assert {"value", "lo", "hi", "claim_min_tread", "fixed_tread"} <= fields, fields
+    treads = f"treads {elasticity.CLAIM_MIN_TREAD} and deeper"
+    helps = {a.option_strings[0]: " ".join((a.help or "").split())
+             for a in private.build_parser()._actions if a.option_strings}
+    key = "elasticity.value"
+    assert f"e.g. {key}" in helps["--clock-elasticity-source"], helps
+    assert "per-M-TILE" in helps["--clock-elasticity"], helps
+
+    section = _runbook_section("## The private-weight reference alone")
+    recipe = [p for p in section.split("\n\n") if "--clock-elasticity ETA" in p]
+    assert len(recipe) == 1, recipe
+    flat = " ".join(recipe[0].split())
+    for words in ("per-M-tile", treads, f"`{key}`", "`claim_min_tread`",
+                  "per-call", f"--clock-elasticity-source '<report>:{key}@<sha>'"):
+        assert words in flat, (words, flat)
+    assert "'<report>@<sha>'" not in section
+
+    closes = " ".join(_private_closes_line().split())
+    said = [s for s in _sentences(closes, ".") if "--clock-elasticity" in s]
+    assert said, closes[:2000]
+    for sentence in said:
+        for words in ("per-M-tile", treads, key, "claim_min_tread", "per-call"):
+            assert words in sentence, (words, sentence)
+    assert "from a committed clock_elasticity report" not in closes
+
+
+def test_the_runbook_books_one_next_session_and_the_driver_calls_its_own_standalone():
+    """TWO NEXT SESSIONS, AND AN ARM DESCRIBED AS STILL DEFECTIVE (finding
+    XS-6). Part A opened on "the driver that owns every arm of the next
+    session" and its resume bullet booked the driver's counter set as "the
+    next session", while the alpha(G) chain's section is "the next session's
+    command"; and the driver prints that booking under THE NEXT SESSION into
+    the chain's own preconditions log, because the chain runs it for its
+    preconditions. Every mention of the next session outside the chain's
+    section now names the chain, the driver's block calls itself the
+    standalone path and names the chain first, and the runbook's heading for
+    that block is the one the driver prints.
+
+    And R3's standalone section said R1 has design defects "NOT yet fixed".
+    R1's claim reads treads CLAIM_MIN_TREAD and deeper and its resume is
+    guarded on the card's UUID since 2026-09-22, both read here off the
+    script, so the section says what was fixed; the driver's own R1 comment
+    still said only the card NAME stood between a new session and session
+    4's cells."""
+    chain = "## The alpha(G) chain"
+    assert chain in _RUNBOOK and (ROOT / "scripts" / "alpha_g_chain.sh").exists()
+    outside = _RUNBOOK.split(chain, 1)[0] + _RUNBOOK.split(chain, 1)[1].split("\n## ", 1)[1]
+    mentions = [s for s in _sentences(outside) if "next session" in s.lower()]
+    assert mentions, "the runbook names no next session outside the chain's section"
+    for sentence in mentions:
+        assert "chain" in sentence.lower(), sentence
+    intro = " ".join(_RUNBOOK.split("\n---\n", 1)[0].split())
+    assert "scripts/alpha_g_chain.sh" in intro, intro
+    assert "the driver that owns every arm of the next session" not in intro
+
+    printed = lift("next_session_booking", REPO=str(ROOT)).stdout
+    heading = re.search(r"^==== (.+) ====$", printed, re.M).group(1)
+    assert "STANDALONE" in heading and "NEXT SESSION" not in heading, heading
+    lead = " ".join(printed.split(heading, 1)[1].split("--resume-latest", 1)[0].split())
+    assert "scripts/alpha_g_chain.sh" in lead and "standalone" in lead.lower(), lead
+    bullet = [b for b in re.split(r"\n- ", _runbook_section("## Where things land"))
+              if "A RESUME RE-RUNS NO INVALID ROW" in b]
+    assert len(bullet) == 1, bullet
+    flat = " ".join(bullet[0].replace("`", "").split())
+    assert heading in flat and "STANDALONE PATH" in flat, (heading, flat[:1500])
+
+    elasticity = _load_script_module("clock_elasticity")
+    assert callable(elasticity.device_guard) and callable(elasticity.device_identity)
+    section = " ".join(_runbook_section("## The private-weight reference alone").split())
+    assert "NOT yet fixed" not in section
+    assert f"treads {elasticity.CLAIM_MIN_TREAD} and deeper" in section, section[:1500]
+    r1 = section.split("R1's", 1)[1].split("blockk-w4's review", 1)
+    assert len(r1) == 2 and "UUID" in r1[0], section[:1500]
+    driver = " ".join(re.sub(r"(?m)^\s*#+", " ", TEXT).split())
+    assert "The CARD file does not stop that" not in driver
+    assert "DEVICE guard" in driver
+
+
+def test_the_elasticity_arm_says_its_bands_read_the_per_m_tile_claim():
+    """D2 IN THE DRIVER'S OWN WORDS FOR THE ARM. `arm_closes` for the R1 arm
+    registered three bands and said "C1 asks whether the interval sits wholly
+    inside ONE band" without saying whose interval, after a problem statement
+    written in d log ms / d log f, the per-call reading session 4's page gated.
+    R1 now gates the elasticity of the per-M-tile cost over treads
+    CLAIM_MIN_TREAD and deeper and prints tread 1 and the per-call reading
+    beside it; the closes text says so, with the tread read off the script."""
+    elasticity = _load_script_module("clock_elasticity")
+    closes = " ".join(lift("arm_closes elasticity-m32-n64-g16",
+                           REPO=str(ROOT)).stdout.split())
+    said = closes.split("THE NUMBER THE BANDS ARE READ AGAINST", 1)
+    assert len(said) == 2, closes[:3000]
+    claim = said[1].split("C1 asks", 1)[0]
+    assert "PER-M-TILE" in claim, claim
+    assert f"treads {elasticity.CLAIM_MIN_TREAD} and deeper" in claim, claim
+    assert "per-call" in claim and "gate nothing" in claim, claim
+    assert "C1 asks whether its interval" in closes
+
+
+def test_the_runbook_counts_no_blockk_fixes_and_every_hash_it_cites_touched_it():
+    """A COUNT NOTHING SOURCES (recheck DRV-R1). R3's standalone section said
+    "blockk-w4 has had one fix since, its kernel probe reading Triton's device
+    caches (2026-09-21), and the rest of its review stands". `git log` lists
+    two functional changes to scripts/blockk_diagonal.py after that review,
+    the kernel probe and a `--card` check that compared a NAME to a SLUG and
+    refused 'NVIDIA H200' on session 4's pod, and no file in the repo records
+    the review, so "the rest of its review stands" cannot be checked. The
+    sentence now counts nothing, names each fix by its commit and sends the
+    reader to the log for the list. Every hash it cites is asked of git."""
+    section = " ".join(_runbook_section("## The private-weight reference alone").split())
+    said = [s for s in _sentences(section, ".") if s.startswith("blockk-w4")]
+    assert len(said) == 1, section[:2500]
+    sentence = said[0]
+    assert not re.search(r"\b(?:one|two|three|a single|only)\s+(?:fix|change)",
+                         sentence), sentence
+    assert "review stands" not in section
+    assert "kernel probe" in sentence and "`--card` check" in sentence, sentence
+    assert "`git log -- scripts/blockk_diagonal.py`" in sentence, sentence
+    cited = re.findall(r"\b[0-9a-f]{7,40}\b", sentence)
+    assert len(cited) >= 2, sentence
+
+    shallow = _spawn(["git", "-C", str(ROOT), "rev-parse", "--is-shallow-repository"],
+                     capture_output=True, text=True, timeout=60)
+    if shallow.returncode != 0 or shallow.stdout.strip() != "false":
+        pytest.skip("no full git history here to ask which commits touched the script")
+    for sha in cited:
+        touched = _spawn(["git", "-C", str(ROOT), "diff-tree", "--no-commit-id",
+                          "--name-only", "-r", sha, "--", "scripts/blockk_diagonal.py"],
+                         capture_output=True, text=True, timeout=60)
+        assert touched.returncode == 0, (sha, touched.stderr)
+        assert touched.stdout.split() == ["scripts/blockk_diagonal.py"], sha
+
+
+def test_the_pages_beside_the_runbook_book_the_chain_as_the_next_session():
+    """THE SAME TWO NEXT SESSIONS, ONE PAGE OVER (recheck DRV-R2). The runbook
+    names the alpha(G) chain as the next session and the driver as the
+    standalone path, but docs/RUNPOD.md introduced the driver as running
+    "every arm of the next session", and docs/STUDY.md's 2026-09-10 section
+    wrote "The next session is `--new`" above the driver's counter set. Every
+    sentence on either page that names the next session now names the chain,
+    RUNPOD.md calls the driver on its own the standalone path, and STUDY.md
+    introduces the block as the driver's own rerun (tests/test_docs.py pins
+    the set inside it against the driver's `rerun_arms`)."""
+    script = "scripts/alpha_g_chain.sh"
+    assert (ROOT / script).exists(), script
+    runpod = " ".join((ROOT / "docs" / "RUNPOD.md").read_text().split())
+    study = (ROOT / "docs" / "STUDY.md").read_text()
+    study = study.split("## What the 2026-09-10 H200 session settled", 1)[1]
+    study = study.split("\n## ", 1)[0]
+    for where, text in (("RUNPOD.md", runpod), ("STUDY.md", study)):
+        mentions = [s for s in _sentences(text) if "next session" in s.lower()]
+        assert mentions, f"{where} names no next session"
+        for sentence in mentions:
+            assert "alpha(G) chain" in sentence, (where, sentence)
+        assert script in " ".join(text.split()), where
+    assert "every arm of the next session" not in runpod
+    assert "standalone path" in runpod
+    before = study.split("```bash\nbash scripts/h200_gaps_session.sh --new", 1)
+    assert len(before) == 2, study[:3000]
+    intro = " ".join(before[0].rstrip().split("\n\n")[-1].split())
+    assert "The driver's own rerun is `--new`" in intro, intro
+    assert "standalone path" in intro, intro

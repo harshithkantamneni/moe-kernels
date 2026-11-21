@@ -1,0 +1,6 @@
+== 2026-10-29T04:17:32Z step decodebytes: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json; every launch grid held to vLLM's own
+COUNTER ROUTE r3-decode: mixtral-8x7b, page docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json (sha256 e9e6747db12d9663...), 26 (cell, arm), 3 calls + 2 warmups each, 156 profiled fused_moe_kernel launches (the warmups too: no launch skip), about 2.6 min
+  child: scripts/r3_decode.py --counter-child (vLLM's own tile, the spy's grids in the manifest)
+RESULT: VALIDITY grid PASS 26 cells, 260 launches attributed; /home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-mixtral-8x7b-dn-r3-counters/lock1710/r3d.json
+2026-10-29T04:19:26Z decodebytes: RESULT: VALIDITY grid PASS 26 cells, 260 launches attributed; /home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-mixtral-8x7b-dn-r3-counters/lock1710/r3d.js
+2026-10-29T04:19:27Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-mixtral-8x7b-dn-r3-counters/lock1710/r3d.json)

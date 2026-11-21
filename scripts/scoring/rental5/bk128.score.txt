@@ -1,0 +1,16 @@
+RENTAL 5 BK 128 TIMED (blind confirmation of the occupancy-3 floor), 2026-10-07-rental5-bk128-gh200
+  page bk64: counted
+  page bk128: counted
+  n=4: q 0.9958 | H_C +0.18%  SYNC +71.44%  PS -0.09%
+  n=5: q 0.9957 | H_C +0.17%  SYNC +72.57%  PS -0.10%
+  n=6: q 0.9951 | H_C +0.13%  SYNC +73.39%  PS -0.15%
+  n=7: q 0.9946 | H_C +0.08%  SYNC +73.87%  PS -0.20%
+  n=8: q 0.9949 | H_C +0.11%  SYNC +74.42%  PS -0.17%
+  n=9: q 0.9949 | H_C +0.11%  SYNC +74.76%  PS -0.17%
+  verdict: H_C HOLDS; SYNC EXCLUDED
+  calibration (ln meas on ln pred): NOT RESOLVED (1 clusters, under 6): descriptive only; slope 6.7517 intercept +0.0366
+  gamma: NOT RESOLVED (0 resolved pairs, under 10); gamma None (C 0, D 0)
+  gamma at sigma 0.10%: NOT RESOLVED (0 resolved pairs, under 10)
+  top-1 regret: NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)
+  two views (ALL, CLEAN):
+    0 of 7 verdicts differ between ALL and CLEAN

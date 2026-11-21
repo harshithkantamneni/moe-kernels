@@ -1,0 +1,245 @@
+wave_split_bytes: 1 card(s), each fitted alone (cards are never pooled)
+STATUS: NOT FINAL. The best byte model the study has for G <= 16 and for PRIVATE; a
+  fixed-point defect, an unidentified activation distance and the missing dead-CTA
+  term are known structural gaps, not noise. WHAT WOULD FALSIFY IT (any one):
+  GH200 w2 SHARED at G=8, n = 2 or 4, above 1.12; n=5 or n=8 at G = 2, 4 or 16
+  outside +-5% of the registered predictions; a w1 G=1 saving (n - q) that changes
+  with n; an H100 against GH200 gap over 0.05 at G >= 2; a GH200 byte page with the
+  co-residency window halved where the n=2 over-read at G=2 does not shrink; n=5
+  time errors above 3% at G=1 or G=2 SHARED through the per-GEMM overlap map.
+  OPEN: the published GH200 1710 MHz lock pages, the ones the judge set that last
+  test on, already give -3.14% at G=2 SHARED (and -2.99% at G=1), past its 3% as
+  worded. The judge's report does not say whether it means pages not yet taken or
+  a looser threshold; it is read here as a test of new pages, the GH200 cell an
+  open question for the judge, not a pass.
+
+=== CARD nvidia_gh200_480gb (NVIDIA GH200 480GB, sm_9.0, 132 SMs, L2 60.0 MiB): its own fit, nothing pooled with another card
+[nvidia_gh200_480gb] PAGES (stored gate verdicts that are not PASS; every page is fitted, as the judge's reproduction fitted them)
+  G=1   nvidia_gh200_480gb-block_m32-block_n64-calls3-dtypebf16-familyr3_arms-group_m1-moder3_run-modelm-4c130f35  V6 FAIL
+  G=2   nvidia_gh200_480gb-block_m32-block_n64-calls3-dtypebf16-familyr3_arms-group_m2-moder3_run-modelm-7da0ee1b  V6 FAIL
+  G=4   nvidia_gh200_480gb-block_m32-block_n64-calls3-dtypebf16-familyr3_arms-group_m4-moder3_run-modelm-5180487f  V6 FAIL, C2 REFUSE
+  G=16  nvidia_gh200_480gb-block_m32-block_n64-calls3-dtypebf16-familyr3_arms-group_m16-moder3_run-model-199127f7  V6 FAIL, C1 REFUSE, C2 REFUSE, C6 FAIL
+  G=64  nvidia_gh200_480gb-block_m32-block_n64-calls3-dtypebf16-familyr3_arms-group_m64-moder3_run-model-6fb90334  V6 FAIL, V7 FAIL, C1 REFUSE, C2 FAIL, C6 FAIL
+[nvidia_gh200_480gb] GEOMETRY (every value read off the pages)
+  w1: num_pid_n P 448, CTAs/SM 5 -> W_c 660, SLAB 524,288 B, ATILE 262,144 B, W_w1 1,879,048,192 B
+  w2: num_pid_n P 64, CTAs/SM 4 -> W_c 528, SLAB 1,835,008 B, ATILE 917,504 B, W_w2 939,524,096 B
+  declared expert slots {'native': 8, 'private': 72, 'shared': 72}; every grid is the walk's, and the pid walk agrees with the closed form on every cell walked
+[nvidia_gh200_480gb] PARAMETERS (per view; the fill view is the registered default)
+  fill C_A 104.77 MiB (1.746 x L2), beta_A 1.364, theta1_A 0.136; C_B 69.72 MiB (1.162 x L2), beta_B 2.110, theta1 0.313, eps1_w1 0.0000, eps1_w2 0.1306
+       stage 1 SSE 0.001935 over 50 PRIVATE cells, stage 2 SSE 0.04353 over 60 SHARED+NATIVE cells at G in (1, 2, 4) (4240 model evaluations)
+       FLAG eps1_w1 at bound 0 (7.1e-08; within 0.0001 of 0; its stage-2 SSE moves by 5.6e-09 relative at 0)
+  ws   C_A 123.21 MiB (2.054 x L2), beta_A 1.550, theta1_A 0.001; C_B 69.75 MiB (1.162 x L2), beta_B 2.116, theta1 0.314, eps1_w1 0.0000, eps1_w2 0.1270
+       stage 1 SSE 0.001738 over 50 PRIVATE cells, stage 2 SSE 0.04333 over 60 SHARED+NATIVE cells at G in (1, 2, 4) (3870 model evaluations)
+       FLAG theta1_A at bound 0 (0.0012; logit -6.7 past -6; its stage-1 SSE moves by 2.6e-08 relative at 0)
+       FLAG eps1_w1 at bound 0 (1e-08; within 0.0001 of 0; its stage-2 SSE moves by 9.0e-10 relative at 0)
+[nvidia_gh200_480gb] CELLS (q in units of W_g; '--' is ILL-POSED and prints no number, 'n/a' a view the parameters did not give; kappa and status of the fill view)
+  arm       G  n g   measured  q_fill    q_ws q_group  kappa  status
+  shared    1  1 w1     1.000   1.000   1.000   1.000   1.00  FIT
+  shared    1  2 w1     1.985   1.979   1.978   2.000   1.02  FIT
+  shared    1  3 w1     2.984   2.979   2.979   3.000   1.02  FIT
+  shared    1  4 w1     3.985   3.980   3.979   4.000   1.01  FIT
+  shared    1  6 w1     5.984   5.980   5.979   6.000   1.01  FIT
+  shared    2  1 w1     1.000   1.001   1.000   1.000   1.00  FIT
+  shared    2  2 w1     1.000   1.001   1.001   1.000   1.00  FIT
+  shared    2  3 w1     2.000   2.001   2.001   2.000   1.00  FIT
+  shared    2  4 w1     2.002   2.001   2.001   2.000   1.00  FIT
+  shared    2  6 w1     3.001   3.002   3.002   3.000   1.00  FIT
+  shared    4  1 w1     1.001   1.002   1.001   1.000   1.00  FIT
+  shared    4  2 w1     1.000   1.002   1.002   1.000   1.00  FIT
+  shared    4  3 w1     1.501   1.502   1.502   1.500   1.00  FIT
+  shared    4  4 w1     0.998   1.001   1.002   1.000   1.00  FIT
+  shared    4  6 w1     1.999   2.003   2.004   2.000   1.00  FIT
+  shared   16  1 w1     1.003   1.005   1.004   1.000   1.01  HELD-OUT
+  shared   16  2 w1     1.010   1.011   1.013   1.000   1.01  HELD-OUT
+  shared   16  3 w1     1.128   1.134   1.138   1.125   1.01  HELD-OUT
+  shared   16  4 w1     0.999   1.009   1.018   1.000   1.01  HELD-OUT
+  shared   16  6 w1     1.247   1.260   1.274   1.250   1.01  HELD-OUT
+  shared   64  1 w1     1.002   1.005   1.004   1.000   1.01  HELD-OUT
+  shared   64  2 w1     1.028   1.011   1.013   1.000   1.01  HELD-OUT
+  shared   64  3 w1     1.015   1.017   1.028   1.000   1.02  HELD-OUT
+  shared   64  4 w1     1.007   1.023   1.051   1.000   1.03  HELD-OUT
+  shared   64  6 w1     1.002   1.035   1.120   1.000   1.05  HELD-OUT
+  native    1  1 w1     1.000   1.000   1.000   1.000   1.00  FIT
+  native    1  2 w1     1.984   1.979   1.978   2.000   1.02  FIT
+  native    1  3 w1     2.985   2.979   2.979   3.000   1.02  FIT
+  native    1  4 w1     3.986   3.980   3.979   4.000   1.01  FIT
+  native    1  6 w1     5.985   5.980   5.979   6.000   1.01  FIT
+  native    2  1 w1     1.000   1.001   1.000   1.000   1.00  FIT
+  native    2  2 w1     1.000   1.001   1.001   1.000   1.00  FIT
+  native    2  3 w1     2.000   2.001   2.001   2.000   1.00  FIT
+  native    2  4 w1     2.002   2.001   2.001   2.000   1.00  FIT
+  native    2  6 w1     3.002   3.002   3.002   3.000   1.00  FIT
+  native    4  1 w1     1.001   1.002   1.001   1.000   1.00  FIT
+  native    4  2 w1     1.000   1.002   1.002   1.000   1.00  FIT
+  native    4  3 w1     1.501   1.502   1.502   1.500   1.00  FIT
+  native    4  4 w1     0.998   1.001   1.002   1.000   1.00  FIT
+  native    4  6 w1     1.999   2.003   2.004   2.000   1.00  FIT
+  native   16  1 w1     1.003   1.005   1.004   1.000   1.01  HELD-OUT
+  native   16  2 w1     1.008   1.011   1.013   1.000   1.01  HELD-OUT
+  native   16  3 w1     1.128   1.134   1.138   1.125   1.01  HELD-OUT
+  native   16  4 w1     0.999   1.009   1.018   1.000   1.01  HELD-OUT
+  native   16  6 w1     1.247   1.260   1.274   1.250   1.01  HELD-OUT
+  native   64  1 w1     1.003   1.005   1.004   1.000   1.01  HELD-OUT
+  native   64  2 w1     1.018   1.011   1.013   1.000   1.01  HELD-OUT
+  native   64  3 w1     1.008   1.017   1.028   1.000   1.02  HELD-OUT
+  native   64  4 w1     1.002   1.023   1.051   1.000   1.03  HELD-OUT
+  native   64  6 w1     1.001   1.035   1.120   1.000   1.05  HELD-OUT
+  private   1  1 w1     1.000   1.000   1.000   1.000   1.00  FIT
+  private   1  2 w1     2.001   2.001   2.000   2.000   1.00  FIT
+  private   1  3 w1     3.001   3.001   3.001   3.000   1.00  FIT
+  private   1  4 w1     4.001   4.001   4.001   4.000   1.00  FIT
+  private   1  6 w1     6.001   6.002   6.001   6.000   1.00  FIT
+  private   2  1 w1     1.000   1.001   1.000   1.000   1.00  FIT
+  private   2  2 w1     2.001   2.002   2.001   2.000   1.00  FIT
+  private   2  3 w1     3.001   3.002   3.002   3.000   1.00  FIT
+  private   2  4 w1     4.002   4.003   4.002   4.000   1.00  FIT
+  private   2  6 w1     6.002   6.005   6.003   6.000   1.00  FIT
+  private   4  1 w1     1.001   1.002   1.001   1.000   1.00  FIT
+  private   4  2 w1     2.001   2.004   2.003   2.000   1.00  FIT
+  private   4  3 w1     3.004   3.006   3.004   3.000   1.00  FIT
+  private   4  4 w1     4.006   4.009   4.006   4.000   1.00  FIT
+  private   4  6 w1     6.006   6.013   6.009   6.000   1.00  FIT
+  private  16  1 w1     1.003   1.005   1.004   1.000   1.01  FIT
+  private  16  2 w1     2.019   2.027   2.024   2.000   1.02  FIT
+  private  16  3 w1     3.024   3.033   3.029   3.000   1.01  FIT
+  private  16  4 w1     4.032   4.058   4.051   4.000   1.02  FIT
+  private  16  6 w1     6.072   6.088   6.077   6.000   1.02  FIT
+  private  64  1 w1     1.002   1.005   1.004   1.000   1.01  FIT
+  private  64  2 w1     2.015   2.027   2.024   2.000   1.02  FIT
+  private  64  3 w1     3.048   3.074   3.070   3.000   1.03  FIT
+  private  64  4 w1     4.107   4.149   4.145   4.000   1.05  FIT
+  private  64  6 w1     6.312   6.396   6.401   6.000   1.09  FIT
+  shared    1  1 w2     1.002   1.000   1.000   1.000   1.00  FIT
+  shared    1  2 w2     1.335   1.422   1.422   2.000   1.51  FIT
+  shared    1  3 w2     1.958   1.964   1.964   3.000   2.44  FIT
+  shared    1  4 w2     2.489   2.478   2.478   4.000   4.11  FIT
+  shared    1  6 w2     3.773      --      --   6.000  11.25  ILL-POSED  (kappa 11.2 > 10)
+  shared    2  1 w2     1.004   1.000   1.000   1.000   1.00  FIT
+  shared    2  2 w2     1.039   1.069   1.067   1.000   1.00  FIT
+  shared    2  3 w2     1.908   1.858   1.857   2.000   1.15  FIT
+  shared    2  4 w2     1.899   1.767   1.766   2.000   1.40  FIT
+  shared    2  6 w2     2.853   2.619   2.620   3.000   1.70  FIT
+  shared    4  1 w2     1.005   1.001   1.000   1.000   1.00  FIT
+  shared    4  2 w2     1.055   1.073   1.071   1.000   1.01  FIT
+  shared    4  3 w2     1.526   1.530   1.529   1.500   1.08  FIT
+  shared    4  4 w2     1.055   1.108   1.109   1.000   1.01  FIT
+  shared    4  6 w2     2.047   2.005   2.011   2.000   1.09  FIT
+  shared   16  1 w2     1.003   1.002   1.000   1.000   1.00  HELD-OUT
+  shared   16  2 w2     1.126   1.104   1.112   1.000   1.05  HELD-OUT
+  shared   16  3 w2     1.274   1.244   1.258   1.125   1.04  HELD-OUT
+  shared   16  4 w2     1.209   1.146   1.190   1.000   1.06  HELD-OUT
+  shared   16  6 w2     1.593   1.416   1.498   1.250   1.06  HELD-OUT
+  shared   64  1 w2     1.004   1.002   1.000   1.000   1.00  OUT-OF-DOMAIN
+  shared   64  2 w2     1.297   1.104   1.112   1.000   1.05  OUT-OF-DOMAIN
+  shared   64  3 w2     1.420   1.167   1.218   1.000   1.10  OUT-OF-DOMAIN
+  shared   64  4 w2     1.533   1.224   1.353   1.000   1.15  OUT-OF-DOMAIN
+  shared   64  6 w2     2.082   1.343   1.743   1.000   1.29  OUT-OF-DOMAIN
+  native    1  1 w2     1.002   1.000   1.000   1.000   1.00  FIT
+  native    1  2 w2     1.326   1.422   1.422   2.000   1.51  FIT
+  native    1  3 w2     1.951   1.964   1.964   3.000   2.44  FIT
+  native    1  4 w2     2.499   2.478   2.478   4.000   4.11  FIT
+  native    1  6 w2     3.646      --      --   6.000  11.25  ILL-POSED  (kappa 11.2 > 10)
+  native    2  1 w2     1.004   1.000   1.000   1.000   1.00  FIT
+  native    2  2 w2     1.033   1.069   1.067   1.000   1.00  FIT
+  native    2  3 w2     1.903   1.858   1.857   2.000   1.15  FIT
+  native    2  4 w2     1.898   1.767   1.766   2.000   1.40  FIT
+  native    2  6 w2     2.849   2.619   2.620   3.000   1.70  FIT
+  native    4  1 w2     1.005   1.001   1.000   1.000   1.00  FIT
+  native    4  2 w2     1.047   1.073   1.071   1.000   1.01  FIT
+  native    4  3 w2     1.525   1.530   1.529   1.500   1.08  FIT
+  native    4  4 w2     1.055   1.108   1.109   1.000   1.01  FIT
+  native    4  6 w2     2.047   2.005   2.011   2.000   1.09  FIT
+  native   16  1 w2     1.003   1.002   1.000   1.000   1.00  HELD-OUT
+  native   16  2 w2     1.119   1.104   1.112   1.000   1.05  HELD-OUT
+  native   16  3 w2     1.277   1.244   1.258   1.125   1.04  HELD-OUT
+  native   16  4 w2     1.205   1.146   1.190   1.000   1.06  HELD-OUT
+  native   16  6 w2     1.593   1.416   1.498   1.250   1.06  HELD-OUT
+  native   64  1 w2     1.002   1.002   1.000   1.000   1.00  OUT-OF-DOMAIN
+  native   64  2 w2     1.179   1.104   1.112   1.000   1.05  OUT-OF-DOMAIN
+  native   64  3 w2     1.323   1.167   1.218   1.000   1.10  OUT-OF-DOMAIN
+  native   64  4 w2     1.455   1.224   1.353   1.000   1.15  OUT-OF-DOMAIN
+  native   64  6 w2     2.039   1.343   1.743   1.000   1.29  OUT-OF-DOMAIN
+  private   1  1 w2     1.002   1.000   1.000   1.000   1.00  FIT
+  private   1  2 w2     2.003   2.002   2.001   2.000   1.00  FIT
+  private   1  3 w2     3.004   3.004   3.002   3.000   1.00  FIT
+  private   1  4 w2     4.007   4.006   4.004   4.000   1.00  FIT
+  private   1  6 w2     6.014   6.009   6.006   6.000   1.00  FIT
+  private   2  1 w2     1.004   1.000   1.000   1.000   1.00  FIT
+  private   2  2 w2     2.005   2.005   2.004   2.000   1.00  FIT
+  private   2  3 w2     3.010   3.010   3.007   3.000   1.00  FIT
+  private   2  4 w2     4.017   4.015   4.011   4.000   1.00  FIT
+  private   2  6 w2     6.036   6.024   6.018   6.000   1.01  FIT
+  private   4  1 w2     1.005   1.001   1.000   1.000   1.00  FIT
+  private   4  2 w2     2.010   2.013   2.010   2.000   1.01  FIT
+  private   4  3 w2     3.025   3.025   3.021   3.000   1.01  FIT
+  private   4  4 w2     4.042   4.037   4.032   4.000   1.01  FIT
+  private   4  6 w2     6.093   6.062   6.053   6.000   1.01  FIT
+  private  16  1 w2     1.003   1.002   1.000   1.000   1.00  FIT
+  private  16  2 w2     2.069   2.083   2.083   2.000   1.05  FIT
+  private  16  3 w2     3.113   3.115   3.114   3.000   1.05  FIT
+  private  16  4 w2     4.317   4.247   4.252   4.000   1.08  FIT
+  private  16  6 w2     6.615   6.412   6.422   6.000   1.09  FIT
+  private  64  1 w2     1.003   1.002   1.000   1.000   1.00  FIT
+  private  64  2 w2     2.069   2.083   2.083   2.000   1.05  FIT
+  private  64  3 w2     3.282   3.284   3.293   3.000   1.11  FIT
+  private  64  4 w2     4.636   4.616   4.630   4.000   1.16  FIT
+  private  64  6 w2     7.572   7.624   7.602   6.000   1.20  FIT
+[nvidia_gh200_480gb] SCORES, n >= 2: rms / worst of (model / measured - 1), beside the group model on the same cells
+  THE MODEL'S OWN (in domain and well posed only)
+    stage 1 fit: PRIVATE                    fill 0.69% / -3.06% (40)  ws 0.65% / -2.92% (40)  | group 4.78%
+    stage 2 fit: SHARED+NATIVE G<=4         fill 3.05% / -8.23% (46)  ws 3.04% / -8.20% (46)  | group 20.00%
+    HELD-OUT: SHARED+NATIVE G=16, 64        fill 3.84% / -11.09% (24)  ws 4.25% / +11.97% (24)  | group 9.23%
+    every in-domain, well-posed cell        fill 2.70% / -11.09% (110)  ws 2.82% / +11.97% (110)  | group 13.93%
+  THE JUDGE'S COMPARISON SETS (reproduced for checking against the report; they INCLUDE OUT-OF-DOMAIN cells and the least roots of ILL-POSED cells)
+    120 cells: S+N+P, w1+w2                 fill 6.20% / -35.50% (120)  ws 4.13% / -16.28% (120)  | group 17.96%; includes 8 OUT-OF-DOMAIN, 2 ILL-POSED
+    w2 S+N, G<=16                           fill 4.84% / -11.09% (32)  ws 4.00% / -8.20% (32)  | group 29.62%; includes 0 OUT-OF-DOMAIN, 2 ILL-POSED
+    w2 PRIVATE                              fill 0.84% / -3.06% (20)  ws 0.80% / -2.92% (20)  | group 6.61%; includes 0 OUT-OF-DOMAIN, 0 ILL-POSED
+    total q, S+N+P (what timing uses)       fill 3.66% / -16.46% (60)  ws 1.53% / -6.41% (60)  | group 8.51%
+[nvidia_gh200_480gb] W2 SHARED DECOMPOSITION, fill view, units of W_w2: q = group - recovered(first window) - recovered(later) + first-window partner loss + A [INTERPRETATION: each term is the model's reading, not a counter]
+  G=1 n=2: 2.000 - 0.446 (of 0.500) - 0.133 (of 0.500) + 0.000 + 0.001 = 1.422  | measured 1.335  (net vs group: model -0.578, measured -0.665)
+  G=1 n=3: 3.000 - 0.596 (of 0.656) - 0.442 (of 1.344) + 0.000 + 0.002 = 1.964  | measured 1.958  (net vs group: model -1.036, measured -1.042)
+  G=1 n=4: 4.000 - 0.689 (of 0.750) - 0.836 (of 2.250) + 0.000 + 0.003 = 2.478  | measured 2.489  (net vs group: model -1.522, measured -1.511)
+  G=1 n=6: ILL-POSED, no numbers  | measured 3.773
+  G=2 n=2: 1.000 - 0.000 (of 0.000) - 0.000 (of 0.000) + 0.067 + 0.002 = 1.069  | measured 1.039  (net vs group: model +0.069, measured +0.039)
+  G=2 n=3: 2.000 - 0.185 (of 0.266) - 0.011 (of 0.734) + 0.049 + 0.005 = 1.858  | measured 1.908  (net vs group: model -0.142, measured -0.092)
+  G=2 n=4: 2.000 - 0.209 (of 0.250) - 0.096 (of 0.750) + 0.067 + 0.005 = 1.767  | measured 1.899  (net vs group: model -0.233, measured -0.101)
+  G=2 n=6: 3.000 - 0.223 (of 0.266) - 0.233 (of 1.734) + 0.067 + 0.008 = 2.619  | measured 2.853  (net vs group: model -0.381, measured -0.147)
+  G=4 n=2: 1.000 - 0.000 (of 0.000) - 0.000 (of 0.000) + 0.067 + 0.005 = 1.073  | measured 1.055  (net vs group: model +0.073, measured +0.055)
+  G=4 n=3: 1.500 - 0.047 (of 0.133) - 0.000 (of 0.367) + 0.067 + 0.010 = 1.530  | measured 1.526  (net vs group: model +0.030, measured +0.026)
+  G=4 n=4: 1.000 - 0.000 (of 0.000) - 0.000 (of 0.000) + 0.101 + 0.006 = 1.108  | measured 1.055  (net vs group: model +0.108, measured +0.055)
+  G=4 n=6: 2.000 - 0.087 (of 0.133) - 0.007 (of 0.867) + 0.085 + 0.014 = 2.005  | measured 2.047  (net vs group: model +0.005, measured +0.047)
+[nvidia_gh200_480gb] FIRST-WAVE STATISTIC: s1 = max(0, W_c,w1 - P_w1) / (E P_w1) = max(0, 660 - 448) / 3584 = 0.05915 (w1 G=1 cross-group events inside the first window: 212)
+  n=2: measured saving n - q +0.0155 (55 slab reads), recovery phi 0.262; model (fill) saving +0.0214
+  n=3: measured saving n - q +0.0159 (57 slab reads), recovery phi 0.269; model (fill) saving +0.0209
+  n=4: measured saving n - q +0.0155 (55 slab reads), recovery phi 0.262; model (fill) saving +0.0205
+  n=6: measured saving n - q +0.0158 (57 slab reads), recovery phi 0.267; model (fill) saving +0.0197
+[nvidia_gh200_480gb] PREDICTED (cells no page measured): n: fill [ws]; ILL = ILL-POSED, no number; OOD = OUT-OF-DOMAIN, printed and never scored. NATIVE is not listed: its live CTAs run in SHARED's order at every G, so the model gives it SHARED's number (it has no dead-CTA term)
+  w1 shared  G=1   n5 4.980 [4.979]  n7 6.981 [6.980]  n8 7.981 [7.980]
+  w1 shared  G=2   n5 3.002 [3.002]  n7 4.003 [4.002]  n8 4.003 [4.002]
+  w1 shared  G=4   n5 2.003 [2.003]  n7 2.504 [2.505]  n8 2.003 [2.004]
+  w1 shared  G=8   n1 1.005 [1.004]  n2 1.004 [1.004]  n3 1.255 [1.256]  n4 1.003 [1.006]  n5 1.505 [1.508]  n6 1.505 [1.509]  n7 1.756 [1.761]  n8 1.003 [1.009]
+  w1 shared  G=16  n5 1.260 [1.269]  n7 1.385 [1.400]  n8 1.007 [1.027]
+  w1 shared  G=32  n1 1.005 [1.004]  n2 1.011 [1.013]  n3 1.017 [1.028]  n4 1.023 [1.051]  n5 1.145 [1.174]  n6 1.143 [1.178]  n7 1.144 [1.188]  n8 1.018 [1.079]
+  w1 shared  G=64  n5 1.029 [1.081]  n7 1.042 [1.169]  n8 1.048 [1.226]
+  w1 private G=1   n5 5.002 [5.001]  n7 7.002 [7.001]  n8 8.003 [8.001]
+  w1 private G=2   n5 5.004 [5.003]  n7 7.006 [7.004]  n8 8.007 [8.004]
+  w1 private G=4   n5 5.011 [5.008]  n7 7.015 [7.011]  n8 8.018 [8.012]
+  w1 private G=8   n1 1.005 [1.004]  n2 2.011 [2.008]  n3 3.016 [3.013]  n4 4.022 [4.018]  n5 5.028 [5.022]  n6 6.034 [6.027]  n7 7.040 [7.031]  n8 8.046 [8.036]
+  w1 private G=16  n5 5.063 [5.055]  n7 7.093 [7.082]  n8 8.118 [8.104]
+  w1 private G=32  n1 1.005 [1.004]  n2 2.027 [2.024]  n3 3.074 [3.070]  n4 4.149 [4.145]  n5 5.154 [5.150]  n6 6.178 [6.172]  n7 7.227 [7.219]  n8 8.305 [8.297]
+  w1 private G=64  n5 5.256 [5.255]  n7 7.574 [7.586]  n8 8.791 [8.809]
+  w2 shared  G=1   n5 3.047 [3.046]  n7 ILL  n8 ILL
+  w2 shared  G=2   n5 2.690 [2.690]  n7 3.606 [3.607]  n8 3.330 [3.334]
+  w2 shared  G=4   n5 2.027 [2.030]  n7 2.517 [2.524]  n8 1.940 [1.953]
+  w2 shared  G=8   n1 1.002 [1.000]  n2 1.082 [1.082]  n3 1.355 [1.361]  n4 1.118 [1.130]  n5 1.627 [1.645]  n6 1.627 [1.650]  n7 1.882 [1.911]  n8 1.133 [1.171]
+  w2 shared  G=16  n5 1.400 [1.451]  n7 1.540 [1.626]  n8 1.159 [1.277]
+  w2 shared  G=32  n1 1.002 [1.000] OOD  n2 1.104 [1.112] OOD  n3 1.167 [1.218] OOD  n4 1.224 [1.353] OOD  n5 1.339 [1.478] OOD  n6 1.336 [1.511] OOD  n7 1.350 [1.588] OOD  n8 1.232 [1.572] OOD
+  w2 shared  G=64  n5 1.282 [1.527] OOD  n7 1.410 [2.001] OOD  n8 1.485 [2.301] OOD
+  w2 private G=1   n5 5.007 [5.005]  n7 7.011 [7.008]  n8 8.013 [8.009]
+  w2 private G=2   n5 5.019 [5.015]  n7 7.029 [7.022]  n8 8.034 [8.026]
+  w2 private G=4   n5 5.050 [5.043]  n7 7.074 [7.064]  n8 8.087 [8.075]
+  w2 private G=8   n1 1.002 [1.000]  n2 2.033 [2.030]  n3 3.065 [3.061]  n4 4.097 [4.092]  n5 5.128 [5.122]  n6 6.160 [6.153]  n7 7.192 [7.184]  n8 8.224 [8.214]
+  w2 private G=16  n5 5.278 [5.283]  n7 7.443 [7.452]  n8 8.578 [8.591]
+  w2 private G=32  n1 1.002 [1.000]  n2 2.083 [2.083]  n3 3.284 [3.293]  n4 4.616 [4.630]  n5 5.637 [5.661]  n6 6.777 [6.799]  n7 8.047 [8.070]  n8 9.445 [9.465]
+  w2 private G=64  n5 6.072 [6.075]  n7 9.236 [9.183]  n8 10.872 [10.793]
+

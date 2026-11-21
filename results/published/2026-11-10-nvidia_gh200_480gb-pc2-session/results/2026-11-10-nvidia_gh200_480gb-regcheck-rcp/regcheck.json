@@ -1,0 +1,1321 @@
+{
+ "tool": "scripts/instr_probe_pc2.py --mode regcheck",
+ "variants": {
+  "u10-sr": {
+   "excluded_cells": {},
+   "inflight_printed": {
+    "16-64-128-1-4-4-False-2": {
+     "groups": 2,
+     "n_if": 3,
+     "wait": 4,
+     "why": ""
+    },
+    "16-64-128-1-4-4-True-1": {
+     "groups": 2,
+     "n_if": 3,
+     "wait": 4,
+     "why": ""
+    },
+    "64-128-64-1-3-4-False-2": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    },
+    "64-128-64-1-3-4-True-1": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    }
+   },
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "16-64-128-1-4-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-4-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "64-128-64-1-3-4-False-2": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "64-128-64-1-3-4-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    },
+    "plain": {
+     "16-64-128-1-4-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-4-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "64-128-64-1-3-4-False-2": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "64-128-64-1-3-4-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    }
+   },
+   "readbacks": {
+    "R-D-G128": "PASS",
+    "R-D-G8": "PASS",
+    "R-S-G128-F512": "PASS"
+   },
+   "rows": [
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      4,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 64,
+        "shared": 61440
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    },
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      4,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 72,
+      "shared": 61440
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 72,
+      "shared": 61440
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 72,
+        "shared": 61440
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    },
+    {
+     "config": [
+      64,
+      128,
+      64,
+      1,
+      3,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 120,
+      "shared": 73728
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 120,
+      "shared": 73728
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 128,
+        "shared": 73728
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    },
+    {
+     "config": [
+      64,
+      128,
+      64,
+      1,
+      3,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 122,
+      "shared": 73728
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 122,
+      "shared": 73728
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 128,
+        "shared": 73728
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's and plain and copy on the census predicate's MMA path, on every config compiled; a cell failing V-BIN or V-ALIGN is excluded and listed; no cell read back FAILs the variant",
+   "sass_checks_c3_printed": {
+    "16-64-128-1-4-4-False-2": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 904,
+     "loop": [
+      10256,
+      12272
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "16-64-128-1-4-4-True-1": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 920,
+     "loop": [
+      10480,
+      12208
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "64-128-64-1-3-4-False-2": {
+     "bars_after_loop": 4,
+     "clock_reads": 6,
+     "instructions": 1200,
+     "loop": [
+      13488,
+      15728
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "64-128-64-1-3-4-True-1": {
+     "bars_after_loop": 4,
+     "clock_reads": 6,
+     "instructions": 1240,
+     "loop": [
+      12608,
+      14624
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "source": "docs/registered/2026-11-10-pc2-pages/pc2-r.json",
+   "source_sha256": "db82441eb4f253d369f169d9af7f73bdae50d3d0e7736a43abbe8b8450d76d1c",
+   "tiles_not_compiled": [],
+   "why": ""
+  },
+  "u5-sd": {
+   "excluded_cells": {},
+   "inflight_printed": {
+    "16-64-128-1-4-4-False-2": {
+     "groups": 2,
+     "n_if": 3,
+     "wait": 4,
+     "why": ""
+    },
+    "16-64-128-1-4-4-True-1": {
+     "groups": 2,
+     "n_if": 3,
+     "wait": 4,
+     "why": ""
+    }
+   },
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "16-64-128-1-4-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-4-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    },
+    "plain": {
+     "16-64-128-1-4-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-4-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    }
+   },
+   "readbacks": {
+    "D-G1024": "PASS",
+    "D-G1024-F3584": "PASS",
+    "D-G128": "PASS",
+    "D-G128-F1024": "PASS",
+    "D-G128-F1792": "PASS",
+    "D-G128-F3584": "PASS",
+    "D-G128-F512": "PASS",
+    "D-G128-F7168": "PASS",
+    "D-G16": "PASS",
+    "D-G192": "PASS",
+    "D-G256": "PASS",
+    "D-G256-F1024": "PASS",
+    "D-G256-F512": "PASS",
+    "D-G32": "PASS",
+    "D-G320": "PASS",
+    "D-G384": "PASS",
+    "D-G384-F1024": "PASS",
+    "D-G384-F512": "PASS",
+    "D-G4": "PASS",
+    "D-G512": "PASS",
+    "D-G512-F1024": "PASS",
+    "D-G64": "PASS",
+    "D-G8": "PASS",
+    "D-G8-F1024": "PASS",
+    "D-G8-F1792": "PASS",
+    "D-G8-F3584": "PASS",
+    "D-G8-F512": "PASS",
+    "D-G8-F7168": "PASS",
+    "D-MX-T16-A2": "PASS"
+   },
+   "rows": [
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      4,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 64,
+        "shared": 61440
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    },
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      4,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 72,
+      "shared": 61440
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 72,
+      "shared": 61440
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 72,
+        "shared": 61440
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's and plain and copy on the census predicate's MMA path, on every config compiled; a cell failing V-BIN or V-ALIGN is excluded and listed; no cell read back FAILs the variant",
+   "sass_checks_c3_printed": {
+    "16-64-128-1-4-4-False-2": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 904,
+     "loop": [
+      10256,
+      12272
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "16-64-128-1-4-4-True-1": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 920,
+     "loop": [
+      10480,
+      12208
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "source": "docs/registered/2026-11-10-pc2-pages/pc2-d.json",
+   "source_sha256": "1f14efdbcc13dabdf765ac19e23f53e5c2eee895eccaa427ad3c622e9b62e54c",
+   "tiles_not_compiled": [],
+   "why": ""
+  },
+  "u6-ss": {
+   "excluded_cells": {},
+   "inflight_printed": {
+    "64-128-64-1-3-4-False-2": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    },
+    "64-128-64-1-3-4-True-1": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    }
+   },
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "64-128-64-1-3-4-False-2": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "64-128-64-1-3-4-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    },
+    "plain": {
+     "64-128-64-1-3-4-False-2": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "64-128-64-1-3-4-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    }
+   },
+   "readbacks": {
+    "S-G128": "PASS",
+    "S-G128-F1024": "PASS",
+    "S-G128-F1792": "PASS",
+    "S-G128-F256": "PASS",
+    "S-G128-F512": "PASS",
+    "S-G256": "PASS",
+    "S-G256-F1024": "PASS",
+    "S-G256-F1792": "PASS",
+    "S-G256-F256": "PASS",
+    "S-G256-F512": "PASS",
+    "S-G32": "PASS",
+    "S-G32-F1024": "PASS",
+    "S-G32-F1792": "PASS",
+    "S-G32-F256": "PASS",
+    "S-G32-F512": "PASS",
+    "S-G8": "PASS",
+    "S-G8-F1024": "PASS",
+    "S-G8-F1792": "PASS",
+    "S-G8-F256": "PASS",
+    "S-G8-F512": "PASS"
+   },
+   "rows": [
+    {
+     "config": [
+      64,
+      128,
+      64,
+      1,
+      3,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 120,
+      "shared": 73728
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 120,
+      "shared": 73728
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 128,
+        "shared": 73728
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    },
+    {
+     "config": [
+      64,
+      128,
+      64,
+      1,
+      3,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 122,
+      "shared": 73728
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 122,
+      "shared": 73728
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 128,
+        "shared": 73728
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's and plain and copy on the census predicate's MMA path, on every config compiled; a cell failing V-BIN or V-ALIGN is excluded and listed; no cell read back FAILs the variant",
+   "sass_checks_c3_printed": {
+    "64-128-64-1-3-4-False-2": {
+     "bars_after_loop": 4,
+     "clock_reads": 6,
+     "instructions": 1200,
+     "loop": [
+      13488,
+      15728
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "64-128-64-1-3-4-True-1": {
+     "bars_after_loop": 4,
+     "clock_reads": 6,
+     "instructions": 1240,
+     "loop": [
+      12608,
+      14624
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "source": "docs/registered/2026-11-10-pc2-pages/pc2-s.json",
+   "source_sha256": "828ce2ae6ab6d1daf1c2d6b756d2f9e149c775d6b6bd1e671ec2a970ea0201fe",
+   "tiles_not_compiled": [],
+   "why": ""
+  },
+  "u7-sn": {
+   "excluded_cells": {},
+   "inflight_printed": {
+    "16-64-128-1-4-4-False-2": {
+     "groups": 2,
+     "n_if": 3,
+     "wait": 4,
+     "why": ""
+    },
+    "16-64-128-1-4-4-True-1": {
+     "groups": 2,
+     "n_if": 3,
+     "wait": 4,
+     "why": ""
+    }
+   },
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "16-64-128-1-4-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-4-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    },
+    "plain": {
+     "16-64-128-1-4-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-4-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    }
+   },
+   "readbacks": {
+    "N-DS-T1": "PASS",
+    "N-DS-T2-A12": "PASS",
+    "N-DS-T2-A6": "PASS",
+    "N-DS-T3": "PASS",
+    "N-DS-T3-A12": "PASS",
+    "N-G3-T1": "PASS",
+    "N-G3-T2": "PASS",
+    "N-JM-T1": "PASS",
+    "N-JM-T2": "PASS",
+    "N-K8-T1": "PASS",
+    "N-K8-T2-A16": "PASS",
+    "N-K8-T2-A8": "PASS",
+    "N-K8-T3": "PASS",
+    "N-K8-T3-A16": "PASS",
+    "N-MX-T1": "PASS",
+    "N-MX-T2": "PASS",
+    "N-PH-T1": "PASS",
+    "N-PH-T2-A2": "PASS",
+    "N-PH-T2-A4": "PASS",
+    "N-PH-T3-A2": "PASS",
+    "N-PH-T3-A4": "PASS",
+    "N-QW-T1": "PASS",
+    "N-QW-T2-A4": "PASS",
+    "N-QW-T2-A8": "PASS",
+    "N-QW-T4": "PASS",
+    "N-QW-T4-A8": "PASS"
+   },
+   "rows": [
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      4,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 64,
+        "shared": 61440
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    },
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      4,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 3,
+      "regs": 64,
+      "shared": 61440
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 3,
+        "regs": 64,
+        "shared": 61440
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's and plain and copy on the census predicate's MMA path, on every config compiled; a cell failing V-BIN or V-ALIGN is excluded and listed; no cell read back FAILs the variant",
+   "sass_checks_c3_printed": {
+    "16-64-128-1-4-4-False-2": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 864,
+     "loop": [
+      10000,
+      11728
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "16-64-128-1-4-4-True-1": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 920,
+     "loop": [
+      10320,
+      12320
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "source": "docs/registered/2026-11-10-pc2-pages/pc2-n.json",
+   "source_sha256": "d9b4cc5bac1575b24cb320d7eee4250f608c1e4801fa787ee5ee3c5693486987",
+   "tiles_not_compiled": [],
+   "why": ""
+  },
+  "u8-sw": {
+   "excluded_cells": {},
+   "inflight_printed": {
+    "32-128-64-1-3-4-False-2": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    },
+    "32-128-64-1-3-4-True-1": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    },
+    "32-64-128-1-3-4-False-2": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    },
+    "32-64-128-1-3-4-True-1": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    }
+   },
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "32-128-64-1-3-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "32-128-64-1-3-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "32-64-128-1-3-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "32-64-128-1-3-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    },
+    "plain": {
+     "32-128-64-1-3-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "32-128-64-1-3-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "32-64-128-1-3-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "32-64-128-1-3-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 32,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    }
+   },
+   "readbacks": {
+    "W128-G1056": "PASS",
+    "W128-G165-F1024": "PASS",
+    "W128-G165-F512": "PASS",
+    "W128-G198": "PASS",
+    "W128-G198-F1024": "PASS",
+    "W128-G198-F512": "PASS",
+    "W128-G264": "PASS",
+    "W128-G264-F1024": "PASS",
+    "W128-G264-F512": "PASS",
+    "W128-G396": "PASS",
+    "W128-G396-F1024": "PASS",
+    "W128-G462": "PASS",
+    "W128-G528": "PASS",
+    "W128-G528-F1024": "PASS",
+    "W128-G594": "PASS",
+    "W64-G1056": "PASS",
+    "W64-G198-F1024": "PASS",
+    "W64-G198-F512": "PASS",
+    "W64-G264": "PASS",
+    "W64-G264-F1024": "PASS",
+    "W64-G264-F512": "PASS",
+    "W64-G396": "PASS",
+    "W64-G396-F1024": "PASS",
+    "W64-G396-F512": "PASS",
+    "W64-G462": "PASS",
+    "W64-G528": "PASS",
+    "W64-G528-F1024": "PASS",
+    "W64-G528-F512": "PASS",
+    "W64-G594": "PASS"
+   },
+   "rows": [
+    {
+     "config": [
+      32,
+      128,
+      64,
+      1,
+      3,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 4,
+      "regs": 99,
+      "shared": 40960
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 4,
+      "regs": 99,
+      "shared": 40960
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 4,
+        "regs": 100,
+        "shared": 40960
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    },
+    {
+     "config": [
+      32,
+      128,
+      64,
+      1,
+      3,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 4,
+      "regs": 102,
+      "shared": 40960
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 4,
+      "regs": 102,
+      "shared": 40960
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 4,
+        "regs": 124,
+        "shared": 40960
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    },
+    {
+     "config": [
+      32,
+      64,
+      128,
+      1,
+      3,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 4,
+      "regs": 71,
+      "shared": 49152
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 4,
+      "regs": 71,
+      "shared": 49152
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 4,
+        "regs": 72,
+        "shared": 49152
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    },
+    {
+     "config": [
+      32,
+      64,
+      128,
+      1,
+      3,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 4,
+      "regs": 80,
+      "shared": 49152
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 4,
+      "regs": 80,
+      "shared": 49152
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 4,
+        "regs": 80,
+        "shared": 49152
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's and plain and copy on the census predicate's MMA path, on every config compiled; a cell failing V-BIN or V-ALIGN is excluded and listed; no cell read back FAILs the variant",
+   "sass_checks_c3_printed": {
+    "32-128-64-1-3-4-False-2": {
+     "bars_after_loop": 8,
+     "clock_reads": 6,
+     "instructions": 976,
+     "loop": [
+      10640,
+      12560
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 32,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "32-128-64-1-3-4-True-1": {
+     "bars_after_loop": 8,
+     "clock_reads": 6,
+     "instructions": 1056,
+     "loop": [
+      10992,
+      12912
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 32,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "32-64-128-1-3-4-False-2": {
+     "bars_after_loop": 4,
+     "clock_reads": 6,
+     "instructions": 1000,
+     "loop": [
+      11168,
+      13488
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 32,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "32-64-128-1-3-4-True-1": {
+     "bars_after_loop": 4,
+     "clock_reads": 6,
+     "instructions": 1072,
+     "loop": [
+      11520,
+      13936
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 32,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "source": "docs/registered/2026-11-10-pc2-pages/pc2-w.json",
+   "source_sha256": "c6a5096d822523ece2b09f3a226176f8a86820bdbdf455d2bd3a2d514b71fd7a",
+   "tiles_not_compiled": [],
+   "why": ""
+  },
+  "u9-sd3": {
+   "excluded_cells": {},
+   "inflight_printed": {
+    "16-64-128-1-3-4-False-2": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    },
+    "16-64-128-1-3-4-True-1": {
+     "groups": 2,
+     "n_if": 2,
+     "wait": 2,
+     "why": ""
+    }
+   },
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "16-64-128-1-3-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-3-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    },
+    "plain": {
+     "16-64-128-1-3-4-False-2": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     },
+     "16-64-128-1-3-4-True-1": {
+      "mma": "mma.sync",
+      "mma_sync": 16,
+      "wgmma": 0,
+      "wgmma_wait_group": 0
+     }
+    }
+   },
+   "readbacks": {
+    "D3-G128": "PASS",
+    "D3-G16": "PASS",
+    "D3-G384": "PASS"
+   },
+   "rows": [
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      3,
+      4,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 5,
+      "regs": 64,
+      "shared": 40960
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 5,
+      "regs": 64,
+      "shared": 40960
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 5,
+        "regs": 64,
+        "shared": 40960
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    },
+    {
+     "config": [
+      16,
+      64,
+      128,
+      1,
+      3,
+      4,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 5,
+      "regs": 72,
+      "shared": 40960
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 5,
+      "regs": 72,
+      "shared": 40960
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 5,
+        "regs": 72,
+        "shared": 40960
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": true
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's and plain and copy on the census predicate's MMA path, on every config compiled; a cell failing V-BIN or V-ALIGN is excluded and listed; no cell read back FAILs the variant",
+   "sass_checks_c3_printed": {
+    "16-64-128-1-3-4-False-2": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 880,
+     "loop": [
+      9808,
+      11824
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "16-64-128-1-3-4-True-1": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 888,
+     "loop": [
+      10048,
+      11776
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 16,
+     "mma": "HMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "source": "docs/registered/2026-11-10-pc2-pages/pc2-d3.json",
+   "source_sha256": "f247bfd5c4e1557facc58e06928b31bae4c6926fdc7494206742160a7ac2f19b",
+   "tiles_not_compiled": [],
+   "why": ""
+  }
+ },
+ "versions": {
+  "python": "3.12.16",
+  "torch": "2.13.0",
+  "triton": "3.7.1",
+  "vllm": "0.27.1"
+ }
+}

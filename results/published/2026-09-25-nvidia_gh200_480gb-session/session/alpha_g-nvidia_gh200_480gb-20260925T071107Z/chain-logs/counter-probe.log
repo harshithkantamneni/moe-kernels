@@ -1,0 +1,24 @@
+ROUTE PROBE  family r3-arms: every metric its pages ask
+  host      Linux aarch64
+  caps      {'available': True, 'cap_eff': '0x0', 'cap_eff_field': '0000000000000000', 'cap_eff_bits': 64, 'sys_admin': False, 'perfmon': False}
+  module    {'available': False, 'why': 'the parameter is not listed by this driver'}
+  ncu       ERR_NVGPUCTRPERM: a kernel launched and the COUNTER READ was REFUSED by this box. That is a fact about the pod -- its host module flag or its container capabilities, both recorded beside this -- and not a broken instrument  [Version 2025.3.1.0 (build 36398880) (public-release)]
+  kernel    LAUNCHED  NVIDIA GH200 480GB: one add_ over 1048576 fp32
+  metrics   query: ncu --query-metrics exited 0 and listed 0 metric names (Device NVIDIA GH200 480GB (GH100)
+==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device ); the whole list is asked of the probe kernel instead
+            proven []
+            unproven []  dropped []
+  nsys      no nsys on PATH
+
+  VERDICT   BLOCKED
+            - this process holds NEITHER CAP_SYS_ADMIN NOR CAP_PERFMON. Either opens the gate on a driver from R450 on and PERFMON is the narrower ask, so ask the provider for --cap-add=PERFMON first, --cap-add=SYS_ADMIN second, and a host reboot last.
+            - the effective capability mask read 0000000000000000 (64 bits as the kernel printed it), so CAP_PERFMON (bit 38) is clear and CAP_SYS_ADMIN (bit 21) is clear by measurement.
+            - the host module parameter could not be read (the parameter is not listed by this driver), so 'the host forbids it' and 'this container lacks the capability' cannot be separated from inside; the capability line above is the side a tenant can act on.
+
+RESULT: CLAIM P1 FAIL a DRAM counter can be READ on this box: route BLOCKED: ERR_NVGPUCTRPERM: a kernel launched and the COUNTER READ was REFUSED by this box. That is a fact about th
+GATE P1  CLAIM    FAIL   a DRAM counter can be READ on this box
+              measured route BLOCKED: ERR_NVGPUCTRPERM: a kernel launched and the COUNTER READ was REFUSED by this box. That is a fact about the pod -- its host module flag or its container capabilities, both recorded beside this -- and not a broken instrument   gate OPEN
+              a FAIL here invalidates: the counter experiment on this box; the plan stands and needs another box or a provider-side change named in the notes above
+
+  wrote /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/COUNTERS.json
+  git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/COUNTERS.json: '/home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/COUNTERS.json' is outside repository at '/home/ubuntu/moe/repo')

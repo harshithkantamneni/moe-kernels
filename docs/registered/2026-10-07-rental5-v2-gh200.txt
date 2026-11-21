@@ -1,0 +1,89 @@
+REGISTERED 2026-10-07, before any rental-5 page: rental 5, 2026-10-07-rental5-v2-gh200
+status: REGISTERED MODEL CHANGE (no unit, no GPU): model v2; its re-predictions of earlier tests are SEEN DIAGNOSTIC, no verdict
+design: design-r5 DESIGN.md part 1 with REVIEW.md section (a) (CAL-counters label, IN-SAMPLE labels, OLMoE's BLIND-CALMODEL basis)
+tool: scripts/r3_timing_model.py --dead-model v2 (dead_model('v2')); scorer scripts/scoring/rental5/score_v2seen.py
+
+expected rms (M -> v2, %): rental3 E2 (counted) 2.52 -> 0.97; rental3 E1 (predicted) 3.66 -> 1.79; qwen2-57b-a14b 1.06 -> 1.13; olmoe-1b-7b 1.40 -> 0.88; jetmoe-8b 0.84 -> 0.86; qwen1.5-moe-a2.7b 1.87 -> 1.28; phi-3.5-moe 0.57 -> 0.58; mixtral-8x22b 1.03 -> 0.99; mixtral-8x7b (in-sample) 0.26 -> 0.26
+
+model:
+  v2: M with D: d = V2_DEAD_NS per dead CTA replaces DEAD_CTA_NS 1.333; kappa = V2_KAPPA replaces k_w in the dead window, hidden = kappa occ_g S'_g c; T0, c, bw, s_small, s_block refit on the CAL 8x7B 2026-09-27 pages
+  constants:
+    V2_DEAD_NS: 0.995
+    V2_KAPPA: 0.325
+  version: v2 (d 0.995 ns, kappa 0.325)
+  d_kappa_fit:
+    d_ns: 0.995
+    kappa: 0.325
+    se: [0.039944, 0.021575]
+    cal_rms_us: 0.931373
+    set: CAL-counters (4 models: 8x7B, 8x22B, Qwen2-57B, OLMoE)
+    label: CAL-counters: fitted on the in-kernel SHARED - NATIVE gap of the four CAL models' counter pages (rental 4 register.py fit_D, from offset/work/deadfit.json rows); 8x22B, Qwen2-57B and OLMoE are also held-out TIME-test models, their counter pages SEEN
+  refit_8x7b:
+    M: {"T0": 0.044241, "c": 202.547644, "bw": 3597.800853, "s_small": 0.011976, "s_block": -0.00808}
+    v2: {"T0": 0.04323, "c": 202.547644, "bw": 3597.800853, "s_small": 0.012987, "s_block": -0.007069}
+    label: CAL: the five 2026-09-27 mixtral_8x7b timed pages (G 2, 3, 4, 8, 32) and 2026-09-27-r3-counters/lock1710, the cross-model source set; no held-out page enters
+  no_new_constant: v2 adds kappa only; d replaces DEAD_CTA_NS
+  kappa_reading: the tp2 lever (9 against 32 copies on mixtral-8x7b-tp2) was CUT by the owner on 2026-10-07; kappa is read from the stamps only (docs/registered/2026-10-07-rental5-stamps2-gh200, D2 hiding)
+recorded_not_adopted:
+  Dg:
+    d_w1: 0.95
+    d_w2: 1.1
+    label: SEEN: rental 4's printed per-GEMM d (A1 d_w2, A2 d_w1); a printed rival column, never a model
+  D2:
+    d_w1: 0.93
+    d_w2: 1.03
+    kappa: 0.3
+    label: SEEN-fitted on all 16 GEMMs (8 CAL, 8 held-out), principles/work/dead_ratio.py
+  rule: each enters only as a printed rival column (Dg, D2) in score_v2seen and the rental-5 dead rivals
+flagged:
+  M1_model_change: a --dead-model {m,v2} switch in r3_timing_model; the default stays m, so every earlier scorer's output is byte-identical
+  code_pins: r3_timing_model.py's sha changes; the rental-4 registrations' code_pins record the old sha (85ef38c), those registrations were scored and are not re-run
+re_predictions:
+  tests:
+    - cross_model_score targets: 8x22B, Qwen2-57B, OLMoE, Qwen1.5, Phi-3.5, JetMoE (and Granite-3.0-3B, printed with no expected value)
+    - rental 3 E2 (counted bytes) and E1 (registered q_pred)
+    - rental 4 A1 and A2 (measured Delta beside M's and v2's)
+    - jetmoe-floor and mixtral-floor: floor slopes in cycles per CTA k-step, no dead term: unaffected
+  each_twice: as registered (model M) and under v2, the 8x7B source refit under each
+  set: SHARED + PRIVATE under rental 3's host rule (T_pred + F240 >= 0.40 ms, F240 0.067551 ms)
+  printed: rms, worst, bias (mean e), per-arm mean us, and r5common.secondary (calibration in logs, descriptive below 6 clusters; gamma)
+  labels:
+    mixtral-8x7b: CAL (in-sample)
+    mixtral-8x22b, qwen2-57b-a14b, olmoe-1b-7b: IN-SAMPLE (d, kappa): their counter pages are in the CAL-counters set, so v2's dead term is in-sample on them; NOT held-out
+    others: held-out, SEEN
+  verdict: NONE: a SEEN diagnostic
+expected_rms_pct:
+  rental3 E2 (counted):
+    - 2.52
+    - 0.97
+  rental3 E1 (predicted):
+    - 3.66
+    - 1.79
+  qwen2-57b-a14b:
+    - 1.06
+    - 1.13
+  olmoe-1b-7b:
+    - 1.4
+    - 0.88
+  jetmoe-8b:
+    - 0.84
+    - 0.86
+  qwen1.5-moe-a2.7b:
+    - 1.87
+    - 1.28
+  phi-3.5-moe:
+    - 0.57
+    - 0.58
+  mixtral-8x22b:
+    - 1.03
+    - 0.99
+  mixtral-8x7b (in-sample):
+    - 0.26
+    - 0.26
+expected_rule: score_v2seen must reproduce every expected value (M and v2) to 0.01 point, or it exits 1
+labels:
+  olmoe_skew: OLMoE's skew cells are BLIND-CALMODEL only because OLMoE's counter pages are in the CAL-counters set; no OLMoE time page enters any v2 fit
+seen_data:
+  - every page read is SEEN
+  - d, kappa are CAL-counters (fitted on four models' counter pages, three of them held-out time models)
+  - the expected table is SEEN (OFFSET.md, computed on published pages)

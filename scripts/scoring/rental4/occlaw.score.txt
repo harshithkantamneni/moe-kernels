@@ -1,0 +1,19 @@
+RENTAL 4 PART B' (k-step law at BLOCK_K / num_stages, OLMoE G = 64), 2026-10-06-rental4-occlaw-gh200
+  k32s4   w1: r 1.3979 occ [5, 5] | MVA2 -0.6%  LK +2.5%  PS +39.8%  LITTLE +2.5%
+  k32s4   w2: r 1.3076 occ [5, 4] | MVA2 -3.5%  LK -1.2%  PS +30.8%  LITTLE -1.2%
+  k128s4  w1: r 0.9924 occ [3, 5] | MVA2 -0.7%  LK -0.8%  PS -0.8%  LITTLE -0.8%
+  k128s4  w2: r 0.9951 occ [3, 4] | MVA2 +0.0%  LK -0.5%  PS -0.5%  LITTLE -0.5%
+  k64s6   w1: r 1.0550 occ [3, 5] | MVA2 +2.3%  LK +5.5%  PS +5.5%  LITTLE +5.5%  OCC -1.8%
+  k64s6   w2: r 1.0597 occ [3, 4] | MVA2 +3.5%  LK +6.0%  PS +6.0%  LITTLE +6.0%  OCC +1.9%
+  k64s2   w1: r 1.0053 occ [5, 5] RE-KEYED | MVA2 +0.5%  LK +0.5%  PS +0.5%  LITTLE -50.3%  OCC +0.5%
+  k64s2   w2: r 0.9631 occ [5, 4] RE-KEYED | MVA2 -3.3%  LK -3.7%  PS -3.7%  LITTLE -49.6%  OCC -1.3%
+  k64s3   w1: r 0.9900 occ [5, 5] | MVA2 -1.0%  LK -1.0%  PS -1.0%  LITTLE -4.2%  OCC -1.0%
+  k64s3   w2: r 0.9804 occ [4, 4] | MVA2 -2.0%  LK -2.0%  PS -2.0%  LITTLE -4.8%  OCC -2.0%
+  k64s8   w1: r 1.1748 occ [2, 5] | MVA2 +2.1%  LK +17.5%  PS +17.5%  LITTLE +17.5%  OCC +0.6%
+  k64s8   w2: r 1.1885 occ [2, 4] | MVA2 +5.3%  LK +18.9%  PS +18.9%  LITTLE +18.9%  OCC +6.0%
+  MVA2: FALSIFIED on 12 (rms 0.025589885438021074)
+  LK: FALSIFIED on 12 (rms 0.0792689893298791)
+  PS: FALSIFIED on 12 (rms 0.16521161163352258)
+  LITTLE: FALSIFIED on 12 (rms 0.21928383741230348)
+  OCC: FALSIFIED on 8 (rms 0.0250525220993603)
+  verdict: UNDECIDED

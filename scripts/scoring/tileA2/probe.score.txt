@@ -1,0 +1,6 @@
+READ against 2026-10-20-tileA2-gates-gh200 (DESCRIPTIVE (the probe's times are never read)); A2's lock 1410.0
+  1710 MHz: a page FAILS
+    mixtral-8x7b-lp1710m: FAIL min cell 1710.0 non-clean 0.229167
+  1410 MHz: every page PASSES
+    mixtral-8x7b-lp1410m: PASS min cell 1410.0 non-clean 0.0
+    qwen2-57b-a14b-lp1410q: PASS min cell 1410.0 non-clean 0.0

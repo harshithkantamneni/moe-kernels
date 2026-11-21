@@ -1,0 +1,10 @@
+step	state	rc	seconds	dirty	log	note
+preflight-r1	DONE	0	4	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/preflight-r1.log	log agrees: RESULT lines imply 0
+preflight-r3	DONE	0	8	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/preflight-r3.log	log agrees: RESULT lines imply 0
+preconditions	DONE	0	231	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/preconditions.log	the driver's own ARMS.tsv carries each arm's second opinion
+counter-probe	INFO	1	10	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/counter-probe.log	BLOCKED: ==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM; ncu /usr/local/cuda/bin/ncu (NOT on PATH; found by /usr/local/cuda*/bin/ncu, and the probe ran with /usr/local/cuda/bin first on PATH) [Version 2025.1.1.0 (build 35528883) (public-release)]; CAP_PERFMON clear, CAP_SYS_ADMIN clear (CapEff 00000000a80425fb); module flag unread (the parameter is not listed by this driver); informational, gates nothing; /workspace/session/alpha_g-nvidia_h200-20260924T042526Z/COUNTERS
+gpu-tests	DONE	0	46	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/gpu-tests.log	pytest exit 0: 37 passed, 1 skipped, 2 warnings in 42.09s
+probe-check	DONE	0	24	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/probe-check.log	log agrees: RESULT lines imply 0
+r3-g2-s0	CLAIM_FAIL	1	727	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/r3-g2-s0.log	log agrees: RESULT lines imply 1
+r1-g2	INVALID	3	1164	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/r1-g2.log	log agrees: RESULT lines imply 3
+suite	SKIPPED	-	0	1	-	END_SUITE=skip (the default): the end suite was not requested this pass; END_SUITE=run buys it after the arms

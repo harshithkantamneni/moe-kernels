@@ -1,0 +1,28 @@
+2026-10-13T10:51:37Z the branch's first commit: the VM can push
+2026-10-13T10:53:32Z setup_vm.sh: READY
+2026-10-13T10:53:34Z prelude (unit 1/21 -): exit 0 (0 min)
+2026-10-13T10:54:01Z calibrate (unit 2/21 mixtral-8x7b r6): exit 0 (0 min)
+2026-10-13T11:07:51Z timed (unit 3/21 mixtral-8x7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (14 min)
+2026-10-13T11:18:22Z timed (unit 4/21 mixtral-8x7b skb histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (10 min)
+2026-10-13T11:28:53Z timed (unit 5/21 mixtral-8x7b skc histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (10 min)
+2026-10-13T11:43:04Z timed (unit 6/21 olmoe-1b-7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (14 min)
+2026-10-13T11:53:55Z timed (unit 7/21 olmoe-1b-7b skb histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (11 min)
+2026-10-13T12:04:46Z timed (unit 8/21 olmoe-1b-7b skc histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (11 min)
+2026-10-13T12:18:57Z timed (unit 9/21 phi-3.5-moe ska histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (14 min)
+2026-10-13T12:29:37Z timed (unit 10/21 phi-3.5-moe skb histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (11 min)
+2026-10-13T12:40:19Z timed (unit 11/21 phi-3.5-moe skc histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (11 min)
+2026-10-13T12:43:00Z timed (unit 12/21 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (3 min)
+2026-10-13T12:43:08Z timed (unit 13/21 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell): exit 3 (0 min)
+2026-10-13T12:43:17Z timed (unit 14/21 phi-3.5-moe q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 3 (0 min)
+2026-10-13T12:43:25Z timed (unit 15/21 phi-3.5-moe q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell): exit 3 (0 min)
+2026-10-13T12:45:29Z bytes: G=8 page exit 0
+2026-10-13T12:45:39Z bytes (unit 16/21 olmoe-1b-7b skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-bytes.json arms=native,shared byte-groups=8): exit 0 (2 min)
+2026-10-13T12:50:04Z bytes: G=8 page exit 0
+2026-10-13T12:50:14Z bytes (unit 17/21 phi-3.5-moe skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-bytes.json arms=native,shared byte-groups=8): exit 0 (5 min)
+2026-10-13T12:50:23Z timed (unit 18/21 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 3 (0 min)
+2026-10-13T12:50:32Z timed (unit 19/21 jetmoe-8b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell): exit 3 (0 min)
+2026-10-13T12:52:58Z bytes: G=64 page exit 3
+2026-10-13T12:53:08Z bytes (unit 20/21 mixtral-8x7b-tp4 k64s4 byte-groups=64): exit 0 (3 min)
+2026-10-13T12:55:19Z bytes: G=64 page exit 3
+2026-10-13T12:55:29Z bytes (unit 21/21 mixtral-8x7b-tp4 k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (2 min)
+2026-10-13T12:55:32Z the session ended: driver exit 3

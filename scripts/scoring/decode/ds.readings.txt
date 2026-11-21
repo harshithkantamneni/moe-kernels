@@ -1,0 +1,52 @@
+DECODE SETTLING RENTAL DS (addendum 4): readings, DESCRIPTIVE
+power: READ
+verdict: READ
+PAGE jetmoe-8b: READ; python 3.12.16 (CAL2 3.12.16; patch level DESCRIPTIVE)
+PAGE phi-3.5-moe: READ; python 3.12.16 (CAL2 3.12.16; patch level DESCRIPTIVE)
+PAGE mixtral-8x7b: READ; python 3.12.16 (CAL2 3.12.16; patch level DESCRIPTIVE)
+PAGE granite-3.0-3b-a800m: READ; python 3.12.16 (CAL2 3.12.16; patch level DESCRIPTIVE)
+PAGE qwen1.5-moe-a2.7b: READ; python 3.12.16 (CAL2 3.12.16; patch level DESCRIPTIVE)
+PAGE olmoe-1b-7b: READ; python 3.12.16 (CAL2 3.12.16; patch level DESCRIPTIVE)
+CENSUS GATE (DS's own census): READ (COMPLETE)
+CENSUS 16x64x128w4s4: READ
+CENSUS 32x64x128w4s3: READ
+CENSUS 32x128x64w4s3: READ
+CENSUS 64x128x64w4s3: READ
+CENSUS CROSS-CHECK (DS's census against CAL2's, reported): SAME over 48 entries
+  CAL2 census 16x64x128w4s4: READ
+  CAL2 census 32x64x128w4s3: READ
+  CAL2 census 32x128x64w4s3: READ
+  CAL2 census 64x128x64w4s3: READ
+PER-CTA STOP (LADDERS, SUBWAVE, DRAIN, W1RATE): none
+REFUSED ROWS (ROW SANITY: L and B finite and positive, B within 0.5 to 2 x n b (GEMM rows); class times finite and positive): 0
+LADDERS 16x64x128w4s4: READ; 30 ladders, mixed 13, subwave 3
+LADDERS 32x64x128w4s3: READ; 12 ladders, mixed 5, subwave 2
+LADDERS 32x128x64w4s3: READ; 12 ladders, mixed 3, subwave 2
+LADDERS 64x128x64w4s3: READ; 14 ladders, mixed 5, subwave 3
+W1RATE 16x64x128w4s4: READ: OLS with one offset per ladder; c 3897.935805 GB/s (ratio to v4d 0.917911) over 10 rows in 4 ladders
+W1RATE 32x64x128w4s3: READ: OLS with one offset per ladder; c 3883.169056 GB/s (ratio to v4d 0.921402) over 6 rows in 3 ladders
+W1RATE 32x128x64w4s3: READ: OLS with one offset per ladder; c 3873.214503 GB/s (ratio to v4d 0.92377) over 6 rows in 2 ladders
+W1RATE 64x128x64w4s3: READ: OLS with one offset per ladder; c 3787.314476 GB/s (ratio to v4d 0.944722) over 6 rows in 3 ladders
+SUBWAVE 16x64x128w4s4: READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder; r_cta 53.828788 GB/s over 13 rows in 5 ladders (3 qualifying), 1 binding; rms 0.033857 (no ceiling 0.037105)
+SUBWAVE 32x64x128w4s3: READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder; r_cta 24.378542 GB/s over 4 rows in 2 ladders (2 qualifying), 1 binding; rms 0.029335 (no ceiling 0.052403)
+SUBWAVE 32x128x64w4s3: READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder; r_cta 37.68873 GB/s over 21 rows in 8 ladders (2 qualifying), 1 binding; rms 0.020296 (no ceiling 0.021619)
+SUBWAVE 64x128x64w4s3: READ: grid over the per-CTA ceiling, weighted least squares, one offset per ladder; r_cta 46.861199 GB/s over 6 rows in 3 ladders (3 qualifying), 1 binding; rms 0.051848 (no ceiling 0.063488)
+DRAIN 16x64x128w4s4: READ: weighted least squares, one offset per mixed ladder; r1 90.581266 GB/s over 32 rows in 13 mixed ladders; rms 0.027385 (no drain 0.039187)
+DRAIN 32x64x128w4s3: READ: weighted least squares, one offset per mixed ladder; r1 46.084224 GB/s over 10 rows in 5 mixed ladders; rms 0.035523 (no drain 0.053276)
+DRAIN 32x128x64w4s3: READ: weighted least squares, one offset per mixed ladder; r1 67.232141 GB/s over 8 rows in 3 mixed ladders; rms 0.01973 (no drain 0.042626)
+DRAIN 64x128x64w4s3: READ: weighted least squares, one offset per mixed ladder; r1 103.388846 GB/s over 12 rows in 5 mixed ladders; rms 0.020101 (no drain 0.038334)
+CALLS granite-3.0-3b-a800m: align median 8.624 us (7.712 to 20.224, 12 cells); silu_and_mul median 4.224 us (3.776 to 4.736, 12 cells); moe_sum median 4.24 us (3.936 to 4.8, 12 cells)
+CALLS jetmoe-8b: align median 5.6 us (4.704 to 8.736, 12 cells); silu_and_mul median 3.872 us (3.392 to 5.792, 12 cells); moe_sum median 2.672 us (2.496 to 2.848, 12 cells)
+CALLS mixtral-8x7b: align median 6.464 us (4.704 to 8.128, 11 cells); silu_and_mul median 6.464 us (5.344 to 9.312, 11 cells); moe_sum median 2.976 us (2.592 to 3.36, 11 cells)
+CALLS olmoe-1b-7b: align median 11.584 us (7.872 to 14.944, 8 cells); silu_and_mul median 4.336 us (3.552 to 5.92, 8 cells); moe_sum median 4.032 us (3.648 to 5.088, 8 cells)
+CALLS phi-3.5-moe: align median 7.456 us (5.408 to 9.216, 13 cells); silu_and_mul median 5.6 us (3.52 to 6.24, 13 cells); moe_sum median 3.04 us (2.496 to 3.392, 13 cells)
+CALLS qwen1.5-moe-a2.7b: align median 11.776 us (9.088 to 13.92, 13 cells); silu_and_mul median 4.352 us (3.456 to 5.408, 13 cells); moe_sum median 3.648 us (3.008 to 4.128, 13 cells)
+CALLS line silu_and_mul (a summary of DS's pages, not a term): READ: OLS on [1, x, B / 1 MB]; 3.67153 us + 4.18e-05 us x + 0.249555 us/MB over 69 rows, rms 0.460454 us
+CALLS line moe_sum (a summary of DS's pages, not a term): READ: OLS on [1, x, B / 1 MB]; 1.8796 us + 0.000133 us x + 0.218897 us/MB over 69 rows, rms 0.351659 us
+ALIGN small-batch: E 8 4.752 us, E 16 5.552 us, E 32 7.264 us, E 40 7.776 us, E 60 9.184 us, E 64 11.632 us
+ALIGN block-scan: E 40 8.704 us, E 64 8.128 us
+ALIGN DECL transfer: TRANSFERS
+BLOCK: READ: ALIGN's block-scan points
+SLOPE: READ: one slope, one intercept per declared E, OLS; 0.526921 us per iteration over 74 rows, E [8, 16, 32, 40, 60, 64], iterations [1, 24]; against 0: DIFFERS FROM 0 (t 71.033614)
+NOT IDENTIFIED: none
+model form: the decode model form for the new blind will be chosen after DS, from DS's and CAL2's pages; it will be frozen and registered before any page of the three new blind models (Mixtral-8x22B, Qwen2-57B-A14B, Granite-3.0-1B-A400M), which remain unseen

@@ -1,0 +1,774 @@
+{
+ "registered": "2026-10-01, before any page",
+ "design": "scratchpad design-l2/DESIGN.md section 4 block R3 (the rental-1 part) and section 5; review design-review/REVIEW.md section 2",
+ "tool_for_the_law": "design-l2/work/register.py (calibration pages only), copied here as numbers",
+ "fitted_on": [
+  "mixtral-8x7b 2026-09-27",
+  "mixtral-8x22b 2026-09-28",
+  "qwen2-57b-a14b 2026-09-28",
+  "olmoe-1b-7b 2026-09-29"
+ ],
+ "hypothesis_generation_seen": "the choice of d = P / W_c as the leading variable was informed by Phi-3.5 and JetMoE (seen); not a test",
+ "law": "s(x, d, n) = s_cap(x, n) + (1 - s_cap) s_sync(d, n); s_sync = a(n) exp(-(d - 0.121) / lam(n)); s_cap 1 at x <= 0.286, solved at 0.576 from Qwen2 w1, H0 holds it to x = 1.0, H1 ramps it to 0 by x = 0.8",
+ "law_params_by_n": {
+  "2": {
+   "a": 0.6976,
+   "lam": 0.0714,
+   "s_cap_0.576": 0.2166
+  },
+  "3": {
+   "a": 0.5381,
+   "lam": 0.0541,
+   "s_cap_0.576": 0.4341
+  },
+  "4": {
+   "a": 0.5198,
+   "lam": 0.0498,
+   "s_cap_0.576": 0.5054
+  },
+  "5": {
+   "a": 0.5235,
+   "lam": 0.0433,
+   "s_cap_0.576": 0.5219
+  },
+  "6": {
+   "a": 0.4851,
+   "lam": 0.042,
+   "s_cap_0.576": 0.5942
+  },
+  "7": {
+   "a": 0.4877,
+   "lam": 0.041,
+   "s_cap_0.576": 0.6119
+  },
+  "8": {
+   "a": 0.4659,
+   "lam": 0.039,
+   "s_cap_0.576": 0.6477
+  },
+  "9": {
+   "a": 0.4508,
+   "lam": 0.0374,
+   "s_cap_0.576": 0.6706
+  }
+ },
+ "measure": "G=1 slab survival s = (B_PRIVATE - B_SHARED) / ((n - 1) W_g), B = per_gemm[g].dram_bytes_read, n = 2..9, W_g = E 2 F H 2 (w1) or E H F 2 (w2); x = (P - 1) SLAB / 60 MiB; d = P / W_c with W_c read off the page's recorded occupancy",
+ "pages": {
+  "scored": [
+   "<date>-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2-r3-counters/lock1710/r3c-g1.json, r3c-g2.json",
+   "<date>-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2-r3-counters/lock1710/r3c-g1.json, r3c-g2.json",
+   "<date>-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2-r3-counters/lock1710/r3c-g1.json, r3c-g2.json"
+  ],
+  "same_board_anchor": "<date>-nvidia_gh200_480gb-mixtral-8x7b-sameboard-r3-counters/lock1710/r3c-g1.json (8x7B w2 G=1, the curve the tp2 w2 rule compares against; the published 2026-09-27 curve is printed beside it)",
+  "plan": "scripts/plans/rental1-2026-10.plan units 9-11 (and unit 6 for the anchor)"
+ },
+ "predictions_G1": [
+  {
+   "cell": "8x7B-tp8 w2",
+   "model": "mixtral-8x7b-tp8",
+   "gemm": "w2",
+   "x_L2": 0.233,
+   "d": 0.1212,
+   "ksteps": 28,
+   "n": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "H1_H2a": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "H0_H2a": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "cell": "8x7B-tp4 w2",
+   "model": "mixtral-8x7b-tp4",
+   "gemm": "w2",
+   "x_L2": 0.467,
+   "d": 0.1212,
+   "ksteps": 56,
+   "n": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "H1_H2a": [
+    0.851,
+    0.836,
+    0.851,
+    0.857,
+    0.869,
+    0.875,
+    0.882,
+    0.887
+   ],
+   "H0_H2a": [
+    0.851,
+    0.836,
+    0.851,
+    0.857,
+    0.869,
+    0.875,
+    0.882,
+    0.887
+   ]
+  },
+  {
+   "cell": "8x7B-tp2 w2",
+   "model": "mixtral-8x7b-tp2",
+   "gemm": "w2",
+   "x_L2": 0.933,
+   "d": 0.1212,
+   "ksteps": 112,
+   "n": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "H1_H2a": [
+    0.696,
+    0.536,
+    0.518,
+    0.521,
+    0.483,
+    0.485,
+    0.463,
+    0.448
+   ],
+   "H0_H2a": [
+    0.762,
+    0.737,
+    0.761,
+    0.771,
+    0.79,
+    0.8,
+    0.811,
+    0.818
+   ]
+  },
+  {
+   "cell": "8x7B-tp8 w1",
+   "model": "mixtral-8x7b-tp8",
+   "gemm": "w1",
+   "x_L2": 0.467,
+   "d": 0.0848,
+   "ksteps": 64,
+   "n": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "H1_H2a": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "H0_H2a": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "cell": "8x7B-tp4 w1",
+   "model": "mixtral-8x7b-tp4",
+   "gemm": "w1",
+   "x_L2": 0.933,
+   "d": 0.1697,
+   "ksteps": 64,
+   "n": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "H1_H2a": [
+    0.353,
+    0.219,
+    0.196,
+    0.17,
+    0.152,
+    0.149,
+    0.134,
+    0.122
+   ],
+   "H0_H2a": [
+    0.493,
+    0.558,
+    0.602,
+    0.603,
+    0.656,
+    0.67,
+    0.695,
+    0.711
+   ]
+  },
+  {
+   "cell": "8x7B-tp2 w1",
+   "model": "mixtral-8x7b-tp2",
+   "gemm": "w1",
+   "x_L2": 1.867,
+   "d": 0.3394,
+   "ksteps": 64,
+   "n": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "H1_H2a": [
+    0.033,
+    0.009,
+    0.006,
+    0.003,
+    0.003,
+    0.002,
+    0.002,
+    0.001
+   ],
+   "H0_H2a": [
+    0.033,
+    0.009,
+    0.006,
+    0.003,
+    0.003,
+    0.002,
+    0.002,
+    0.001
+   ]
+  },
+  {
+   "cell": "8x7B w2 stages4 (baseline)",
+   "model": "mixtral-8x7b",
+   "gemm": "w2",
+   "x_L2": 1.837,
+   "d": 0.1212,
+   "ksteps": 224,
+   "n": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "H1_H2a": [
+    0.696,
+    0.536,
+    0.518,
+    0.521,
+    0.483,
+    0.485,
+    0.463,
+    0.448
+   ],
+   "H0_H2a": [
+    0.696,
+    0.536,
+    0.518,
+    0.521,
+    0.483,
+    0.485,
+    0.463,
+    0.448
+   ],
+   "role": "same-board anchor (published 2026-09-27 values; re-read on the new board)"
+  }
+ ],
+ "decision_rules": {
+  "H1_vs_H0_tp2_w2": "H1 (replicated two-partition L2, C_eff 0.5-0.67 L2) if tp2 w2 sits within 0.08 of the same-board 8x7B w2 G=1 curve at every n = 4..9 AND below 0.65 at every n = 4..9; H0 (unified 60 MiB LRU) if >= 0.74 at every n = 4..9; anything else INCONCLUSIVE",
+  "H1_vs_H0_tp4_w1": "H1 if s < 0.40 at every n = 6..9 and within 0.08 of H1's numbers; H0 if s > 0.40 at every n = 6..9 and within 0.08 of H0's; else INCONCLUSIVE. tp4 w1 (x 0.93, d 0.170) and tp2 w2 (x 0.93, d 0.121) sit at one x and two d: under H1 + H2a they differ (0.12-0.15 against 0.45-0.52 at n = 6..9), under any x-only law they agree",
+  "x_only_rival": "an x-only law (s a function of x alone) is falsified if tp4 w1 and tp2 w2 differ by more than 0.10 at three or more of n = 4..9",
+  "controls": "tp8 w2, tp8 w1: s >= 0.95 at every n (both hypotheses; immune below the edge); tp4 w2: within 0.05 of 0.85-0.89 (both); tp2 w1: <= 0.08 (both). A control outside its band says the law's shape, not H0 vs H1, failed",
+  "noise": "+/- 0.05 in s is the 2026-09-25 vs 09-27 board-to-board reproduction of 8x7B G=1 (0.04); it is valid against the same-board anchor only, which is why the anchor page is in the plan",
+  "fabric_control": "PRIVATE F / Mn in [0.50, 0.56] on every cell: a CONTROL, it already holds on 1202 published cells and every hypothesis predicts it",
+  "far_share_record": "far share of SHARED's extra L2 hits over PRIVATE, dFh / (dH + dFh) from the recorded l2_tex_read_sectors, l2_tex_read_hit_sectors, l2_read_miss_sectors and lts__t_sectors_srcunit_ltcfabric.sum, in [0.15, 0.45] where s >= 0.1 (H1 with equal-priority copies): a RECORD; no new metric is added in rental 1 (the partition metrics are rental 2's scaffolding)",
+  "gates": "V10 (the short-kernel clock read, 1641-1688 MHz on every JetMoE and OLMoE lock page) does NOT gate survival scoring: bytes are clock-free (2026-09-27 G=2 at base vs lock agree within 0.03% w1, 0.8% w2). A page failing V6 (SHARED vs PRIVATE L2 read sectors > 0.5%) has its s flagged, since the activation-cancels premise is what V6 checks"
+ },
+ "secondary_G2": {
+  "rule": "every G = 2 SHARED and PRIVATE cell scored against the registered byte model (R0: 8x7B 2026-09-27 MIX fit through cross_model_predict.target_geometry, nothing fitted on the shards) with its own 5% bar; cells R0 prints no number for (OUT-OF-DOMAIN / ILL-POSED) are listed, not scored. The same R0 is C's R0: the two registrations are committed together and neither is revised after the other's pages land",
+  "R0_params": {
+   "C_A": 138.48020407774175,
+   "beta_A": 1.2664978352827505,
+   "theta1_A": 1.7147270423859942e-07,
+   "C_B": 72.52141980445369,
+   "beta_B": 1.3239898646683528,
+   "theta1": 0.19674854776229564,
+   "eps1_w1": 1.1265901074698326e-08,
+   "eps1_w2": 0.10273998149024145,
+   "view": "mix",
+   "C_A2": 86.17989278767973,
+   "beta_A2": 1.4761302885910965
+  },
+  "R0_source": "/private/tmp/claude-501/-Users-harshithkantamneni/9585165f-4f6b-46ca-8c2e-b87f79486eeb/scratchpad/design-atile/repo/results/published/2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710",
+  "cells": [
+   {
+    "target": "mixtral-8x7b-tp2",
+    "G": 2,
+    "arm": "shared",
+    "gemm": "w1",
+    "q": [
+     1.0006106499694805,
+     1.0006556819977495,
+     1.9573488335975364,
+     1.9529640817602631,
+     2.9565605746586385,
+     2.95387293034541,
+     3.956683767487627,
+     3.95472897092369,
+     4.957110141737152
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp2",
+    "G": 2,
+    "arm": "shared",
+    "gemm": "w2",
+    "q": [
+     1.0000000000002927,
+     1.0544925321325929,
+     1.786778296626112,
+     1.3188511459018173,
+     2.177683733957384,
+     1.4906665011464444,
+     2.540708831207265,
+     1.5483821757203629,
+     2.874035998003329
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp2",
+    "G": 2,
+    "arm": "private",
+    "gemm": "w1",
+    "q": [
+     1.0006106499694805,
+     2.001576784024346,
+     3.002542971354762,
+     4.003509172009027,
+     5.004475377993623,
+     6.0054415866436095,
+     7.006407796816752,
+     8.007374007941905,
+     9.00834021970175
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp2",
+    "G": 2,
+    "arm": "private",
+    "gemm": "w2",
+    "q": [
+     1.00000000000875,
+     2.003142170828202,
+     3.006374117956531,
+     4.00960606508486,
+     5.012838012213187,
+     6.016069959341516,
+     7.019301906469845,
+     8.022533853598173,
+     9.025765800726504
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp4",
+    "G": 2,
+    "arm": "shared",
+    "gemm": "w1",
+    "q": [
+     1.0002532402795166,
+     1.0005051777733587,
+     1.755925190360978,
+     1.2925227707845073,
+     2.271812111122312,
+     1.4099388866346478,
+     2.650228463273672,
+     1.4824098913085337,
+     2.843781481018352
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp4",
+    "G": 2,
+    "arm": "shared",
+    "gemm": "w2",
+    "q": [
+     1.0000000000001052,
+     1.0535212282994975,
+     1.1822283459097402,
+     1.153573037482932,
+     1.2117502538080225,
+     1.1966870896107205,
+     1.2228051251094838,
+     1.2057579788296326,
+     1.2373850157453279
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp4",
+    "G": 2,
+    "arm": "private",
+    "gemm": "w1",
+    "q": [
+     1.0002532402795166,
+     2.0012147986693485,
+     3.0021765686686495,
+     4.003138391609594,
+     5.004100235733485,
+     6.005062090450599,
+     7.006023951221623,
+     8.006985815776623,
+     9.007947682854411
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp4",
+    "G": 2,
+    "arm": "private",
+    "gemm": "w2",
+    "q": [
+     1.000000000003637,
+     2.001308613058873,
+     3.0026546150584394,
+     4.004000617058006,
+     5.005346619057573,
+     6.006692621057141,
+     7.0080386230567076,
+     8.009384625056274,
+     9.010730627055842
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp8",
+    "G": 2,
+    "arm": "shared",
+    "gemm": "w1",
+    "q": [
+     1.0000000000025713,
+     1.0002088431239566,
+     1.0976463350271035,
+     1.0800690468517584,
+     1.1492917960580327,
+     1.1149541999063501,
+     1.154387765790113,
+     1.1326069930773488,
+     1.1575975955167035
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp8",
+    "G": 2,
+    "arm": "shared",
+    "gemm": "w2",
+    "q": [
+     1.0000000000000377,
+     1.053171608479356,
+     1.093550607361672,
+     1.0918329977134524,
+     1.1026864416890705,
+     1.106023968787774,
+     1.105409678359989,
+     1.1085515594387032,
+     1.1173702584444247
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp8",
+    "G": 2,
+    "arm": "private",
+    "gemm": "w1",
+    "q": [
+     1.0000000000025713,
+     2.000502150290079,
+     3.0014549346475246,
+     4.002407926677529,
+     5.003361001825434,
+     6.004314118545876,
+     7.005267259027049,
+     8.006220414360858,
+     9.00717357959751
+    ]
+   },
+   {
+    "target": "mixtral-8x7b-tp8",
+    "G": 2,
+    "arm": "private",
+    "gemm": "w2",
+    "q": [
+     1.0000000000015117,
+     2.000544383276355,
+     3.0011043203590084,
+     4.001664257441661,
+     5.002224194524315,
+     6.002784131606967,
+     7.00334406868962,
+     8.003904005772274,
+     9.004463942854926
+    ]
+   }
+  ]
+ },
+ "R0_G1_record": [
+  {
+   "target": "mixtral-8x7b-tp2",
+   "G": 1,
+   "arm": "shared",
+   "gemm": "w1",
+   "q": [
+    1.0002536316694681,
+    1.6814762094530407,
+    2.279547124808813,
+    2.9476734617526823,
+    3.5997212174267075,
+    4.240202679922133,
+    4.8719152932370235,
+    5.496731544713992,
+    6.115974476238536
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp2",
+   "G": 1,
+   "arm": "shared",
+   "gemm": "w2",
+   "q": [
+    1.0000000000001052,
+    1.1679015784189932,
+    1.3010424644473386,
+    1.3747581909382456,
+    1.4202824436244454,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp2",
+   "G": 1,
+   "arm": "private",
+   "gemm": "w1",
+   "q": [
+    1.0002536316694681,
+    2.0006551826999077,
+    3.001056742962139,
+    4.001458305532676,
+    5.001859869026594,
+    6.002261432982218,
+    7.0026629972016785,
+    8.00306456158604,
+    9.003466126080337
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp2",
+   "G": 1,
+   "arm": "private",
+   "gemm": "w2",
+   "q": [
+    1.000000000003637,
+    2.001305942419992,
+    3.0026519444195587,
+    4.003997946419126,
+    5.005343948418693,
+    6.006689950418259,
+    7.008035952417826,
+    8.009381954417393,
+    9.010727956416961
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp4",
+   "G": 1,
+   "arm": "shared",
+   "gemm": "w1",
+   "q": [
+    1.0001053037609169,
+    1.210674275722846,
+    1.3428124585866636,
+    1.4277956538581016,
+    1.4650475633592772,
+    null,
+    1.4703350134376474,
+    null,
+    null
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp4",
+   "G": 1,
+   "arm": "shared",
+   "gemm": "w2",
+   "q": [
+    1.0000000000000377,
+    1.065426489238686,
+    1.1042026895468577,
+    1.1210546242962867,
+    1.1299968634218174,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp4",
+   "G": 1,
+   "arm": "private",
+   "gemm": "w1",
+   "q": [
+    1.0001053037609169,
+    2.000505012116636,
+    3.0009047570490353,
+    4.0013045111284296,
+    5.001704268867073,
+    6.0021040284354665,
+    7.002503789049479,
+    8.002903550317022,
+    9.003303312020265
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp4",
+   "G": 1,
+   "arm": "private",
+   "gemm": "w2",
+   "q": [
+    1.0000000000015117,
+    2.0005432722900833,
+    3.0011032093727366,
+    4.001663146455389,
+    5.002223083538043,
+    6.002783020620695,
+    7.003342957703348,
+    8.003902894786002,
+    9.004462831868654
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp8",
+   "G": 1,
+   "arm": "shared",
+   "gemm": "w1",
+   "q": [
+    1.000000000001069,
+    1.0412478677902648,
+    1.0811408526791357,
+    1.1021611643579403,
+    1.116008597847331,
+    1.118725139767871,
+    1.1223420530045427,
+    1.1238048878797127,
+    1.124037597979933
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp8",
+   "G": 1,
+   "arm": "shared",
+   "gemm": "w2",
+   "q": [
+    1.0000000000000133,
+    1.0257008087302566,
+    1.0392735485337505,
+    1.0447471582352903,
+    1.047539384857024,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp8",
+   "G": 1,
+   "arm": "private",
+   "gemm": "w1",
+   "q": [
+    1.000000000001069,
+    2.0002088072196162,
+    3.0006048953493627,
+    4.00100101938256,
+    5.0013971577806515,
+    6.00179330336217,
+    7.00218945304886,
+    8.00258560530144,
+    9.002981759264692
+   ]
+  },
+  {
+   "target": "mixtral-8x7b-tp8",
+   "G": 1,
+   "arm": "private",
+   "gemm": "w2",
+   "q": [
+    1.0000000000006284,
+    2.000225895786894,
+    3.0004587208917384,
+    4.000691545996581,
+    5.000924371101425,
+    6.00115719620627,
+    7.0013900213111135,
+    8.001622846415955,
+    9.0018556715208
+   ]
+  }
+ ],
+ "not_in_rental_1": "B's R0 anchors (8x7B, Qwen2 G = 1, 2 with partition metrics), R1 num_stages, R2 BLOCK_K (needs --block-k), R4 clock 1005 MHz, R5 slot padding: rental 2, which needs --block-k, --slot-pad-rows, the partition metrics and per-knob directories"
+}

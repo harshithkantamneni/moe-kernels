@@ -1,0 +1,63 @@
+2026-10-27T04:12:16Z setup_vm.sh start: commit e10fda1b9e8cad4f815d549184f76cddaab781e1 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-27T05:20:28Z
+2026-10-27T04:14:02Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-27T04:14:03Z driver start: commit e10fda1b9e8cad4f815d549184f76cddaab781e1, steps of the plan scripts/plans/rentalC3-cal-2026-10.plan, deadline 2026-10-27T05:20:28Z (58 min of work left)
+2026-10-27T04:14:03Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalC3-cal-2026-10.plan (sha256 51faa798bb9b4c2f59e767a1ccc4b9f51ce02a1a48ae28365007ef7a7007b2ae), 8 units
+2026-10-27T04:14:03Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/8 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 58 min left)
+2026-10-27T04:14:03Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-27T04:14:03Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-27T04:14:03Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-27T04:14:03Z prelude: power.max_limit 900.00 W, at or over the registered 700 W
+2026-10-27T04:14:03Z prelude: the power limit read back after 0 s: enforced.power.limit 700.00 W, -q -d POWER GPU scope Current 700.00 W (Requested 700.00 W), power.limit 700.00 W (S1 read-back)
+2026-10-27T04:14:06Z lock probe: the session lock 1410 MHz held (C2)
+2026-10-27T04:14:06Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261027T041403Z, session lock 1410 MHz
+2026-10-27T04:14:06Z prelude END: exit 0 after 0 min [unit 1/8 - lock-mhz=1410 power-limit-w=700]
+2026-10-27T04:14:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:14:07Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 2/8 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 58 min left)
+2026-10-27T04:14:23Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-27T04:14:23Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-27T04:14:23Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-10-27T04:14:23Z bytes: the registered list G = 64 (olmoe-1b-7b, f128): no tail drop, no re-price, no base-clock control
+2026-10-27T04:17:10Z bytes: G=64 page exit 3 after 165 s
+2026-10-27T04:17:12Z bytes: lock block exit 0 (G=64 exit 3 04:17:10 165 s;)
+2026-10-27T04:17:17Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-27T04:17:17Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-27T04:17:18Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/summary.json)
+2026-10-27T04:17:18Z bytes END: exit 0 after 3 min [unit 2/8 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-10-27T04:17:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:17:20Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 3/8 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 7 min, cap 25 min, 55 min left)
+2026-10-27T04:17:20Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-27T04:17:20Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-10-27T04:17:20Z bytes: the registered list G = 64 (mixtral-8x7b, f128): no tail drop, no re-price, no base-clock control
+2026-10-27T04:24:08Z bytes: G=64 page exit 3 after 405 s
+2026-10-27T04:24:10Z bytes: lock block exit 0 (G=64 exit 3 04:24:08 405 s;)
+2026-10-27T04:24:15Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-27T04:24:16Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/summary.json)
+2026-10-27T04:24:16Z bytes END: exit 0 after 7 min [unit 3/8 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-10-27T04:24:17Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:24:18Z gate START: gate band: scripts/tileA2_gate.py band at the 1410 lock; FAIL ends the rental (tileA2-gates) [unit 4/8 - gband gate=band] (estimate 1 min, cap 5 min, 48 min left)
+2026-10-27T04:24:20Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)
+2026-10-27T04:24:20Z gate END: exit 0 after 0 min [unit 4/8 - gband gate=band]
+2026-10-27T04:24:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:24:22Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 5/8 - rc3] (estimate 3 min, cap 10 min, 48 min left)
+2026-10-27T04:24:38Z regcheck: REGCHECK_u7_st7=PASS
+2026-10-27T04:24:38Z regcheck: REGCHECK_u8_stq=PASS
+2026-10-27T04:24:38Z regcheck END: exit 0 after 0 min [unit 5/8 - rc3]
+2026-10-27T04:24:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:24:40Z perturb START: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 6/8 - pt3] (estimate 6 min, cap 20 min, 47 min left)
+2026-10-27T04:25:11Z perturb: GATE_u7_st7=FAIL median=0.02026723753612847 worst=0.024246766760665173
+2026-10-27T04:25:11Z perturb: HARD_u7_st7=PASS
+2026-10-27T04:25:11Z perturb: GATE_u8_stq=FAIL median=0.014642749809695876 worst=0.030131204583648485
+2026-10-27T04:25:11Z perturb: HARD_u8_stq=PASS
+2026-10-27T04:25:11Z perturb END: exit 1 after 1 min [unit 6/8 - pt3]
+2026-10-27T04:25:12Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:25:14Z stamps START: stamps at the 1410 lock: the instrumented copy (stamps=ends) at 128x128x64 w8 s3 G=1, docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json, arms native; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_c3.py) [unit 7/8 mixtral-8x7b st7 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native] (estimate 4 min, cap 15 min, 47 min left)
+2026-10-27T04:25:14Z stamps: the overhead gate for u7-st7 reads 'FAIL median=0.02026723753612847 worst=0.024246766760665173': the pages run PERTURBED (owner OD-1, C3)
+2026-10-27T04:25:28Z stamps: u7-st7 exit 0 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-instr-mixtral-8x7b-st7)
+2026-10-27T04:25:28Z stamps END: exit 0 after 0 min [unit 7/8 mixtral-8x7b st7 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
+2026-10-27T04:25:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:25:31Z stamps START: stamps at the 1410 lock: the instrumented copy (stamps=ends) at 128x128x64 w8 s3 G=1, docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json, arms native; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_c3.py) [unit 8/8 qwen2-57b-a14b stq block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native] (estimate 4 min, cap 15 min, 46 min left)
+2026-10-27T04:25:31Z stamps: the overhead gate for u8-stq reads 'FAIL median=0.014642749809695876 worst=0.030131204583648485': the pages run PERTURBED (owner OD-1, C3)
+2026-10-27T04:25:47Z stamps: u8-stq exit 0 (/home/ubuntu/moe/results/2026-10-27-nvidia_gh200_480gb-instr-qwen2-57b-a14b-stq)
+2026-10-27T04:25:47Z stamps END: exit 0 after 0 min [unit 8/8 qwen2-57b-a14b stq block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
+2026-10-27T04:25:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:25:52Z driver end: exit 0

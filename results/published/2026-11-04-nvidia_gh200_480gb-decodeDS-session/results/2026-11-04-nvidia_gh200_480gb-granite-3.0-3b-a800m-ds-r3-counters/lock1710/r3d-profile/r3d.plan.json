@@ -1,0 +1,63 @@
+{
+ "family": "r3-decode",
+ "model": "granite-3.0-3b-a800m",
+ "dtype": "bf16",
+ "page": "docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json",
+ "page_sha256": "d96c433afc018771076cbf6068f82256f32ecb2605492d10fa2a3dbda74e4a83",
+ "cells": [
+  [
+   "S-T2-A8",
+   "native"
+  ],
+  [
+   "S-T4-A8",
+   "native"
+  ],
+  [
+   "S-T4-A16",
+   "native"
+  ],
+  [
+   "S-T4-A32",
+   "native"
+  ],
+  [
+   "S-T8-A8",
+   "native"
+  ],
+  [
+   "S-T8-A40",
+   "native"
+  ],
+  [
+   "S-T64-A16",
+   "native"
+  ],
+  [
+   "S-T64-A40",
+   "native"
+  ],
+  [
+   "S-T96-A32",
+   "native"
+  ],
+  [
+   "S-T96-A40",
+   "native"
+  ],
+  [
+   "S-T120-A40",
+   "native"
+  ],
+  [
+   "S-T128-A40",
+   "native"
+  ]
+ ],
+ "calls_per_cell": 3,
+ "warmup_calls": 2,
+ "gemms_per_call": 2,
+ "seed": 0,
+ "decl_copies": null,
+ "manifest": "/home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d-profile/r3d.manifest.json"
+}

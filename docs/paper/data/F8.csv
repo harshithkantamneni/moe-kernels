@@ -1,0 +1,81 @@
+rental,series,n,s,H1,H0
+rental1,tp2 w1,2,0.15639,0.033,0.033
+rental1,tp2 w1,3,0.100733,0.009,0.009
+rental1,tp2 w1,4,0.0583654,0.006,0.006
+rental1,tp2 w1,5,0.0564444,0.003,0.003
+rental1,tp2 w1,6,0.0457034,0.003,0.003
+rental1,tp2 w1,7,0.0389188,0.002,0.002
+rental1,tp2 w1,8,0.0368589,0.002,0.002
+rental1,tp2 w1,9,0.03217,0.001,0.001
+rental1,tp2 w2,2,0.816637,0.696,0.762
+rental1,tp2 w2,3,0.594455,0.536,0.737
+rental1,tp2 w2,4,0.571477,0.518,0.761
+rental1,tp2 w2,5,0.579361,0.521,0.771
+rental1,tp2 w2,6,0.543321,0.483,0.79
+rental1,tp2 w2,7,0.561659,0.485,0.8
+rental1,tp2 w2,8,0.550091,0.463,0.811
+rental1,tp2 w2,9,0.542368,0.448,0.818
+rental1,tp4 w1,2,0.649655,0.353,0.493
+rental1,tp4 w1,3,0.543011,0.219,0.558
+rental1,tp4 w1,4,0.469267,0.196,0.602
+rental1,tp4 w1,5,0.446485,0.17,0.603
+rental1,tp4 w1,6,0.417302,0.152,0.656
+rental1,tp4 w1,7,0.380064,0.149,0.67
+rental1,tp4 w1,8,0.380731,0.134,0.695
+rental1,tp4 w1,9,0.356582,0.122,0.711
+rental1,tp4 w2,2,0.937618,0.851,0.851
+rental1,tp4 w2,3,0.837531,0.836,0.836
+rental1,tp4 w2,4,0.858053,0.851,0.851
+rental1,tp4 w2,5,0.864448,0.857,0.857
+rental1,tp4 w2,6,0.856646,0.869,0.869
+rental1,tp4 w2,7,0.897294,0.875,0.875
+rental1,tp4 w2,8,0.900199,0.882,0.882
+rental1,tp4 w2,9,0.91232,0.887,0.887
+rental1,tp8 w1,2,0.90514,1,1
+rental1,tp8 w1,3,0.874488,1,1
+rental1,tp8 w1,4,0.868815,1,1
+rental1,tp8 w1,5,0.821757,1,1
+rental1,tp8 w1,6,0.875567,1,1
+rental1,tp8 w1,7,0.88476,1,1
+rental1,tp8 w1,8,0.869848,1,1
+rental1,tp8 w1,9,0.880206,1,1
+rental1,tp8 w2,2,0.973414,1,1
+rental1,tp8 w2,3,0.990529,1,1
+rental1,tp8 w2,4,0.999466,1,1
+rental1,tp8 w2,5,0.999859,1,1
+rental1,tp8 w2,6,0.999972,1,1
+rental1,tp8 w2,7,1.00012,1,1
+rental1,tp8 w2,8,1.00017,1,1
+rental1,tp8 w2,9,1.00017,1,1
+rental1,sameboard 8x7B w2,2,0.722282,,
+rental1,sameboard 8x7B w2,3,0.538654,,
+rental1,sameboard 8x7B w2,4,0.522036,,
+rental1,sameboard 8x7B w2,5,0.531993,,
+rental1,sameboard 8x7B w2,6,0.501428,,
+rental1,sameboard 8x7B w2,7,0.506705,,
+rental1,sameboard 8x7B w2,8,0.489654,,
+rental1,sameboard 8x7B w2,9,0.476815,,
+rental1,sameboard 8x7B w1,2,0.0513373,,
+rental1,sameboard 8x7B w1,3,0.0303052,,
+rental1,sameboard 8x7B w1,4,0.0214003,,
+rental1,sameboard 8x7B w1,5,0.0149506,,
+rental1,sameboard 8x7B w1,6,0.0125051,,
+rental1,sameboard 8x7B w1,7,0.0100569,,
+rental1,sameboard 8x7B w1,8,0.00859088,,
+rental1,sameboard 8x7B w1,9,0.00733316,,
+rental2,tp2 w2 s8 (PRIMARY),4,0.854612,,
+rental2,tp2 w2 s8 (PRIMARY),5,0.758305,,
+rental2,tp2 w2 s8 (PRIMARY),6,0.752667,,
+rental2,tp2 w2 s8 (PRIMARY),7,0.759252,,
+rental2,tp2 w2 s8 (PRIMARY),8,0.757625,,
+rental2,tp2 w2 s8 (PRIMARY),9,0.75517,,
+rental2,"tp4 w1 s8 (PRIMARY, NL vs lag)",4,0.561435,,
+rental2,"tp4 w1 s8 (PRIMARY, NL vs lag)",5,0.514125,,
+rental2,"tp4 w1 s8 (PRIMARY, NL vs lag)",6,0.4915,,
+rental2,"tp4 w1 s8 (PRIMARY, NL vs lag)",7,0.561906,,
+rental2,"tp4 w1 s8 (PRIMARY, NL vs lag)",8,0.423539,,
+rental2,"tp4 w1 s8 (PRIMARY, NL vs lag)",9,0.463499,,
+rental2,"tp2 w2 s6 (secondary, the curve's shape)",6,0.579163,,
+rental2,"tp2 w2 s6 (secondary, the curve's shape)",7,0.569131,,
+rental2,"tp2 w2 s6 (secondary, the curve's shape)",8,0.543929,,
+rental2,"tp2 w2 s6 (secondary, the curve's shape)",9,0.51637,,

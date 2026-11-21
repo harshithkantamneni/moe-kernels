@@ -1,0 +1,27 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "qwen1.5-moe-a2.7b",
+ "page": "q1",
+ "shuffle_seed": 20261010,
+ "cells": [
+  {
+   "label": "balanced",
+   "n": 1,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "balanced cells only (R3's balanced_ids, counts null); no histogram"
+}

@@ -1,0 +1,17 @@
+2026-10-21T18:44:46Z the branch's first commit: the VM can push
+2026-10-21T18:48:01Z setup_vm.sh: READY
+2026-10-21T18:48:06Z prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-10-21T18:48:33Z calibrate (unit 2/10 mixtral-8x7b tc2): exit 0 (0 min)
+2026-10-21T18:48:44Z tilecensus (unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b): exit 0 (0 min)
+2026-10-21T18:51:48Z bytes: G=64 page exit 3
+2026-10-21T18:51:58Z bytes (unit 4/10 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-21T18:58:48Z bytes: G=64 page exit 3
+2026-10-21T18:58:58Z bytes (unit 5/10 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (7 min)
+2026-10-21T18:59:01Z gate (unit 6/10 - gband gate=band): exit 0 (0 min)
+2026-10-21T19:06:21Z timed (unit 7/10 mixtral-8x22b t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (7 min)
+2026-10-21T19:11:19Z bytes: G=1 page exit 0
+2026-10-21T19:11:28Z bytes (unit 8/10 mixtral-8x22b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared byte-groups=1): exit 0 (5 min)
+2026-10-21T19:16:29Z timed (unit 9/10 mixtral-8x7b t128g1m block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
+2026-10-21T19:18:34Z bytes: G=1 page exit 0
+2026-10-21T19:18:44Z bytes (unit 10/10 mixtral-8x7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared byte-groups=1): exit 0 (2 min)
+2026-10-21T19:18:46Z the session ended: driver exit 0

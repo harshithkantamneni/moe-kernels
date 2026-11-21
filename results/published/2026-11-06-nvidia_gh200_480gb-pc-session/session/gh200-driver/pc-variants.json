@@ -1,0 +1,7 @@
+[
+ {"id": "u5-sa", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-06-pc-pages/pc-a.json", "spec": "stamps=ends"},
+ {"id": "u7-sc", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-06-pc-pages/pc-c.json", "spec": "stamps=ends"},
+ {"id": "u14-se2", "kind": "stamps", "probe": "pc", "model": "phi-3.5-moe", "groups": [1], "arms": ["native"], "block_m": 64, "block_n": 128, "block_k": 64, "num_warps": 8, "num_stages": 3, "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json", "spec": "stamps=ends"},
+ {"id": "u17-sd", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-06-pc-pages/pc-d.json", "spec": "stamps=ends"},
+ {"id": "u20-sr", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-06-pc-pages/pc-r.json", "spec": "stamps=ends"}
+]

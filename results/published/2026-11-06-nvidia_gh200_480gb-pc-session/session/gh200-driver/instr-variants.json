@@ -1,0 +1,3 @@
+[
+ {"id": "u13-se1", "kind": "stamps", "model": "phi-3.5-moe", "groups": [1], "arms": ["native"], "block_m": 128, "block_n": 128, "block_k": 64, "num_warps": 8, "num_stages": 3, "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json", "spec": "stamps=ends"}
+]

@@ -1,0 +1,11 @@
+== 2026-11-06T18:12:16Z step perturb: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2)
+INSTRUMENTED KERNEL PC (perturb): 2 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u7-sc        page  docs/registered/2026-11-06-pc-pages/pc-c.json cells 9 tiles 64x128x64w4s2 64x128x64w4s3 64x128x64w4s4 shapes mixtral-8x7b pcs-e32-h4096 pcs-e8-h2048 pcs-e8-h512 spec stamps=ends,evict_a=none,evict_b=none
+  u14-se2      hist  docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json cells 6 tiles 64x128x64w8s3 shapes phi-3.5-moe spec stamps=ends,evict_a=none,evict_b=none
+  gate (C3's): median |plain/copy - 1| <= 1%, worst <= 2%, CTAs per SM identical, all-off SASS equal, the upstream file, C3's SASS legs; 8 bursts of 10 calls each way on every cell of ['u14-se2', 'u7-sc']
+  u7-sc: FAIL median |r - 1| 1.89% > 1%; worst |r - 1| 9.33% > 2%
+  u14-se2: PASS 
+2026-11-06T18:12:54Z perturb: GATE_u7_sc=FAIL median=0.01885249587845733 worst=0.09327108577594956
+2026-11-06T18:12:54Z perturb: HARD_u7_sc=PASS
+2026-11-06T18:12:54Z perturb: GATE_u14_se2=PASS median=0.002341196748037455 worst=0.008610656877284906
+2026-11-06T18:12:54Z perturb: HARD_u14_se2=PASS

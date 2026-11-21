@@ -1,0 +1,139 @@
+REGISTERED 2026-10-14, before any decode-stage page: the decode stage, the blind rental (frozen; finalised mechanically), 2026-10-14-decodeB-blind-gh200
+status: FROZEN; FINALISED MECHANICALLY from the CAL score (scripts/scoring/decode/finalise_decode.py), which refuses unless the CAL stop rule reads GO
+design: design-decode DESIGN.md (2026-10-14, design only, read-only against 80514a6) and the owner's decisions of 2026-10-14: DD1 NATIVE alone certifies, SHARED's declaration arm (DECL) an optional lever on CAL models; DD2 vLLM's naive path (T 1 to 3) in scope; DD3 a summary-statistics-only extraction at B 1 to 128, or the design's fallback (rental 5's fitted shapes extrapolated) when the raw traces are unavailable, registered; DD4 the multi-call CUDA graph (GRR) is the primary timer, a one-call graph (GR1) the control; DD5 provisional bars rms <= 3%, worst <= 8%, |mean| <= 1.5%; DD6 decode runs after the tile stage (built now, rented after tile rental B)
+tool: scorer scripts/scoring/decode/score_blind.py; finalisation scripts/scoring/decode/finalise_decode.py
+
+blind rental: 101 min of units, about 135 min wall, $5.15
+power at the provisional bars (DESIGN-NOMINAL, sigma ASSUMED): {'the model is the truth': 1.0, 'T0_GR off by +5 us (the riskiest assumption)': 0.0, 'T0_GR off by +1 us': 1.0, '+1% everywhere': 1.0, '+2% everywhere': 0.0, '+5% on sub-wave cells': 0.0}
+
+what: E1-DEC BLIND: v4d with its CAL constants frozen, on five models no decode page has timed
+units:
+  - {"label": "dm", "model": "phi-3.5-moe", "page": "phi-3.5-moe-main.json", "step": "r3decode", "inst": "GRR", "drop": "nodrop", "est_min": 15}
+  - {"label": "dm", "model": "qwen1.5-moe-a2.7b", "page": "qwen1.5-moe-a2.7b-main.json", "step": "r3decode", "inst": "GRR", "drop": "nodrop", "est_min": 18}
+  - {"label": "dm", "model": "jetmoe-8b", "page": "jetmoe-8b-main.json", "step": "r3decode", "inst": "GRR", "drop": "nodrop", "est_min": 15}
+  - {"label": "dm", "model": "deepseek-v2-lite", "page": "deepseek-v2-lite-main.json", "step": "r3decode", "inst": "GRR", "drop": "nodrop", "est_min": 15}
+  - {"label": "dm", "model": "granite-3.0-3b-a800m", "page": "granite-3.0-3b-a800m-main.json", "step": "r3decode", "inst": "GRR", "drop": "nodrop", "est_min": 15}
+  - {"label": "dc", "model": "qwen1.5-moe-a2.7b", "page": "qwen1.5-moe-a2.7b-ctl.json", "step": "r3decode", "inst": "GR1", "drop": "gr1", "est_min": 9}
+  - {"label": "dc", "model": "granite-3.0-3b-a800m", "page": "granite-3.0-3b-a800m-ctl.json", "step": "r3decode", "inst": "GR1", "drop": "gr1", "est_min": 9}
+drop_order: last first: the two GR1 control pages (gr1); every main page is nodrop
+pages:
+  dir: docs/registered/2026-10-14-decode-pages
+  files: (in the JSON)
+  label: SYNTHETIC (decode_synth.py); DW cells EXTRAPOLATED
+finalisation:
+  refuses: unless cal.score.json's STOP reads GO
+  frozen_from_cal:
+    - T0_GR_ms
+    - s_naive_GR_ms
+    - s_block_GR_ms
+    - the selected rho form
+    - the GD2 band
+    - sigma_page and the tightened bars
+    - the tile stage's v4 Params
+  writes: the blind predictions per cell (v4d and every rival) and scripts/plans/rentalD-blind-2026-10.plan
+statistic: e_dec = (T_v4d - T_meas) / T_meas per valid NATIVE cell, 0 at or under 1 us absolute
+rule: E1-DEC: pooled over the five models AND per model at the bars finalised from the CAL replicate (the provisional rms <= 3%, worst <= 8%, |mean| <= 1.5% when there is no replicate); a model is CERTIFIED when its own bar and the pooled bar hold
+bars_provisional:
+  rms_max: 0.03
+  max_abs: 0.08
+  mean_max: 0.015
+rivals:
+  eager: v4d at v3's eager constants (T0 43 us, s_small, s_block)
+  roofline: T0_GR + A W_e / bw
+  line: a + b (T k), fitted on the CAL NATIVE cells (pooled)
+  OLS: ridge on standardised [A W_e / bw, waves w1 + w2, ln(1 + dead CTAs), naive, block-scan] over the CAL NATIVE cells (the tile stage's ols_fit rule)
+  NAIVE-NODEDUP: v4d with every naive row's slab fetched
+  rho other: v4d at the unselected rho form
+  exclusion: rental 7's rule (tcommon.rival_rule): lever cells |T_R / T_v4d - 1| >= 2%, at least 6; EXCLUDED when R's rms there is over 2% and over v4d's + 3 se
+gates:
+  V-BIN: bincount(ids) == counts, k distinct experts per token (feasible, realize_counts); a failure refuses the cell
+  V-ALIGN: the spy's readback of one eager call (sorted ids None iff naive; num_tokens_post_padded; sentinel count P; expert_ids[:L] ascending; sorted length the capped buffer; the launch grid fused_moe_grid's; USE_TD False) equals r3_decode.expected_readback; a mismatch refuses the cell; any refused CAL cell is a STOP
+  GD5: the config the kernel received is tile_resolve.default_config(T, E), vLLM finds no tuned file and no override
+  GD4: every captured call's output equals the eager output bit for bit; a failure VOIDS the page. It covers the CHECK-PHASE capture only: each timed repeat recaptures the same calls on the same tensors and is not compared again
+  COPIES: (GRR) calls 0..R-1 are each spied in the check phase and must read R distinct w1 copies (r3_decode.check_copies); a failure refuses the cell. At R = 1 the call is cold by volume only (see coldness)
+  GD1: GPU per replay >= 3 x the host enqueue per replay (launch_floor's host probe, before and after); a failing cell is excluded (G2)
+  GD2: GR1 - GRR per call on matched cells; the CAL band [p05 - 1 us, p95 + 1 us] is frozen into the blind registration; a STOP when CAL's median is outside [-1, 10] us, the band is wider than 8 us, or the band leaves [-2, 11] us; a blind GR1 page with over 20% of its cells outside the band VOIDS that model's GRR page
+  GD3: E240 - GR1 in [0, 10] us on cells GPU-bound eager (C + F240 > 1.25 H): DESCRIPTIVE
+  G1: rental 7's r7-median-run3 rebuilt from cells.csv (6 of 9 clean; the 10% non-clean cap); a FAIL puts the page out (NOT SCORED)
+  G2: GD1, and the duty timer's host flag
+  G4: the cell's clock >= 1705 MHz
+  G5: the page's decode-page sha256 and every row's counts sha256 are the registered ones
+  V-SRC: the VM's installed fused_moe.py and moe_align_block_size.py are v0.27.1's bytes (moe/instrumented/UPSTREAM_DECODE.json); else the page is refused before any cell
+coldness:
+  phi-3.5-moe:
+    R: 1
+    calls_per_graph: 8
+    A_min: 2
+    W_e_MiB: 150.0
+    reuse_distance_MiB: 300.0
+    l2_MiB: 60
+    how: COLD BY VOLUME ONLY: R = 1, every call reads copy 0; between two reads of a slab the call streams at least A_min x W_e = 300 MiB, 5x the L2
+  qwen1.5-moe-a2.7b:
+    R: 4
+    calls_per_graph: 8
+    A_min: 4
+    W_e_MiB: 16.5
+    reuse_distance_MiB: 264.0
+    l2_MiB: 60
+    how: COLD BY ROTATION: call j reads copy j mod 4 (COPIES checks 4 distinct addresses); 264 MiB between two reads of one copy
+  jetmoe-8b:
+    R: 2
+    calls_per_graph: 8
+    A_min: 2
+    W_e_MiB: 66.0
+    reuse_distance_MiB: 264.0
+    l2_MiB: 60
+    how: COLD BY ROTATION: call j reads copy j mod 2 (COPIES checks 2 distinct addresses); 264 MiB between two reads of one copy
+  deepseek-v2-lite:
+    R: 3
+    calls_per_graph: 9
+    A_min: 6
+    W_e_MiB: 16.5
+    reuse_distance_MiB: 297.0
+    l2_MiB: 60
+    how: COLD BY ROTATION: call j reads copy j mod 3 (COPIES checks 3 distinct addresses); 297 MiB between two reads of one copy
+  granite-3.0-3b-a800m:
+    R: 7
+    calls_per_graph: 14
+    A_min: 8
+    W_e_MiB: 4.5
+    reuse_distance_MiB: 252.0
+    l2_MiB: 60
+    how: COLD BY ROTATION: call j reads copy j mod 7 (COPIES checks 7 distinct addresses); 252 MiB between two reads of one copy
+g3d_blind: shuffle and label on every blind main page at the CAL's margin rule; a FAIL voids that model's cells
+riskiest_assumption: T0_GR + s_path is one card constant that transfers across models; on the small models it is 20 to 60% of the call, and the CAL's two models cannot separate it from H, I or the kernel count
+nominal: DESIGN-NOMINAL as in decodeC-cal
+power:
+  draws: 4000
+  seed: 20261014
+  cells: (in the JSON)
+  sigma_cell: 0.0018
+  sigma_cell_under_50us: 0.0036
+  p_holds:
+    the model is the truth: 1.0
+    T0_GR off by +5 us (the riskiest assumption): 0.0
+    T0_GR off by +1 us: 1.0
+    +1% everywhere: 1.0
+    +2% everywhere: 0.0
+    +5% on sub-wave cells: 0.0
+  computed: CPU float64 (numpy)
+  label: DESIGN-NOMINAL predictions; sigma ASSUMED
+rental:
+  units_min: 101
+  wall_min: 135
+  cost_usd: 5.15
+  rate: gpu_1x_gh200 at $2.29/h
+  rule: units plus prelude 3 and calibrate 2 (and the CAL census 6), x 1/0.84 (rentals 4 to 7) plus 15 min boot and setup
+labels:
+  time: BLIND (the decode call, its tile and its instrument: no decode page exists)
+  pages: SYNTHETIC
+  everything published: SEEN
+  per_model:
+    phi-3.5-moe: SEEN-MODEL: R3 pages published (rental 7, R3's tile); the decode call, tile and instrument BLIND
+    qwen1.5-moe-a2.7b: SEEN-MODEL: R3 pages published (R3's tile); the decode call, tile and instrument BLIND
+    jetmoe-8b: SEEN-MODEL: R3 pages published (R3's tile); the decode call, tile and instrument BLIND
+    granite-3.0-3b-a800m: SEEN-MODEL: R3 pages published (R3's tile, the launch floor); the decode call, tile and instrument BLIND
+    deepseek-v2-lite: SEEN-SHAPE (the tile stage's D7: on a published H200 page, its GEMMs Qwen1.5's); the decode call, tile and instrument BLIND
+seen_data:
+  - every published page (rentals 1 to 7) is SEEN
+  - the CAL rental's pages, once scored

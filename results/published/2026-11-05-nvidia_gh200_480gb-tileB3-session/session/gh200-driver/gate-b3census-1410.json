@@ -1,0 +1,34 @@
+{
+ "compared": 16,
+ "ctas_per_sm": {
+  "deepseek-v2-lite|128x128x64w8s3|w1": 2,
+  "deepseek-v2-lite|128x128x64w8s3|w2": 2,
+  "deepseek-v2-lite|64x128x64w8s3|w1": 3,
+  "deepseek-v2-lite|64x128x64w8s3|w2": 3,
+  "jetmoe-8b|128x128x64w8s3|w1": 2,
+  "jetmoe-8b|128x128x64w8s3|w2": 2,
+  "jetmoe-8b|64x128x64w8s3|w1": 3,
+  "jetmoe-8b|64x128x64w8s3|w2": 3,
+  "phi-3.5-moe|128x128x64w8s3|w1": 2,
+  "phi-3.5-moe|128x128x64w8s3|w2": 2,
+  "phi-3.5-moe|64x128x64w8s3|w1": 3,
+  "phi-3.5-moe|64x128x64w8s3|w2": 3,
+  "qwen1.5-moe-a2.7b|128x128x64w8s3|w1": 2,
+  "qwen1.5-moe-a2.7b|128x128x64w8s3|w2": 2,
+  "qwen1.5-moe-a2.7b|64x128x64w8s3|w1": 3,
+  "qwen1.5-moe-a2.7b|64x128x64w8s3|w2": 3
+ },
+ "deepseek": "admitted",
+ "drift": {
+  "deepseek-v2-lite": [],
+  "jetmoe-8b": [],
+  "phi-3.5-moe": [],
+  "qwen1.5-moe-a2.7b": []
+ },
+ "file": "/home/ubuntu/moe/results/2026-11-05-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tb/tile-census.json",
+ "gate": "census",
+ "path_mismatch": [],
+ "sha256": "c5230f72c6f629b641cfa0787f15be4bf8e07419af4bd3447015cf29e4b777f0",
+ "verdict": "PASS",
+ "why": ""
+}

@@ -1,0 +1,2389 @@
+# Registered predictions
+
+A prediction is scored against a page only if it was committed here before
+the page existed. Each file names the fit it came from; nothing in it is
+fitted on what it predicts.
+
+## 2026-09-27: Mixtral 8x22B on a GH200, from Mixtral 8x7B's fit
+
+`2026-09-27-mixtral-8x22b-gh200.json` (every cell) and `.txt` (the table),
+written by `scripts/cross_model_predict.py` from the 2026-09-27 GH200 session
+(`results/published/2026-09-27-nvidia_gh200_480gb-session`, board 9b6d01):
+its five lock-1710 timed pages (G = 2, 3, 4, 8, 32) fitted by
+`scripts/r3_timing_model.py` at the knee p = 14 (T0 0.0540 ms, c 206.69 ns =
+353.4 cycles per CTA k-step at 1710 MHz, bw 3601 GB/s), and its eight lock-1710
+counter pages fitted by `scripts/wave_split_bytes.py` in the registered mix
+view. Only the shapes change (w1 K 6144 x 512 N-tiles, 3.221 GB; w2 K 16384 x
+96 N-tiles, 1.611 GB, from `moe/spec.py`'s `mixtral-8x22b`, read off the
+model's config.json). The 8x22B session runs on whatever GH200 board Lambda
+gives; the two GH200 boards measured so far agree within about 1% on every
+shared cell, and a different board is part of what this tests.
+
+What falsifies what, stated before any 8x22B page:
+
+- **The floor is the tile's, not the model's.** The floor capture reads the
+  same cycles per CTA k-step as 8x7B's (350 to 352 on w1, 354 to 367 on w2):
+  falsified by w1 outside 340 to 365. At G >= 8 the SHARED slope over treads 2
+  to 6 is 0.9270 ms per tread (1.714 x 8x7B's, the ratio of N-tiles x k-steps):
+  falsified outside 0.908 to 0.946 (2%).
+- **Time.** Every timed SHARED and PRIVATE cell at G = 2, 3, 4, 8 and 32,
+  treads 1 to 9: the rms of (predicted / measured - 1) over them at or under
+  2%, and no cell beyond 5%. The source fit's own leave-one-G-out rms was 0.30%;
+  the margin is the untested shape change, not a fitted tolerance.
+- **Bytes.** Every w1 cell and every PRIVATE cell within 5% of the prediction;
+  w2 SHARED at G <= 16, n <= 4 within 5%. w2 SHARED at n >= 5 and every
+  OUT-OF-DOMAIN cell are printed and scored as open questions only: the mix
+  view missed those by 5 to 12% on 8x7B itself.
+- **The G=2 zig-zag and G=3's period-3 ripple** keep their phase: at G=2 the
+  steps n = 2 to 3, 4 to 5 and 6 to 7 exceed n = 3 to 4, 5 to 6 and 7 to 8, and
+  the G=3 steps repeat with period 3 as the table's do.
+
+**Scored 2026-09-28** on `results/published/2026-09-28-nvidia_gh200_480gb-8x22b-session`
+(board 435984; its session README has every cell): the floor HELD (w1 346 to
+347 cycles per CTA k-step), the G >= 8 slope HELD (0.9155, 0.9141), time
+HELD at the 1710 lock (40 cells at G=3, 8, 32, rms 1.71%, worst -4.73%; G=2
+and 4 ran at 1605 on the module's power cap and are not scored), the G=2
+zig-zag and G=3 ripple HELD; bytes FALSIFIED on 5 of the 240 named cells
+(PRIVATE w1 G=64 n=9, PRIVATE w2 G=64 n=5, w2 SHARED G=3 n=3, G=4 n=4, G=8
+n=4, 5.3 to 6.7%). The files above are unchanged; changes made after these
+pages (the timing model's partial-wave rule, the byte model's stage 3) are
+scored in docs/FINDINGS.md as post-registration.
+
+## 2026-09-28: Qwen2-57B-A14B (64 experts, top 8) on a GH200, from Mixtral 8x7B's fit
+
+`2026-09-28-qwen2-57b-a14b-gh200.json` (every cell) and `.txt` (the table),
+written by `scripts/cross_model_predict.py` at ae62402 from the same 2026-09-27
+GH200 session (board 9b6d01): its five lock-1710 timed pages fitted by
+`scripts/r3_timing_model.py` (p = 14, the partial-last-wave rule; T0 0.0529
+ms, c 206.58 ns = 353.3 cycles per CTA k-step at 1710 MHz, bw 3598 GB/s) and
+its eight lock-1710 counter pages fitted by `scripts/wave_split_bytes.py` in
+the MIX view (LATER_MISS and stage 3 in force). Everything fitted is 8x7B's.
+What changes is the shapes (w1 K 3584 x 80 N-tiles, 2.349 GB; w2 K 2560 x 56
+N-tiles, 1.174 GB, from `moe/spec.py`'s verified `qwen2-57b-a14b`) and the
+design: 64 experts, 9 copies (576 slots for SHARED and PRIVATE, 64 for
+NATIVE), NATIVE on vLLM's block-scan alignment kernel at every tread. The
+session runs `scripts/gh200_model_session.sh --model qwen2-57b-a14b`
+(`--declared-copies 9` on every timed page) on whatever GH200 board Lambda
+gives.
+
+What falsifies what, stated before any Qwen2-57B page:
+
+- **The floor is the tile's.** The floor capture reads 340 to 365 cycles per
+  CTA k-step on w1 (8x7B 350 to 352, 8x22B 346 to 348) though a CTA runs 56
+  k-steps, not 64 or 96. The G >= 8 SHARED slope over treads 2 to 6 is 0.6837
+  ms per tread at G=8 and at G=32: falsified outside 0.670 to 0.697 (2%).
+- **Time.** Every timed SHARED and PRIVATE cell at the 1710 lock, treads 1 to
+  9: rms of (predicted / measured - 1) at or under 2%, no cell beyond 5%.
+  Cells measured at another lock (the module's power cap slipped 8x22B's deep
+  ladder) are printed and not scored.
+- **Bytes.** Every w1 cell and every PRIVATE cell within 5%; w2 SHARED at
+  G <= 16, n <= 4 within 5%. The 64-expert signature, scored with them: w1
+  SHARED at G=1 reads 1.16, 1.21, 1.22, 1.23 weight sets at n = 2 to 5 (a
+  co-residency window now spans several experts' M-tiles; on 8x7B it climbs
+  toward n), and w2 SHARED at G=1 stays at 1.00 to 1.08. The 8 ILL-POSED and
+  36 OUT-OF-DOMAIN w2 cells are printed and scored as open questions only.
+- **G=2's zig-zag** keeps its phase: the SHARED steps n = 2 to 3, 4 to 5, 6 to
+  7 and 8 to 9 (0.795 0.788 0.810 0.804 ms) exceed n = 3 to 4, 5 to 6, 7 to 8
+  (0.581 0.578 0.575).
+
+The stated risk, before the pages: the byte model's first-window and
+activation parameters are keyed by GEMM name, and at E = 64 w1's co-residency
+window is 4.1 M-rows (8x7B's w1 0.7, its w2 4.1). If w1 misses and w2 holds,
+the parameters encode the window regime, not the GEMM, and the model must be
+re-keyed on the window; that would be a finding, not a refit. The G=3 ripple
+is predicted weak here (steps 0.426 0.634 0.714 | 0.655 0.681 0.702 | 0.688)
+and is not registered as a falsifier.
+
+**Scored 2026-09-29** on `results/published/2026-09-28-nvidia_gh200_480gb-qwen2-57b-session`
+(board 50e61f; its session README has every cell): the floor HELD (w1 353.3 to
+353.7), the G >= 8 slope HELD (0.6962, 0.6953, at the band's upper edge), time
+FALSIFIED (58 cells at 1710, rms 2.71% against 2%, worst -5.00%: a uniform
+2.3 to 2.7% bias), G=2's zig-zag HELD in phase (amplitude a fifth), bytes
+FALSIFIED (w1 14.3% rms; the G=1 w1 signature read 1.23 to 1.91 against 1.16
+to 1.23; w2 SHARED at G = 2 to 4 up to +97%; PRIVATE w2 1.89%). The stated risk
+(w1 in Mixtral w2's window regime) is among the causes; the files above are
+unchanged.
+
+## 2026-09-29: OLMoE-1B-7B (64 experts, top 8, small K) on a GH200, from Mixtral 8x7B's fit
+
+`2026-09-29-olmoe-1b-7b-gh200.json` and `.txt`, written by
+`scripts/cross_model_predict.py` from the 2026-09-27 GH200 session (board
+9b6d01), the same pages and fit as the Qwen2-57B registration, with the model
+as it stands after the Qwen2-57B diagnosis: the dead-CTA term (ea2c77c, 1.333 ns
+per dead CTA, measured on 8x7B's counters) and the capacity rule for later
+re-reads (15a9533). Every fitted number is 8x7B's (T0 0.0441 ms, c 206.58 ns =
+353.3 cycles per CTA k-step, bw 3598 GB/s). Shapes from `moe/spec.py`'s
+`olmoe-1b-7b` (config.json read 2026-09-29): w1 K 2048 x 32 N-tiles, 0.537 GB;
+w2 K 1024 x 32 N-tiles, 0.268 GB: a CTA runs 32 and 16 k-steps (8x7B 64 and
+224), and w1's co-residency window is 10.3 M-rows (8x7B's 0.7). Design: 64
+experts x 9 copies, NATIVE on block-scan at every tread.
+
+**This is a test of the timing model, not of the byte model.** Every OLMoE
+re-read sits at 0.07 to 1.0 x the L2 in LRU reuse distance, most of them below
+0.3, where no page has measured survival and where a single card-level law was
+refuted on 8x7B and Qwen2-57B together (2026-09-29, docs/FINDINGS.md). The
+byte predictions are registered and printed; they are not a falsifier except
+PRIVATE's.
+
+What falsifies what, stated before any OLMoE page:
+
+- **Time, the primary test.** `scripts/cross_model_score.py` at this commit,
+  8x7B's fit from the 2026-09-27 pages held, every VALID lock-1710 timed cell
+  of OLMoE priced from its own counter pages' counted bytes: SHARED and
+  PRIVATE rms at or under 2%, no cell beyond 5%. The same scorer reads
+  Qwen2-57B at 1.52% (its diagnosis data). Cells at another lock are printed,
+  not scored.
+- **The floor is the tile's.** The floor capture reads 340 to 365 cycles per
+  CTA k-step on w1 though a CTA runs 32 k-steps; a per-CTA fixed cost the
+  model does not have would show here first.
+- **The G >= 8 SHARED slope** over treads 2 to 6 is 0.1597 ms per tread at
+  G=8 and G=32 (predicted bytes): falsified outside 0.1565 to 0.1629 (2%).
+- **PRIVATE bytes**, w1 and w2, every G and tread, within 5% of the JSON's q.
+- **Printed, not scored:** time from predicted bytes (the JSON's T); w1 and w2
+  SHARED/NATIVE bytes, the first measurements of L2 survival below 0.3 x L2.
+
+## 2026-09-29: the same OLMoE test on the H100 SXM5, from that card's own 8x7B fit
+
+`2026-09-29-olmoe-1b-7b-h100.json` and `.txt`: the OLMoE registration above,
+made the second card's way, so the test runs on whichever of the two cards
+Lambda has first (both, if both come). The fit is the 2026-09-25 H100 80GB HBM3
+session's (board b533dd): its five lock-1710 timed pages (G = 1, 2, 4, 16, 64;
+T0 0.0242 ms, c 205.76 ns = 351.8 cycles per CTA k-step, bw 2971 GB/s) and its
+base-clock counter pages (the only ones that card has). That fit reproduces
+its own pages to 1.32% rms, against the GH200's 0.26%, so the 2% bar has less
+room on this card. Before any page, the two cards' fits agree on OLMoE: the G >=
+8 SHARED slope 0.1588 (G=8) and 0.1583 (G=32) ms per tread here, 0.1597 on the
+GH200.
+
+The falsifiers are the GH200 registration's, with this card's numbers: time
+from OLMoE's own counted bytes (`scripts/cross_model_score.py`, source = the
+2026-09-25 H100 pages above) at rms at or under 2% and no cell beyond 5%; the
+floor on w1 inside 340 to 365 cycles per CTA k-step; the G >= 8 SHARED slope
+inside 0.1556 to 0.1620 (G=8) and 0.1551 to 0.1615 (G=32); PRIVATE bytes within
+5%; SHARED/NATIVE bytes and time from predicted bytes printed only.
+
+**Scored 2026-09-29** on `results/published/2026-09-29-nvidia_gh200_480gb-olmoe-session`
+(board d663f7, the GH200 registration; the H100 registration was not run, the
+GH200 being available first): time from its own bytes FALSIFIED (76 cells, rms
+3.53%, 12 beyond 5%), the G >= 8 slope FALSIFIED (0.1705 and 0.1707 against the
+band 0.1565 to 0.1629), w1's floor HELD (360 cycles), PRIVATE bytes HELD (w1
+1.97%, w2 0.30%, none beyond 5%); printed: time from predicted bytes 3.83%,
+SHARED bytes w1 9.8%, w2 2.9%. The files above are unchanged.
+
+## 2026-09-29: four held-out models on a GH200, from Mixtral 8x7B's fit with the per-CTA fixed cost
+
+`2026-09-29-{qwen1.5-moe-a2.7b,granite-3.0-3b-a800m,phi-3.5-moe,jetmoe-8b}-gh200.json`
+and `.txt`, written by `scripts/cross_model_predict.py` at 0f77622 from the
+2026-09-27 GH200 session (board 9b6d01), the model as it stands after all four
+measured models were used as calibration or diagnosis data: the dead-CTA term,
+the capacity rule for later re-reads, and the per-CTA fixed cost F (0f77622:
+measured on the four models' counters, c 344.1 cycles, F 520 cycles on w1 and
+979 on w2). The timing fit is 8x7B's alone (T0 0.0442 ms, c 202.55 ns, bw 3598
+GB/s). None of these four models has a page; their configs were read from
+their config.json on 2026-09-29 (`moe/spec.py`). Each runs as its own session
+of `scripts/gh200_model_session.sh --model M` on whatever GH200 board Lambda
+gives, 9 copies declared on every page.
+
+| model | E, top-k | k-steps w1 / w2 | registered floor per CTA k-step, w1 / w2 | G >= 8 SHARED slope (ms per tread) |
+|---|---|---|---|---|
+| qwen1.5-moe-a2.7b | 60, 4 | 32 / 22 | 360.4 / 388.6 | 0.2159 |
+| granite-3.0-3b-a800m | 40, 8 | 24 / 8 | 365.8 / 466.5 | 0.0440 |
+| phi-3.5-moe | 16, 2 | 64 / 100 | 352.2 / 353.9 | 0.4898 (G=8), 0.4896 (G=32) |
+| jetmoe-8b | 8, 2 | 32 / 88 | 360.4 / 355.2 | 0.1076 |
+
+What falsifies what, per model, stated before any of its pages:
+
+- **Time, the primary test.** `scripts/cross_model_score.py` at this commit,
+  8x7B's fit held, every VALID lock-1710 timed cell priced from the model's
+  own counted bytes: SHARED and PRIVATE rms at or under 2%, no cell beyond 5%.
+- **The floor.** Each GEMM's cycles per CTA k-step on the floor capture (the
+  slope of `sm__cycles_elapsed.avg` over CTA k-steps per SM) within 2% of the
+  table: the per-CTA term's direct test, sharpest on Granite's 8-k-step w2.
+- **The G >= 8 SHARED slope** over treads 2 to 6 within 2% of the table.
+- **PRIVATE bytes**, w1 and w2, every G and tread, within 5% of the JSON's q.
+- **Printed, not scored:** time from predicted bytes (the JSON's T); SHARED and
+  NATIVE bytes (an expert's weights fit in the L2 on all four, the region where
+  no survival law is calibrated).
+
+All four models were chosen for the ways they differ from what the model has
+seen: an expert count between 8 and 64 (Phi 16, Granite 40, Qwen1.5 60), top-k
+4 (Qwen1.5), a CTA shorter than any measured (Granite w2, 8 k-steps), and
+Mixtral's own design at another shape (JetMoE).
+
+**Scored 2026-09-30, Qwen1.5-MoE-A2.7B** on
+`results/published/2026-09-29-nvidia_gh200_480gb-qwen1.5-session` (board
+d67185, five VALID lock-1710 pages): time from its own bytes HELD (76 cells,
+rms 1.87%, worst +4.81%, none beyond 5%), the floor HELD (w1 361.0, w2 385.8
+cycles per CTA k-step at base, +0.17% and -0.73%; every cell at 7 or more
+waves), the G >= 8 slope HELD (0.2156 and 0.2154, -0.15% and -0.21%), PRIVATE
+bytes HELD (w1 1.31%, w2 0.53%, none beyond 5%); printed: time from predicted
+bytes 2.12%, SHARED bytes w1 7.4%, w2 3.9%.
+
+**Scored 2026-09-30, Phi-3.5-MoE** on
+`results/published/2026-09-29-nvidia_gh200_480gb-phi3.5-session` (board
+d67185, five VALID pages): time HELD (76 cells, rms 0.57%, worst -1.27%), the
+floor HELD (w1 349.6, -0.73%; w2 355.4, +0.42%, the lock capture 354.4), the
+slope HELD (0.4839 and 0.4828, -1.21% and -1.39%), PRIVATE bytes w1 HELD
+(0.36%) and w2 FALSIFIED (1.81% rms, but 3 cells beyond 5%: G=64 n = 7, 8, 9 at
+-5.1, -8.0, -6.8%); printed: time from predicted bytes 0.65%, SHARED bytes w1
+10.8%, w2 18.5%.
+
+**Scored 2026-09-30, JetMoE-8B** on
+`results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session` (board
+d67185, four VALID lock-1710 pages; G=2 slipped at 1710 twice and held at
+1605, not scored): time FALSIFIED (58 cells, rms 7.17%, 12 beyond 5%: every
+SHARED and PRIVATE cell at n = 1, -15 to -20%, and SHARED at n = 3, +10 to
++11%; n >= 4 at 1% or under), w1's floor HELD (360.3, -0.02%), w2's floor
+FALSIFIED (368.0 against 355.2, +3.6%, on cells of 0.97 to 2.91 waves; the
+estimator bias corrected below, for later pages only), the slope FALSIFIED
+(0.1135 and 0.1105, +5.4% and +2.6%), PRIVATE bytes HELD (w1 0.19%, w2 0.59%);
+printed: time from predicted bytes 7.16%, SHARED bytes w1 20.1%, w2 11.0%.
+
+**Scored 2026-09-30, Granite-3.0-3B-A800M** on
+`results/published/2026-09-30-nvidia_gh200_480gb-granite-session` (board
+1310e2, the GH200 registration with the corrected floor estimator below; the
+H100 registration was not run): time NOT SCORABLE and the slope NOT SCORABLE,
+every one of the ten lock-1710 timed pages INVALID on V5 (eight UNKNOWN, two
+FAIL), nine of them also failing the claim C2 (PRIVATE's apparent stream 4169
+to 7005 GB/s against the 3726 GB/s ruler); SHARED and NATIVE calls read 0.238
+to 0.291 ms at every n from 1 to 5, and the printed SHARED slopes are 71 to 84%
+under 0.0440. w2's floor HELD on n = 3, 4, 6 (459.8 cycles per CTA k-step on the
+base-clock capture, -1.43%; the lock capture, FL1 FAIL, 456.1, -2.22%); w1's
+floor NOT SCORABLE (all-cell 374.2, printed); PRIVATE bytes HELD (w1 3.02%,
+worst +4.60%; w2 0.17%); printed: SHARED bytes w1 19.3%, w2 3.9%. The files
+above are unchanged.
+
+## 2026-09-29: Granite-3.0-3B-A800M on the H100 SXM5, from that card's own 8x7B fit
+
+`2026-09-29-granite-3.0-3b-a800m-h100.json` and `.txt`: Granite's test (above)
+registered a second way, so it can run on an H100 SXM5 in parallel with the
+GH200 queue; if no H100 is rented before the GH200 queue reaches Granite, it
+runs on the GH200 under the GH200 registration instead, and this one is not
+run. The fit is the 2026-09-25 H100 session's (board b533dd; five lock-1710
+timed pages, base-clock counter pages), refit at this commit with the dead-CTA
+and per-CTA terms: T0 0.0241 ms, c 201.72 ns = 344.9 cycles per CTA k-step, bw
+2970 GB/s. The per-CTA fixed cost (CTA_FIXED_KSTEPS, measured on the GH200's
+counters) is carried to this card as a property of the tile: the H100's
+2026-09-25 pages carry no cycle counters to measure it. Before any page, the
+two cards' registrations agree on Granite: the G >= 8 SHARED slope 0.0442 here,
+0.0440 on the GH200.
+
+Falsifiers, this card's numbers: time from Granite's own counted bytes
+(`scripts/cross_model_score.py`, source = the 2026-09-25 H100 pages) at rms at
+or under 2%, no cell beyond 5%; the floor per CTA k-step within 2% of 366.7
+(w1) and 467.7 (w2), a test of carrying F across cards; the G >= 8 SHARED
+slope within 2% of 0.0442; PRIVATE bytes within 5%; the rest printed.
+
+**Not run.** No H100 SXM5 was rented before the GH200 queue reached Granite;
+it ran on the GH200 under that registration (scored above, 2026-09-30). The
+files above are unchanged.
+
+## 2026-09-29, before any Granite page: the floor falsifier's estimator, corrected
+
+The floor falsifier above (the slope of `sm__cycles_elapsed.avg` over CTA
+k-steps per SM across the floor capture's n = 2, 3, 4, 6) is biased where a
+GEMM's grid runs few waves: each cell's last wave is partly filled, by a
+different fraction per n, and a line through four such cells tilts. JetMoE-8B's
+w2 (0.97 to 2.91 waves) read 368.0 against 355.2 on it, while every GEMM with
+at least four waves per cell reads within 1.3% of its prediction on the seven
+measured models. JetMoE's registered result stands as registered (FALSIFIED on
+the estimator as written); this corrects the estimator for pages not yet taken.
+
+For Granite-3.0-3B-A800M (both registrations), the floor is scored on the cells
+of the floor capture whose live CTAs fill at least 4 waves (live CTAs / (132 x
+the GEMM's occupancy)): w2 on n = 3, 4, 6 (5.5, 7.3, 10.9 waves), its slope
+within 2% of 466.5 cycles per CTA k-step (GH200) and 467.7 (H100). w1 has one
+such cell (n = 6) and is NOT SCORABLE; its all-cell slope is printed. The other
+falsifiers are unchanged.
+
+## 2026-09-30: the floor at 4+ waves, JetMoE-8B and Mixtral 8x7B (floor-only sessions)
+
+Before any page: two floor-only sessions (`gh200_model_session.sh --steps
+prelude,floor`, `vm_run.sh start --steps`) take the floor capture at the treads
+`dram_counter_route.r3_floor_treads` now gives each model so that every GEMM has
+at least 3 cells of at least 4 waves: JetMoE-8B at n = 2, 3, 4, 6, 9, 10, 11 and
+Mixtral 8x7B at n = 2, 3, 4, 6, 7, 8 (their earlier floor captures, at n = 2, 3,
+4, 6, had no such w2 cells: JetMoE's w2 read 368.0 on the biased all-cell
+estimator). The predictions are the per-CTA floor, 344.1 + F / S cycles per CTA
+k-step (c and F from the four calibration models' counters, 0f77622), scored
+as the slope over each GEMM's cells of at least 4 waves, within 2%:
+
+| model | GEMM | S | scored n | registered cycles per CTA k-step |
+|---|---|---|---|---|
+| jetmoe-8b | w1 | 32 | 2, 3, 4, 6, 9, 10, 11 | 360.4 |
+| jetmoe-8b | w2 | 88 | 9, 10, 11 | 355.2 |
+| mixtral-8x7b | w1 | 64 | 2, 3, 4, 6, 7, 8 | 352.2 |
+| mixtral-8x7b | w2 | 224 | 6, 7, 8 | 348.5 |
+
+Mixtral 8x7B's floor counters are calibration data for c and F; its w2 cells
+at 6 to 8 are new. JetMoE's floor data at n = 2 to 6 is published; n = 9 to 11 is
+not yet measured.
+
+**Scored 2026-09-30** on `results/published/2026-09-30-nvidia_gh200_480gb-{jetmoe,mixtral8x7b}-floor-session`
+(board 594c0f; each README has the cells), the base-clock captures: JetMoE-8B w1
+360.8 (+0.12%) and w2 on n = 9 to 11 361.7 (+1.84%), HELD; Mixtral 8x7B w1 349.9
+(-0.66%) and w2 on n = 6 to 8 354.2 (+1.65%; unlocked -0.33%, lock +0.06%),
+HELD. The lock captures fail FL1 alone (JetMoE's w2 reads +2.61% there). CORRECTED
+2026-10-02: those lock captures held the lock (docs/FINDINGS.md, rental 2, Corrections 1, 2).
+The files above are unchanged.
+
+## 2026-09-30, before any page: the partial wave's co-residency law, Mixtral 8x7B at TP=8 (floor capture)
+
+The timing model's partial-wave rule (TAIL, a partial wave's CTAs at their
+full-occupancy lifetime S'c occ) is replaced by a co-residency law (CORES in
+`scripts/r3_timing_model.py`): the partial wave is dealt round-robin, k_SM =
+ceil(k / 132) CTAs per SM, its floor lifetime S'c g(k_SM) with g(k) = k (620
+floor-bound GEMM cells of the four calibration models: g free reads 0.76 to
+1.15 x k, the old lifetime's rms is 1.86% against 0.35%), and its bytes at
+min(bw, rho x k), rho = 11.48 GB/s per resident CTA from the calibration
+counters (8x22B's n = 1 tail). Whether rho is pooled over the wave or held per
+slab-fetching CTA the calibration cannot tell; the pooled form was chosen on
+JetMoE-8B's published n = 3 page (diagnosis). This registration tests both.
+
+Model: `mixtral-8x7b-tp8` (moe/spec.py, a TP=8 shard of the verified
+Mixtral 8x7B; no R3 page of it exists). Capture: NATIVE floor captures at
+G = 64 and 8, `--floor-treads 1 2 3 4 5 6 8 10`, base clock and the 1710 lock
+(primary: the base-clock captures; every lock capture of a short-kernel model
+has so far failed FL1 on its clock fit alone, and a lock capture that passes
+FL1 is scored beside it). Run as `gh200_model_session.sh --steps prelude,floor
+--floor-groups 64,8 --floor-treads 1,2,3,4,5,6,8,10`. Predictions:
+`2026-09-30-mixtral-8x7b-tp8-floor-gh200.{json,txt}` (per GEMM
+`sm__cycles_elapsed.avg`, every cell, under the law and its three rivals; one
+unit S'c = 22,690 cycles on w1, 10,655 on w2), from
+`scripts/cores_heldout_predict.py`, 8x7B's 2026-09-27 fit.
+
+Coverage. The one cell that separates the laws is w1 at n = 2: 896 live CTAs,
+one full wave of 660 and a partial wave of 236 at 2 per SM (104 SMs) and 1 (28),
+118 of them fetching a slab, floor-bound. w1 n = 1 (a lone wave of 448, 4 and 3
+per SM below occupancy 5, every CTA fetching) is bandwidth-bound and w2 n = 1, 2
+run k_SM = 4 = occ: controls, every law prints the same. n = 3 to 10 run two or
+more waves (partial waves of 24 to 520 CTAs, 1 to 4 per SM) and are throughput
+under every law: the rule's domain boundary.
+
+| w1, n = 2 (both G) | cycles | units | D = cycles(n=4) - cycles(n=2) |
+|---|---:|---:|---:|
+| co-residency law (registered) | 162,474 | 7.16 | 155,193 (6.84 u) |
+| old lifetime (`--no-cores`) | 230,546 | 10.16 | 87,121 (3.84 u) |
+| per fetching CTA (`--cores-per-lead`) | 196,496 | 8.66 | 121,171 (5.34 u) |
+| throughput (`--no-tail`) | 158,962 | 7.01 | 158,705 (6.99 u) |
+
+What this separates, stated before the pages: the law from the old lifetime
+(`--no-cores`) and from rho per fetching CTA (`--cores-per-lead`), each
+outside F1 and F2 at w1 n = 2; NOT from plain throughput pricing (`--no-tail`,
+158,962 and D 158,705, inside both), which the law reduces to wherever a partial
+wave is floor-bound.
+
+Falsifiers, per G, on the base-clock captures: F1 D within 0.5 unit (11,345 cycles)
+of 155,193 (D cancels the per-GEMM constant the model lacks: every calibration
+series reads 0.3 to 1.1 units above it); F2 w1 n = 2 within -3% to +8% of
+162,474; F3 every other cell within 8% of its prediction (a control that misses
+says the miss is not this law); F4 the per-CTA floor over the cells of >= 4
+waves (w1 n = 6, 8, 10; w2 n = 5, 6, 8, 10) within 2% of 352.2 (w1) and 379.1
+(w2) cycles per CTA k-step. The score reprices every cell with the capture's
+own `dram__bytes_read.sum`; the registered numbers use the launch order's own
+reads (sigma = 1).
+
+**Scored 2026-10-01** on `results/published/2026-10-01-nvidia_gh200_480gb-rental1-session`
+(board 7269a7, unit 2; `results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g{64,8}.json`,
+the base-clock captures; every cell repriced with its own `dram__bytes_read.sum`, sigma 0.58
+to 1.06, which moves no co-residency number by more than 0.1%). F1 HELD: D = 156,941 (G=64) and
+155,820 (G=8) cycles against 155,193, +0.08 and +0.03 unit; the old lifetime (87,121) and
+the per-fetching-CTA form (121,171; repriced 116,675 and 121,423) are outside, plain
+throughput (158,705) is inside, as registered. F2 HELD: w1 n = 2 170,316 (+4.8%) and
+170,367 (+4.9%) against 162,474 (old lifetime -26%, per lead -13 to -15%, throughput +7.0
+to +7.2%, inside). F3 FALSIFIED: G=64 w1 n = 1 +13.4%, w2 n = 1 +8.6%, n = 2 +10.4%, n = 3
++8.3%; G=8 w1 n = 1 +14.9%, w2 n = 2 +11.1%; every other cell within 8%. F4: w1 on n = 6,
+8, 10 339.6 and 342.5 against 352.2 (-3.6%, -2.8%), FALSIFIED; w2 on n = 5, 6, 8, 10 374.3
+and 374.2 against 379.1 (-1.3%), HELD. The lock captures fail FL1 alone (w1 fitted 1671
+and 1662 MHz, w2 1655) and read the same verdicts (D 155,988 and 155,914; w1 n = 2 +3.1%,
++5.4%; F4 w1 -3.6%, -3.3%). The JSON's `primary` field names the lock captures "(FL1
+PASS)"; with FL1 failing, both texts give the base captures. CORRECTED 2026-10-02: that
+FL1 fail is a degenerate clock fit and the lock held (docs/FINDINGS.md, rental 2, Corrections
+3), so the JSON's primary was set aside on a false fail; its verdicts are the same. The files
+above are unchanged.
+
+## 2026-10-01, before any page: rental 1, three registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental1-2026-10.plan` through
+`gh200_model_session.sh --plan` (`vm_run.sh start --plan`): units in the file's
+order, each with its own model, overrides and page directory, each pushed as it
+lands. The three sections below are committed in ONE commit with the
+scaffolding, before the rental (the census licenses pages by commit), and none
+is revised after another's pages land: B's G = 2 secondary and C's R0 are the
+same byte model.
+
+| # | unit | pages | est. min |
+|---|---|---|---:|
+| 1 | prelude | | 3 |
+| 2 | (i) mixtral-8x7b-tp8 floor, EXACTLY the 2026-09-30 design (`--floor-groups 64,8 --floor-treads 1,2,3,4,5,6,8,10`), pushed before any other tp8 page | r3f-g64, g8, base and lock | 8 |
+| 3-5 | (ii) C: tp8 G = 64 32 16 8; tp4 and tp2 G = 64 32 16 | 10 byte pages | 28 |
+| 6 | (ii) C: same-board 8x7B G = 16 32 8 1 (the rho denominators; G = 1 is B's anchor and a board check) | 4 | 26 |
+| 7-8 | (ii) C: Qwen2-57B and OLMoE at G = 128 | 2 | 13 |
+| 9-11 | (iii) B: tp2, tp4, tp8 at G = 1 and 2 | 6 | 19 |
+| 12-14 | (iv) A: launch floor, Granite-3B, JetMoE-8B, Granite-1B (ncu-free) | | 51 |
+
+148 min estimated (byte pages 55 s + 108 s per GB of routed weights, from the
+published ledgers; the 09-30 floor-only step 5 min; launch_floor's own dry-run
+estimate), against the deadline of launch + 400 min and the guardian's 410-min
+hard cap. When time runs short the driver drops the LAST unit first, up the
+file: A, then B, then C; the floor capture goes last of all.
+
+## 2026-10-01, before any page: the launch floor (Granite-3.0-3B, JetMoE-8B, Granite-3.0-1B-A400M)
+
+R3's flat 0.24 to 0.29 ms at small n (Granite-3.0-3B SHARED/NATIVE n = 1..5,
+PRIVATE n = 1..4; JetMoE n = 1) is read here as the eager timer running
+host-paced, not a GPU-side floor. The published pages already carry the
+timer's own verdict: 90/90 host-bound on every such (arm, n), host enqueue
+0.341 to 0.362 ms per call, and the fit-free rule host-bound iff C_reg + F < H
+(F = 251.7 MB / 3726 GB/s = 0.0676 ms, the flush's read) matches 439 of 441
+non-edge published cells. That is post hoc; this registration is the test.
+
+Tool: `scripts/launch_floor.py`, R3's call imported (`build_private_weights`,
+`arm_inputs`, `arm_call`, `pinned_config`, `counter_declaration`; R3's page
+path untouched), 1710 lock, duty 0.25, G = 4, BLOCK_M 32, 9 copies, 3
+repeats. Modes per (arm, n): E240 (R3 as published: `time_cell`'s duty
+sizing mirrored line for line, a 240 MiB flush), E0 (no flush), E480 (480
+MiB), GR (one captured `fused_experts` call replayed as a CUDA graph under
+E240's flush). Kineto traces (no counter, no ncu) TR-E and TR-G at E240 at
+the trace treads, and at E0 and E480 at n = 1, 2. Run by the driver's
+`launchfloor` step: Granite-3B treads 1..9 all modes, JetMoE 1..4 all modes,
+Granite-1B 1..9 E240 and GR (treads 1..9, not the design's 1..12: the 9-copy
+declaration and cross_model_predict's ladder). Predictions:
+`2026-10-01-launch-floor-gh200.{json,txt}`, C_reg from the Granite and
+JetMoE registrations of 2026-09-29 (G = 4) and, for Granite-1B, from
+`scripts/cross_model_predict.py` at this commit on 8x7B's 2026-09-27 pages.
+
+Fitted on what: C_reg on Mixtral 8x7B only; F from bytes and the ruler; H is
+each cell's own measured host enqueue (recorded on every cell, not only
+host-bound ones); Phi = 0.0998 ms and P8's plateau band are FITTED ON GRANITE
+(SEEN); the composition model MP has no fitted constant. Edge cells, fixed
+now: host-bound fraction over the 3 repeats in [0.2, 0.8], out of P4 and P5.
+
+| # | prediction (cells scored) | fails if |
+|---|---|---|
+| P1 | GR follows C_reg within [0.80, 1.10] x C_reg on the 15 Granite (arm, n <= 5) cells; n = 1 NATIVE 0.0758-0.1042, SHARED and PRIVATE 0.0877-0.1206 ms; I_GR(5) - I_GR(1) >= 0.10 ms (SHARED, PRIVATE) | more than 1 of 15 outside, or an increment under 0.10; rival line: any GR n <= 3 >= 0.20 ms (a GPU floor predicts >= 0.23) |
+| P2 | GR = E240 on GPU-bound cells (Granite n >= 7, JetMoE n >= 3) | any off by more than max(2%, 6 us) |
+| P3 | E0 - E240 = F_trace - h_flush_trace - dD_tail (the start event fires after the flush, so its host dispatch h_flush is not in the E240 interval; first order +0.053 to +0.063 ms), inputs from TR-E/TR-G at E0 and E240, Granite n = 1, 2 (6 cells) | outside +/-12 us on more than 1 of 6; a cell without both traces is scored only through MP (P6) |
+| P4 | E480 - E240 = -(F480 - F240) +/- 12 us where still host-bound (about -0.068 ms); crossover moves to C* = H - F480 = 0.219 ms: host-bound NATIVE n <= 4, SHARED n <= 3, PRIVATE n <= 2 (E240: 5, 5, 4) | the moved verdict wrong on more than 2 non-edge cells, or a shift outside the band |
+| P5 | C_reg + F < H, each cell's own H, gives the E240 and E480 verdicts on all three models | under 95% of non-edge cells (a low bar; P4 is the test) |
+| P6 | MP (max-plus, each kernel at max(previous end, launch + lambda), 50 iterations) predicts I_eager on every E240/E0/E480 cell at the trace treads, JetMoE n = 1 included | any outside max(5%, 12 us) |
+| P7 | Granite n = 1: TR-G kernel sum <= 0.13 ms, non-GEMM <= 0.03 ms, eager host span >= 0.25 ms with launch-API time under 40% | classifies only |
+| P8 | Granite-1B (unseen): host-bound wherever C_reg + 0.0676 < H (at H = 0.3545: every NATIVE and SHARED n <= 9, PRIVATE n <= 7); plateau H - Phi in [0.23, 0.27] ms (Granite-fitted, seen); GR within P1's band on all 27 cells | P1's rule (more than 1 of 27) or P5's on this model |
+
+What it separates: P1, P3 and P4 move a host-paced interval and leave a
+GPU-side fixed floor where it is (GR near 0.25 ms, no flush lever). If P1 to
+P6 hold, R3's eager pages get the regime boundary C + F < H, host-bound cells
+leave the time test and C is scored on GR cells; no T_floor is added to
+call_ms. No claim about fused_experts inside a forward pass, where small-n
+production is graph-captured.
+
+## 2026-10-01, before any page: what sets L2 survival, the TP-shard distance block (rental 1 of the L2 design)
+
+Published G=1 slab survival is not a function of the sequential reuse distance
+x = (P - 1) SLAB / L2 alone: Phi-3.5 w1 and 8x7B w2 sit at one x and differ 5x
+in s. The leading candidate is d = P / W_c, the re-reader's lag behind its
+leader in co-residency windows. Rental 1 takes only the block that needs no new
+knob: Mixtral 8x7B's TP shards at G = 1 and 2, default kernel, default metric
+list. The TP shards keep E 8, top 2, H 4096, the tile and W_c and move x and d
+apart: w1 keeps 64 k-steps and its 512 KiB slab, w2 keeps P = 64 and d = 0.121.
+
+Measure, per page and GEMM, G = 1, n = 2..9: s = (B_PRIVATE - B_SHARED) /
+((n - 1) W_g), B = `per_gemm[g].dram_bytes_read` (PRIVATE reads n weight
+sets, SHARED 1 + (1 - s)(n - 1); the activation traffic is the same tiles in
+the same order and cancels to first order). Law (`design-l2/work/register.py`,
+calibration pages ONLY: 8x7B 09-27, 8x22B, Qwen2-57B, OLMoE): s = s_cap(x) + (1 -
+s_cap) s_sync(d, n), s_sync from 8x7B w2 and 8x22B w2, s_cap 1 at x <= 0.286 and
+solved at 0.576 from Qwen2 w1. Between 0.576 and 1.84 L2 s_cap is not identified:
+H0 (one 60 MiB LRU) holds it to x = 1.0, H1 (two partitions with replication,
+C_eff 0.5 to 0.67 L2) ramps it to 0 by 0.8. That d leads was suggested by Phi-3.5
+and JetMoE (seen): hypothesis generation, not a test. Predictions:
+`2026-10-01-l2-survival-tp-gh200.{json,txt}`.
+
+| cell | x (L2) | d | s, n = 2..9, H1 + H2a | H0 + H2a (where different) |
+|---|---:|---:|---|---|
+| tp8 w2 | 0.23 | 0.121 | 1.00 at every n | same |
+| tp4 w2 | 0.47 | 0.121 | 0.85 0.84 0.85 0.86 0.87 0.88 0.88 0.89 | same |
+| tp2 w2 | 0.93 | 0.121 | 0.70 0.54 0.52 0.52 0.48 0.48 0.46 0.45 (= 8x7B w2) | 0.76 0.74 0.76 0.77 0.79 0.80 0.81 0.82 |
+| tp8 w1 | 0.47 | 0.085 | 1.00 (extrapolated in d) | same |
+| tp4 w1 | 0.93 | 0.170 | 0.35 0.22 0.20 0.17 0.15 0.15 0.13 0.12 | 0.49 0.56 0.60 0.60 0.66 0.67 0.69 0.71 |
+| tp2 w1 | 1.87 | 0.339 | 0.03 0.01 0.01 0.00 0.00 0.00 0.00 0.00 | same |
+
+Pages that score it: the plan's units 9 to 11, `<date>-<card>-mixtral-8x7b-tpT-l2-r3-counters/lock1710/r3c-g{1,2}.json`
+for T = 2, 4, 8, and the same-board anchor, unit 6's `...-mixtral-8x7b-sameboard-r3-counters/lock1710/r3c-g1.json`
+(8x7B w2 at G = 1, the curve the tp2 w2 rule compares against; the +/-0.05 band
+in s is the 09-25 to 09-27 board-to-board reproduction, 0.04, and holds only
+against a same-board baseline).
+
+Decision rules, fixed now. H1 over H0: tp2 w2 within 0.08 of the same-board 8x7B
+w2 curve AND below 0.65 at every n = 4..9; H0: >= 0.74 at every n = 4..9; else
+INCONCLUSIVE. tp4 w1: H1 if under 0.40 at every n = 6..9 and within 0.08 of H1's
+numbers, H0 if over 0.40 and within 0.08 of H0's. An x-only law (s a function of
+x alone) is falsified if tp4 w1 and tp2 w2, one x and two d, differ by more than
+0.10 at three or more of n = 4..9. Controls (both hypotheses): tp8 w2 and tp8 w1
+>= 0.95; tp4 w2 within 0.05 of its row; tp2 w1 <= 0.08; a control outside says
+the law's shape failed, not H0 or H1. PRIVATE F / Mn in [0.50, 0.56] is a CONTROL
+(it holds on 1202 published cells and every hypothesis predicts it). The far
+share of SHARED's extra hits, from the recorded tex/fabric sectors, in [0.15,
+0.45] where s >= 0.1 is a RECORD. V10 does not gate survival scoring (bytes are
+clock-free; tp8 and tp4 pages will likely read 1641 to 1688 MHz like every
+short-kernel lock page); a page failing V6 has its s flagged, since V6 checks
+the activation-cancels premise (JetMoE G = 1 already fails it, 0.70%).
+
+Secondary, G = 2: every SHARED and PRIVATE cell against the registered byte
+model R0 (8x7B 09-27 MIX through `cross_model_predict.target_geometry`, nothing
+fitted on the shards) with its own 5% bar; R0's numbers are in the JSON. This R0
+is C's R0 below: both registrations are committed together, before rental 1,
+and neither is revised after the other's pages land.
+
+Not in rental 1: the R0 anchors with partition metrics, num_stages, BLOCK_K,
+the 1005 MHz clock and slot padding (rental 2: `--block-k`, `--slot-pad-rows`,
+the partition metrics and per-knob directories).
+
+**Scored 2026-10-01** on `results/published/2026-10-01-nvidia_gh200_480gb-rental1-session`
+(board 7269a7, units 6 and 9 to 11; every tp page fails V10 alone, the anchor passes every
+gate, V6 passes everywhere so no s is flagged). Measured s, n = 2..9: tp2 w2 0.82 0.59 0.57
+0.58 0.54 0.56 0.55 0.54; same-board 8x7B w2 0.72 0.54 0.52 0.53 0.50 0.51 0.49 0.48; tp4
+w1 0.65 0.54 0.47 0.45 0.42 0.38 0.38 0.36. H1 over H0 on tp2 w2: H1 (within 0.066 of the
+same-board curve at n = 4..9, 0.54 to 0.58, under 0.65; H0 needed >= 0.74). tp4 w1:
+INCONCLUSIVE (0.42 0.38 0.38 0.36 at n = 6..9: +0.23 to +0.27 over H1, 0.24 to 0.35 under
+H0, 0.42 over 0.40 at n = 6). The x-only law: FALSIFIED (tp2 w2 minus tp4 w1 0.10 to 0.19
+at all six of n = 4..9). Controls: tp8 w2 HELD (>= 0.973); tp8 w1 FAILED (0.82 to 0.91);
+tp4 w2 FAILED at n = 2 only (+0.087, n = 3..9 within 0.025); tp2 w1 FAILED at n = 2, 3
+(0.16, 0.10; then 0.03 to 0.06). By the rule above the law's shape failed at x <= 0.93 L2,
+so the H1 reading of tp2 w2 is not a pass of the law. PRIVATE F / Mn HELD (0.504 to 0.521,
+126 cells). Far share RECORD: 43 of 50 cells with s >= 0.1 inside [0.15, 0.45] (outside:
+tp4 w2 n = 8, 9 at 0.137; tp8 w2 n = 5..9, 0.06 to 0.115). G = 2 secondary against R0:
+PRIVATE HELD (54 of 54 within 5%, worst +0.4%); SHARED FALSIFIED (31 of 54 beyond 5%,
+worst tp4 w1 n = 8 -58.8%, R0 low on tp2 w2 and tp4 w1 from n = 4). The files above are
+unchanged.
+
+## 2026-10-01, before any page: PRIVATE's A-tile reads at large G and short K (rental 1)
+
+The registered byte model (8x7B's MIX fit, carried by `cross_model_predict`)
+misses PRIVATE's A-tile reads two ways on the eight published GH200 models: w1
+is over-predicted on every top_k = 8 model at every G, G = 1 included (Qwen2
+G=64 +4.7 to +6.8%, Granite +2.7% at G=1), and w2 is under-predicted at G >= 32
+on the long-K models (Phi -8.0%, Qwen2 -5.8%). Two candidate fixes, both
+scaffolding of the existing model and both OFF by default
+(`scripts/wave_split_bytes.py`: `Model(geom, content_a=True)`,
+`Params.k0_A/a_A`; every registered number is unchanged with them off, pinned
+in `tests/test_atile_pooled_fit.py` from the code at 6d2595d):
+
+- **R1, content-keyed w1 A.** R3's routing (`SWEEP.balanced_ids` ->
+  `realize_counts`, a heap greedy with ties by expert id) puts the experts in
+  E/k classes of k with identical token sets, so k M-tiles read one w1 A tile.
+  w1's A is keyed by tile content (first read compulsory, the credit (U - E n)
+  ATILE in S_c), one A survival law for both GEMMs (w1 fill, w2 ws).
+  THIS IS A HARNESS PROPERTY: real top-k routing has no such classes, so the
+  term models R3's pages, not the hardware or a served model.
+  `wave_split_bytes.DESIGN_KEYS` now carries `routing`.
+- **R2, R1 times a duration factor** s(ks) = (1 + ks / k0_A)^(-a_A) on every A
+  distance, ks = K / BLOCK_K: long CTAs stay wave-coherent, so their A
+  re-reads sit closer in time than the byte distance says. The fit runs to its
+  exponential limit, s = exp(-c ks).
+
+Fits (`scripts/atile_pooled_fit.py`, PRIVATE cells, every G and tread, both
+GEMMs). PRIMARY, calibration models only (8x7B 09-27, 8x22B, Qwen2-57B,
+OLMoE): R1 C_A 159.61 MiB, beta_A 1.053, theta1_A 0 (fit rms 1.21%, worst
+-9.51%); R2 C_A 63.68 MiB, beta_A 1.338, c = 0.00344 per k-step (0.87%, -7.24%).
+SECONDARY, all eight models, the four diagnosis models SEEN: R1 148.13 /
+1.072 (1.00%, -9.23%); R2 73.37 / 1.316, c = 0.00293 (0.75%, -7.95%). R0 = the
+registered 8x7B MIX fit, nothing refitted. The knee form with its knee fixed at
+40 k-steps is NOT registered: the 40 was read off JetMoE and Phi.
+
+Pages (one GH200, rental 1, lock 1710, treads 1..9, all three arms; each page
+group in its own directory): `mixtral-8x7b-tp8` G = 8, 16, 32, 64 (taken only
+after the registered tp8 floor capture is pushed); `-tp4` G = 16, 32, 64;
+`-tp2` G = 16, 32, 64; Qwen2-57B and OLMoE at G = 128; Mixtral 8x7B G = 8, 16,
+32 on the SAME board (the rho denominators); the L2-survival registration's
+tp2/tp4/tp8 G = 1 pages for T3. Predictions:
+`2026-10-01-atile-ksteps-gh200.{json,txt}`, every PRIVATE cell, w1 and w2, n =
+1..9, R0 and the four fits.
+
+| cell (q, n = 8) | R0 | R1 | R2 | R2/R1 |
+|---|---:|---:|---:|---:|
+| tp8 w2 G=64 | 8.305 | 8.388 | 8.629 | +2.9% |
+| tp4 w2 G=64 | 8.690 | 8.757 | 9.246 | +5.6% |
+| tp2 w2 G=64 | 9.435 | 9.389 | 10.018 | +6.7% |
+| Qwen2 w2 G=128 | 9.135 | 9.162 | 10.076 | +10.0% |
+| Qwen2 w1 G=128 | 9.235 | 8.100 | 8.141 | R0/R1 +14.0% |
+| OLMoE w1 G=128 | 8.589 | 7.968 | 7.987 | R0/R1 +7.8% |
+
+Tests, what each separates, falsifiers fixed now:
+
+- **T1, content-keyed w1 (R1/R2 against R0).** PRIVATE w1 at G = 128 on Qwen2
+  and OLMoE: pass within 2% of R1 at every n >= 2; falsified if the measured q
+  sits nearer R0 than R1 at any n >= 4.
+- **T2, duration (R2 against every byte law).** w2 n = 9, f = (q - n) x 128 /
+  (63 n): rho42 = f(tp4 G=64) / f(8x7B G=16), rho84 = f(tp2 G=64) / f(8x7B
+  G=32), both pages from ONE board. Bands = prediction +- 2 sigma, sigma from
+  sigma_q = 0.036 (90th percentile of the per-call standard error of PRIVATE w2
+  q, G >= 8, n >= 6, 8x7B 09-27; median 0.009), propagated to each f in
+  quadrature. rho42: R1 0.961 [0.835, 1.087], R2 1.869 [1.640, 2.098] (R0
+  0.964 [0.824, 1.104]; secondary R2 1.689 [1.475, 1.902]). rho84: R1 0.989
+  [0.918, 1.061], R2 1.426 [1.338, 1.515] (R0 0.992; secondary R2 1.354 [1.267,
+  1.441]). A candidate is falsified when BOTH rho fall outside its band; both
+  between the R1 and R2 bands refutes every candidate; one in, one out is
+  inconclusive. The board-to-board difference (09-25 against 09-27, PRIVATE w2
+  up to 2.8% at G=64 n=6) is why the denominators are re-measured. Confound:
+  along each row L (8 -> 64) and W_c / L (66 -> 8 columns in flight) move with
+  the k-steps, so a byte law with a columns-in-flight term also rises; the
+  separator (8x7B G=32 at BLOCK_K 32 / 8 stages against 128 / 2) needs
+  `--block-k` and is rental 2. The 21 MiB row is supporting evidence only.
+- **T3, the G = 1 credit (sharing against none, at G = 1).** PRIVATE w1 G=1
+  n=1 on the tp shards' G=1 pages: q - 1 within +-0.0010 of R1 (the worst
+  |measured - R1| over the eight published G=1 n=1 cells is 0.00098): tp8 R1
+  -0.00446 (R0 0.00000), tp4 -0.00193 (R0 +0.00011); pass inside R1's band and
+  outside R0's. tp2 (R1 -0.00039, R0 +0.00025) is a record: its share distance,
+  W_w1 / E = 117 MB, is past the L2. The design's "within 5% of q" is replaced
+  (5% of q = 1 is ten times every credit).
+- **T4, the score.** Each candidate on every PRIVATE cell of the scoring pages
+  (G = 1 aside): pass at rms <= 2% and no G >= 32, n >= 6 cell beyond 4%.
+
+V10 does not gate any score here: the tp8 and tp4 lock pages will likely fail it
+(short kernels: the JetMoE and OLMoE lock pages read 1641-1688 MHz against 1710),
+and DRAM bytes are clock-free (base-clock against lock bytes agree to 0.03% w1,
+0.8% w2 on 8x7B 09-27).
+
+**Scored 2026-10-01** on `results/published/2026-10-01-nvidia_gh200_480gb-rental1-session`
+(board 7269a7, units 3 to 8 and the G = 1 pages of 9 to 11; every PRIVATE cell scored: the
+failing gates are V10, V7 and V6 on NATIVE/SHARED and claim gates C1, C2, C6, none on
+PRIVATE's bytes; R1 and R2 recomputed on the pages' geometry match the JSON to 0.0005%).
+T1: OLMoE HELD (worst +0.52% from R1 at n >= 2; R0 -5.4 to -7.3%); Qwen2 INCONCLUSIVE
+(nearer R1 than R0 at every n, R0 -8.5 to -11.6%, but +2.18, +2.11, +2.64% from R1 at n =
+6, 7, 9, outside the 2% pass). T2: rho42 1.199, rho84 1.184 (f: tp4 G=64 0.2963, 8x7B
+G=16 0.2472, tp2 G=64 0.5802, 8x7B G=32 0.4900), both between the R1/R0 bands and the R2
+bands: every candidate refuted (R0, R1, R2, primary and secondary). T3: tp8 PASS (q - 1
+-0.00438, R1 -0.00446), tp4 PASS (-0.00138, R1 -0.00193, outside R0's band [-0.00089,
+0.00111]); tp2 record -0.00044 (R1 -0.00039, R0 +0.00025). T4, 270 PRIVATE cells:
+FALSIFIED for every candidate: R0 rms 3.68% (24 cells of G >= 32, n >= 6 beyond 4%), R1
+2.87% (15), R2 1.55% (10: 8x7B G=32 w2 n = 7-9, tp2 G=64 w2 n = 7-9, Qwen2 G=128 w2 n =
+6-9), secondary R1 2.73% (14), R2 1.77% (10). The files above are unchanged.
+
+## 2026-10-01, before any page: rental 2, four registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental2-2026-10.plan` through
+`gh200_model_session.sh --plan` (`vm_run.sh start --plan`), as rental 1 did. The four
+registrations below, their scorers (`scripts/scoring/rental2/`, written and tested on
+synthetic pages before any page) and the scaffolding they need are committed in ONE
+commit before the rental. Every number in the four JSON files is written by
+`scripts/scoring/rental2/register.py` from committed files (`--check` recomputes them);
+the `.txt` beside each is rendered from its JSON. Design: the scratchpad's
+`design-r2/DESIGN.md` with every fix of `design-r2-review/REVIEW.md`.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude (also locks 1005 MHz once, read back, reset) | 1 | 3 |
+| floors: tp8 floor2, tp4, tp2 (base and 1710, shape metrics, null kernel), tp4 at 1005 | 4 | 21 |
+| B lag: tp2 l2base, l2s8 (partition metrics); tp4 l2base, l2s8; tp8 l2s8 (the negative control); tp2 l2s6 | 6 | 24 |
+| C T5: tp2 G = 64 at BLOCK_K 64/s4, 32/s4, 128/s2 | 3 | 12 |
+| launch floor: tp8, Granite-3B, each a timed and a trace process | 2 | 56 |
+| tail: tp2 l2bk32, l2bk128, l2pad7, ats8; 8x7B l2base + l2s8 (one drop-group); JetMoE, Granite-1B | 8 | 60 |
+
+176 min of units, about 178 min with setup: 2.97 h, about $6.8 at $2.29/h; the guardian's
+hard cap of 410 min is $15.6. The core (through the launch floor) is 116 min. The driver
+drops the last unit first; the 8x7B base/s8 pair goes together (`drop-group`).
+
+**Part 1, B's knobs and C's T5** (`2026-10-01-rental2-knobs-gh200.{json,txt}`). L2r: past
+the edge (x >= 0.92 L2) s_knob = s_base exp(-dd / lambda(n)), below it s_cap + (s_base -
+s_cap) exp(-dd / lambda(n)), dd the d of the knob page less the same-board base page's,
+each page's W_c read off its own occupancy. lambda(n) is SEEN (rental 1's tp2 w2 / tp4 w1
+pair) with a per-n band from +-0.03 on each s in quadrature (42% at n = 4, 33% at n = 5,
+24 to 34% at n = 6..9; n = 2, 3 printed only). Rivals NL (s_base +- 0.05) and ST (the
+registered 2026-10-01 lambda(n), CAL). tp2 w2 s8 is the primary test and the only L2r
+against ST call; tp4 w1 s8 is registered as NL against LAG (L2r and ST together), since ST's
+band lies inside L2r's there; tp2 s6 is secondary and needs all four of n = 6..9. A
+hypothesis is SELECTED on 4 of n = 4..9 in its band and no other, FALSIFIED on 4 of 6
+outside. Controls: PRIVATE F / Mn in [0.50, 0.56] demotes that page's SELECTED to
+INCONCLUSIVE, and tp2 w1 under its own L2r upper edge (replacing rental 1's fixed 0.08)
+demotes that page's L2r or LAG selection (an NL or ST one stands); the tp8 w2
+s8 negative control (s >= 0.95 at n = 4..9) demotes every part-1 SELECTED; a V6 failure
+flags the page and its verdicts read INCONCLUSIVE. T5: rho_BK = f(BK128) / f(BK32) at n = 9,
+f = (q - 9) 128 / (63 x 9) from `dram_counter_route.r3_q`, each candidate re-priced on each
+page's own geometry with its registered band half-width kept fixed: R0 and R1 1.00 [0.93,
+1.07], R2 1.67 [1.57, 1.77] (CAL), R2h 1.29 [1.23, 1.35] (SEEN, m = 0.567 from rental 1's
+rho84); a failed BK64 board check (f within 2.8% of 0.5802) turns R2h's verdict to
+INCONCLUSIVE.
+
+**Part 2, the launch-floor rerun** (`2026-10-01-rental2-launch2-gh200.{json,txt}`). The
+timed process has the profiler guarded off (`torch.profiler.profile` raises, and
+`_profiler_enabled()` is asserted False before every cell) and measures each (arm, n,
+mode)'s host time H_pre before any cell and again after the last; the traces run in a
+second process. Every prediction is priced on H_pre. tp8 is BLIND on every host-side
+prediction; its P1 is C_reg CAL with GEMM durations SEEN under ncu. P0 is an instrument
+gate (the profiler, a post/pre drift over 5%, H_cell / H_pre outside [0.93, 1.10] on over
+5% of cells, over 5% refused probes); when it fails P2, P4, P5 and P8 are printed marked
+"host drift".
+
+**Part 3, the per-GEMM constant** (`2026-10-01-rental2-const-gh200.{json,txt}`). Z is the
+intercept of SM-active cycles on q per capture and GEMM, the slope free. Re-derived that
+way on the calibration models, Z / u at the 1710 lock reads 0.23 to 0.51 (w1) and 0.26 to
+0.68 (w2), and the base-to-lock exponent reads -0.61 to 3.02 over 10 series, so it is not
+used as a band. K1: L = elapsed - active.max <= 5000 cycles on 80% of the pool. K2: the
+pooled w2 Z / u of tp4 and tp2 in [0.25, 0.69] (the full CAL w2 range, no model excluded).
+K3: Z(1005) / Z(1710) on tp4 against the two forms, f_1005 / f_1710 (nanoseconds) and 1.0
+(SM cycles), each within 2 sigma of the registered intercept noise (sigma_r / r 0.10 on
+w1, 0.13 on w2); inside both or neither is INCONCLUSIVE. K4: D_imb in [-0.2 u, 0.2 u] on
+80%, H_IMB on D_imb >= 0.3 u on over 20%; the CTA-count clause is a RECORD only.
+
+**Part 4, tp8's w1 floor** (`2026-10-01-rental2-w1floor-gh200.{json,txt}`). The tread sets
+are the review's unseen ones (tp8 w1 (13, 14, 15) -11.0%, (11, 15, 16) -0.4%, (11, 12, 13)
++3.8%; tp4 w1 (14, 15, 16) -3.6%, (11, 13, 15) +0.1%, (10, 12, 13) +3.8%; tp2 w1 (10, 11,
+12), (12, 13, 14), delta only; w2 an offset test at +3.8%). FLUID_LOW, a set-independent
+0.964 x asymptote, is the rival; H_NPN is a labelled secondary. Bands come from a
+registered noise model: sigma_cell 2.7k cycles (CAL) propagated exactly through the sets'
+weights (sigma_theta 0.28 tp8, 0.20 tp4). The theta call is at 0.5. Co-primary: per GEMM
+on the unseen cells, the rms about ceil(q) u + a against q u + a, a won by more than
+sigma_cell. The primary capture is the base clock. tp8 w1 (6, 8, 10), 339.5, is printed as
+a SEEN replication only.
+
+**The review's open scorer items, decided before any page** (each is in the named JSON):
+
+- knobs: s(n) is `scripts/l2_survival.py`'s formula, written out in `measure`; V6-flagged
+  cells are excluded from every count; W_c = sm_count x the least of the four occupancy
+  limits; P = npn; the s_cap knots per n and the linear interpolation are in the JSON; r()
+  below the edge is exp(-dd / lambda) on s_base - s_cap; a failed control demotes SELECTED to
+  INCONCLUSIVE; the partition cross-check (direct fabric hits against F - (M - Mn) within 5%)
+  is an instrument check whose failure on over 10% of a page's cells only switches that
+  page's far-share RECORD to the direct count; T5 is decided on n = 9 alone with f from
+  r3_q's PRIVATE w2 q; a failed BK64 board check makes R2h INCONCLUSIVE.
+- launch2: H_cell = host_enqueue_ms / calls_per_burst (median over repeats); the host-bound
+  fraction is over the cell's 3 repeat rows; P0's drift is the median over (arm, n, mode) of
+  |H_post / H_pre - 1|; the edge rule's F is the cell's own mode's; P3 needs 8 qualifying
+  cells and fails on more than 1 outside; P6's function is rental 1's text, copied verbatim
+  into `launch_mp.py` (a test pins the copy).
+- const: the floor-bound share is at sigma 1, never re-priced; Z by intercept; K1's pool is
+  every floor-bound cell of the three 1710 captures, both GEMMs; K2 pools tp4 and tp2 w2 (the
+  median of the two); K3 by the intercept ratio against the two forms.
+- w1floor: the primary capture is the base clock; theta and delta by unweighted OLS over
+  the sets, their noise propagated exactly through the shared cells; FLUID and FLUID_LOW
+  have their own falsification rules; when every family fails the verdict is NEITHER; the x
+  grid is the page's own launch grid, asserted equal to the registered one.
+
+## 2026-10-02, after the gate results and before any score: rental 2's gate addendum
+
+`2026-10-02-rental2-addendum-gates.{json,txt}`. None of rental 2's four registrations said
+how a page that fails a validity gate is counted, and the 1710 MHz floor captures failed
+FL1 (tp8 on a degenerate fit, w1 1690.5 MHz + 3.9 us / w2 1672.6 + 0.6 us, with no evidence of
+an off-lock run; tp4 1707.3 / 1695.6 MHz with n=1 w2 at 1785; tp2 1710.4 / 1703.2 MHz with
+n=1 w2 at 1773); the base captures and tp4 at
+1005 passed. The rule was fixed when those gate results were seen and before any score:
+every page counts at its own cells' measured clock, and sm_clock_mhz (about 1.4% low,
+uniformly, by the null kernel) enters a verdict only as a ratio (K3's f_1005 / f_1710); a floor cell over its capture's lock by
+more than one 15 MHz step is dropped and recorded; every verdict is computed on ALL pages
+and on CLEAN pages (gate-failed ones excluded) and registered as the common verdict,
+INCONCLUSIVE when they differ, NOT SCORED (ALL's verdict printed, labelled) when CLEAN has
+no data; a V1 failure makes a page unusable in both views; part 1's registered V6 and V10
+handling stands. For a floor capture under a lock, CLEAN uses V1 and a null-kernel lock check
+(the capture's median null-kernel sm_clock_mhz within 3% of the lock) in place of FL1, FL1
+where there is no null kernel; chosen after the null-kernel medians were seen (1684, 1687,
+1688 MHz at 1710; 991 at 1005) and before any score, because the gate audit shows FL1's low
+fits are a degenerate f / t0 fit. The four 2026-10-01 files are unchanged (sha256 pinned in the addendum).
+
+**Scored 2026-10-02** on `results/published/2026-10-02-nvidia_gh200_480gb-rental2-session`
+(board 4da056, 24 units; the four scorers run unchanged, outputs and the per-prediction ALL /
+CLEAN table in `scripts/scoring/rental2/` and `SCORES.md`). CLEAN keeps every floor capture
+(null-kernel medians -1.29 to -1.50% of 1710) and drops the four byte pages that fail V7
+(8x7B l2s8, tp2 atbk32, atbk64, ats8); no floor cell is above its lock. Part 4: NEITHER
+(H_EST, FLUID, FLUID_LOW and H_NPN FALSIFIED; theta +0.54 tp8, +0.80 tp4; delta_H -1.29% tp4,
+-1.75% tp2), co-primary INCONCLUSIVE, w2 offset H_EST HOLDS on all three. Part 3: K1, K2
+(0.254), K4 HOLD; K3 cycle form HOLDS, ns form FALSIFIED (r 0.921, f ratio 0.597);
+identification INCONCLUSIVE. Part 2: tp8 P0 to P5 HELD, P6 and P8 FALSIFIED; Granite-3B P0
+FAILED (graph-replay cells), P1 and P6 HELD; JetMoE P1 NOT SCORED (registered n = 5 not on the plan), P8 FALSIFIED;
+Granite-1B P0 FAILED, P1 and P8 FALSIFIED; P3 pooled FALSIFIED. Part 1: both primaries
+INCONCLUSIVE with every hypothesis FALSIFIED (s rose under num_stages 8); s6 NL; 8x7B
+x-invariance and T5 NOT SCORED (ALL: HELD; R0, R1, R2 FALSIFIED at rho_BK 0.357, R2h
+INCONCLUSIVE, board check -17%); H2c l2bk128 SELECTED, l2bk32 INCONCLUSIVE (FLAGGED V6); H3 FALSIFIED. Two post-page scorer
+fixes, in 9e04d99 (`SCORES.md`, end): H2c now applies the registered V6 rule to l2bk32, and P1
+reads NOT SCORED where a registered tread was never planned (JetMoE n = 5). Seen on the pages: the 1005 capture's GEMM cells
+read 1003 to 1005 MHz, so the "about 1.4% low, uniformly" above holds for the null kernel
+only (GEMM cells read 0.5 to 5.5% low at 1710). The files above are unchanged.
+
+## 2026-10-05, before any page: rental 3, six registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental3-2026-10.plan` through
+`gh200_model_session.sh --plan`. The six registrations below, their scorers
+(`scripts/scoring/rental3/`, tested on synthetic pages only in
+`tests/test_scoring_rental3.py`) and the scaffolding they need are committed in ONE commit
+before the rental. Every number in the six JSON files is written by
+`scripts/scoring/rental3/register.py` from committed files (`--check` recomputes them, and a
+test runs it); the `.txt` beside each is rendered from its JSON. Design: the scratchpad's
+`design-r3/DESIGN.md` with every fix of `design-r3-review/REVIEW.md` (the review wins where
+they differ). Labels: CAL (fitted on the calibration models), SEEN (any other published
+page: every published page is SEEN, rental 2's and the parent Qwen2-57B's included), BLIND
+(a cell on no page).
+
+| block | units | est. min |
+|---|---|---:|
+| prelude (also locks 1005 and 1410 MHz once, read back, reset) | 1 | 3 |
+| E: qwen2-57b-a14b-tp8 floor (base + 1710), floor at 1005, calibrate, timed, bytes G = 3, 8, 32 | 5 | 57 |
+| A + B: granite-3.0-1b-a400m floor (base + 1710), floor at 1005 | 2 | 7 |
+| B + RK (drop-group x): tp4 floor (base + 1710), floorrep (1710, the K1 / K4 replicate), 1005, 1410, the G = 64 wall-time check | 5 | 17 |
+| B2: tp8 and tp2 at 1005 | 2 | 5 |
+| C (drop-group c): tp2 G = 1 l2base, k32s8, k128s4, k128s3, k64s7; then k64s3 alone | 6 | 30 |
+| R: the rep8 timed replicate (G = 8, treads 6, no G = 3 page) | 1 | 14 |
+| tail: deep (G = 4, 2 to n = 9); tp8 flush ladder E0, E240, E360, E480 | 2 | 49 |
+
+182 min of units; the core through rep8 is 133. With 30 min of setup: 212 min at the
+estimate ($8.1 at $2.29/h); about 188 min at the published ratios (timed, rep8 and deep do
+not compress, the rest at rental 2's 0.75): $7.2. The guardian's hard cap of 410 min is $15.6.
+`--deadline` at launch + 240 min runs the whole plan (setup, 182 and the 8-minute reserve
+is 220); at launch + 180 the driver drops the tail by rule (the flush ladder, then deep) and
+keeps the core. The driver drops the last unit first; drop-groups x and c go together.
+
+**Part E, end-to-end blind time** (`2026-10-05-rental3-e2e-gh200.{json,txt}`). Predictions
+are `cross_model_predict.py --gemm-const` at this commit from 8x7B's 2026-09-27 fit (CAL;
+T0 0.04424 ms, c 202.55 ns, bw 3598 GB/s at 1710). SCOPE, stated in the file: an UNSEEN
+SHAPE INSIDE THE 64-EXPERT, TOP-8 FAMILY on which every post-2026-09-28 term was chosen, not
+transfer across expert counts. `parent_inputs` names what of the target comes from the
+parent Qwen2-57B (routing, declaration and w2 grid exactly; w1's per-CTA unit; F, c and the
+CAL Z fit on CAL pages that include it; the dead-CTA term adopted to repair its miss;
+LATER_MISS written for its w2 SHARED). E1 (time from predicted bytes) over the 31 core
+cells the host rule keeps (T_M + 0.0676 >= 0.40 ms): rms <= 2% and no cell beyond 5%; the
+deep pages get their own printed reading. E2 the same from counted bytes
+(`cross_model_score.py`, pinned by sha256). E3 / E3s PRIVATE / SHARED q on 54 cells: rms <=
+3% and at most 10% beyond 5%. E4 the w2 unit (S 5, F 36% of u) on the 1005 DUR ruler: b in
+[0.98, 1.02] against the F = 0 rival's 0.637. E5 (M against M+Z) PRINTED only: M+Z is a
+near-uniform -9.6 us a call that a board offset reproduces. E6 (new, blind): counted
+SHARED minus NATIVE in-kernel w2 time on the byte pages against the dead-CTA term's 37.0 us (DEAD,
++-20%) and the parent's counted 21.5 us at the same 31,248 dead CTAs (FIXED, SEEN, +-20%).
+V5 does not gate the timed pages; a V8 that latches INVALID drops the page in CLEAN only;
+every byte-page V-gate, V10 included, gates CLEAN (E6 converts cycles at 1710 MHz).
+
+**Part B, the floor law** (`2026-10-05-rental3-floorlaw-gh200.{json,txt}`). Re-registered as
+CLOCK (ceil at 1005, flatter at 1710, the flattening in GAP = EL.avg - ACT.max), CEIL and
+FLUID; the design's X mechanism is dropped (SEEN theta(X / u) -0.17 to +0.13). B0: theta(X /
+u) in [-0.15, 0.15] on the new 1710 GEMMs; B1 theta_ACT.max in [0.70, 1.05] on 80% of lock
+captures; B2 theta_DUR at 1005 in [0.70, 1.05]; B3 same-board dtheta (granite-1B, tp4;
+qwen2-tp8 w2, tp8 and tp2 printed, the last two cross-board); B4 theta_DUR at 1710 against
+theta_ACT.max - 0.20 on 2 GEMMs, one of them blind (granite-1B or qwen2-tp8) (CLOCK), or >= 0.70 (CEIL); B6 the wall-time floor OUTSIDE ncu (graph
+replay, NATIVE, G = 64, tp4 at 1710) labels a CLOCK selection 'in wall time' or 'in the ncu
+replay only', and without it the claim is 'ncu-measured'; B7 part 4's tp8 w1 sets on the
+1005 DUR. A GEMM capture is fitted only with >= 5 cells and |corr(q, frac)| <= 0.95 (every
+new GEMM passes: the review's 'frac proportional to q' read q per occupancy wave), and is
+counted for a test only when se(theta) <= 0.15. The lock-in-force check of CLEAN: the null
+kernel within 3% AND, at 1710 only, the L2 clock in [1690, 1715] MHz over cells of 0.5 ms or more (printed, not gated, when
+fewer than 3 reach it: short cells read low) AND nvidia-smi before and after within 15 MHz of
+the lock. Fixes 2 to 5 of the build's independent check (B4's blind GEMM, the MID label, the
+L2 leg, V10) were decided on 2026-10-05, before any rental-3 page; each is marked in its file.
+
+**Part A, the per-GEMM constant's form** (`2026-10-05-rental3-zform-gh200.{json,txt}`). One
+series per capture FILE (the design pooled tp4's 1710 and 1005 cells; fixed). CAL fits:
+PROP zeta 0.336, AFF 2850 + 0.2081 u (r3_timing_model's GEMM_CONST, asserted equal), MIX
+3406 (f / 1710) + 0.200 u. A1 at the 1710 capture's measured clock, +-2 sigma_tot; A2's
+primary lever is base / 1710 (the L2 stays put), 1005 / 1710 printed ('SM and L2 moved
+together'). The MID window is empty on the primary lever at the registered noise and is
+read on the 1005 lever only (printed); a reading between the forms is INCONCLUSIVE, which
+the SEEN tp4 ratios (0.92 to 0.97, registered as priors) make likely. A curvature check
+(the n <= 8 and n >= 8 half-fits) can make a GEMM NOT SCORED; MIX3 is printed.
+
+**Part C, what lifts G = 1 survival** (`2026-10-05-rental3-stages-gh200.{json,txt}`). OCC,
+DEPTH, WIDTH, U-OCC, U-DEPTH and NULL on k32s8, k128s4, k128s3, k64s7 and the k64s3 control,
+each page keyed to its RECORDED w2 occupancy (k128s3 scored as such only at 3 CTAs per SM).
+The three pairs one page separates (OCC / U-OCC on k128s3, WIDTH / U-OCC on k64s7, U-OCC /
+U-DEPTH on k32s8) read NO SEPARATION when that page is unclassified; SELECTED needs 4 of the
+5 pages classified and every rival, NULL included, FALSIFIED; a lifted control falsifies
+all; a failed board check makes every verdict INCONCLUSIVE.
+
+**Part D, the flush ladder** (`2026-10-05-rental3-flush-gh200.{json,txt}`). tp8 n = 1..3 at
+E0, E240, E360, E480; E120 is not planned (2x the L2, under the 4x rule). OVERLAP (Phi =
+H_cell - I rises 33.8 us per 120 MiB step, +-12 us) against SAT (within +-10 us), read on
+E360 - E240 and E480 - E360 per qualifying host-bound cell, 2/3 of the cells to select.
+
+**Part R and RK, the noise models** (`2026-10-05-rental3-replicate-gh200.{json,txt}`). R:
+sigma_page from rep8 against the e2e G = 8 page on 9 cells, beside sigma_board 0.26% (SEEN,
+8x7B's 09-25 and 09-27 pages, 24 common cells, page IDs named); E1's UNRESOLVED label reads
+sqrt(sigma_page^2 + sigma_board^2). RK: the tp4 floorrep 1710 capture against the floor
+unit's 1710 capture gives K1's L and K4's D_imb a per-cell noise floor; K1 / K4 are
+RESOLVED on a pool when flipping every cell within 2 sigma of a threshold leaves the verdict;
+it is applied to rental 2's published pool (SEEN) and printed beside its verdicts, which
+stand.
+
+**Scorer ambiguities, decided before any page**: every one of the review's section-6 items
+(E-1 to E-10, B-1 to B-7, A-1 to A-7, C-1 to C-7, D-1 to D-5) is resolved in writing in its
+file's `ambiguities_resolved`.
+
+**Scored 2026-10-06** on `results/published/2026-10-06-nvidia_gh200_480gb-rental3-session`
+(board bb7a34, 24 units at 49f2198, 23 exit 0; the six scorers' outputs and the per-prediction ALL /
+CLEAN table in `scripts/scoring/rental3/` and `SCORES.md`). CLEAN keeps every floor capture (lock
+in force: null kernel -1.18 to -1.78% of the lock, L2 1697.0 to 1697.8 MHz at 1710) and every
+timed page (the G = 32 page fails V5 alone, which does not gate timed pages), and drops the three
+e2e byte pages, which fail V5 (PRIVATE w1 q_P 0.957 n). Part E: E1, time from predicted bytes,
+FALSIFIED (rms 3.50%, worst -6.08%, 31 cells, every cell over-predicted by 10 to 29 us; resolution
+0.31%); E2, time from counted bytes, FALSIFIED (rms 2.52%, worst +4.72%); E3, E3s and E6 NOT SCORED
+(ALL: FALSIFIED, FALSIFIED, INCONCLUSIVE); E4 M HOLDS (b 0.984). Part R: sigma_page 0.18%. RK: K1
+and K4 UNRESOLVED at the floorrep noise, on rental 3's tp4 pool and on rental 2's (rental 2's
+verdicts stand). Part B: INCONCLUSIVE (CEIL, FLUID FALSIFIED; CLOCK neither; B1 HOLDS, B0 FALSIFIED,
+B2 fails on 1 of 8, B6 INCONCLUSIVE at theta_wall 0.58, B7 H_EST HOLDS), so the floor-law claim stays
+"ncu-measured". Part A: INCONCLUSIVE (PROP FALSIFIED; AFF fails on 1 GEMM; qwen2-tp8 w2 NOT SCORED,
+curvature). Part C: INCONCLUSIVE (DEPTH, WIDTH, U-OCC, U-DEPTH FALSIFIED; OCC and NULL survive, no
+page at 2 or fewer CTAs per SM). Part D: OVERLAP SELECTED on 3 qualifying cells. One post-page
+scorer fix (`SCORES.md`, end): E2's call into `cross_model_score.score` dropped the V5-only G = 32
+page through `r3_timing_model.admit` and printed NOT SCORED; it now reads the pages the view
+counted, as `gates.timed` says, and prints FALSIFIED. The unit-13 exit 3 is one refused host probe
+(GR n = 13), not a timed cell; the recovery step's G = 32 retake passed the plan name as the model
+and was REFUSED with nothing measured, an operations defect. The files above are unchanged.
+
+## 2026-10-06, before any page: rental 4, six registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental4-2026-10.plan` through
+`gh200_model_session.sh --plan`. The six files below, their scorers (`scripts/scoring/rental4/`,
+tested on synthetic pages only in `tests/test_scoring_rental4.py`) and the scaffolding they need
+are committed together before the rental. Every number in them is written by
+`scripts/scoring/rental4/register.py` from committed files or is a typed-in input carrying its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r4/DESIGN.md`, corrected by `design-r4-review/REVIEW.md` and then by
+`reanalysis/REANALYSIS.md` section 4 (the later document wins); the build's independent review
+(`build-r4-review/REVIEW.md`) is applied before any page and each fix is marked `review_fix`.
+Labels as in rental 3: CAL, SEEN (every published page), BLIND; SEEN-fitted marks a constant
+fitted on published pages after they were seen, SEEN third-party a published number of
+someone else's.
+
+**Owner decisions of 2026-10-06** bound here. (1) The NATIVE-only histogram page's gates (V7 lock
+and thermal, the host-bound guard, the uniform-routing control within 2 sigma_page, worst-cell
+clock 1710, the histogram's sha256 and the shuffle seed on the page): registered as
+`2026-10-06-rental4-nativegates-gh200` for rental 5; no rental-4 unit runs such a page, and the
+skew plumbing (balanced_ids replaced by realize_counts, with the uniform-path control) is
+rental 5's. (2) The instrumented copy's perturbation tolerance: median |plain / copy - 1| <= 1%,
+worst <= 2%, identical occupancy limit. (3) RRZE-HPC/gpu-benches (GPL-3.0, third party) runs on the
+VM, fetched at commit 23e586dd into `$MOE_HOME/ext`, never vendored. (4) A3 is cut. (5) The
+instrumented copy of vLLM 0.27.1's kernel (`moe/instrumented/`), timestamps and eviction hints,
+off by default; the plain installed kernel stays the measured object of every timed test.
+
+**Cut by the build review (E1).** The eviction trio (8x7B G = 2, plain, A evict_first, B
+evict_last) and its registration: Triton 3.7.1 lowers these pipelined loads to cp.async .ca /
+.cg and drops `eviction_policy`, so a hinted page would count the all-off kernel. The copy keeps
+its hint parameters; any hinted unit is refused unless its compiled PTX carries L2::cache_hint
+(the perturb gate's hint leg, and the counter child's refusal). An L2 access-policy-window
+design (host side, kernel unchanged) is deferred and unregistered.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate | 2 | 5 |
+| rulers (torch read2d, copy, add, matmul; the L2 size), gpubench (latency, stream, l2-cache) | 2 | 11 |
+| A1 (drop-group a1): qwen2-57b-a14b-tp8 timed G = 8 n 1..9 at 9 and 15 copies | 2 | 33 |
+| perturb: the gate of the 9 stamps units below | 1 | 10 |
+| stamps (drop-group st): F (8x7B), K at BK 32 / 64 / 128 and s8 (OLMoE G = 64), tail (8x22B, 8x7B), dead (OLMoE s4, s8) | 9 | 25 |
+| B' (drop-group b): OLMoE G = 64 counters k64s4, k32s4, k128s4, k64s6, k64s2, k64s3, k64s8 | 7 | 28 |
+| A2 (drop-group a2): olmoe-1b-7b timed G = 8 n 1..9 at 9 and 15 copies | 2 | 32 |
+
+144 min of units; with about 12 of pushes 156 (2.6 h, $5.95 at $2.29/h), with setup about 186
+($7.10); the guardian's 410-minute cap is $15.65. The driver drops the last unit first; each pair
+and group goes together. Z (phi-3.5-moe at 1005), past the line in both drafts, is left out.
+
+**dead** (`2026-10-06-rental4-dead-gh200`). Delta = (SHARED - NATIVE at 15 copies) - (at 9), the
+median over n = 3..9, less the alignment kernel's growth read off each page's align_probe.
+Predicted (us): A1 D 20.73, D2 21.46, M 27.77, K0 24.43, SLOT 21.09, FIXED 0; A2 D 23.69, D2 23.33,
+M 31.74, K0 23.69, SLOT 21.70. D (d 0.995 ns, kappa 0.325) is refitted here on the CAL rows and
+reproduces the offset study; D2 (0.93 / 1.03 ns, kappa 0.30) is SEEN-fitted on all 16 GEMMs. z
+at sigma_noise 0.9 us (registered) and 0.45 (printed); D FAILS beyond 3 on A1 or A2; M, K0, SLOT
+EXCLUDED beyond 3; FIXED EXCLUDED above 3 sigma; K5 NOT TESTED (A3 cut); D / SLOT and D / D2 are
+printed NOT SEPARATED. The NATIVE null control NATIVE(c15) - NATIVE(c9) within 3 sqrt 2 x 0.18% x T,
+else every verdict INCONCLUSIVE. Every c15 page is labelled NOT JOINABLE TO COUNTER BYTES.
+
+**occlaw** (`2026-10-06-rental4-occlaw-gh200`, the review's B'). Per page and GEMM, c from the
+floor-bound cells (n >= 4, DRAM <= 0.5 x 4022 GB/s), F held; the knob over the same-board k64s4
+base against MVA2, LK (the max form), PS, LITTLE and OCC, all SEEN-fitted (labelled); 2% per
+(page, GEMM), any miss falsifies; SELECTED needs every other law falsified and 8 of 12 scored.
+Occupancy is the SEEN cubins' and is re-keyed to the page's recorded limit. The k64s4 base is
+SEEN (OLMoE's 2026-09-29 G = 64 page); MVA2 is in-sample at k32s4, k64s4 and k64s8. B' and the
+stamps K block share configurations: they are ONE test of the law.
+
+**perturb** (`2026-10-06-rental4-perturb-gh200`). Decision 2 per variant on its own cells: an
+event pair around each launch, plain and copy alike, an L2 flush before every call outside the
+pairs, the GPU held ahead of the host, each unit in its own Triton cache. Legs: timing; plain and
+copy paired by config with equal registers, shared and CTAs per SM; the all-off copy's SASS equal
+to the plain kernel's with line info stripped; a hinted unit's PTX carrying L2::cache_hint; the
+installed vLLM being upstream's. A FAIL leaves the unit unrun.
+
+**stamps** (`2026-10-06-rental4-stamps-gh200`). Scored only when the unit's own SASS puts the
+clock reads where its readout needs them (before the num_tokens LDG; between the loop-exit BAR and
+the topk LDG; two or more inside the k-loop). The prologue stamp lands before the pipeliner's fill,
+so the fill / epilogue split is withdrawn. F: the w2 epilogue's extra over w1 against the near
+L2, far L2 and DRAM latency (this rental's gpubench, else RRZE's published GH200). K: per-iteration
+time against occ x c, 3%, in three classes PS, LK=LITTLE, MVA2~OCC (no cell separates MVA2 from
+OCC beyond two bands). T: the final partial wave's per-iteration time against rho as one stage at
+loaded latency (1070 ns), three stages loaded (478) or idle (110), and the device share (stage
+bytes x tail CTAs / 3598 GB/s). D: a dead CTA's life against 150 / 451 / 667 cycles, and its
+dispatch from the dead CTAs that start after the last live CTA ends (100 or more, over 20
+globaltimer ticks) against DISP / MIX / SLOT.
+
+**hw** (`2026-10-06-rental4-hw-gh200`). gpubench's constants by its registered windows and the
+rulers, against RRZE's published GH200 (far L2 253.4 ns within 5%, DRAM 346.4 within 10%, triad
+3783 GB/s within 3%) and the 60 MiB L2; eta_mix = 3598 / each ruler printed.
+
+**Leakage, stated once.** Every constant typed into these files was fitted or chosen after
+published pages were seen (each labelled); no rental-4 page exists. OLMoE and Qwen2-57B are CAL
+models, so B' and the stamps are BLIND-CALMODEL apart from the SEEN k64s4 configuration; the
+15-copy contrasts are on no page.
+
+**Scored 2026-10-07** on `results/published/2026-10-07-nvidia_gh200_480gb-rental4-session`
+(board bb7a34, rental 3's; 25 units at 85ef38c in 95 minutes; the scorers' outputs and the
+per-prediction ALL / CLEAN table in `scripts/scoring/rental4/` and `SCORES.md`). No page is dropped
+by either view: the four timed pages pass V0 to V8 (worst cell 1710.0 MHz) and the seven byte pages
+V0 to V10. **dead**: D, the candidate d 0.995 ns, HOLDS on both contrasts (A1 qwen2-tp8 Delta 22.93
+us, z +1.79; A2 OLMoE 24.45 us, z +0.58); M, the current 1.333 ns, is EXCLUDED on both (z -5.38,
+-8.10); D2 HOLDS; SLOT EXCLUDED on A2 (z +3.06, at the line; D / SLOT and D / D2 are printed NOT
+SEPARATED by the registration's own rule, which the scorer does not print: `SCORES.md`); K0 NOT
+EXCLUDED; FIXED EXCLUDED; the NATIVE null control passes (+0.77, 0.00 us); per-GEMM d printed 1.10
+ns (w2) and 0.95 ns (w1). **occlaw**: UNDECIDED with no survivor, every law FALSIFIED on at least
+one of 12 (page, GEMM) cells (MVA2 rms 2.56%, OCC 2.51% on its 8); k64s2 re-keyed (5 / 5 CTAs per
+SM recorded against 4 / 4). **perturb**: FAIL on 9 of 9 variants (median 1.45 to 9.51%, worst 2.22
+to 16.68%, registers differ in every variant; the all-off copy's SASS equals the plain kernel's on
+18 of 18 configs), so **stamps** is NOT SCORED: NOT RUN on all nine units, as registered. **hw**: far
+L2 DIFFERS (275.0 against 253.4 ns, +8.5%), DRAM NOT SCORED (gpu-latency stopped at its 420 s
+timeout at 1.46 L), triad and the L2 size CONSISTENT. **nativegates** scores nothing (rental 5's).
+One post-page scorer fix to reading code, changing no verdict (`SCORES.md`, end): `score_stamps.py`
+reads a refused unit's gate line and prints NOT RUN with its median and worst, where it printed "0
+stamps.json". The gate's diagnosis (ptxas reallocates the whole kernel around the stamps; the
+stamps' cost at equal occupancy) is in `docs/FINDINGS.md`, rental 4. The files above are unchanged.
+
+## 2026-10-07, before any page: rental 5, six registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental5-2026-10.plan` through
+`gh200_model_session.sh --plan`. The six files `2026-10-07-rental5-{v2,skew,c15,stamps2,secondk,bk128}-gh200`,
+their scorers (`scripts/scoring/rental5/`, tested on synthetic pages only) and the scaffolding
+they need are committed together before the rental. Every number in them is written by
+`scripts/scoring/rental5/register.py` from committed files or is a typed-in input carrying its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r5/DESIGN.md`, corrected by `design-r5-review/REVIEW.md` (the later document wins). Labels:
+CAL, CAL-counters (the four models d and kappa were fitted on), SEEN (every published page),
+SEEN-fitted, BLIND, BLIND-CALMODEL (a never-measured cell on a CAL model). Every published page is
+SEEN, and so is every rental-5 input that came from one; each file's `seen_data` and `leakage`
+blocks say which.
+
+**Owner decisions of 2026-10-07** bound here. (1) G3 is a TOST on the pooled
+shuffled-minus-balanced difference with a cluster-t interval (df = pages - 1), margin 0.36%, and
+Cochran's Q gates (p < 0.01 sends the TOST to each n-stratum); every per-cell difference is kept
+and printed; the model's shuffle effect is registered per cell; the label-permutation cells
+(PW-hotfirst, PW-rand1) are included. (2) Dead- and live-CTA stamp sampling at 1 in 17 (pid mod
+17) under the gate CTAs/SM identical, timing median <= 1%, worst <= 2%; regcheck runs right after
+calibrate, before any timed unit. (3) The skew histograms are SYNTHETIC: Zipf / Dirichlet shapes
+fitted by `scripts/skew_synth.py` to summary statistics (cv, max/mean, Gini by layer and batch) of
+three public routing logs that state no licence, drawn from registered seeds, committed openly in
+`2026-10-07-rental5-skew-hist/` with the fitting targets (`trace_stats.json`, statistics only) and
+the fitted shapes (`synth_fit.json`, each shape's matched statistics). No trace-derived count is in
+the repository or on the VM; the prototype's rescaled histograms are not used.
+
+**v2** (no unit): model M with D, `r3_timing_model.py --dead-model v2` (default `m`, so every
+earlier scorer reads the same bytes): d 0.995 ns, kappa 0.325 in the dead window, T0 refit to
+43.23 us on the CAL 8x7B pages. Its re-predictions of the earlier held-out tests are SEEN
+diagnostics with no verdict (`scripts/scoring/rental5/v2seen.score.txt`, reproducing the design's
+table to 0.01 point); 8x22B, Qwen2-57B and OLMoE are IN-SAMPLE for (d, kappa). **skew**: two pages
+per shape (Mixtral n 2/8/32, OLMoE 2/4/16, Qwen1.5 1/2/8; NATIVE and SHARED at 9 copies, G = 8), a
+byte-leg counter page for Mixtral and OLMoE; S (v2 + the per-expert schedule M2 + the per-expert
+byte walk M3) against U, LT (the close rival) and PW; SKEW-RATIO, E1-SKEW, E1-UNI-EXT, B-SKEW,
+E2-SKEW and the decomposition; predicted r_S - 1 from +1.1 to +30.4% (Mixtral), +2.6 to +21.9%
+(OLMoE), +5.6 to +21.7% (Qwen1.5); 40 / 48 / 17 lever cells for U / PW / LT. The registered
+shuffle effect delta_M3 is 0 on every cell: a token-row permutation keeps each expert's token set,
+so the review's premise that the shuffle breaks realize_counts' co-occurrence classes does not
+hold. By the owner's decision of 2026-10-07 G3 is kept as exactly that: a test of token order against the model's predicted zero effect. The owner confirmed the registered thresholds (B-SKEW every cell <= 5% and rms <= 3%; E2-SKEW rms <= 2% and worst <= 5%; cells under 1705 MHz excluded). **c15**: SHARED at 15 against 9 copies on
+OLMoE's skewed cells, D 23.69 us at every histogram, M 31.74, sigma 1.03 us. **stamps2**: the
+sample level (CTA start and end, iteration tops at k = 0 and k = S - 1 - 16 m), variants v1 / v2
+/ v3 (`moe.instrumented.R5_VARIANTS`), the first passing regcheck and perturb per unit; F2, K2 and
+D2 with kappa's error including d's. **secondk** and **bk128** (a BLIND confirmation of the
+occupancy-3 floor; SYNC is already excluded by SEEN counters). The tp2 lever (9 against 32 copies)
+was CUT by the owner on 2026-10-07; kappa is read from the stamps only.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate, regcheck (compile only) | 3 | 8 |
+| skew Mixtral, OLMoE (skm, sko; never dropped): pages A, B and the byte leg C | 6 | 66 |
+| skew Qwen1.5 (skq) | 2 | 29 |
+| c15 (OLMoE SHARED at 15 copies) | 1 | 7 |
+| stamps (st: perturb, stf; stt and std depend on st) | 6 | 28 |
+| second K (k2), BK 128 (bk) | 4 | 14 |
+
+152 min of units (2.5 h, $5.80 at $2.29/h). The driver drops the last unit first: BK 128, then
+second K, std, stt, st, c15, skq.
+
+**Scored 2026-10-09** on `results/published/2026-10-09-nvidia_gh200_480gb-rental5-session`
+(board 1cd741, new; 22 units at d4d1767 in 108 minutes; the scorers' outputs and the
+per-prediction ALL / CLEAN table in `scripts/scoring/rental5/` and `SCORES.md`). The two Mixtral
+timed pages wrote no report (`locked_r3` stopped each at its first sub-lock cell, 1635 and 1680
+MHz), so every Mixtral timed cell is NOT SCORED (`missing`); Qwen1.5 skb fails G1 (drift on three n
+= 2 cells) and is counted in ALL, excluded from CLEAN; the qwen2-tp8 byte pages fail V5 and leave
+CLEAN for secondk. **skew**: G3 INCONCLUSIVE (ALL, 4 pages: CI [-0.274, +0.015]% inside +-0.36%;
+CLEAN, 3 pages: [-0.373, +0.044]%, which voids every histogram cell in CLEAN), so SKEW-RATIO S and
+E1-SKEW are NOT SCORED (CLEAN has no data) with ALL reading HOLDS (S rms 1.05%, worst -2.09%, 36
+ratios; E1-SKEW rms 1.26%, worst +4.38%, bias +0.40%, 72 cells); U and PW INCONCLUSIVE (ALL
+EXCLUDED, 12.95% and 17.81% rms on their lever cells), LT INCONCLUSIVE (5 lever cells, under 6);
+B-SKEW and E2-SKEW NOT SCORED: the 1705 MHz cut on sm__cycles_elapsed.avg / gpu_time_ns drops
+every byte cell (1656 to 1698 MHz under the held lock; 1 of 3646 GEMMs on the 113 published
+lock-1710 counter pages reaches 1705, so the cut is unreachable on this card as written); E1-UNI
+and E1-UNI-EXT HOLD (rms 1.80%, 0.26%); the permutation control FAILS on two clusters (printed,
+voids nothing). OLMoE's 12 G3 cells all read the shuffled rows 0.18 to 0.30% faster than the
+balanced rows; Qwen1.5's read zero. **c15**: D HOLDS (median Delta 25.39 us against 23.69, z
++1.32); M EXCLUDED (z -4.93); FIXED EXCLUDED; skewed and uniform increments agree (-0.46 us).
+**secondk**: NOT SCORED (CLEAN has no data); ALL UNDECIDED (w1 H_ITER +1.5%, w2 NEITHER).
+**bk128**: H_C HOLDS (rms 0.13%), SYNC EXCLUDED. **stamps2**: NOT SCORED: NOT RUN on all five
+units: regcheck FAIL on 9 of 11 variants (the copy compiles w2 at 48 registers against 55, 5
+CTAs/SM against 4; std2 at s8 passes), the perturbation gate FAIL on 11 of 11 (median 2.2 to 6.6%,
+worst 2.7 to 14.7%; std2, equal occupancy, 2.8 to 3.2%). **v2** scores nothing new (its SEEN
+diagnostic is unchanged). One post-page scorer fix to reading code, following the registration's
+`views` text and flagged because it changes a verdict (`SCORES.md`, end): `score_skew.py` leaves a
+page whose G1 is recorded in its `gates` to the two views instead of refusing it in both; G3 goes
+from FAIL to INCONCLUSIVE and the rivals U and PW from UNDECIDED to INCONCLUSIVE. Readings left to
+the owner: the unreachable byte-leg clock cut, the Mixtral partial pages (`cells.csv` holds six and
+eight of nine repeats), and the permutation control's printed "voids every histogram cell". The
+files above are unchanged.
+
+## 2026-10-09, before any page: rental 6, four registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental6-2026-10.plan` through
+`gh200_model_session.sh --plan`. The four files `2026-10-09-rental6-{v3,skew,q1,secondk}-gh200`,
+their scorers (`scripts/scoring/rental6/`, tested on synthetic pages only) and the scaffolding they
+need are committed together before the rental. Every number is written by
+`scripts/scoring/rental6/register.py` from committed files or is a typed-in input with its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r6/DESIGN.md`, corrected by `design-r6-review/REVIEW.md` (the review wins). Labels as rental
+5, plus SEEN-FITTED, SEEN-SELECTED, SEEN-INFORMED and IN-SAMPLE.
+
+**Owner decisions of 2026-10-09** bound here. (1) Model v3's term (b) applies only where NATIVE
+takes block-scan. (2) h = -5.16 us from the four-model S - N gaps, kept and labelled SEEN-FITTED:
+at least 143 of its 178 cells are held-out timing pages, so 8x22B, Qwen2-57B and OLMoE are
+IN-SAMPLE for (b). (3) E1-SKEW at the time bar (rms 2%, worst 5%, |mean| 1%). (4) Phi-3.5 carries
+Mixtral's synthetic shapes. (5) A cell needs 6 of 9 clean repeats and a page at most 10% slipped
+repeats. (6) No permutation cells. content_a is SEEN-SELECTED and the n = 1 exclusion
+SEEN-INFORMED; the v3 file lists every seen-informed choice, carving OLMoE's skewed w1 rows out of
+B-SKEW (after rental 5's +8% / +25%) included. Rental 5's code_pins also list
+`private_weight_reference.py` and `skew_synth.py`, which rental 6 changes; rental 5's scorer checks
+only its three pinned files, which are unchanged (the v3 file says so).
+
+**v3** (no unit): v2 plus (a) MODEL M4 (`scripts/wave_split_bytes_v3.py`, `ModelV3`) and (b) the
+page's own A plus h on SHARED where NATIVE is block-scan (`scripts/r3_timing_model_v3.py`). By the
+owner's decision of 2026-10-09 v3 lives in these new modules, which import the pinned ones:
+`r3_timing_model.py`, `wave_split_bytes.py` and `rental5/skewmodel.py` stay byte-identical to
+rental5-skew's code_pins, and a test checks their sha256. On the rental-5 SEEN skew cells it
+reads 0.90% rms against v2's 1.26%. **skew**: three pages per shape (Mixtral n 3/6/16, OLMoE
+3/6/12, Phi 2/4/12), new draws (`skew_synth.py --draw6`), byte pages for OLMoE and Phi; E1-SKEW,
+the E1 rivals, SKEW-RATIO, G3, B-SKEW, OPEN-L2SKEW (skewed OLMoE w1, with the row-key rival priced
+in `2026-10-09-rental6-skew-hist/rowkey_rival.json`), B-CA, E2-SKEW; counter pages use the clock
+rule (check_page PASS, cells in [1640, 1710] MHz; the published floor1005 and floor1410 pages, under
+the lock, give 0 cells in the band and are its negative control, tested). **G3** keeps rental 5's
+strict rule (a failure with Q not rejecting voids every histogram cell, E1-SKEW NOT SCORED), and by the
+owner's decision of 2026-10-09 E1 is then also printed DESCRIPTIVELY on the voided cells, not a
+verdict; the build review puts the chance that G3 does not pass cleanly at about 21 to 35% against
+the design's 6%, mostly from OLMoE's -0.24% token-order effect (the skew file states it). **q1**: Q1-H on block-scan control pairs (v2 and H8 separated by 4.6 and 7.4 us; P(v3 holds)
+0.993 at the assumed Phi 1.0 us and JetMoE 0.45 us sd, 0.86 with Phi at Mixtral's 2.04 us, 0.72 with
+both there, registered), c15 NATIVE cells SEEN (NATIVE declares E at any copies count) and only c15
+SHARED blind, Q1-P DESCRIPTIVE (JetMoE n 1, 2
+host-bound by rule; the small-batch residual trends with n), Q1-SK open, Q1-C on D = x15 - x9.
+No registered verdict separates v3 from v3_all. **secondk**: mixtral-8x7b-tp4 G = 64, both pages
+new, H_ITER against H_CTA 16.9% (w1) and 22.4% (w2).
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate | 2 | 5 |
+| skew, 9 pages (nodrop) | 9 | 108 |
+| Q1 pages (q1q, q1p, q1j) | 6 | 18 |
+| byte pages OLMoE, Phi (byt) | 2 | 8 |
+| second K (k2) | 2 | 6 |
+
+145 min of units ($5.53 at $2.29/h). The driver drops the last unit first: k2, q1j, byt, q1p,
+q1q; calibrate and the nine skew pages carry nodrop=1.
+
+**Scored 2026-10-13** on `results/published/2026-10-13-nvidia_gh200_480gb-rental6-session`
+(board ff9942, new; 21 units at 650d295 in 122 minutes; the scorers' outputs and the
+per-prediction ALL / CLEAN table in `scripts/scoring/rental6/` and `SCORES.md`; no post-page fix).
+Units 13 to 15, 18 and 19 (Qwen1.5 q15, Phi q9 and q15, JetMoE q9 and q15) wrote no page: the
+driver's `fresh_tag` ran out of its ten suffixes and handed the eleventh timed unit an empty tag,
+which argparse refused at the dry run (fixed after the session). The six Mixtral and Phi skew
+pages fail R3's G1 on drift flags (every cell at 1710.0 MHz; 3.7 to 10.6% of repeats flagged,
+each already out of its cell median) and count in ALL, not CLEAN, as the G1 rule is written; CLEAN
+is OLMoE's three pages. **skew**: G3 PASS (ALL 51 cells, 9 pages, CI [-0.140, -0.003]%; CLEAN 18
+cells, CI [-0.227, -0.208]%). E1-SKEW HOLDS (ALL 122 cells rms 0.55%, worst -1.55%, mean -0.00%;
+CLEAN 42 OLMoE cells rms 0.54%, worst -1.47%, mean +0.16%); E1-UNI, SKEW-RATIO v3, E2-SKEW (39
+cells rms 0.62%) and B-SKEW (30 rows rms 2.66%, worst +4.34%) HOLD. E1 rivals: v2 EXCLUDED (7 OLMoE
+n 3 SHARED lever cells, IN-SAMPLE for h); LT3 and H8 INCONCLUSIVE (the views disagree); v3_all
+INCONCLUSIVE and v3_noca UNDECIDED (too few lever cells). SKEW-RATIO: U EXCLUDED, LT3 INCONCLUSIVE.
+OPEN-L2SKEW: v3 FAILS OLMoE's skewed w1 (rms 11.76%, worst +20.56% at n 12) and the 39.5 MiB
+row-key rival is NOT BETTER (rms 7.30%; printed at 60 MiB, not registered, rms 1.04%). B-CA: v3
+FAILS (OLMoE w1 controls up to +3.62% against 3%), v3_noca EXCLUDED (rms 9.87%). On these
+floor-bound cells the byte term of ln T is at most 0.06%, so E1 and E2 test the timing model.
+**q1**: Q1-H UNDECIDED (no c15 page for the copies clause; ALL 10 pairs mean g -0.98 us, CLEAN 7
+pairs -1.67 us); Q1-C NOT SCORED; Q1-P DESCRIPTIVE (Mixtral n 3 -6.38 us); Q1-SK printed.
+**secondk**: UNDECIDED (w1 H_ITER +0.78%, H_CTA +17.8%; w2 H_ITER +3.17%, 0.17 point past the 3%
+tolerance, H_CTA +26.3%; V7 fails on both pages, read off NATIVE cells as registered). **v3**
+scores nothing of its own. Readings left to the owner: Q1-H's rivals when the copies clause is
+undecided (the scorer reads none; on the pairs that ran v2 and H8 sit 5.5 and 8.4 us off against 3
+se of 3.2 us), and the histogram G1 drift rule (one flagged repeat fails a page; the ladder pages'
+V0 allows 20%). The files above are unchanged.
+
+## 2026-10-13, before any page: rental 7, four registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental7-2026-10.plan` through
+`gh200_model_session.sh --plan`. The four files `2026-10-13-rental7-{g1rule,skew,q1,l2open}-gh200`,
+their scorers (`scripts/scoring/rental7/`, tested on synthetic pages only) and the scaffolding they
+need are committed together before the rental. Every number is written by
+`scripts/scoring/rental7/register.py` from committed files or is a typed-in input with its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r7/DESIGN.md`, corrected by `design-r7-review/REVIEW.md` (the review wins). Labels as rental
+6, plus SEEN-DERIVED: a gate rule whose threshold was read off published pages, not a model
+constant. Model v3 is rental 6's, unchanged; no term is added.
+
+**Owner decisions of 2026-10-13** bound here. (1) The histogram drift rule is S_med plus the
+review's run guard, `r7-median-run3`, applied by the SCORER to each page's cells.csv
+(`scripts/scoring/rental7/r7common.py`): a repeat is out of its cell median only when lock-slipped
+or with 3 or more consecutive per-burst clock reads a step under the lock (1694 MHz or less at
+1710; one read per burst, 140 to 166 ms apart, so a run is about 0.45 s); the endpoint DRIFT flag
+is recorded only; a cell needs 6 clean of its timed repeats; G1 fails past 10% non-clean repeat
+rows or on R3's clock clauses over the rebuilt cells. The scorer never reads R3's stored G1 or
+medians, and a page whose cells.csv counts differ from its report is NOT SCORED. R3 and
+`locked_r3.py` stay byte-identical to rental 6's pins (the owner's preference: a registered code
+pin stays byte-identical); the plan key hands locked_r3 `--min-clean-repeats 0`, so R3 times every
+repeat and stops no cell early (at min-clean 6 the build review measured about 19% of cells
+truncated at a 30% flag rate). The owner's 20%-ceiling rule (P20) is rebuilt beside it with its
+own medians, clocks and lost cells. Rebuilt from cells.csv, R3's r5-any gives the stored G1 on all
+17 published report pages; r7-median-run3 passes all 17 and loses no cell; real sags injected into
+those pages (endpoint and interior, 3 to 7 reads) are taken out of every median and fail G1. (2) Q1-H's rivals are scored
+whenever 6 pairs and 3 clusters are valid, whatever the copies clause reads. (3) The OLMoE w1 byte
+page `l2open` is in: its draws are the ones the design priced (seed base 20261030), every row of it
+is priced before any page (`2026-10-13-rental7-skew-hist/l2open_rowkey.json`, MPS float32 checked
+against CPU float64 on every cell), one capacity is registered (C = 60 MiB, SEEN-chosen), and the
+5% clause reads skewed rows only. (4) No second-K rerun. (5) Fresh seeds on rental 6's treads
+(`scripts/skew_synth7.py`, rental 6's rule at seed base 20261020).
+
+**g1rule** (no unit): the rule above, its SEEN evidence on the 17 pages, the sag control, and its
+limits (a sag shorter than 3 consecutive reads is seen by no rule).
+**skew**: Mixtral (n 3/6/16) and Phi (2/4/12), pages A, B, C, 120 cells (84 E1 cells); 0 of the 48
+skewed cells' counts are on any published page, all 72 controls are (SEEN replicates). E1-SKEW
+holds only if the pooled cells AND each shape meet the time bar; a shape is CERTIFIED in CLEAN with
+at least 2 of its 3 pages there. P(holds) about 1.000 SEEN-anchored, 0.977 harsh; LT3 is the one
+decidable E1 rival (62 lever cells). **q1**: all six Q1 units on this board; Q1-H is a REPLICATE
+(21 of its 24 pairs SEEN; only c15 SHARED is blind), its population adds Mixtral n 6 and Phi n 4
+(SEEN-SELECTED) for 5 clusters: P(v3 holds) 0.983 at tau 0.9 us and 0.929 at 1.3 (0.887 and 0.792
+with the design's 3 clusters). Q1-C is rental 6's rule; Q1-P DESCRIPTIVE; Q1-SK open. **l2open**:
+OPEN; the nearest of v3, ROWKEY39.5 and ROWKEY60 is NAMED only when 2x nearer than the next with
+every skewed row within 5%.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate | 2 | 5 |
+| skew, 6 pages (nodrop) | 6 | 72 |
+| Q1 pages (q1q, q1p, q1j) | 6 | 18 |
+| l2open byte page (byt) | 1 | 4 |
+
+99 min of units (95 without the byte page), about 83 min actual at rental 6's 0.84x, about $4.1 to
+$4.3. The driver drops the last unit first: byt, q1j, q1p, q1q; calibrate and the six skew pages
+carry nodrop=1. Every per-unit driver log is now named by model and label.
+
+**Scored 2026-10-14** on `results/published/2026-10-14-nvidia_gh200_480gb-rental7-session`
+(board 02e86e, new; 15 units at ae010ff in 91 minutes, none dropped, driver exit 0; the scorers'
+outputs and the per-prediction ALL / CLEAN table in `scripts/scoring/rental7/` and `SCORES.md`; no
+post-page fix). **g1rule**: R3's own stored G1 fails the six Mixtral and Phi skew pages and Phi q9
+on drift flags, as expected of the pinned R3. The scorers rebuild every page from cells.csv under
+r7-median-run3, and all twelve timed pages pass. 0 of 1,332 repeat rows are non-clean, no cell is
+lost, and every cell median reads 1710.0 MHz. 668 repeats carry a dipped read, but none has 3 in a
+row (longest 2). The P20 view, printed beside every verdict, passes every page too (52 drift-flagged
+rows dropped, one cell lost, Phi skb DW SHARED n 2). CLEAN equals ALL. **skew**: G3 PASS (36 cells,
+6 pages, CI [-0.013, +0.015]%). E1-SKEW HOLDS: 84 cells rms 0.61%, worst -1.61%, mean -0.24%;
+Mixtral 42 cells rms 0.51% and Phi 42 cells rms 0.69%, each CERTIFIED in CLEAN (3 of 3 pages), so
+CLEAN now certifies Mixtral and Phi beside rental 6's OLMoE (NOTE 2026-11-12: rental 6 registered no certification
+rule, so OLMoE HOLDS in CLEAN and is not certified; docs/FINDINGS.md, Rental 6). E1-UNI (36 cells rms 0.46%) and
+SKEW-RATIO v3 (48 ratios rms 0.45%) HOLD. E1 rivals: LT3 EXCLUDED (1.83% against 0.68% on 62 lever
+cells); v2, H8, v3_all and v3_noca UNDECIDED by construction. SKEW-RATIO: U EXCLUDED, LT3 UNDECIDED
+(4). The residual tracks the tread again: about -1% at each shape's first tread, +0.3% at the third.
+**q1**: all six Q1 pages ran (`fresh_tag` fix). Q1-H FAILS: the level clause holds (24 pairs, 5
+clusters, mean g +0.42 us, se 0.52), and the copies clause fails (c15 minus c9 +2.24 us; Phi n 2
++3.44, Qwen1.5 n 2 +3.05, JetMoE n 4 +0.22; the shift is in SHARED, while NATIVE moves -0.19 and
+-1.12 us between the same two pages). Rivals v2 (g_R +4.52 us) and H8 (+7.44) are EXCLUDED;
+v3_all is NOT EXCLUDED (g_R 0 by construction). Q1-C SELECTED CALL (D +0.58 us, DEAD at -5.47).
+Q1-P DESCRIPTIVE: Mixtral n 3 mean g -10.56 us, against v3_all's -10.61 (rental 6 read -6.38).
+Q1-SK printed. **l2open**: NAMED ROWKEY60 (OPEN). Skewed w1 rms 1.99% (worst -3.21%) against
+ROWKEY39.5 8.10% and v3 15.33% (v3 +7.7% at n 4 to +25.8% at n 16). **register.py --check**: with
+rental 7's pages published, `reg7.published_counts_sha` read them as SEEN, and the check differed on
+the skew and l2open files (leakage labels only). `register.py` now seeds that set as of 2026-10-13,
+as `seed_pricer` does; `reg7.py` (pinned) is unchanged, and the check reads `same` on all eight
+files. The files above are unchanged.
+
+## 2026-10-14, before any page: the tile stage, rental A's six registrations and rental B's two (frozen)
+
+Rental A (one `gpu_1x_gh200`) runs `scripts/plans/rentalA-tile-2026-10.plan` through the tile stage's
+driver, `scripts/gh200_tile_session.sh` (`vm_run.sh start ... --driver gh200_tile_session.sh`): the
+pinned `gh200_model_session.sh` copied with the tile keys added, every changed hunk marked `TILE` and
+held to the pinned file by tests/test_tile_plan.py. The six files `2026-10-14-tileA-{census,floor,
+bytes,e1cal,dead,rep}-gh200` and rental B's `2026-10-14-tileB-{e1tile,stop}-gh200` are written by
+`scripts/scoring/tileA/register.py` (`--check` recomputes all eight; a test runs it). Rental B's two
+are FROZEN now: cells, files, rules, rivals and gates are fixed; its numeric predictions are written
+by `scripts/scoring/tileA/finalise.py` from rental A's scored selections, by the registered rules,
+before rental B runs (owner decision D3). Scorers in `scripts/scoring/tileA/`, tested on synthetic
+pages only. Design: the scratchpad's `design-tile/DESIGN.md`, corrected by `design-tile-review/REVIEW.md`
+(the review wins), with the owner's decisions D1 to D10 of 2026-10-14.
+
+**Model v4** (`scripts/r3_timing_model_v4.py`, `scripts/wave_split_bytes_v4.py`, new modules over the
+pinned v3 modules): v3 with every tile-dependent quantity read from the tile. c_time = c_card x
+c_counter(tile) / 344.1 and PHI = F / c_counter(tile), so at R3's tile v4 is v3 exactly:
+`r3_timing_model_v4.py --check` re-prices all 300 registered v3 predictions of rental6-skew and
+rental7-skew and equals the registered numbers and rental 6's pricer bit for bit. c_counter is c_128
+measured on the 128x128x64 w8 s3 counter pages of OLMoE and Mixtral 8x7B (with F_wg,w1 and F_wg,w2,
+one joint fit, CAL-A); at 64x128 a closed MVA whose delay Z_wg puts 128x128 at c_128, under one of
+three shared-byte accountings (B, W, T); on mma.sync, rental 4's MVA2 as a ratio to R3's tile (D5).
+F-step (v3's form) is registered; F-cyc replaces it only by the registered rule. eta_mma is per
+clock (v4 counts cycles at a locked clock): Luo et al. (arXiv 2501.12084) Table 11's 0.991
+(m64n256k16, the only wgmma rate with a measured clock), carried by Table 9's within-table ratios to
+0.983 for m64n128k16 (128x128) and 0.965 for m64n64k16 (64x128); measured on an H800 PCIe in FP16,
+BF16 on the GH200 assumed equal. Table 9's chip-relative 0.872 / 0.857 is the rival. It moves no
+128x128 cell, at most 1.31% of the six Phi 64x128 cells (c_128 600 to 1300), and c_64 by up to
+5.5%, beyond the 3% band, so it can change which accounting is selected (registered). MVA2's eta as the wgmma shared divisor is an untested
+reuse. Fitted: 6 (MVA2's three SEEN, Z_wg and F_wg x2 CAL-A); selections: 3 (accounting, A key, F
+form). The accounting reading on the 64x128 w8 pages is DESCRIPTIVE: at the design-nominal constants
+B, W and T move rental B's predictions by at most 0.28% (0 lever cells), so they are NOT SEPARATED.
+
+**census**: compile only, every config of both rentals on every model (blind ones included): registers,
+shared, CTAs per SM, MMA path (a mismatch is a STOP), PTX loop counts. Every occupancy is read by one
+function from the census (the shared-memory rule's 2 at 128x128 and 3 at 64x128 w8 until it exists);
+`rowkeys_tile.py --census-score` and `register.py --census-score` are the mechanical rebuild. A
+counter page recording another occupancy is scored at its own; rental B re-reads the census and a
+(model, tile) that differs is NOT SCORED. **floor**: the calibration, the
+descriptive 64x128 test (u = S c + F within 3%), the selection for rental B (the accounting that
+alone holds, else v4cal), the F form. **bytes**: the A key on every scored w1 row of the G-1 byte pages
+(uniform, balanced and skewed; 56 rows): v3, CLAMP (q floored at the active weights once), ROWKEY60,
+ROWKEY30 (one of the card's two 60 MiB L2 partitions; the design's "Fan et al." is withdrawn); NAMED
+when 2x nearer than the next with every row within 5%, else CLAMP. The row keys are streamed
+(`rowkeys_tile.py`, the pinned rival's access order and hit rule at 0.25 GB; the pinned simulate ran
+past 19 GB on this laptop and was stopped) and equal the pinned rival's bytes on every cell checked.
+**e1cal**: v4 end to end on the CAL models' timed pages (BLIND-CALMODEL). **stop** (D6): rental B
+runs only if every tile class's mean NATIVE residual is within 0.75%, the 128 G 1 CAL models agree
+within 1%, every E1-CAL page ran and was scored, the bar holds, G3 voids nothing and the census did
+not refuse. The design's OLMoE n 8 tread is removed (M4's Hopper G-1 rule), a registered deviation. **dead**: D
+against SLOT at occupancy 2 (12 to 17 us apart); kappa only if c_128 >= 900; D2 against D and kappa 0
+against 0.15 NOT SEPARABLE. **rep**: sigma_page at 128x128, else rental 3's 0.18%.
+
+**e1tile (rental B, frozen)**: Phi (64x128 G 1 n 1; 128x128 G 1 n 1, 2; G 16 n 3, 4), Qwen1.5 (G 1 n
+1, 2, 4; G 16 n 5, 6), JetMoE (G 16 n 3, 4; G 1 n 2), deepseek-v2-lite (G 1 n 3): PT, PT2, PW, PW2,
+uniform, balanced, 84 NATIVE cells. E1-TILE holds iff the pooled cells and each BLIND-TILE model meet
+the time bar; CERTIFIED in CLEAN with 2 pages; a model with no valid cell leaves it NOT SCORED;
+deepseek-v2-lite (SEEN-SHAPE, D7: on a published H200 page, its GEMMs Qwen1.5's) is in the pool only.
+14 of the 84 are SEEN-WORKLOAD (uniform and balanced cells whose rows per expert a published R3 page
+timed: Phi 64g1 n 1, 128g1 n 1 and 2, 128g16 n 3; Qwen1.5 128g1 n 1 and 2; JetMoE 128g1 n 2): only
+the tile is blind there. Power (CPU float64; MPS float32 within 5e-6, 4.4 s): P 0.968 at zero
+drift, 0.62 at 1% common-mode drift and 0.48 at 1% model-specific drift; the stop rule passes 92.5%
+at zero drift and 14% at 1% common-mode drift. finalise.py refuses on any STOP and generates rental
+B's plan (14 units, 117 min). Drop order, last first: byt, dsv; every Phi, Qwen1.5 and JetMoE page is
+nodrop.
+
+| rental A block | units | est. min |
+|---|---|---:|
+| prelude, calibrate, census | 3 | 13 |
+| 128x128 and 64x128 w8 counter pages (nodrop) | 4 | 26 |
+| byte pages at vLLM's G (nodrop, Qwen2-57B's included) | 4 | 27 |
+| E1-CAL timed pages (nodrop, Qwen2-57B and Mixtral 128 G 1 n 2 included) | 5 | 51 |
+| rep, w4, ms, dk (dropped last first: dk, ms, w4, rep) | 5 | 30 |
+
+147 min of units (117 nodrop), about $5.6; rental B about 117 min, $5.3: the stage about $11 (D10).
+
+**Scored 2026-10-20** on `results/published/2026-10-20-nvidia_gh200_480gb-tileA-session`
+(board 03e9ec, new; 21 units at c4914ba in 115 minutes, none dropped, driver exit 3 from the census
+unit's exit 3; the scorers' outputs and the tables in `scripts/scoring/tileA/` and `SCORES.md`; no
+post-page fix). **STOP: rental B does not run** (finalise.py refuses). **census**: VALID
+(INCOMPLETE): 0 MMA path mismatches over 72 configs; deepseek-v2-lite errors on all six tiles ("N
+rows per expert is not an integer token count for E=64 k=6", a census-tool defect); 32x128x64 w4
+reads occupancy 4 against the design's 5 (the rebuild at the census occupancy changes only floor's
+DESCRIPTIVE mma.sync block; tileA-bytes is the same). **floor**: CALIBRATION NOT SCORED (under 6
+floor-bound cells). The counter clock rule (cells in [1640, 1710] MHz) keeps 6 of 27 and 7 of 27
+cells on the OLMoE and Mixtral f128 pages, all PRIVATE: NATIVE and SHARED ran 1599 to 1640 MHz on
+the 128x128 wgmma tile. No c_128, so no v4. **bytes**: NOT NAMED (nearest CLAMP); v4 takes CLAMP
+(rms CLAMP 5.03%, v3 5.03%, ROWKEY60 12.31%, ROWKEY30 12.29%) on 19 of the 56 registered rows; the
+band drops OLMoE b128g1's 24 and 13 of Qwen2-57B's 16. **e1cal**: NOT SCORED; the stop rule prints
+the floor clause only. Rebuilt under r7-median-run3 (DESCRIPTIVE), Mixtral e128g16 (33.8% non-clean)
+and Qwen2-57B e128g1 (27.1%) also fail G1, which the stop rule's page clause reads as a STOP.
+**rep**: sigma_page 0.1275% (24 cells). **dead**: delta +20.01 us (se 0.61); D, D2, SLOT and d 1.06
+each EXCLUDED, so D against SLOT is NOT SEPARATED by this page; kappa NOT SCORED (no c_128). The
+decode stage cannot be scored as registered (`2026-10-14-decodeC-cal-gh200` requires the tile
+stage's finalised selections). Open defect, not fixed: `score_floor.py` and `score_bytes.py` import
+`r3_timing_model_v4` / `r3_timing_model` before `tcommon` sets `sys.path`, so they need
+`PYTHONPATH=.:scripts` from the command line. The registration files above are unchanged;
+`register.py --check` reads `same` on all eight. One non-scorer fix: rental 7's `register.py`
+now reads reg7._held_pages as of 2026-10-13 (the tile session's histogram pages had joined the
+g1rule file's 17 held pages, and `--check` read DIFFERS there); reg7.py (pinned) is unchanged and
+all eight rental-7 files read `same`.
+
+## The decode stage (2026-10-14): `2026-10-14-decodeC-cal-gh200`, `2026-10-14-decodeB-blind-gh200`
+
+Registered before any decode page, from design-decode DESIGN.md and the owner's decisions DD1 to DD6
+of 2026-10-14. Built by `scripts/scoring/decode/register_decode.py` (`--check` recomputes both files;
+`--check-card` recomputes v4d's card constants from rental 6's pricer; `--mps-check` re-runs the power
+simulation on the laptop GPU in float32: equal to the CPU float64 result at every scenario). The pages
+are SYNTHETIC (`scripts/decode_synth.py`, `docs/registered/2026-10-14-decode-pages/`); the call is
+vLLM's own at T 1 to 128 (its default tile, its naive path at T 1 to 3), timed by `scripts/r3_decode.py`
+under locked_r3's `--r3-script`.
+
+**decodeC-cal**: OLMoE-1B-7B and Mixtral-8x7B. The GRR main pages (one CUDA graph of back-to-back calls
+on rotating weight copies, cold with no flush) fit v4d's three CAL constants (T0_GR, s_naive_GR,
+s_block_GR) and select rho (fixed 11.48 GB/s per CTA against scaled by bytes in flight) on the sub-wave
+cells. The GR1 control pages set GD2's band (GR1 - GRR per call), frozen for the blind rental; the
+E240 page reads GD3 (DESCRIPTIVE); G3-D's shuffle and label TOSTs must be EQUIVALENT (time a function
+of counts alone) and fill tests FILL0; the DECL lever and the counter pages (every launch's grid held to
+the spy's readback) are DESCRIPTIVE; the replicate sets sigma_page and tightens the blind bars from the
+provisional rms <= 3%, worst <= 8%, |mean| <= 1.5% (DD5), never loosening them. The STOP rule: a nodrop
+unit not counted, no fit, the in-sample E1-DEC over the provisional bars, G3-D shuffle or label not
+EQUIVALENT, any CAL cell refused by V-ALIGN or GD5, or GD2's median outside [-1, 10] us.
+
+**decodeB-blind (frozen)**: Phi-3.5-MoE, Qwen1.5-MoE, JetMoE-8B, deepseek-v2-lite and Granite-3B on GRR
+main pages, GR1 control pages on Qwen1.5 and Granite. `finalise_decode.py` refuses on a STOP, freezes the
+CAL constants, rho, the bars and the GD2 band, prices every blind cell (v4d and the rivals eager,
+roofline, line, OLS, NAIVE-NODEDUP, the other rho) and writes the blind plan. A model is CERTIFIED when
+its own E1-DEC bar and the pooled bar hold.
+
+**Before any page (build-decode review, 2026-10-14).** Refused and failed cells are taken out of G1's
+non-clean share, so a refusal cannot fail the page; `score_cal.py` refuses without `--tile-scores` and
+STOPs on any NOT PRICED CAL cell; an unfitted path offset is never 0 (its cells are NOT PRICED); the rho
+margin is absolute (0.1 percentage points of rms); the L2-survival and FILL-r rivals are struck; GRR's
+calls 0..R-1 must read R distinct weight copies (Mixtral and Phi, R = 1, are cold by volume, 300 to 672
+MiB between reads against the 60 MiB L2); GD4 covers the check-phase capture only; the GD2 band is capped
+at 8 us; per-model SEEN labels on the blind models; seven more scorer ambiguities written down.
+
+**The trace statistics (DD3)**: rental 5's routing logs are gone, so the primary extraction did not
+run; the trace-like cells are rental 5's fitted DW shapes EXTRAPOLATED to decode B, registered as such
+(`coverage_stats.json`). They cut coverage by at most about 9 points; the coverage ladder is the lever.
+
+| rental | units | est. min of units | wall | cost |
+|---|---:|---:|---:|---:|
+| decode CAL (after tile rental B) | 13 | 106 | about 2 h 21 min | about $5.4 |
+| decode blind (generated at finalisation) | 9 | 101 | about 2 h 15 min | about $5.2 |
+
+## 2026-10-20, before any page: tile rental A2, eight registrations, rental B2's two (frozen), a decode addendum
+
+Rental A ran its wgmma pages under the 1710 lock at 1599 to 1640 MHz (reason 0x4 only, the SW power cap,
+inferred; GPU or module scope unresolved), so its calibration was NOT SCORED and its heavy timed pages
+failed G1 (one cause, two STOP clauses). A2 re-runs the tile stage's calibration at a lock the tiles can
+hold. Design: design-A2 DESIGN.md corrected by design-A2-review REVIEW.md and the build review, and the
+owner's decisions of 2026-10-20: **a 900 W GPU power limit and the lock ladder 1710, 1410, 1305** (the
+first rung whose probe passes is every later unit's lock; at 1710 no clock conversion is used). The 900 W
+limit changes the owner's 2026-09-26 700 W decision for A2, and for rental B2, which runs at the limit and
+the rung A2 held. Built by `scripts/scoring/tileA2/register_a2.py` (`--check` recomputes all eleven files)
+over the pinned `regtile.py`: every tileA / tileB builder runs unchanged inside `a2common.scoring` (v4 at
+L by P1's rule, c x 1710 / L at every tile, `scripts/r3_timing_model_v4L.py`; the identity at 1710), then a
+whitelist of fields is replaced; each tileB2 file equals its frozen tileB twin outside that whitelist
+(`tests/test_tileA2_registrations.py`). No pinned file and no rental-A registration or verdict changes.
+
+| file | what |
+|---|---|
+| `2026-10-20-tileA2-census-gh200` | addendum to tileA-census: `scripts/tile_census_a2.py` compiles each model at its smallest whole tread (deepseek-v2-lite at 3); OLMoE again at n 3, any difference leaves deepseek NOT SCORED; the equality gate against rental A's census (copied verbatim into `2026-10-20-tileA2-hist/`); the named merge step that writes A2's census input |
+| `2026-10-20-tileA2-floor-gh200` | the calibration and the 64x128 test at L; at 1710 rental A's band [1640, 1710]; below it [0.975 L, L] (a new rule, 2 x rental 3's 1.02% held shortfall at 1410), fallback [0.959 L, L] only when the primary leaves `joint_cF` None; the cross-clock c_128 readout |
+| `2026-10-20-tileA2-bytes-gh200`, `-e1cal-`, `-rep-`, `-dead-` | the byte pages (56 rows), the five E1-CAL pages and the replicate re-measured at L, G4 at L - 5; tA2-dead SEEN-REPLICATE (DESCRIPTIVE); e1cal states the conversion risk at 1410 and 1305 (R1 G 1 about 1.36% fast at 1410, about 1.4x at 1305, against the 0.75% class-mean clause) |
+| `2026-10-20-tileA2-convl-gh200` | CONV-L: three R3-tile pages at L and at 1710 on A2's board, a per-cell ratio per class (G 1, G 8), the E1 bar, worded "indicates"; skipped by rule and NOT SCORED when 1710 holds; the offline check on SEEN pages |
+| `2026-10-20-tileA2-gates-gh200` | power.max_limit read before -pl 900 (and in the pre-setup dry run; under it the session stops, no fallback to 700 W); G-CAL (against the lowest rung), G-CEN, the lock-hold probe (1710, 1410, 1305; strict; each rung also the OLMoE f128 counter page in the rung's band, the first failing page ends the rung), G-BAND, G-64, each ending the rental on a FAIL; the plan unit by unit; deadline launch + 220 min, hard cap launch + 235 min |
+| `2026-10-20-tileB2-{e1tile,stop}-gh200` | rental B at the power limit and lock rung A2 held, both read by `finalise_a2.py` from A2's score directory (`scripts/scoring/tileA2/`) |
+| `2026-10-20-decode-tilesource-gh200` | decode stays at 1710; it uses A2's constants only once A2's floor calibration is scored (`scripts/scoring/tileA2/decode_gate_a2.py`: GO, else WAIT), whatever else A2's stop rule reads; which census it reads |
+
+Every A2 registration carries a SEEN block (rental A's out-of-band fits, the predictable 64x128 outcome,
+tA-dead, the A key's near tie, sigma_page, the traces that chose the lock, and rental A's 1710 E1-CAL times
+and dropped byte rows, which stay unread against v4: a rule). Plan: `scripts/plans/rentalA2-tile-2026-10.plan`,
+32 units, 168 min of units estimated (142 nodrop; the estimates are rental A's actual minutes), about 173 min
+wall ($6.6) if 1710 holds, 207 ($7.9) at 1410 (dk dropped) and at 1305 (dk, ms, w4 and rep dropped); drop
+order dk, ms, w4, rep. Driver: `scripts/gh200_tileA2_session.sh`, the pinned
+tile driver plus lines marked A2 (`tests/test_tileA2_plan.py`). The scorers `scripts/scoring/tileA2/score_*_a2.py`
+run rental A's pinned scorers inside `a2common.scoring`; at rental A's own rules they reproduce its committed
+scores byte for byte (`PYTHONHASHSEED=0`, no `PYTHONPATH`; `score_floor.py` and `score_bytes.py` now import
+`tcommon` first, so they start from the command line, and no verdict moved).
+
+**Scored 2026-10-21** on `results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session` (board
+fb8566, new; 32 units at 36291487 in 164 minutes, none dropped, every unit and the driver exit 0; the
+scorers' outputs and the tables in `scripts/scoring/tileA2/` and `SCORES.md`; no post-page fix). The
+session is named by the date it ended (22:45Z on 2026-10-20 to 01:29Z on 2026-10-21), as rentals 4 and 5
+were. **STOP: rental B2 does not run** (`finalise_a2.py` refuses on the session record, and the stop rule
+reads STOP). **session**: NOT READ: the two power readings disagree (900.0 and 700.0 W):
+`--query-gpu=power.limit` reads 900 W on every read of the session and `nvidia-smi -q -d POWER`'s GPU
+Current Power Limit 700 W on every read, before and long after `-pl 900`, so which limit was enforced is
+not established; the refusal stands. **probe**: 1710 FAILS (Mixtral lp1710m: 4 LOST cells, 22.9% of rows
+non-clean; the rung's other pages not run, by the early stop); 1410 PASSES (Mixtral 0 of 144, Qwen2-57B
+0 of 72; the OLMoE counter clause in the fallback band): A2's lock is 1410. **census**: VALID (COMPLETE);
+MERGED (EQUAL over 72, deepseek-v2-lite admitted at tread 3, 84 entries). **floor**: CAL-A in the
+fallback band [1352.19, 1410] (the primary kept 2 and 9 of 27 f128 cells): c_128 691.6 +- 9.9, F_wg
+2898 / 3346; W HOLDS, T FAILS, B unreachable: SELECTED W, F-step; cross-clock -1.01% (z -0.48) against
+rental A's out-of-band 698.67. **bytes**: NOT NAMED (nearest v3); v4 takes CLAMP (45 rows: v3 8.70%,
+ROWKEY60 9.78%, CLAMP 10.20%, ROWKEY30 14.38%). **rep**: sigma_page 0.1199%. **e1cal**: FAILS (42 cells,
+rms 4.23%, worst -8.52%, mean -2.31%; class means +3.574%, -4.955%, -1.376%; the 128 G 1 models 2.581%
+apart). **dead** (SEEN-REPLICATE): delta 25.35 us; SLOT NOT EXCLUDED, D, D2 and d 1.06 EXCLUDED, kappa
+NOT SCORED. **convl**: HOLDS (G1 0.61%, G8 0.16% rms). **decode gate**: GO (`decode_gate_a2.py`). The
+registration files above are unchanged; `register_a2.py --check` reads `same` on all 22, and rental
+A's and rental 7's `register.py --check` on theirs. No scorer or as-of fix was needed; two test pins
+moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). Open defects, not fixed: the
+session record's two power readings; the driver's ledger text "at the 1710 lock" on units that ran at
+1410; G3's stratum-1 FAIL, which `score_e1cal.py` does not void (it voids only when every stratum fails).
+
+### The settle rental S1 (2026-10-21, DESCRIPTIVE)
+
+| file | registers |
+|---|---|
+| `2026-10-21-settleS1-gh200` | the five measurements DIAGNOSIS-A2's section Q7 could not settle, plus a power proof: M0 a sustained bf16 GEMM logging power.draw, enforced.power.limit and the SW power cap (which GPU limit holds); M1 kernel against application replay (no cache flush) on E1-CAL cells OLMoE n 1 PT, n 4 PT and Qwen2-57B n 2 PT; M2 the OLMoE f128 page at 1305 and 1005 MHz (and 1410 on the same board); M3 Mixtral 128 G 1 counted bytes against v4's frozen predictions; M4 PRIVATE-arm ladder pages (Mixtral 128 G 16 treads 3, 4, 8; 64x128 G 1 tread 2); M5 long-scoreboard and barrier stalls and tensor-pipe activity along x on the 128 G 1 byte cells. Per measurement the unit, quantity, reader function (`scripts/scoring/settleS1/read_s1.py`), reading bands and the candidate fix (F1 to F3) each reading constrains; histogram pages copied into `2026-10-21-settleS1-hist` |
+
+S1 certifies nothing and no model verdict is scored on its pages; every S1 page is SEEN for v5, whose blind test
+uses rental B2's new shapes (JetMoE, Phi-3.5, Qwen1.5). A2's 900 W limit and 1410 MHz session lock; the prelude now
+refuses unless `enforced.power.limit` and `nvidia-smi -q`'s GPU-scope Current Power Limit both read 900 W (A2's
+session-record defect); a refusal at 900 W reruns the same session at 700 W (owner, pre-authorised), and a
+refusal at 700 W stops it. Plan: `scripts/plans/rentalS1-settle-2026-10.plan`, 14 units, 47 min estimated (40
+nodrop), about 72 min wall ($2.75); drop order st only; deadline launch + 85 min, hard cap launch + 100 min. Driver:
+`scripts/gh200_settleS1_session.sh`, A2's pinned driver plus lines marked S1 (`tests/test_settleS1_plan.py`), which
+also names each unit's real lock in the ledger.
+
+**Read 2026-10-21** on `results/published/2026-10-21-nvidia_gh200_480gb-settleS1-session` (board 9da3c0,
+new; 14 units at 52ed2cac in about 25 minutes, none dropped, every unit and the driver exit 0; the reader's
+output in `scripts/scoring/settleS1/settleS1.read.{json,txt}`; no post-page fix). DESCRIPTIVE: no verdict.
+**power**: 900 W refused, 700 W read back: after `-pl 900 -sc 0` and the 30 s poll, `enforced.power.limit`
+and the `-q` GPU scope's Current Power Limit read 700 W (power.limit 900 W); the owner's fallback set 700 W,
+all three readings agreed, and every unit ran at 700 W. **M0**: CAP-BELOW-680 (largest 1 s mean 662.96 W, SW
+power cap on every busy sample, enforced 700 W). **M1**: INSTRUMENT-INDEPENDENT on OLMoE (median d 1.52 us)
+and Qwen2-57B (9.65 us); the in-burst CUDA-event follow-up is not built. **M2**: A by lock 1410 47.32 us,
+1305 37.74 us (PRESENT), 1005 0.70 us (GONE), against this board's 1410 page; whether v5 and B2 time at 1005
+MHz is the owner's decision. **M3**: W1-EXACT (mean e w1 +0.10%, w2 +21.3%, v3 and CLAMP alike). **M4**:
+128x128 G 16 w1 and w2 A-DOMINATED; 64x128 G 1 w1 B-DOMINATED, w2 MIXED. **M5**: Qwen2-57B LATENCY (rho long
+scoreboard 0.83, barrier 0.98, tensor active -0.73); OLMoE NONE-SEEN. The power reading corrects tile rental
+A2's open question: `-pl 900 -sc 0` does not move the enforced GPU limit on this board, and A2's `-q` reads
+were the same 700 W, so A2 most likely ran at 700 W (an inference across boards); A2's verdicts stand as
+scored, its session record stays NOT READ, and 900 W at 1710 MHz is untested. The registration files are
+unchanged (`register_s1.py --check` reads `same`); the reader re-reads the published copy to the same `.txt`
+and to JSON that differs only in page paths, and `scripts/scoring/rescore.py settleS1` re-reads it to the
+committed files. Two test pins moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`).
+Open defect, not fixed: the prelude's log names `power-set-unsettled.txt` for the file
+`power-set-unsettled-900.txt`.
+
+### The calibration rental C2 (2026-10-22, CALIBRATION)
+
+NOTE 2026-11-12: dated 2026-10-22 here and in the file name, but first committed 2026-10-21 17:24Z (2366efcf),
+before C2's instance launched at 18:42:47Z that day (docs/FINDINGS.md, Calibration rental C2).
+
+| file | registers |
+|---|---|
+| `2026-10-22-cal2-gh200` | Mixtral-8x22B as a fourth held-out CAL model in the large-K, x near 1, G 1 regime (knee-v5 section 8, the owner's option (b) of 2026-10-22): C2-T its 128x128 w8 s3 G 1 timed page (n 2, six cells, NATIVE and SHARED) and C2-B its byte page; C2-F the averaged-fit sag estimator's two pages on C2's board (OLMoE and Mixtral-8x7B f128) and G-BAND; C2-M the A2-type Mixtral-8x7B b128g1 byte page on A2's E1-CAL cells and C2-MT its timed page (owner, 2026-10-22; DESCRIPTIVE C2-S6: Mixtral's held-out mean on C2's board beside +3.13 and the GEMM against per-call split on one board). The primary reading C2-R1 (8x22B's held-out 128 G 1 mean X under v5'' and F1 par, `scripts/scoring/cal2/read_c2.py`), the four-model table beside the three registered CAL means (+0.13, -0.82, +3.13), the pass estimates A, B and D (power5's method, ported), the bands CLEAN (abs X <= 1), PARTIAL, REGIME (X >= 2, a regime or E 8 family property), OPPOSITE (X < -1) and what each means for B3 (CLEAN changes which estimate is credible, D over A; A stays under 0.09 at every X); v5'' and the sag estimator FROZEN (every work file by sha256, constants by value, a six-cell fingerprint the reader must reproduce) and tied to the rental's commit (the reader refuses unless that commit holds the registration, the reader, the driver and every repo module the chain imports, each at its registered sha256); histogram page drawn into `2026-10-22-cal2-hist` by `scripts/scoring/cal2/hist_c2.py` |
+
+C2 certifies nothing; every C2 page becomes SEEN for v5'' and B3 once read, and no cell of B3's blind models runs.
+700 W set and read back as S1 does (no fallback: S1's publication showed `-pl 900 -sc 0` leaves the enforced limit at
+700 W), the session lock 1410 MHz probed in the prelude (a lock that does not read back stops the session) and
+G-BAND after the f128 pages. Plan: `scripts/plans/rentalC2-cal-2026-10.plan`, 10 units, 48 min estimated (37
+nodrop), about 73 min wall ($2.79); drop order m7 only (the two Mixtral-8x7B pages); deadline launch + 90 min, hard
+cap launch + 105 min ($4.01 at most). Driver:
+`scripts/gh200_cal2_session.sh`, S1's pinned driver plus lines marked C2 (`tests/test_cal2_plan.py`), which also
+fixes S1's open ledger defect: the unsettled power reading is written to `power-set-unsettled-<W>.txt` and the
+ledger names that file.
+
+**Read 2026-10-22** on `results/published/2026-10-21-nvidia_gh200_480gb-cal2-session` (board c3f52a, new; 10
+units at 09b340ce in about 31 minutes on 2026-10-21, none dropped, every unit and the driver exit 0; the reader's
+output in `scripts/scoring/cal2/cal2.read.{json,txt}`; no post-page fix). CALIBRATION: no verdict; every C2 page is
+now SEEN for v5'' and B3. **Board** valid: 700 W read back on both readings at the first poll (`C2_POWER_W=700`),
+`LOCK_PROBE_1410=held`, G-BAND PASS on the registered fallback band (the primary left joint_cF None, as on A2); the
+commit check passed on 73 files and the fingerprint reproduces. **F1** on C2's board: par 41.59 us, tau 412.5 us
+(OLMoE 30.60 / 325, Mixtral-8x7B 52.58 / 500; A2's 42.02 / 425). **C2-R1**: X = +4.57% over all six NATIVE n 2
+cells (+4.08 to +5.26, none dropped; X over A2's four labels +4.37, X at A2's par +4.57); the four-model table
+OLMoE +0.13, Qwen2-57B -0.82, Mixtral-8x7B +3.13, Mixtral-8x22B +4.57 (spread 5.39); pass estimates A 0.0045, B
+0.0112, D 0.0049. **OUTCOME: REGIME** (X >= 2): the large-K, x near 1, G 1 miss is a regime or E 8 family property;
+B3 is not registered with v5''; the registered next step is a four-model refit with 8x22B SEEN, then a new
+held-out check. DESCRIPTIVE: **C2-S1** x w1 median 1.188, w2 1.071; **C2-S2** M4 over counted reads on 8x22B
+b128g1 w1 +0.05%, w2 +32.53% (worst +41.27%), the knee's cycles error on counted bytes w1 +1.99%, w2 +1.00%;
+**C2-S3** 8x22B's own sag 51.06 us (tau 475 us), C2's par 8.01 us under it on the mean; **C2-S4** SAME-AS-S1
+(Mixtral-8x7B w1 cycles +4.20% against S1's +5.42%; M4 w2 reads +22.28%, w1 -0.21%); **C2-S5** census COMPLETE (2
+CTAs per SM compiled and priced), triad 3725.87 GB/s inside the 15-rental range; **C2-S6** REPRODUCES (Mixtral-8x7B
++3.37% on C2's board against A2's +3.13; GEMMs +3.20% of time, per-call +0.17%). The 8x22B timed page stores G1 FAIL
+(clock drift on the uniform cell, 0 slipped repeats) and its R3 run exits 3 INVALID; the registered admission
+rebuilds G1 under r7-median-run3 from `cells.csv` and passes (0 of 108 repeat rows non-clean). The registration
+files are unchanged (`register_c2.py --check`); the reader re-reads the published copy to the same `.txt` and to
+JSON that differs only in the page path, and `scripts/scoring/rescore.py cal2` re-reads it to the committed files.
+Two test pins moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`).
+
+### The calibration rental C3 (2026-10-26, CALIBRATION, DESCRIPTIVE)
+
+| file | registers |
+|---|---|
+| `2026-10-26-cal3-gh200` | per-CTA launch and finish stamps for Mixtral-8x7B and Qwen2-57B, w1 and w2, at vLLM's 128x128x64 w8 s3 G 1 tile on A2's E1-CAL cells (NATIVE), from the instrumented copy of vLLM's kernel at its "ends" level (`moe/instrumented`, unchanged; the owner's option (b) of 2026-10-22, after refit4's two offline rounds failed their gate). C3-R1 theta_L, C5's launch spread of a later wave, measured on Mixtral-8x7B w2 (bands IN [0.25, 0.30]: C5 MEASURED; NEAR [0.20, 0.35]; OUT); C3-R2 the share of w2 slab re-reads launched within half of M4's staggered gap of their partner (LAUNCH-TOGETHER, MIXED, STAGGERED); C3-R3 why Mixtral-8x7B's w1 runs faster than priced, the exact split of ln(T_pred / T_stamp) into a per-CTA LIFE term and a PACKING term against K1's held-out price (LIFE, BOTH, PACKING, or NOT REPRODUCED when this board's plain kernel misses by under +2%); C3-R4 validity. The priced times by value in `2026-10-26-cal3-priced.json` (refit4 ROUND2's K1 and N0 at their LOMO constants on the C2 and A2 counter pages). Read by `scripts/scoring/cal3/read_c3.py` |
+
+C3 certifies nothing and moves no verdict; every C3 page is SEEN once read, and no blind model runs. The copy is gated
+on every C3 cell (owner decision 2 with rental 5's CTAs-per-SM leg, plus C3's SASS legs: a clock read before the first
+LDG and none inside the HGMMA loop) and by regcheck (CTAs per SM equal, the wgmma path kept); the perturb unit's plain
+medians are the uninstrumented reference. Owner OD-1 (2026-10-26, C3 only): a gate failing on its timing legs alone
+(median over 1%, worst over 2%) keeps the stamps units, pages labelled PERTURBED with each cell's measured overhead
+beside every reading; C3-R1 and C3-R2 (ordering quantities) are read on them unless the read GEMM's median overhead
+exceeds 10% or a worst burst pair 20% (NOT READ); C3-R3 is descriptive only there; the hard legs and regcheck still
+refuse. OD-4: REFIT.md's 82 to 88% same-wave share does not reproduce for Mixtral-8x7B (0.896 PT/PW, 0.969
+uniform/balanced; it matches 8x22B's 0.812 to 0.900), registered with its derivation. Build review (GO-WITH-FIXES), applied before any page: C3-R2 is
+banded on the re-reads in waves 1 and later that the schedule puts in their partner's wave (C5 1.000, M4 0.000); each
+stamped call is held ahead and records its stamps' own span; C3-R3's split is corrected for the measured overhead and
+its band read only when the w1 |overhead| is at most a quarter of the plain-kernel miss (owner, 2026-10-26), else
+DESCRIPTIVE ONLY; the overhead bounds are two-sided; a PERTURBED theta_L is at most MEASURED-PERTURBED, and a theta_L
+read on Mixtral-8x7B is in-sample for that model in any later held-out round. C2's prelude (700 W read back or stop,
+the 1410 lock read back or stop) and G-BAND after C2's two f128 pages. Plan: `scripts/plans/rentalC3-cal-2026-10.plan`,
+8 units, 30 min estimated (26 nodrop), about 55 min wall ($2.10); drop order q only (the Qwen2-57B stamps); deadline
+launch + 70 min, hard cap launch + 85 min ($3.24 at most). Driver: `scripts/gh200_cal3_session.sh`, C2's pinned driver
+plus lines marked C3 (`tests/test_cal3_plan.py`); probe `scripts/instr_probe_c3.py` (rental 4/5's probe at vLLM's
+tile and A2's histogram cells; `scripts/instr_probe.py` stays byte-identical). The gate a later model round must pass
+before B3 is unchanged: every held-out 128 G 1 mean within 1% and an estimated P(A) of at least 0.5.
+
+**Read 2026-10-27** on `results/published/2026-10-27-nvidia_gh200_480gb-cal3-session` (board 02e86e, rental 7's;
+8 units at e10fda1b in about 12 minutes on 2026-10-27, none dropped, the driver exit 0, every unit exit 0 but the
+perturbation gate's exit 1; the reader's output in `scripts/scoring/cal3/cal3.read.{json,txt}`; no post-page fix).
+CALIBRATION, DESCRIPTIVE: no verdict; every C3 page is now SEEN. **Board** valid: 700 W read back on both readings
+at the first poll (`C2_POWER_W=700`), `LOCK_PROBE_1410=held`, G-BAND PASS on the registered fallback band (the
+primary left joint_cF None, as on A2 and C2); the commit check passed on 33 files. **Gate**: regcheck PASS on both
+variants (2 CTAs per SM, the copy at 113 and 114 registers against 116, wgmma); the perturbation gate FAILS on its
+timing legs (Mixtral-8x7B median 2.03%, worst 2.42%; Qwen2-57B 1.46%, 3.01%; bars 1% and 2%) and PASSES its hard
+legs, so by OD-1 every stamp page is **PERTURBED**; the read GEMM's overhead, Mixtral-8x7B w2, is 1.38% median and
+2.97% worst burst pair, inside the NOT-READ bound (10%, 20%). **C3-R1: OUT**: theta_L 0.3513 over 12 launches
+(theta (1 + o) 0.3562; cells 0.262 to 0.353), MEASURED-PERTURBED and in-sample for Mixtral-8x7B: C5's 0.25 to 0.30
+is not the launch spread, C5 stays SEEN-FITTED, and a next byte law starts from the measured launch times.
+(QUALIFIED 2026-11-17, defect of record: the OUT and 0.3513 / 0.3562 are the committed output of
+`read_c3.wave_theta`'s ill-conditioned least squares on raw globaltimer stamps (`read_c3.py:161-163`), and their
+4th decimal depends on the BLAS build; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o)
+0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead. The reader and its output stay as
+registered; the OUT is not supported as a reading, and C3 does not show whether C5's constant is the launch spread.
+Rule for later registrations: fit on centered times. docs/FINDINGS.md, Calibration rental C3.)
+**C3-R2: LAUNCH-TOGETHER**: 0.901 of 1872 later-wave, schedule-same-wave re-read pairs launch within 0.5 of M4's
+staggered gap (all pairs 0.877; schedule share 0.925): M4's staggered distance is the wrong picture for Mixtral w2
+at 128x128 G 1. **C3-R3: NOT REPRODUCED** (DESCRIPTIVE ONLY): K1 over-predicts this board's plain Mixtral-8x7B w1
+by 0.94% (N0 1.70%), under the registered +2%, so the split (LIFE +0.034, PACKING -0.030, overhead-corrected) is
+printed and nothing is attributed; whether the board, the timing basis (event time here, counted cycles in refit4)
+or the earlier readings account for it is not read. DESCRIPTIVE: theta Mixtral-8x7B w1 0.494, Qwen2-57B w1 0.742,
+w2 0.477; the pair-gap theta on Mixtral-8x7B w2 0.071 to 0.175 per cell; e_plain under K1 Mixtral-8x7B w2 -5.27%,
+Qwen2-57B w1 -4.59%, w2 -4.29%; the stamped call over plain +1.44 to +3.05% (per-GEMM means). The two f128 counter
+pages exit 3 on the route's own gates, as C2's did; no C3 reading uses a page verdict. The registration files are
+unchanged (`register_c3.py --check`); the reader re-reads the published copy to the same `.txt` and JSON except the
+page path, and `scripts/scoring/rescore.py cal3` re-reads it to the committed files. Two test pins moved
+(`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). The gate a later model round must pass before
+B3 is unchanged.
+
+### The calibration rental C4 (2026-10-27, CALIBRATION)
+
+| file | registers |
+|---|---|
+| `2026-10-27-cal4-gh200` | a fifth non-blind CAL model in blind Phi-3.5's w1 regime (large K, x near 1, P near 100; the owner's choice of 2026-10-27 after round 4's offline gate failed at max held-out mean 1.49 and P(A) 0.380): Mixtral-8x7B's tensor-parallel-2 shard `mixtral-8x7b-tp2` (`moe/spec.py`; w1 K 4096, P 112, x 0.92 to 0.98 at n 2; w2 P 32, expert w2 0.93 L2), the only repo model in that regime that fits. C4-T its 128x128 w8 s3 G 1 timed page (n 2, six cells, NATIVE and SHARED, NATIVE scored) and C4-B its byte page; C4-F the sag estimator's two pages on C4's board and G-BAND; C4-P the prelude, calibrate and a compile-only census of tp2 (2 CTAs per SM is a validity clause: the W2 law prices with W_c 264). C4-R1 tp2's held-out 128 G 1 mean X under the FROZEN round-4 model (round3 ROUND4.md's selected variant: W2 on both GEMMs, K1 in the wall domain at its SEEN p 6.0 and S0 2.75, the clock form, F1 par; `scripts/scoring/cal4/read_c4.py`), the five-model table beside round 4's four means (+0.48, -1.44, +1.25, +0.24; +1.49 on C2's board), the pass estimates A, B and D on five models and 83 cells (round 4's UNPRICED JetMoE cell excluded), the bands CLEAN (abs X <= 1), HIGH, HIGH-FAR (X >= 2), LOW, LOW-FAR (X <= -2) and what each means for the final declared round; C4-R2 the w1 bytes reading, Lambda = sum(counted - W2) / sum(M4 - W2), Phi-3.5's bytes lever held out for the first time (W2-SIDE, BETWEEN, M4-SIDE, BEYOND-W2, BEYOND-M4; read only on a W2 lever of at least 3%, 14.66% on the page at registration); the joint C4-R1 x C4-R2 table, one registered sentence per cell (CLEAN with M4-SIDE or BETWEEN is a cancellation, not a passed lever); the round-4 model FROZEN (26 work files by sha256, round 4's selected table re-priced by the frozen code at registration, a six-cell fingerprint of ms and W2 and M4 reads) and tied to the rental's commit with C2's git-tracked-file rule for repo modules; the reader's PREFLIGHT, right after the fingerprint and before any page, re-prices round 4's table through the same sag-fit path and its four-model P(A) 0.3798 and refuses on any difference, and checks the repo modules then and again at the end; histogram page drawn into `2026-10-27-cal4-hist` by `scripts/scoring/cal4/hist_c4.py` (Mixtral-8x7B's own fitted shapes, base 20261450, model index 8) |
+
+C4 certifies nothing; every C4 page becomes SEEN once read, and no cell of B3's blind models runs. tp2 is a TP shard of
+the CAL model Mixtral-8x7B (its router, E, top_k and H), with a new w1 N and w2 K and no earlier 128x128 cell; its
+R3-tile pages (rentals 1, 2 and 3) are SEEN, and its uniform and balanced cells have the counts of those pages' tread-8 cells (SEEN by counts at another tile, never timed). Owner decisions of 2026-10-27, registered: C4, then ONE final declared model round; if it fails the B3 gate, iteration stops and the owner chooses between narrowing scope and going blind; B3 is registered only after a declared round passes; if C4 reads NOT READ, the final round runs on the four existing CAL models without tp2 and C4 is not rented again. The census clause requires 2 CTAs per SM and verdict COMPLETE. With round 4's four means held, no X opens G2 on its own (the
+five-model A is 0.497 at X 0), and G1 already fails on the four; C4 informs the one declared model round that follows,
+whose gate is round 4's. C2's prelude (700 W read back or stop, the 1410 lock read back or stop) and G-BAND after the
+two f128 pages. Plan: `scripts/plans/rentalC4-cal-2026-10.plan`, 8 units, 25 min estimated (all nodrop), about 50 min
+wall ($1.91); deadline launch + 65 min, hard cap launch + 80 min ($3.05 at most). Driver: `scripts/gh200_cal4_session.sh`,
+C2's pinned driver with its own header and no other line changed (`tests/test_cal4_plan.py`).
+
+**Read 2026-10-27** on `results/published/2026-10-27-nvidia_gh200_480gb-cal4-session` (board 183300, new; 8 units
+at aa5e1b7c in about 20 minutes on 2026-10-27, none dropped, every unit and the driver exit 0; the reader's output in
+`scripts/scoring/cal4/cal4.read.{json,txt}`; no post-page fix). CALIBRATION: no verdict; every C4 page is now SEEN,
+and tp2 is a CAL model. **Board** valid: 700 W read back on both readings at the first poll (`C2_POWER_W=700`),
+`LOCK_PROBE_1410=held`, G-BAND PASS on the registered fallback band (the primary left joint_cF None); the commit check
+passed on 74 files; the fingerprint reproduces, and the PREFLIGHT re-priced round 4's table (+0.48, -1.44, +1.25,
++0.24; +1.49 on C2's board) and its P(A) 0.3798 before any page. The tc4 census compiles tp2 at 2 CTAs per SM on both
+GEMMs (COMPLETE). Calibrate's triad 3725.4 GB/s is just below the 15-rental range 3725.6 to 3727.6 (DESCRIPTIVE; K1 at
+it reads X unchanged). **C4-R1: LOW-FAR**: X = -4.44% over six NATIVE n 2 cells, none dropped or unpriced (PT -5.69,
+PW -4.89, PT2 -5.70, PW2 -5.24, uniform -2.59, balanced -2.56); the five-model table's largest |mean| is 4.44 and the
+round-4 gate's G1 fails on the five; pass estimates on 83 cells A 0.0206, B 0.0359, D 0.0118. **C4-R2: BEYOND-M4**:
+Lambda 1.5505 on a W2 lever of 0.1466; tp2's counted w1 reads exceed M4's by 7.47% and W2's by 21.04% on the sum.
+**Joint LOW-FAR x BEYOND-M4**: "neither byte law fits at P 112: Phi's stake at risk"; by the registration the final
+declared round has no measured w1 law at Phi-3.5's distance and reports Phi-3.5's stake as at risk. DESCRIPTIVE: X at
+A2's par -4.68; with M4's bytes -1.84; with C4-B's counted bytes on both GEMMs (oracle) +0.12; v5'' on the same cells
+-1.61; w2 reads M4 -0.21%, W2 -5.23% against the counters; K1 on counted bytes in the wall domain w1 -0.25%, w2
+-2.53%; F1 on C4's board par 54.25 us (587.5 us); tp2's own sag 53.82 us (450 us), par minus measured off -4.69 us.
+tp2 shares Mixtral-8x7B's router, so no routing property is tested. The registration files are unchanged
+(`register_c4.py --check`); the reader re-reads the published copy to the same `.txt` and JSON except the page path,
+and `scripts/scoring/rescore.py cal4` re-reads it to the committed files. Two test pins moved
+(`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). Next, by the owner's registered sequence: one
+final declared model round under round 4's gate on five models; if it fails, iteration stops and the owner chooses
+between narrowing scope and going blind.
+
+**Scope decision 2026-10-28 (owner).** The final declared model round failed the B3 gate on five models. That was
+round 5, offline (moe-kernels-work 2026-10-28 round5, ROUND5.md; `work/DECLARED5.txt` written
+2026-10-27T23:19:46Z, sha256 `e2dd41fe...df18d6`, not amended).
+- G1 fails on four of six means: tp2 +2.39%, Mixtral-8x7B +1.77% (+2.01% on C2's board) and Qwen2-57B -1.46%.
+  OLMoE reads +0.45% and Mixtral-8x22B +0.24%.
+- G2 fails: P(A) is 0.124 on 84 cells, against 0.5.
+
+By the owner's registered sequence, iteration stops, and the owner chose to narrow scope. **B3 is not registered**,
+and its blind models (Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B on B2's 84 frozen cells) stay unspent. No
+registration file, scorer or verdict changes. `2026-10-20-tileB2-e1tile-gh200` stays as committed and
+unscored. B3 reopens only if a declared model passes the same gate on held-out CAL models
+with the blind models still unspent. docs/FINDINGS.md, "Tile stage: scope decision (2026-10-28)", records what is
+certified, what is MEASURED or HELD-OUT on vLLM's tiles, what is not established, and the open defects carried.
+
+NOTE 2026-11-12: this paragraph describes 2026-10-28. The registered sequence it follows (C4's AFTER line)
+contradicts itself: it lets the owner choose going blind after a failed round, and it registers B3 only after a
+declared round passes. On 2026-11-04 the owner chose to go blind under the working-model bar (rms 3%, worst cell
+8%, |mean| 1.5%), set after round 5's numbers were known, and B3 was registered with no round passing (2026-11-04
+US Central, committed 2026-11-05 03:37Z as a5608079; tile rental B3, below; its registration discloses this). B3's E1-TILE FAILS, and its blind models are spent.
+
+## 2026-10-28, before any decode page: the decode stage's second addendum
+
+`2026-10-28-decode-addendum2-gh200` (`scripts/scoring/decode/register_decode_d2.py --write` / `--check`) follows the
+decode readiness review's recommendation (b) (moe-kernels-work 2026-10-28 decode-ready, READINESS.md) and registers the
+owner's decisions of 2026-10-28. `2026-10-14-decodeC-cal-gh200`, `2026-10-14-decodeB-blind-gh200` and
+`2026-10-20-decode-tilesource-gh200` stay byte-identical; the addendum pins them, every frozen decode file and A2's
+committed score files.
+- **D2-1: DD6 superseded.** Decode CAL runs now; tile rental B is not run. The tile source stays A2's score directory
+  through the first addendum (`decode_gate_a2.py`: GO).
+- **D2-2: the second-tile cells are DESCRIPTIVE.** A cell off the naive path where an active expert holds more than
+  BLOCK_M rows (11 of 103 CAL main cells, 27 blind main cells, listed by identity) leaves the fit, the rho selection and
+  every E1 bar, and is read as SIGMA-D: the measured time against v4d's sigma-1 price and against an L2-served
+  estimate (v4d with the later M-tiles' slab reads removed, nothing else changed). G3-D, GD2, GD3 and the replicate's
+  sigma_page keep every cell. New wrappers run the frozen scorers unchanged: `score_cal_d2.py`, `score_blind_d2.py`,
+  `finalise_decode_d2.py` (shared rules in `d2common.py`).
+- **D2-3: 700 W.** The wrappers read the session's `power-set.txt` GPU Current Power Limit; off 700 W (1 W), the decode
+  readings are NOT SCORED. No driver change.
+- **D2-4: extras.** Knee rows at p 5.75 and 3.75 beside the registered prediction (DESCRIPTIVE); the two `dn` byte
+  units nodrop in `scripts/plans/rentalD-cal-d2-2026-10.plan` (the frozen plan otherwise line for line).
+- **D2-5: the sequence.** CAL; on GO, the mechanical finalisation and the blind rental.
+- **After the build review (GO-WITH-FIXES; owner, 2026-10-28).** The scope, verbatim in the registration and in both
+  score files, printed beside every certification line: "Certified domain: decode calls in which every active expert
+  fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing
+  at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row." SIGMA-D's reading is registered:
+  position under 1/3 FULL-REREAD, over 2/3 L2-SERVED, between MIXED; NOT READ when the sigma-1 and served prices are
+  under 3 us or 10% apart. The blind bars come from the kept cells' replicate noise (the every-cell figure printed
+  beside). Operator step: after the prelude's push, `d2common.py --power` on the run branch's `vm/session/power-set.txt`;
+  terminate unless it reads READ.
+
+| rental | est. min of units | wall (25 min boot) | cost | deadline | guardian hard cap |
+|---|---:|---:|---:|---:|---:|
+| decode CAL (addendum 2 plan) | 106 | about 151 min | about $5.76 | launch + 165 min | launch + 180 min ($6.87) |
+| decode blind (on a CAL GO) | 101 | about 145 min | about $5.53 | launch + 160 min | launch + 175 min ($6.68) |
+
+**Scored 2026-10-29** on `results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session` (board 183300, C4's;
+13 units at a398c6a0 in about 73 minutes on 2026-10-29, none dropped; 12 exit 0 and the tilecensus unit exit 3 on
+deepseek-v2-lite's known census error, readiness I7; the score in `scripts/scoring/decode/cal.score.{json,txt}`,
+written by `score_cal_d2.py <tree>/results <out> --tile-scores scripts/scoring/tileA2` from the repository root with
+PYTHONHASHSEED=0; no post-page fix). **Power** READ: the GPU scope's Current Power Limit 700.00 W in `power-set.txt`.
+**Descriptive cells**: the 11 registered second-tile cells, left out of the fit, the rho selection and every E1 bar.
+**Fit**: rho scaled selected (sub-wave rms 4.87% against fixed 19.56%; T0_GR 24.83 us, s_naive -8.37 us, s_block
+-10.41 us). **E1-CAL-IN-SAMPLE: FAILS** on 92 cells: rms 4.75%, worst -22.7% (OLMoE L-T2-A8, naive path, 61.2 us
+measured against 47.3 us), mean +1.67%. **G3-D**: shuffle EQUIVALENT (margin 1.87 us); label NOT EQUIVALENT (margin
+0.52 us; mean -0.91 us, CI [-1.69, -0.14]; Mixtral -1.60 to -2.02 us, OLMoE within 0.12 us); fill NOT EQUIVALENT
+(margin 2.83 us, mean +3.29 us). **REP**: sigma_page 0.19% over 47 kept pairs (0.19% over all 52, DESCRIPTIVE).
+**GD2** PASS (median +3.66 us, band [-0.46, 5.91] us, 40 matched cells). **GD3** NOT SCORED: every E240 cell fails
+GD1 (host-bound), so no matched cell. **STOP rule: STOP** (E1-CAL-IN-SAMPLE FAILS; G3-D label NOT EQUIVALENT); the
+blind decode rental does not run and `finalise_decode_d2.py` refuses. DESCRIPTIVE: SIGMA-D Mixtral MIXED (median
+position 0.41, 6 of 6 read), OLMoE MIXED (0.62, 5 of 5); BYTES-D2 OLMoE's second-tile re-reads unseen at DRAM on
+all 8 GEMMs, Mixtral w1's seen at T 32 and 64; knee rows p 5.75 rms 4.69%, p 3.75 rms 4.96%; as registered on all 103
+cells E1 FAILS at rms 8.92% with the same STOP. By path (descriptive, from the score's rows): block-scan 5 cells rms
+1.02%, small-batch 78 cells rms 4.11% mean +1.95% (Mixtral +4.11%, OLMoE -0.69%), naive 9 cells rms 9.14%. The four
+registration files are unchanged (`register_decode.py --check`, `register_decode_d2.py --check`: `same`); scored on
+the fetched tree and on the published copy, the `.txt` is byte-identical and the JSON differs only in the power
+file's path; `scripts/scoring/rescore.py decodeCAL` re-scores the published session to the committed files. One test
+pin moved (`tests/test_calibration_provenance.py`). Next (owner): offline diagnosis, no rental (docs/FINDINGS.md,
+Decode CAL rental).
+
+## 2026-10-29 (amended 2026-11-03), before any CAL2 page: the decode stage's third addendum
+
+NOTE 2026-11-12: git first holds this addendum in 88768aea, committed 2026-11-03 18:20Z, before CAL2 launched at
+22:03:20Z; no 2026-10-29 version was ever committed. Its decisions D3-1 to D3-5 are of 2026-10-29 and D3-6 to D3-11
+of 2026-11-03 (docs/FINDINGS.md, Decode CAL2 and blind rentals).
+
+`2026-10-29-decode-addendum3-gh200` (`scripts/scoring/decode/register_decode_d3.py --write` / `--check`, committed at
+88768aea) follows the offline diagnosis of the decode CAL STOP and the owner's decisions D3-1 to D3-11; its `.txt` is
+the full record. In brief: model v4d' is v4d plus fix W (naive rows in vLLM's launch order, a wave and 60 MiB L2
+follower rule) and fix R (w1 on 16x64x128 w4 s4 at the counter-measured rate, x 0.91849, measured on SEEN pages), with
+0 fitted constants added and the align term dropped (D3-10); the G3-D label clause is DESCRIPTIVE, in the CAL2 stop
+rule and in the blind certification (D3-2, D3-6), and the scope line says so beside every verdict; the blind bars and
+the per-model certification stay as registered (D3-3); CAL2 is addendum 2's CAL plan plus the DESCRIPTIVE settling
+units M1 to M4 on the D3 driver (D3-4); new wrappers `score_cal_d3.py`, `finalise_decode_d3.py` and
+`score_blind_d3.py` run the frozen scorers unchanged (D3-5). The four earlier decode registrations stay
+byte-identical.
+
+**Scored 2026-11-03** on `results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session` (board ae5fc5, new; 21
+units at 88768aea in about 84 minutes on 2026-11-03, none dropped; 20 exit 0 and the tilecensus unit exit 3 on
+deepseek-v2-lite's known census error, readiness I7; written by `score_cal_d3.py <tree>/results <out> --tile-scores
+scripts/scoring/tileA2` from the repository root with PYTHONHASHSEED=0, first on the fetched tree; no post-page fix).
+The scorer writes `cal.score.{json,txt}` and the registration names no location for them; they are committed as
+`scripts/scoring/decode/cal2.score.{json,txt}` (82364213), beside the first CAL's `cal.score.*`. **Power** READ: the
+GPU scope's Current Power Limit 700.00 W in `power-set.txt`. **Descriptive cells**: the 11 registered second-tile
+cells. **Fit**: rho scaled selected (sub-wave rms 2.64% on 40 cells against fixed 18.29%; T0_GR 28.02 us, s_naive
+-12.71 us, s_block -14.43 us). **E1-CAL-IN-SAMPLE (v4d'): HOLDS** on 91 cells (one Mixtral main cell, L-T64-A4,
+dropped host-bound under GD1): rms 2.29%, worst -6.35% (OLMoE L-T32-A27, 127.5 us measured against 119.4 us), mean
++0.17%. **G3-D**: shuffle EQUIVALENT (margin 1.87 us); label NOT EQUIVALENT, DESCRIPTIVE under addendum 3 (margin
+0.51 us; mean -1.16 us, CI [-2.24, -0.08]; Mixtral -2.04, -1.73, -3.09 us at T 4, 16, 64, mean -2.29 us; OLMoE within
+0.09 us); fill NOT EQUIVALENT (margin 2.83 us, mean +3.13 us). **REP**: sigma_page 0.159% over 47 kept pairs (0.162%
+over all 52, DESCRIPTIVE); the tightened blind bars sit at their floors (rms 1.5%, worst 4%, |mean| 0.75%). **GD2** PASS
+(median +3.94 us, band [-0.14, 7.09] us, 40 matched cells). **GD3** NOT SCORED (no matched E240 cell). **STOP rule
+(addendum 3): GO**; the frozen rule with the label as a stop clause reads STOP (DESCRIPTIVE). DESCRIPTIVE: SIGMA-D
+Mixtral MIXED (median position 0.35, 6 of 6 read), OLMoE L2-SERVED (0.70, 5 of 5); knee rows p 5.75 rms 2.32%, p 3.75
+rms 2.67%; as registered on all 102 cells E1 FAILS at rms 8.65%; v4d as registered on the same 91 cells 4.87% rms,
+worst -23.2%; settling units: M1 fix R's ratio re-read 0.920 (registered 0.9185), M2 align slopes 0.61 us (OLMoE) and
+0.59 us (Mixtral) per iteration against the diagnosis's 0.96, M3 FOLLOWS-ADDRESS (q -0.69), M4 12 of 14 GEMM rows
+agree with fix W. On the GO, `finalise_decode_d3.py` wrote `scripts/scoring/decode/decodeB.finalised.json` (247 cells,
+0 not priced, 27 DESCRIPTIVE) and `scripts/plans/rentalD-blind-2026-10.plan`, committed at 82364213 before any blind
+page. Re-scored on the published copy, `cal2.score.txt` is byte-identical and the JSON differs only in the power
+file's path; the finalisation re-run on that score writes both files byte for byte. `register_decode.py`,
+`register_decode_d2.py` and `register_decode_d3.py --check` read `same` on all six registration files, the settling
+pages and the CAL2 plan. `scripts/scoring/rescore.py decodeCAL2` re-scores the published session to the committed
+files (docs/FINDINGS.md, Decode CAL2 and blind rentals).
+
+**Scored 2026-11-04** on `results/published/2026-11-04-nvidia_gh200_480gb-decodeBlind-session` (board ae5fc5, CAL2's,
+on a different instance; 9 units at 82364213 in about 81 minutes on 2026-11-04, none dropped, all exit 0; the score
+in `scripts/scoring/decode/blind.score.{json,txt}`, written by `score_blind_d3.py <tree>/results
+scripts/scoring/decode/decodeB.finalised.json <out>` from the repository root with PYTHONHASHSEED=0; no post-page
+fix). **Power** READ: 700.00 W. **Descriptive cells**: the 27 registered second-tile cells, out of E1-DEC. **Bars**:
+rms 1.5%, worst 4%, |mean| 0.75%. **E1-DEC pooled: FAILS** on 220 cells: rms 11.40%, worst +39.24% (JetMoE-8B
+L-T2-A2, 59.8 us measured against 83.3 us priced), mean +5.99%. **Per model, every one FAILS and none is CERTIFIED**:
+deepseek-v2-lite 43 cells rms 2.35%, worst +12.2%, mean +0.45%; Qwen1.5-MoE-A2.7B 52 cells 5.31%, +15.6%, +3.15%;
+Phi-3.5-MoE 42 cells 9.52%, +24.4%, +5.22%; Granite-3.0-3B-A800M 42 cells 13.41%, +33.8%, +7.05%; JetMoE-8B 41 cells
+19.46%, +39.2%, +15.11%. The scope line is printed beside every model's verdict. **Rivals**: rho other,
+NAIVE-NODEDUP, eager, roofline, line and OLS all EXCLUDED (roofline the closest: 12.35% rms against v4d''s 11.41% on
+its 189 lever cells). **GD2** PASS on Qwen1.5 (13 matched cells, none outside the band) and on Granite (0 matched
+cells: all 26 of its GR1 cells host-bound under GD1). **G3-D**: shuffle EQUIVALENT on all five; label (DESCRIPTIVE, never a void) EQUIVALENT on four, NOT EQUIVALENT
+on Phi-3.5-MoE (mean +0.44 us against a 0.40 us margin). DESCRIPTIVE: SIGMA-D L2-SERVED on all five (median positions
+0.76 to 0.94); on every cell roofline and OLS are NOT EXCLUDED; knee rows p 5.75 rms 11.51%, p 3.75 rms 11.94%; as
+registered on all 247 cells E1 FAILS at 16.70%, none certified. Scored on the fetched tree and on the published
+copy, the `.txt` is byte-identical and the JSON differs only in the power file's path; `scripts/scoring/rescore.py
+decodeBlind` re-scores the published session to the committed files. Decode is calibrated (CAL2 GO, in sample on two
+models) and NOT blind-certified on any model (docs/FINDINGS.md, Decode CAL2 and blind rentals).
+
+## 2026-11-04, before any DS page: the decode stage's fourth addendum (a measurement registration)
+
+`2026-11-04-decode-addendum4-gh200` (`scripts/scoring/decode/register_decode_d4.py --write` / `--check`) follows the
+decode blind FAIL's two offline diagnoses (moe-kernels-work 2026-11-04 diag-blind and diag-residual, DIAGNOSIS.md) and
+registers the owner's decisions of 2026-11-04 (D4-7, D4-8): the settling rental DS is a MEASUREMENT registration only.
+It registers no model form, no constant and no gate. Every earlier decode registration, v4d, v4d' and every earlier decode
+scorer stay byte-identical; the addendum pins them, the committed CAL2 score and finalisation, and CAL2's published
+tile census.
+- **The model form.** The decode model form for the new blind will be chosen after DS, from DS's and CAL2's pages. It
+  will be frozen and registered before any page of the three new blind models (Mixtral-8x22B, Qwen2-57B-A14B,
+  Granite-3.0-1B-A400M), which remain unseen: this addendum writes no page of theirs.
+- **Disclosure.** The earlier decode blind pages (Phi-3.5, Qwen1.5, JetMoE, deepseek-v2-lite, Granite-3B) were seen
+  during the diagnosis, and what they showed chose what DS measures. Any later re-score of them is a weak sanity floor.
+- **DS (DESCRIPTIVE).** A tile census of DS's own (the CAL2 plan's `tilecensus` unit on the four decode tiles and the
+  six DS models, D4-8) and six wide counter pages on SEEN models only
+  (`docs/registered/2026-11-04-decode4-pages/*-ds.json`; JetMoE, Phi-3.5, Mixtral-8x7B, Granite-3B, Qwen1.5, OLMoE; DECL
+  arms declare E 16 and 32), run by the D3 driver's `kernels=wide` key (`scripts/plans/rentalDS-settle-d4-2026-11.plan`),
+  every unit nodrop. The ladders identify both regimes on every decode tile: few-CTA long-slab GEMMs within one wave
+  (SUBWAVE) and the drain past a wave boundary (DRAIN), each from 2 or more ladders of 2 or more models. NO FALLBACK (every reading): w1's bytes are priced only at
+  W1RATE's rate on their tile. Where W1RATE reads no rate, SUBWAVE and DRAIN read NOT IDENTIFIED if their ladders hold
+  w1 rows, and LADDERS shows the w1 rows unpriced; 3895.49 GB/s is w2's measured rate, never a w1 fallback. D4-8 replaced
+  Phi T 96 A 5 and T 128 A 3 (every expert past BLOCK_M, so in no GEMM reading) with Phi T 80 A 5 and A 6 and OLMoE
+  T 128 A 16 and A 32, a third DRAIN model on 32x128x64w4s3 and 64x128x64w4s3 (OLMoE's crossing row past one
+  boundary, as JetMoE's and Qwen1.5's); Mixtral T 96 A 7 gives Mixtral a third w1 row past the wave on 32x128x64w4s3.
+- **Stop rules.** The D3 driver's prelude (clean checkout, idle GPU, 1710 supported, persistence, 700 W read back) and
+  its 1710 lock read back per page; the reader's POWER (700 W), PAGE (the registered page's sha256, the grid gate PASS,
+  the wide filter, the CAL2 session's versions, python on major.minor), ROW SANITY (a GEMM row's time and bytes finite
+  and positive, bytes within 0.5 to 2 x n b, implied DRAM rate at most 4,022 GB/s, the GH200 HBM3 spec peak; refused rows listed), the census gate CAL used on DS's own census (missing or an MMA path
+  mismatch: a STOP for the per-CTA readings LADDERS, SUBWAVE, DRAIN and W1RATE), CENSUS (DS's census at the occupancy S
+  uses, per tile) and the cross-check against CAL2's published census (reported, not gating; a difference is a STOP for
+  the per-CTA readings, with the differences listed). G-BAND does not apply (DS fits no sag estimator). No reading is a
+  STOP.
+- **Readings (all DESCRIPTIVE, `read_ds.py`).** LADDERS (every GEMM ladder by n, its wave class and its excess over
+  counted bytes); SUBWAVE (the per-CTA rate of few-CTA long-slab GEMMs within one wave, a registered grid, one offset per
+  ladder); DRAIN (the one-slab drain past a wave boundary, one offset per mixed ladder); W1RATE (w1's counter marginal
+  rate per tile, the w1 byte-rate pairs); CALLS (align, silu_and_mul and moe_sum per call, per model, with a summary
+  line per class that is not a model term); ALIGN and BLOCK (the align kernel per E; the block-scan constants at E 40
+  and 64); SLOPE (the align time per loop iteration, DS spanning 1 to 24). A reading that does not identify reads NOT
+  IDENTIFIED.
+- **Unseen.** "Unseen" means no decode page. Earlier non-decode GEMM pages of Qwen2-57B-A14B and Mixtral-8x22B (the
+  settleS1 r3-counters kr and ar, the cal3 stq instrumented pages, the 2026-09-28 GH200 sessions and the others the
+  registration lists) are published and unused by this addendum.
+- **Published trees.** `reproduce_d4.py` checks that the published CAL2 and decode blind trees reproduce their committed
+  scores (DESCRIPTIVE).
+- **Next round, recorded intent only (not code).** The new blind runs only on GO: CAL2 passes under the post-DS model,
+  and the published decode blind re-scores under 4.0% pooled, labelled a weak sanity floor. Its bars (D4-1: 3% / 8% /
+  1.5%), plan and scorer are registered with the model. The decode blind FAIL and the CAL2 GO stand.
+- **Superseded, never registered:** the earlier builds' v4d'' model, its terms (DRAIN, W1RATE, CALL, BLOCK as model
+  terms), the coded launch gate, the finalisation and the new blind's pages and scorer.
+
+| rental | est. min of units | wall (25 min boot) | cost | deadline | guardian hard cap |
+|---|---:|---:|---:|---:|---:|
+| DS (settling, DESCRIPTIVE) | 49 | about 83 min | about $3.17 | launch + 100 min | launch + 115 min ($4.39) |
+
+**Read 2026-11-04** on `results/published/2026-11-04-nvidia_gh200_480gb-decodeDS-session` (board cce89f, new; 9 units
+at 5410ad00 in about 14.5 minutes on 2026-11-04, every unit nodrop, all exit 0; the readings in
+`scripts/scoring/decode/ds.readings.{json,txt}`, written by `read_ds.py <tree>/results <out>` from the repository root
+with PYTHONHASHSEED=0 on the published copy; no post-page fix). **Power** READ: 700.00 W. **PAGE** READ on all six.
+**Census gate** READ (COMPLETE) on DS's own census; the **cross-check** against CAL2's published census reads SAME over
+48 entries, so no per-CTA STOP. **ROW SANITY**: 0 rows refused. Every reading READ, NOT IDENTIFIED none, all
+DESCRIPTIVE on SEEN models. **W1RATE** c_t 3897.9, 3883.2, 3873.2 and 3787.3 GB/s on 16x64x128w4s4, 32x64x128w4s3,
+32x128x64w4s3 and 64x128x64w4s3 (0.918 to 0.945 of v4d's rate). **SUBWAVE** r_cta 53.8, 24.4, 37.7 and 46.9 GB/s
+(rms 3.39%, 2.93%, 2.03%, 5.18% against 3.71%, 5.24%, 2.16%, 6.35% without the ceiling; one binding row per tile).
+**DRAIN** r1 90.6, 46.1, 67.2 and 103.4 GB/s (rms 2.74%, 3.55%, 1.97%, 2.01% against 3.92%, 5.33%, 4.26%, 3.83%
+without the drain). **CALLS** per model on 8 to 13 NATIVE cells: align medians 5.60 (JetMoE) to 11.78 us (Qwen1.5),
+silu_and_mul 3.87 to 6.46 us, moe_sum 2.67 to 4.24 us. **ALIGN** small-batch E 8 to 64: 4.75 to 11.63 us (DECL
+TRANSFERS); **BLOCK** E 40 8.70 us, E 64 8.13 us. **SLOPE** 0.527 us per loop iteration over 74 rows, iterations 1 to
+24, DIFFERS FROM 0 (t 71.0). No model form is registered; the decode form is chosen next from DS's and CAL2's pages and
+frozen before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M. Read on the fetched tree and on the
+published copy, the `.txt` is byte-identical and the JSON differs only in two paths; `scripts/scoring/rescore.py
+decodeDS` re-reads the published session to the committed files (docs/FINDINGS.md, Decode settling rental DS).
+
+## 2026-11-04, before any new blind page: the decode stage's fifth addendum (model v5d, the gate, the new blind NOT RUN)
+
+`2026-11-04-decode-addendum5-gh200` (`scripts/scoring/decode/register_decode_d5.py --write` / `--check`) registers model
+v5d, the gate addendum 4 recorded as intent, and the new blind. Every earlier decode registration, v4d, v4d' and every
+earlier decode scorer stay byte-identical; the addendum pins them and DS's committed readings.
+- **Model v5d** (`scripts/r3_timing_model_v5d.py`, over v4d'). On the aligned paths (small-batch, block-scan) the CORES
+  rho tail is removed and each GEMM is max(G_bw s, b / r_cta) + d b / r1 per decode tile, at DS's SUBWAVE and DRAIN
+  readings (d = 1 past a wave boundary); w1's bandwidth part is scaled by 3577.96 / c_t on the three larger tiles
+  (DS's W1RATE; fix R stays on 16x64x128w4s4); the naive path keeps v4d''s GEMM price (DS read no naive row). The call
+  kernels replace B_other: silu_and_mul a + g B and moe_sum a + h k + g B, fitted by OLS on DS's NATIVE rows, forms
+  chosen by leave-one-model-out on DS's six models. The align kernel is DS's points by E (piecewise linear, held outside
+  the measured E) plus 0.527 us per loop iteration past the first. The three CAL constants are refitted on CAL2. Every
+  choice is made on DS's and CAL2's pages; the registration lists the alternatives tried, the forking paths, DS's three
+  weak readings and how far they reach, and the choices the old blind's diagnosis informed (D5-1 to D5-8).
+- **The gate** (`gate_d5.py`, one GO / NO-GO line; `finalise_decode_d5.py` refuses unless GO): DS's readings give the
+  registered terms, both published trees reproduce, CAL2 under v5d reads GO, and the SEEN decode blind re-scored under
+  v5d reads under 4.0% pooled over its 220 cells (a weak sanity floor, never a test). **It reads NO-GO on both
+  clauses**: CAL2 2.41% rms but worst cell -10.67% (Mixtral-8x7B T 128 A 4, a single-wave w2 of 128 CTAs at about one
+  CTA per SM, slower than DS's per-CTA ceiling prices it); the re-score 4.41% pooled. Its output is committed as
+  `scripts/scoring/decode/gate_d5.out.txt`.
+- **Closed (owner, 2026-11-04).** The decode stage closes as calibrated, not certified; the NO-GO is not overridden.
+  The new blind (Mixtral-8x22B 47 main cells, Qwen2-57B-A14B 48, Granite-3.0-1B-A400M 48; page lists under
+  `docs/registered/2026-11-04-blind5-pages/`, registered, never timed; the owner's bars 3% / 8% / 1.5%) is registered
+  and NOT RUN: its plan file is never written and nothing is rented. GD5 was checked offline (no GH200 tuned file for
+  any of the three shapes in two vLLM source trees).
+
+## 2026-11-04, before any page: tile rental B3, the blind test of the round-5 large-tile model
+
+| file | registers |
+|---|---|
+| `2026-11-04-tileB3-gh200` | the blind test of round 5's selected large-tile model as frozen (moe-kernels-work 2026-10-28 round5/ROUND5.md: the STAG-CUT w1 byte law with W2 on w2, the K1 wall knee at round 4's SEEN p 6.0 and S0 2.75, the clock form of F1, F1 par; 64x128 at v5'') on rental B2's 84 frozen NATIVE cells (`2026-10-20-tileB2-e1tile-gh200`'s pages, unchanged: Phi-3.5-MoE 30, Qwen1.5-MoE-A2.7B 30, JetMoE-8B 18, deepseek-v2-lite 6 pooled only), at 1410 MHz and 700 W, under the owner's working-model bar of 2026-11-04 (rms <= 3% per blind model and pooled, every cell within 8%, \|mean\| <= 1.5%; the reason is the published state of the art, none pre-registered: TileSight 10.35% wMAPE, PipeWeave 6.0% seen / 11.5% unseen GPUs, NeuSight 8.9%); B2's bar (2%, 5%, 1%) is printed beside, DESCRIPTIVE. The model is FROZEN (32 work files by sha256, constants by value, 84 predictions at A2's, C2's and C4's pars computed before the rental, a fingerprint, round 5's selected table re-priced: +0.45, -1.46, +1.77, +0.24, tp2 +2.39, +2.01 on C2's board), tied to the rental's commit with C2's git-tracked-file rule; JetMoE 128g1 n2 PT, round 4's UNPRICED cell, is priced (84 of 84). On-board inputs, each fitted on the VM by the frozen chain's estimator copied verbatim and each a STOP before any timed unit: the 128x128 sag par (OLMoE and Mixtral-8x7B f128, `scripts/tileB3_gate.py sag`) and the 64x128 sag par (OLMoE and Mixtral-8x7B f64w8, `sag64`, the owner's choice over A2's CARRIED par, with a clock clause: r6common's clock rule in the band in force, lock_gate PASS and at least 14 of 27 cells in band). The other stops: 700 W read back, the 1410 lock read back, the census gate, G-BAND. DISCLOSED, NOT MODELLED: round 5's single per-call constant (T0 + s_block = 36.16 us) does not price block-scan align by numel (B3's cells run numel 1,024 to 46,080; the align grows 0.532 us per 1000 ids at 1710 MHz); the B3 per-call check puts estimate A at 0.30 to 0.40 under that risk; with the estimate's common bias Phi-3.5's mean is about +0.9%, about +1.9% with its large-P w1 risk, past the 1.5% bar; the silu_and_mul and moe_sum byte terms (80 to 625 MB) are extrapolated beyond their fitted range; an align amendment was tried offline and worsened the held-out fit (OLMoE +0.45 -> +2.01), so it is not adopted. Finalisation: `read_b3.py finalise` recomputes every fit with the frozen chain and the repo copy, refuses on any difference with the gate records (pars to a relative 1e-9), and prices the 84 cells with no blind page opened (an audit hook: gaps-* paths and any path naming a blind model, the census aside); the owner commits its file before `score`, which refuses unless the file equals the finalised one. E1-TILE HOLDS iff the pool and each blind model hold in ALL and CLEAN (rule 3); a model is CERTIFIED with its bar in CLEAN and at least 2 of its pages there. G3 as r5common.g3_rule reads it (per-stratum voids applied to the verdict). The estimate at the working-model bar, by the knee round's method on round 5's five held-out means: A 0.4283, B 0.5745, D 0.4741 (at B2's bar, reproduced: 0.124, 0.1903, 0.1381) |
+
+NOTE 2026-11-17, a defect of record in the bar's reason: PipeWeave's 6.0% seen / 11.5% unseen are, in PipeWeave v2
+(arXiv 2601.14910v2, section VI-C), average MAPE over all its kernels (about 1M samples, 11 GPUs), not a Triton
+fused_moe error; it reports no fused-MoE-only error, and its fused MoE kernel is SGLang's (section VII). The
+registration's text ("for Triton fused_moe", "for this problem") is pinned and unchanged; the bar's values do not
+depend on it and no verdict moves (docs/FINDINGS.md, Tile rental B3, Defect of record).
+
+Relation to the earlier gate, stated in the registration: round 5 FAILED B3's model-round gate (G1 1%, G2 P(A) >= 0.5
+at B2's bar), and that FAIL stands; B3 is registered because the owner chose to go blind under the new bar, decided
+after round 5's numbers were known (disclosed). A FAIL spends the four blind models. SEEN: every A, A2, S1, C2, C3 and
+C4 page; the launch-floor rentals 1 to 3 (Granite-1B, Granite-3B, Mixtral-tp8 and JetMoE-8B traces at the old tile); the
+B3 per-call check and B3 v2's amendment computations; rounds 2 to 5 each built on the last; the blind stakes (Phi-3.5
+128g1 +3.64% against v5''); the decode blind rental's pages; the decode addendum 4 registration and its DS rental,
+published at bfc45176. Plan: `scripts/plans/rentalB3-tile-2026-11.plan`, 23 units, 143 min estimated (112 nodrop; drop
+order byt, srep, dsv), about 168 min wall ($6.41 at $2.29/h); deadline launch + 186 min, hard cap launch + 201 min
+($7.67 at most). Driver: `scripts/gh200_tileB3_session.sh`, C2's pinned driver with the three B3 gates as its only
+marked lines (`tests/test_tileB3_plan.py`); reader tests `tests/test_tileB3_reader.py`.
+
+**Scored 2026-11-05** on `results/published/2026-11-05-nvidia_gh200_480gb-tileB3-session` (board ebedab, new; 23
+units at a5608079 in about 137.5 minutes on 2026-11-05/06, none dropped, all exit 0; the predictions of record
+finalised from the four sag pages only and committed at 0b82fae3 before any blind page was scored; the score in
+`scripts/scoring/tileB3/tileB3.score.{json,txt}`, written by `read_b3.py score --b3 <that directory>` from the
+repository root with PYTHONHASHSEED=0 on the published copy, at the scorer's default `--out-dir`; no post-page fix).
+**Board** valid (700 W, the 1410 lock held, G-BAND PASS in the fallback band). **Gates** census PASS, sag PASS (par
+59.815 us / 612.5 us), sag64 PASS (par64 39.465 / 337.5). **Pages** all 8 counted in ALL and CLEAN, 0 non-clean repeat
+rows. **G3** PASS (EQUIVALENT, homogeneous), no cell voided. **E1-TILE FAILS** (rule 3: ALL and CLEAN agree): pooled
+84 cells rms 2.41%, mean +0.29%, worst -8.22% (the worst-cell clause fails); Phi-3.5-MoE FAILS (30 cells, rms 3.50%,
+mean +1.30%, worst -8.22%; 128g1 mean +3.38%, 64g1 mean -3.24%); Qwen1.5-MoE-A2.7B (1.18%, -0.74%, -3.68%), JetMoE-8B
+(2.05%, +0.57%, +3.82%) and deepseek-v2-lite (0.65%, -0.40%, -0.95%) meet the bar on their own cells, DESCRIPTIVE.
+**Certification** none: NOT CERTIFIED for Phi-3.5-MoE, Qwen1.5-MoE-A2.7B and JetMoE-8B. The FAIL is final; the four
+blind models are SEEN. DESCRIPTIVE: B2's bar FAILS; rivals v5'' 1.99% rms, round 4 2.08% (83 cells), v4 5.21%;
+B-BYTES outside B2's byte bar (w1 mean +3.60%); E2-TILE rms 1.49%; the sag drift (OLMoE f128 repeat 36.55 against
+39.86 us at 1 ms). `scripts/scoring/rescore.py tileB3` re-scores the published session to the committed files
+(docs/FINDINGS.md, Tile rental B3).
+
+**A defect in the committed score file (noted 2026-11-05; the scorer is pinned and is not edited).** In
+`tileB3.score.json` the block `views.addendum.CLEAN.E1-TILE.per_model` labels Qwen1.5-MoE-A2.7B and JetMoE-8B
+"CERTIFIED". The label is local to the CLEAN view and contradicts the registered rule (certified only when E1-TILE
+HOLDS) and the scorer's top-level `certification`, which reads NOT CERTIFIED for all three blind models. It comes from
+the view rule reused from rental B and B2 (`b3common.e1_rule` is `tcommon.e1tile_rule` with the bar as an argument):
+called once per view, in CLEAN it labels a blind model CERTIFIED from its own bar and its page count alone, before
+rule 3 combines the views and without the pooled bar. `b3common.certification` then overrides that label with the
+combined verdict and writes the top-level field, while the view block is kept unchanged. The top-level
+`certification` is the certification of record; `tests/test_rescore.py::test_the_committed_tileB3_score_certifies_no_model`
+holds it to NOT CERTIFIED for every blind model.
+
+## 2026-11-06, before any page: rental PC, per-CTA DRAM rate against loads in flight (a measurement registration)
+
+`2026-11-06-pc-gh200` (`scripts/scoring/pc/register_pc.py --write` / `--check`, committed at c9c92f1e) registers
+rental PC as a MEASUREMENT: it certifies nothing, registers no model form, no constant, no bar and no gate on any
+model, and moves no registered verdict. Every reading is DESCRIPTIVE. The core (blocks A, C, D) is motivated by the
+decode CAL2 few-CTA failure (v5d's worst CAL2 cell, Mixtral T128 A4 w2, 128 CTAs in one wave, ran slower than
+bandwidth and no ceiling read off DS's pages priced it); the Phi units ask the launch-schedule question of Phi-3.5's
+B3 miss (the w1 byte law, phi-split REPORT.md, POST-HOC on SEEN pages), not the rate question.
+- **The instrument.** The unchanged instrumented copy (`moe/instrumented/fused_moe_instr.py`, sha256 16a8e398...,
+  stamps=ends) driven by the new host-side probe `scripts/instr_probe_pc.py` on the registered pages
+  (`docs/registered/2026-11-06-pc-pages/`: pc-a 38 cells at 1710 MHz, pc-c 9 at 1410, pc-d 15 at 1710, pc-r 3, and
+  Mixtral's decode counter page) and C3's probe for Phi's E1; per cell a readback, 3 warm-up calls and 3 stamped calls
+  (6 where the read GEMM has under 4 live CTAs), a 240 MiB L2 flush outside the event pair (none on the flush-off
+  control).
+- **The readings.** PC-R0 (validity and ROW SANITY) to PC-R14 and the replicate (`read_pc.py`, by function): the rate
+  curve, the F ladders, beta_Q against the PTX in-flight ratio, beta_f, omega, sigma, the transition into saturation
+  (X_sat, r0, G_90, L_gpu), transfer to real shapes and the CAL2 cell, the L2 control, Phi's w1 re-read pairs (E1 and
+  E2, against B3's counted bytes), Phi 64g1 life against packing, counter against time, the clock at kernel start and
+  placement. A reading that does not clear its rule reads NOT IDENTIFIED or NOT READ with the reason, never zero.
+- **H1** (r = Q_B / L with L rising toward saturation): the reader prints SUPPORTED, FALSIFIED or MIXED beside the
+  numbers (owner decision 4), from bands registered before any page: FALSIFIED on beta_Q < 0.5, beta_f > 0.5,
+  omega > 1.25, no plateau (r(G 2) / r(G 16) > 1.5 with X(G 16) <= 0.25 X_sat) or sigma < 0.6; SUPPORTED when beta_Q in
+  [0.7, 1.3], |beta_f| <= 0.3, omega in [0.85, 1.15], the plateau within 15% over G 2 to 16 and sigma >= 0.85; NOT
+  IDENTIFIED when no falsifier fires and an input is unread.
+- **Seen and reserved.** Loaded, all SEEN: Mixtral-8x7B and its tp2, tp4, tp8 shards, JetMoE-8B, Phi-3.5-MoE,
+  OLMoE-1B-7B and the registered synthetic shapes. Mixtral-8x22B, Qwen2-57B-A14B (and its tp8 shard) and
+  Granite-3.0-1B-A400M are reserved for the decode blind: never loaded, timed or shaped (the probe refuses them,
+  `tests/test_instr_probe_pc.py` asserts nothing in the plan loads them).
+- **Stop rules.** C3's prelude (700 W and the 1410 lock read back; the 1710 probe), unit locks read back before and
+  after, the regcheck drop rule (owner decision 2), G-BAND for the Phi group, C3's gate (a timing FAIL alone runs a page
+  PERTURBED). Plan `scripts/plans/rentalPC-2026-11.plan` (sha256 5c19aa93...), 20 units, 84 min estimated, about 109
+  min wall ($4.16 at $2.29/h); deadline launch + 125 min, guardian hard cap launch + 140 min ($5.34 at most). Driver
+  `scripts/gh200_pc_session.sh` (`tests/test_pc_driver.py`); reader tests `tests/test_read_pc.py`.
+
+**Read 2026-11-06** on `results/published/2026-11-06-nvidia_gh200_480gb-pc-session` (board c9f689, new; 20 units at
+c9c92f1e in about 34.4 minutes on 2026-11-06, none dropped or skipped; driver exit 3 from the one refused unit; the
+readings in `scripts/scoring/pc/pc.read.{json,txt}`, written by `read_pc.py --pc <that directory> --out-dir
+scripts/scoring/pc` from the repository root with PYTHONHASHSEED=0 on the published copy; no post-page fix).
+**Commit** checked (68 files). **Board** valid (700 W, both lock probes held, G-BAND PASS in the fallback band).
+**Census** reads the registered occupancy on all four registered configs. **Units**: sa, sc, sr and se1 PERTURBED
+(timing gate worst 9.03%, 9.33%, 3.44%, 3.35%; hard legs PASS), se2 CLEAN; **sd REFUSED** (its regcheck FAIL: the
+stamped 16x64x128 w4 s2 variant at 7 CTAs per SM against the plain 8, so the gate's hard occupancy leg FAIL; block
+D's 15 cells unread). **NOT READ** cells: A-G2 (overhead worst -23.55%), C-G8 (worst -22.16%), C-G8-s4k64 (median
+10.29%) under C3's per-cell bound; A-F7168-G8 (no usable timer path). **H1 NOT IDENTIFIED**: beta_f (C-G8 unread) and
+the plateau (A-G2 unread) are unread; the read inputs beta_Q 0.911, omega 0.945 and sigma 0.963 sit in their support
+bands and no falsifier fires. **PC-R7** r0 35.8 GB/s (READ), X_sat 3612 GB/s (READ), G_90 192, L_gpu 0.91 us at G 4
+to 8 and 1.43 us at G 128. **PC-R3** beta_Q 0.40 to 0.47 at G 128, 0.35 at G 384. **PC-R4** beta_f 0.45 (G 32), 0.24
+(G 128), about 0 at G 512 and 1024. **PC-R8** the CAL2 cell CARRIES (the curve prices Mixtral T128 A4 at -1.1%; its
+transfer t against A-G128 is -0.8%). **PC-R10** 128g1 miss fraction 0.69 to 0.76 over the 10 cells with re-reads,
+64g1 0.22 to 0.52 over 4. The replicate reads within 1.11%. Read on the fetched tree and on the published copy, the two
+outputs differ only in the tree's path; `scripts/scoring/rescore.py pc` re-reads the published session to the
+committed files (docs/FINDINGS.md, Rental PC).
+
+## 2026-11-10, before any page: rental PC2, what v6d cannot yet price (a measurement registration)
+
+`2026-11-10-pc2-gh200` (`scripts/scoring/pc2/register_pc2.py --write` / `--check`; built 2026-11-10, not yet rented)
+registers rental PC2 as a MEASUREMENT: it certifies nothing, registers no model form, no constant, no bar and no gate,
+and moves no registered verdict. Every reading is DESCRIPTIVE. Owner, 2026-11-10: run PC2 before building v6d's
+addendum 6; v6d stays as frozen, with the duty factor; Granite-3.0-1B stays in the blind. PC2 measures the four things
+design-D6 section 7 says v6d cannot price, on SEEN or synthetic shapes only.
+- **The instrument.** The unchanged instrumented copy (stamps=ends), driven by `scripts/instr_probe_pc2.py` (PC's pinned
+  probe plus lines marked PC2: its rules module is `scripts/scoring/pc2/pc2common.py`), started by
+  `scripts/gh200_pc2_session.sh` (PC's pinned driver plus lines marked PC2) through `scripts/vm_run_pc2.sh` (vm_run.sh,
+  pinned by PC, plus lines marked PC2). Pages `docs/registered/2026-11-10-pc2-pages/`: pc2-d (29 cells, the 16x64x128
+  w4 s4 decode tile: G 4 to 1024, F ladders at G 8 and 128, short slabs under load), pc2-s (20, short slabs of 66 to
+  459 KB on 64x128x64 at G 8, 32, 128, 256 with a 3.67 MB anchor), pc2-n (26, naive-path cells on six SEEN models and
+  one synthetic k 8 shape, each with an aligned twin or a naive pair), pc2-w (29, single waves of 165/198 to 528 CTAs on
+  32x64x128 and 32x128x64, one rung past a wave and two waves), pc2-d3 (3, the decode tile at s3), pc2-r (3, replicate).
+- **The decode tile.** PC's own regcheck page reads the stamped copy at the plain kernel's occupancy at s4 (3 = 3) and s3
+  (5 = 5); only s2's w2 changed it (8 against 7), which refused PC's whole block D. PC2 stamps s4 and s3 in variants of
+  their own, leaves s2 out, and refuses any stamped compile whose CTAs per SM are not its tile's registered occupancy.
+  Every cell's plain-kernel event median (PLAIN, from the perturb unit) is printed beside, its limit stated.
+- **The readings.** PC2-R0 (validity, PC's ROW SANITY unchanged, the occupancy leg) to PC2-R6, SPAN (the GEMM's own
+  time and kappa, now registered) and PLAIN (`read_pc2.py`, over `read_pc.py`'s pinned functions); and how each of
+  v6d's open terms will be read off them. The naive-path term will be chosen after PC2's pages are read, with the seen
+  decode blind in view, and disclosed as such.
+- **Regcheck scope.** One specialisation per tile per variant is regchecked (the probe's rule, PC's); the reader's
+  occupancy leg checks every stamped compile and fails closed (the whole unit NOT READ).
+- **Seen and reserved.** Mixtral-8x22B, Qwen2-57B-A14B (and its tp8 shard) and Granite-3.0-1B-A400M are never loaded,
+  by name, by shape or by GEMM dimensions (`pc2common.gemm_guard`: no PC2 GEMM, w1 or w2, has either reserved GEMM's
+  (N, K)). Not built: the optional E 32 block-scan align page (unreachable on SEEN models within the pinned decode
+  page's T <= 128).
+- **Plan.** `scripts/plans/rentalPC2-2026-11.plan` (sha256 4a83311b...), 10 units, 35 min estimated (27 nodrop), about
+  60 min wall ($2.29 at $2.29/h); deadline launch + 75 min ($2.86), guardian hard cap launch + 90 min ($3.44 at most);
+  cut order rep, d3, w. Tests `tests/test_instr_probe_pc2.py`, `tests/test_pc2_driver.py`, `tests/test_read_pc2.py`,
+  `tests/test_pc2_registration.py`.
+
+**Read 2026-11-10** on `results/published/2026-11-10-nvidia_gh200_480gb-pc2-session` (board 588570, new; 10 units at
+e7786f4e in about 5.6 minutes on 2026-11-10, none dropped, skipped or refused; driver exit 0; the readings in
+`scripts/scoring/pc2/pc2.read.{json,txt}`, written by `read_pc2.py --pc2 <that directory> --out-dir scripts/scoring/pc2`
+from the repository root with PYTHONHASHSEED=0 on the published copy; no post-page fix). **Commit** checked (72
+files). **Board** valid (700 W, the 1710 lock probe held). **Census** reads the registered occupancy on all five tiles.
+**Units**: every unit valid, every stamped compile at its registered occupancy; sd3 CLEAN; sd, ss, sn, sw and sr
+PERTURBED (timing gate worst 7.18%, 6.76%, 4.20%, 5.67%, 6.78%; hard legs PASS); EXACT TIME APPLIED and a 32 ns timer on
+every unit. **NOT READ**: 82 of 220 cell GEMMs, 81 on the per-call spread (40 of the 64 w2 cells with a slab of 459 KB
+or less) and 1 on the overhead bound alone (D-G4 w2); D-G4 w1 fails both and is counted under the
+spread. **v6d's terms** as registered: term 1 Q_B 48 KB READ, X_sat 3782 GB/s
+READ, kappa READ on 8 of 10 single-wave rungs, c0 at G 128 and the L table NOT IDENTIFIED; term 2 c0 READ at G 8
+only (2.40 us on 64x128x64, 2.72 us on 16x64x128), kappa at short slabs READ on about half the cells; **term 3 DOES
+NOT HOLD** on both 4-per-SM tiles (G 528 SATURATED at 1.026 and 1.022 of X_sat, kappa 528 / 396 MOVED at 0.932 and
+0.923); term 4 (no v6d slot) twin t ratios 0.93 to 1.02 on the 10 of 22 GEMMs that read. The text file cuts PC2-R1, R2,
+R3 and R4 at the reader's 20,000-character cap (R3p's PLAIN values are in the JSON, all 58 present); the JSON is the
+complete reading. **Correction of record to the regcheck-scope note above** (the registration is frozen): only the
+k 2 specialisations were regchecked (each tile's w1 compile at top_k 2, its w2 at top_k 1); sn's stamped compiles at
+top_k 4, 6 and 8 rest on the reader's fail-closed occupancy leg alone, which read 3 CTAs per SM on all 14 of sn's
+stamped compiles. Read on the fetched tree and on the published copy, the two outputs differ only in the tree's path;
+`scripts/scoring/rescore.py pc2` re-reads the published session to the committed files (docs/FINDINGS.md, Rental PC2).
+
+## 2026-11-10, before any new blind page: the decode stage's sixth and last addendum (model v6d, the gate NO-GO, the new blind NOT RUN)
+
+NOTE 2026-11-12: "frozen before its gate ran" rests only on the timestamps in FROZEN.txt and in this registration;
+FROZEN.txt, the gate output and this addendum first appear in git together in 019ace6a, after the gate ran
+(docs/FINDINGS.md, Decode closes after v6d, NOTE 2026-11-12).
+
+`2026-11-10-decode-addendum6-gh200` (`scripts/scoring/decode/register_decode_d6.py --write` / `--check`) registers model
+v6d, its gate reading and addendum 5's new blind under it. Every earlier decode registration, v4d, v4d', v5d and every
+earlier decode scorer stay byte-identical; the addendum pins them, PC's and PC2's readings and its build records.
+- **Model v6d** (`scripts/r3_timing_model_v6d.py`, over v5d). Every aligned GEMM, and every naive GEMM of a cell with no
+  non-fetching follower, is priced by design-D6's per-CTA law: life = c0(G) plus the B slab at the latency read off
+  PC's rate curve at the duty load, never under the tile's X_sat share; the wave is kappa(fill) times the life; waves
+  past the first stream at X_sat. Constants are numbers in the model, recomputed by `d6common.law_from` from PC
+  (`pc.read.json` and the new span reading `d6_build/pc_spans.json`), PC2 (`pc2.read.json`) and DS. Choices D6-18 to
+  D6-24 (c0 linear in G between G 8 and G 128; kappa by fill with PC2-R3's rungs on the 4-per-SM tiles; PC's kappa kept
+  on 16x64x128, the one place the brief's "kappa where read" was not followed; the naive rule) were made on PC, PC2, DS
+  and CAL2 only and frozen at 2026-11-10T22:35:03Z (`d6_build/FROZEN.txt`). CALL, ALIGN and SLOPE stay v5d's.
+- **The gate** (`gate_d6.py`, run at 22:36:41Z after the freeze; `finalise_decode_d6.py` and `score_blind_d6.py` refuse
+  unless GO). **It reads NO-GO**: CAL2 GO (1.81% rms, worst +5.97%), the SEEN decode blind re-score 4.52% pooled against
+  4.0%. Output committed as `scripts/scoring/decode/gate_d6.out.txt`. A defect found after the gate (the v4d' naive
+  branch inherits the fixed rho form chosen by a CAL2 fit the law-priced cells dominate, where every earlier decode CAL
+  fit chose scaled; its 13 seen-blind cells read 13.2% rms) is recorded in the registration and
+  `d6_build/post_gate.out`, not fixed.
+- **Closed (owner's stopping rule, 2026-11-10).** Decode closes as calibrated, not certified. The owner accepted the closure, the D6-20 deviation and the D6-24 defect as recorded (2026-11-11). The new blind (addendum
+  5's pages, units, bars and $4.24 rental) is registered and NOT RUN; no plan file is written. Build records:
+  `d6_build/run.py --check`. Tests `tests/test_stage_decode_addendum6.py` (docs/FINDINGS.md, Decode closes after v6d).
+
+NOTE 2026-11-17: the stopping rules of 2026-11-10 (decode) and 2026-11-11 (prefill, rental RR below) are superseded.
+On 2026-11-17 (US Central) the owner reopened decode and prefill together for one unified model, v7: an owner
+decision, not a registration (no model form, constant, bar or gate), and a forking path, disclosed. Both closures stand
+as recorded. Plan: offline design and build; a gate registered before it is scored, on published pages in all three
+regimes (R3's tile, vLLM's prefill and decode tiles); only on GO, one blind GH200 rental on models with no prefill or
+decode page, then the stage stops and is reported either way. At this note: offline design only, no v7 code, score, gate
+or rental. Every rule and constant v7 may draw on was found or fitted on SEEN pages (docs/FINDINGS.md, Decode closes
+after v6d, NOTE 2026-11-17).
+
+## 2026-11-11, before any page: rental RR, the w1 re-read L2 hit mechanism (a measurement registration)
+
+`2026-11-11-rr-gh200` (`scripts/scoring/rr/register_rr.py --write` / `--check`; built 2026-11-11, not yet rented)
+registers rental RR as a MEASUREMENT: no model form, no constant, no gate and no blind. Owner, 2026-11-11: prefill gets
+this one measurement rental and no blind, then closes, and the project moves to the write-up. Every reading is
+DESCRIPTIVE. The 42.5 MiB constant and the four forms it reads were found post-hoc on seen pages (design-P1 section 2.3);
+RR measures them on fresh synthetic cells.
+- **The instrument.** The unchanged instrumented copy (stamps=ends), driven by `scripts/instr_probe_rr.py` (PC2's pinned
+  probe plus lines marked RR; rules module `scripts/scoring/rr/rrcommon.py`), and the plain kernel's counted DRAM bytes
+  on the same cells and board through `scripts/dram_counter_route_rr.py` (a wrapper over the pinned counter route's
+  functions), started by `scripts/gh200_rr_session.sh` (PC2's pinned driver plus lines marked RR) through
+  `scripts/vm_run_rr.sh` (vm_run_pc2.sh plus lines marked RR). Pages `docs/registered/2026-11-11-rr-pages/`: rr-128 and
+  rr-64 (40 cells each at 128x128x64 w8 s3 and 64x128x64 w8 s3: series A, E 8, H 4096, P 20 to 224, m_e 2, 4, 8 and a
+  skew; series B, K 8192; series C, E 64, k 8). Every unit runs at the 1410 MHz session lock.
+- **The readings.** RR-R0 (validity), RR-R1 (the counted miss fraction m = (D - C_u) / R), RR-R2 (the per-pair rule's
+  four forms against m on the same cells: step at 42.5 MiB between starts, step at 45 MiB between mid-lives, step at
+  30 MiB, random replacement at 62.5 MiB; a descriptive refit), RR-R3 (the wave-start spread against wave index, NUMBERS
+  ONLY: w_inf, k_90 and the slope per tile, series and W_c / P group, the stand-in's beside; an earlier draft's label band,
+  set with PC's pages in view, was removed on the owner's decision before any page), RR-R4 (the Phi-3.5 128g1 replicate,
+  kept, its bytes under RR-R1's rules), and a stand-in on both boards' published stamps (C3's Mixtral-8x7B and Qwen2-57B,
+  PC's Phi-3.5) that reads design-P1's fit within 0.0011 (`read_rr.py`).
+- **The launcher (adopted by the owner).** `vm_run_rr.sh` gives the driver upgrade one 600 s budget: it waits for a held
+  apt or dpkg lock (fail closed without fuser), runs `dpkg --configure -a` before each install attempt, and bounds each
+  attempt with the VM's timeout (the whole process group), stdin /dev/null and no prompts; a spent budget refuses prepare.
+- **Plan.** `scripts/plans/rentalRR-2026-11.plan`, 10 units, 43 min estimated (35 nodrop), about 68 min wall ($2.60 at
+  $2.29/h), deadline launch + 85 min ($3.24), guardian hard cap launch + 100 min ($3.82 at most); cut order rep (the core
+  alone: 60 min wall, $2.29). Tests `tests/test_instr_probe_rr.py`, `tests/test_dram_counter_route_rr.py`,
+  `tests/test_rr_driver.py`, `tests/test_read_rr.py`, `tests/test_rr_registration.py`.
+
+**Read 2026-11-12** on `results/published/2026-11-12-nvidia_gh200_480gb-rr-session` (board 73996e, new; 10 units at
+51d33d9b in about 20.1 minutes on 2026-11-12, none dropped or skipped; br refused, driver exit 3; the readings in
+`scripts/scoring/rr/rr.read.{json,txt}`, written by `read_rr.py --rr <that directory> --out-dir scripts/scoring/rr` from
+the repository root with PYTHONHASHSEED=0 on the published copy; no post-page fix). MEASUREMENT only: under the owner's
+stopping rule (2026-11-11) prefill closes after RR, and no model is tested. **Commit** checked (79 files). **Board**
+valid (700 W, the 1410 lock probe held). **Census** reads the registered occupancy (2 and 3 CTAs per SM). **RR-R0**:
+every stamps and counter unit valid; s128, s64 and sr PERTURBED (timing gate worst 6.15%, 2.90%, 2.87%; hard legs
+PASS). **READ**: stamps 39 of 40 (128x128x64; A128-P20-m2 over C3's overhead bound) and 40 of 40 (64x128x64); counted
+38 of 40 and 32 of 40, every NOT READ on the 3% per-call spread; both 37 and 32. **RR-R2** on the 56 fresh cells: rms
+F1 0.030, F2 0.024, F3 0.052, F4 0.060 (on all 69: 0.028, 0.022, 0.048, 0.061); F2 lowest. F1 and F2 were found
+POST-HOC on SEEN pages (0.048, 0.043, joining one board's stamps to every board's counts; RR joins stamps and counts on
+one board, so the two are not like for like); this is a DESCRIPTIVE replication, never a certification. Refit, DESCRIPTIVE:
+45.0 MiB (starts) and 47.5 MiB (mid-lives). **RR-R3**, numbers only: pooled w_inf 0.586 (k_90 5) on 128x128x64 and
+0.897 (k_90 8) on 64x128x64; series B NOT IDENTIFIED on both tiles. **RR-R4 NOT IDENTIFIED**: br refused before any
+launch (`REFUSE: cell PT n=1 asks arms ['shared'] that the run's --arms native does not run`, exit 2). Its registered
+plan line (`rrcommon.py:502`) runs `arms=native` on a page whose every cell names `[native, shared]`, and `cell_arms`
+(`private_weight_reference.py:8094-8100`) refuses it. **Defect of record in this registration's plan line** (the
+registration is frozen and stays as written): PC's and B3's byte units on the same page ran `arms=native,shared`. Read
+on the fetched tree and on the published copy, the two outputs differ only in the tree's path;
+`scripts/scoring/rescore.py rr` re-reads the published session to the committed files (docs/FINDINGS.md, Rental RR).
+
+NOTE 2026-11-17: "prefill closes after RR" held until 2026-11-17, when the owner reopened prefill and decode for one
+unified model (an owner decision, not a registration; the 2026-11-10 decode entry above, NOTE 2026-11-17). RR's
+readings and labels are unchanged.
+
+`2026-11-17-v7-gate-gh200` (`scripts/scoring/v7/register_v7.py --write` / `--check`; built 2026-11-17, a DRAFT until
+pushed) registers model v7 (`scripts/r3_timing_model_v7.py`: one `price()` over a declared regime switch on the tile
+key; R3's tile is v3 exactly, the prefill tiles are round 5 as B3 froze it, vendored byte for byte in
+`scripts/round5_frozen/` and loaded by `scripts/round5_chain.py`, plus switch RR on the w1 reads at GROUP_SIZE_M 1, the
+decode tiles are v6d plus switch D6FIX on the D6-24 cells) and its gate (`scripts/scoring/v7/gate_v7.py`). It was
+registered before gate_v7.py ran, NOT before its values were known: during implementation the build computed every
+clause value except G2's P(A) (R3 GO by construction; PREFILL NO-GO on G1, four of six held-out means outside 1.0%;
+DECODE GO, CAL2 1.60% rms and the re-score 3.19%), so the gate registers known results and the blind, registered
+separately, is the test. The old bars, unchanged, each regime's GO independent: R3, the 300 registered v3 predictions
+bit for bit; prefill, C4's next-round gate (G1 every held-out 128 G 1 mean within 1.0%, RR's C and sigma carried
+unchanged into every fold; G2 estimated P(A) >= 0.5), after a TREES refusal (with every switch off v7 must reproduce
+round 5's held-out table and B3's 84 committed predictions), B3's 84 cells printed as SEEN information; decode,
+addendum 6's two clauses (CAL2 under the addendum-3 stop rule, with v6d's three CAL constants plus D6FIX's three from a
+second CAL2 fit; the SEEN decode blind re-scored under 4.0% pooled over 220 cells). Addendum 6 said of the D6-24 defect
+"Any fix would be chosen on the seen re-score, so none is made and the NO-GO stands"; v7 makes that fix, so under
+D6FIX clause 2 is not evidence and a DECODE GO is the owner's 2026-11-17 reopening applied to a SEEN floor. A regime
+may go to ONE blind only on its own GO; no bar may change after the file is public. Disclosed: every v7 constant and
+rule was found or fitted on SEEN pages, and design-v7's feasibility estimate already priced the gate pages. The freeze
+pins 148 files (the 100 repository source files on the gate's import closure, computed by `register_v7.py --trace`;
+round 5's 32 vendored files; 8 readings and committed numbers; 8 quoted registrations) and v7's constants hash; the
+gate reads this registration at its committed path only and refuses every regime on any difference. Tests
+`tests/test_timing_model_v7.py`, `tests/test_timing_model_v7_prefill.py`, `tests/test_v7_gate.py` (the gate on
+synthetic fixtures only).
+
+RESULT 2026-11-18: public when 6ed4c57d was pushed (01:10Z); the gate ran once after that at 6ed4c57d (macOS 27.2.1,
+outputs 01:11:41Z), exit 1, committed byte for byte as `scripts/scoring/v7/gate_v7.out.txt` and `gate_v7.json`: R3 GO
+(300 of 300); DECODE GO (CAL2 91 cells 1.60% rms, worst -5.40%, mean -0.17%; re-score 220 cells 3.19% pooled; v6d
+beside 4.52%), a SEEN floor and not evidence under D6FIX; PREFILL NO-GO: REFUSED: ModuleNotFoundError: No module named
+'refit4', a defect of record (round 5's `r7._rc` imports refit4 again after `round5_chain.chain()` removed it from
+sys.modules and sys.path; never exercised because the tests stub G2). The reading stands. A DESCRIPTIVE re-run after
+registration with that single fix (`scripts/scoring/v7/prefill_rerun_v7.py`, `prefill_rerun_v7.{json,txt}`, not a
+verdict) reads G1 FAILS (+0.37, -1.50, +1.42, -0.01, -1.99, C2 +1.66) and G2 P(A) 0.2067. Prefill gets no blind;
+decode may go to ONE blind, registered separately (docs/FINDINGS.md, Model v7 gate). Rule from this defect: a gate's
+every clause is run end to end as the registered script on a fixture shaped like the real pages before its
+registration is public.
+
+`2026-11-17-v7-decode-blind-gh200` (`scripts/scoring/v7blind/register_v7_blind.py --write` / `--check`; built
+2026-11-17; committed for real with `--write --final` on 2026-11-18, after the v7 gate registration was public and
+`scripts/scoring/v7/gate_v7.out.txt` read DECODE: GO, before any page of the three models) registers model v7's one decode blind: v7 with every switch on (D6FIX at
+decode) at its CAL2 refit (GO, 1.60% rms in sample; v6d's fit, fixed rho, T0 -1.87, s_naive -2.14, s_block -0.72 us;
+D6FIX's fit scaled, s_naive +9.55 us), its 143 predictions frozen before any page, on the decode stage's three reserved
+models (Mixtral-8x22B, Qwen2-57B-A14B, Granite-3.0-1B-A400M; no decode page timed, the census in the file) with
+addendum 5's pages and units unchanged (the old decode blind's T grid, routing classes, GRR main and GR1 control pages,
+18 second-tile cells DESCRIPTIVE) and the bars registered for these cells verbatim (owner, D4-1, addendum 5, carried by addendum 6: rms 3%, worst 8%,
+|mean| 1.5%, per model and pooled, not tightened; decodeB-blind's rule, a model CERTIFIED when its own bar and the
+pooled bar hold). D6FIX moves none of the 143 cells, so v7 prices
+them as v6d did. The plan `scripts/plans/rentalV7B-decode-blind-2026-11.plan` (the pinned decode driver) no longer carries
+the DRAFT line that the launcher `scripts/vm_run_v7b.sh` (RR's, apt-lock fix included, lines marked V7B) refuses. 72 unit-min,
+about 111 min wall, $4.24 at $2.29/h; deadline launch + 125 min, hard cap + 140 min ($5.34; at Lambda's
+list price of 2026-11-18, $2.59/h, about $4.79 planned and $6.04 at the cap). The freeze holds the v7
+gate registration's freeze and this blind's own files; `score_blind_v7.py` refuses on any difference. Tests
+`tests/test_v7_decode_blind.py` (synthetic trees and a stub VM only).
+
+RESULT 2026-11-18: public at the push of e58c1531 (03:30:24Z), which is also the run commit; one GH200 (Lambda
+instance 28a23f07, us-east-3, board e165c7, new), launched 03:36:57Z, termination confirmed 04:44:46Z, about 67.8 min
+and $2.93 at $2.59/h; 7 units, every one exit 0, none dropped, 700 W read back; one slipped repeat (1680 MHz at the
+1710 lock) on Mixtral-8x22B's main page, kept out of its cell's median by R3, on a DESCRIPTIVE second-tile cell
+(L-T128-A2). Published at `results/published/2026-11-18-nvidia_gh200_480gb-v7b-session`. Scored once by
+`score_blind_v7.py` at e58c1531 on the fetched tree's `vm/` (exit 0); a first run pointed at the tree's root instead
+read `NOT SCORED: power: 0 session power-set.txt files` and scored nothing (disclosed; no code, registration or file
+changed). Committed as `scripts/scoring/v7blind/blind.score.{json,txt}`, scored on the published copy (the `.txt`
+byte-identical, the JSON differing only in the power file's path and `git_dirty`); `scripts/scoring/rescore.py
+v7blind` re-scores it. Since publication `--check` reads DIFFERS on the computed unseen scan alone (it now reads this
+session too, 7 lines against 6); every other field reads same. **E1-DEC pooled FAILS** (125 cells, rms 4.17%, worst +17.20%, mean +1.61%); Mixtral-8x22B HOLDS
+(41 cells, 1.79%, worst +2.98%, mean +1.49%), Qwen2-57B-A14B HOLDS (43, 2.05%, worst -4.28%, mean -0.34%),
+Granite-3.0-1B-A400M FAILS (41, 6.74%, worst +17.20%, mean +3.78%); **no model CERTIFIED** (own bar and pooled bar).
+Power READ; no GRR page voided (GD2 PASS); G3-D shuffle EQUIVALENT on all three; rivals EXCLUDED (eager, roofline, line,
+OLS) or NOT SEPARATED (rho other, NAIVE-NODEDUP, 0 lever cells); G3-D label NOT EQUIVALENT on all three and SIGMA-D NOT
+READ, both DESCRIPTIVE. This was the one blind of the owner's 2026-11-17 reopening; the registered verdict stands (FAIL,
+none certified) and the blind is spent. Owner decision 2026-11-18, after the score, a forking path: decode is reopened a
+second time to certify a validity domain for v7 (no refit): a DESCRIPTIVE mapping rental with a mechanical per-path
+threshold rule registered before its pages, then one domain blind on models with no decode page (DeepSeek-V3, -tp4,
+-tp8, Qwen2-57B-tp8), then the stage stops. No map or domain registration exists at this entry (docs/FINDINGS.md,
+Model v7 decode blind).
+
+`2026-11-18-v7-domain-map-gh200` (`scripts/scoring/v7domain/register_v7_domain.py --write` / `--check`; registered
+2026-11-18, final when pushed, before any page of its shapes) registers model v7's decode domain MAP, DESCRIPTIVE: v7
+frozen and unchanged (every switch on, the CAL2 refit, the v7 gate registration's freeze) priced on 130 cells of 14
+SYNTHETIC shapes (`scripts/scoring/v7domain/map_shapes.py`, names `map-<family>-e<E>k<k>-h<H>i<I>`): A, naive and
+aligned twins across E 8 to 256 at one slab; B, slab per expert 2.36 to 37.75 MB at a fixed predicted call time; C,
+block-scan at E 256. The map design is Phase 0's (moe-kernels-work 2026-11-18 domain-phase0), regenerated cell for
+cell. Registered with it, verbatim, the threshold-selection rule that decides the domain D from the map's pages
+mechanically: per path (naive, small-batch, block-scan), X_p the smallest predicted call time past which every set of
+at least 10 cells has every replicate-bounded |e| under 6%, rms 2.5% and |mean| 1.0%, the maximum over leave-one-shape-out
+folds; a path with no X_p is outside; a slab guard fitted on family B adds W_e >= S only on a significant slope worth
+1 us over 35 MB. `scripts/scoring/v7domain/read_map.py` reads the committed registration only, verifies the freeze and
+the plan, applies the rule and writes `domain.json` / `domain.txt` with DESCRIPTIVE tables (the aligned-step over-price
+by E, the slab sweep). The domain blind it feeds (DeepSeek-V3, -tp4, -tp8, Qwen2-57B-A14B-tp8 at the old bars) is the
+next step, registered separately. Disclosed: the second reopening of decode (owner, 2026-11-18), the POST-HOC origin,
+Phase 0's offline pricing of these shapes. The shapes are not in `moe/spec.py` (frozen by twelve registrations); the
+launcher `scripts/vm_run_v7m.sh` (vm_run_v7b.sh plus lines marked V7M) runs the pinned decode driver with
+`scripts/scoring/v7domain/vmsite` on its PYTHONPATH, whose `sitecustomize.py` adds them when a process imports
+`moe.spec`. Plan `scripts/plans/rentalV7M-domain-map-2026-11.plan`: 76 unit-min, about 115 min wall, $4.39 at
+d2common.RATE $2.29/h ($4.96 at Lambda's list price of 2026-11-18, $2.59/h); deadline launch + 130 min, hard cap + 145
+min ($5.53 / $6.26). Tests `tests/test_v7_domain_map.py` (synthetic trees and a stub VM only).
+
+RESULT 2026-11-18: public at the push of 556029e1, pushed before the 09:40:04Z launch, which is also the run commit;
+one GH200 (Lambda instance 5b9c188e, board 1e520d, new; the guardian's log names a region, us-east-3, only for a first
+attempt at 09:07:07Z refused for capacity, not for this launch, whose launcher output reads us-east-3), launched 09:40:04Z, termination confirmed 10:27:33Z, about 47.5 min,
+about $2.05 at $2.59/h ($1.81 at the registered $2.29/h); 16 units, every one exit 0, none dropped, 700 W read back,
+every page held the 1710 lock with no slipped repeat. Published at
+`results/published/2026-11-18-nvidia_gh200_480gb-v7m-session` (1364 of the run branch's 1379 files, the 15
+`cuda_utils` .so files left out). Read by `read_map.py` on the published session root from a clean checkout of the
+publishing commit c1074957 (exit 0; git_dirty false), committed as `scripts/scoring/v7domain/map.domain.{json,txt}`;
+read first on the fetched tree's `vm/` at 6080bd76 with the same rows, D and tables; `scripts/scoring/rescore.py
+v7domain` re-reads it. Power READ; 130 of 130 cells valid and in scope. **D is EMPTY: no path has an X_p**, by the
+registered rule, mechanically: naive (16 cells) and small-batch (75) fail (i), the replicate-bounded e_ub cap of 6%, at
+every counted candidate of the full set (naive: short calls priced fast, worst -19.39%, and map-b-e32k4-h2560i1152
+L-T1-A4 at e_ub 6.81% in the last counted set; small-batch: map-b-e32k4-h2560i1152 L-T96-A32 at T_v7 198.0 us, e_ub
+7.38%, 9th by T_v7 and so in every set of at least 10 cells, its twin at 184.4 us, e_ub 6.37%, in every counted set but
+the last; its rms never under 2.64%); block-scan (39) passes (i) and
+(ii) from 70.5 us (max e_ub 3.33%, rms 1.83%) but fails (iii) at every candidate (mean +1.09% to +2.12% over the counted
+sets). The verbatim rule (iv) does not say what happens when the full set or a fold gives
+no value; the registration's points (committed at 556029e1 before any page; `.txt` line 27) do: "a path where any of
+them is none has no X_p", which `read_map.py` implements. DESCRIPTIVE disclosure: the fold without
+map-b-e32k4-h2560i1152 gives naive 27.6 us and small-batch 111.1 us, so under the other reading (the largest over the
+folds that give a value) the result would differ (naive X_p 27.6 us, small-batch 111.1 us); that reading is not the
+registered one, and nothing here says what a blind under it would have read. Slab guard NOT TRIGGERED (b -0.0094 us/MB, 95% [-0.0603, +0.0415]). As
+registered ("If D is empty, no Phase 2 blind runs"), no domain blind is rented. DESCRIPTIVE beside it: pooled 130 cells
+4.61% rms, worst -19.39%; aligned-step over-price by E, median +1.71 to +4.19 us. The map's `--check` reads same; the v7
+blind's `--check` reads DIFFERS on its computed unseen scan alone (8 sessions against 6) (docs/FINDINGS.md, Model v7
+decode domain map).
+
+`2026-11-18-v7-domain-blind-gh200` (`scripts/scoring/v7dblind/register_v7d_blind.py --write` / `--check`; DRAFT,
+written 2026-11-18 while the map rental ran, before any page of its four models; finalised by `--write --final` only
+once the map's readout `scripts/scoring/v7domain/map.domain.json` is committed and verifies) registers model v7's
+decode DOMAIN blind, the plan's Phase 2: v7 frozen and unchanged (every switch on, the CAL2 refit, the v7 blind's fit
+to the bit) priced on 192 main cells of DeepSeek-V3, DeepSeek-V3-tp4, DeepSeek-V3-tp8 and Qwen2-57B-A14B-tp8 (no
+decode page of any; the census reads every registered page list and every published session, the v7 blind's
+included, classifies each gaps directory by its reports, and finds Qwen2-57B-tp8's R3-tile pages and DeepSeek-V3's
+H200 and A100 fused_experts rows, none at a decode tile on a GH200), the v7 blind's cell recipe (decode_synth's
+frozen generators, GRR main pages, GR1 control pages on Qwen2-57B-tp8 and DeepSeek-V3-tp8 in drop group gr1, 20
+second-tile cells DESCRIPTIVE). D is a required input: `--final` verifies the readout (the map registration at its
+registered sha256, its freeze and plan, verdict READ, `read_map.domain` on the readout's own rows giving the same D,
+D not empty, the map session published) and labels each cell IN-DOMAIN (its path has an X_p, T_v7 >= X_p, W_e >= S_p
+when set, every active expert in one M-tile) or OUT, DESCRIPTIVE. Scored by `score_blind_v7d.py`: E1-DEC on the
+in-domain cells only, per model and pooled, the old bars (rms 3%, worst 8%, |mean| 1.5%, owner D4-1), decodeB-blind's
+rule, and a minimum registered before D is known: a model with fewer than 10 in-domain cells scored is reported, BELOW
+THE MINIMUM, not certified. Plan `scripts/plans/rentalV7D-domain-blind-2026-11.plan` (DRAFT line; the launcher
+`scripts/vm_run_v7d.sh`, vm_run_v7b.sh plus lines marked V7D, refuses it): 89 unit-min, about 131 min wall, $5.00 at
+$2.29/h, $5.65 at $2.59/h; deadline launch + 145 min, hard cap + 160 min ($6.11 / $6.91); without the gr1 pages,
+which the driver drops first, about 107 min. Disclosed: the second reopening of decode, the POST-HOC origin of the
+domain idea, D computed by the rule registered before the map's pages (556029e1), Phase 0's offline pricing of these
+four models, and that D has no upper bound: cells past the map's measured range (naive T_v7 445 us, block-scan
+1824 us, W_e 37.7 MB, block-scan 25.2 MB; DeepSeek-V3 at 88 MB and 207 to 6293 us) are in by extrapolation, the
+scorer splitting each model's in-domain cells into within range and extrapolated, DESCRIPTIVE. After review,
+`--final` also re-reads the published map session with `read_map.read` and requires the readout's rows and D, refuses
+a readout with git_dirty not false or of another shape (a clean REFUSED), and requires the committed DRAFT at HEAD to
+verify its freeze and agree with the final document outside the domain labels (label rule, minimum, cells,
+predictions, bars); the scorer recomputes the labels from the frozen readout and names the inherited all-cell blocks
+(rivals, KNEE_D, SIGMA_D, G3-D label, pooled_over) DESCRIPTIVE. Tests `tests/test_v7_domain_blind.py` (synthetic
+trees, synthetic map readouts and a stub VM only).
+
+NOT FINALISED 2026-11-18: the map's readout (`scripts/scoring/v7domain/map.domain.json`, committed, read from a clean
+checkout, git_dirty false) verifies and reads D EMPTY, so `register_v7d_blind.py --write --final` refuses it, as
+registered: run in a scratch clone with the readout committed, it exits 2 with `REFUSED: D is EMPTY: no path has an X_p
+(the map registration: no domain blind runs)`, its only refusal (every other check of the readout passed first). This
+registration stays the DRAFT of 6080bd76, NOT REGISTERED; its plan keeps the DRAFT line and `scripts/vm_run_v7d.sh`
+refuses it; nothing is rented. By the stop rule of the owner's 2026-11-18 decision the second reopening of decode ends
+here with no blind: decode stays registered FAIL at the v7 blind, no validity domain is certified; R3 CERTIFIED (v3) and
+prefill NO-GO stand. `--check` reads same (it rebuilds over the sessions the DRAFT records). Tests: the committed
+readout verifies and `--final` refuses it for the empty D alone (`tests/test_v7_domain_blind.py`) (docs/FINDINGS.md,
+Model v7 decode domain map).
+
+`2026-11-18-v7-prefill-blind-gh200` (`scripts/scoring/v7pblind/register_v7p_blind.py --write` / `--check`; REGISTERED
+2026-11-18 by `--write --final` with the owner's go recorded, before any page of its three models; DRAFT written first; finalised by `--write --final --owner-go '<date>: <words>'`
+only, which refuses unless the committed DRAFT verifies its freeze and equals the final document outside the DRAFT
+marks, the census and the freeze) registers model v7's ONE PREFILL blind: the THIRD reopening of prefill, chosen by the
+owner on 2026-11-18 AGAINST the v7 gate's registered PREFILL NO-GO (REFUSED on refit4; the DESCRIPTIVE re-run reads G1
+FAILS, held-out means -1.99 to +1.66%, and G2 FAILS, the gate's own P(A) 0.2067, B 0.284, D 0.1885), stated at the top
+of the registration with every earlier verdict standing (round 5's gate FAIL, B3 FAIL, the v7 gate's PREFILL NO-GO,
+decode FAIL). v7 frozen and unchanged (every switch on, RR at G 1; round 5's prefill branch at the K1 knee and the
+board's 128x128 sag par), plus the refit4 fix applied in memory outside every frozen file exactly as
+`prefill_rerun_v7.py` applies it (registered verbatim; it changes no price); the registered pricer reproduces the
+re-run's every-switch-on numbers on the gate's pages (six held-out means, P(A), B3's 84 cells). Census over every
+registered page list and every JSON record of every published session (by name and by (E, H, I, k)): no prefill-tile
+page of Granite-3.0-1B-A400M, Granite-3.0-3B-A800M, Qwen2-57B-A14B-tp8, Mixtral-8x7B-tp4, -tp8 or DeepSeek-V3's
+shards; DeepSeek-V3 has H200 and A100 fused_experts rows at prefill sizes, and E 256 cannot run B3's instrument (R3
+refuses a SHARED declaration of E x 9 >= 1024). Chosen: the two Granite models and Qwen2-57B-A14B-tp8 (a TP shard of a
+CAL model, disclosed), B3's recipe and instrument at 128x128x64 w8 s3 (G 1 at the two smallest vLLM-consistent treads,
+G 16 at n 9; PT, PW, PT2, PW2 from OLMoE's fitted shapes, uniform, balanced; NATIVE and SHARED, 9 copies): 54 cells,
+18 a model; GD5 offline on vLLM 0.27.1's vendored listing (no GH200 file); predictions frozen at A2's, C2's, C4's and
+B3's board pars, finalised at the rental's own par before any blind page. Read by `score_blind_v7p.py`: the power check
+and the gates first, B3's page and cell rules (G5, rebuild, row_drop, G3's voids), the working-model bar (rms 3%,
+worst 8%, |mean| 1.5%) per model and pooled in ALL and CLEAN by rule 3, a model CERTIFIED when its own bar and the
+pooled bar hold (decodeB-blind's rule, as v7's decode blinds) with at least 10 cells scored in CLEAN; B3's E1-TILE
+conjunction DESCRIPTIVE beside. Driver `scripts/gh200_v7p_session.sh` (B3's plus lines marked V7P: the census gate
+`scripts/v7p_gate.py`, each model's compiled facts equal OLMoE's in A2's merged census), launcher
+`scripts/vm_run_v7p.sh` (vm_run_v7b.sh plus lines marked V7P; refuses the DRAFT plan). Plan
+`scripts/plans/rentalV7P-prefill-blind-2026-11.plan`: 84 unit-min, about 125 min wall, $4.77 at d2common.RATE $2.29/h,
+$5.40 at $2.59/h; deadline launch + 140 min, hard cap + 155 min ($5.92 / $6.69). Not in the recipe here: B3's
+64x128 page and its sag pages, the byte pages and the sag repeat (the 64x128 tile is not tested). Disclosed: the third
+reopening and the gate override, the POST-HOC origin, v7 unchanged, RR's SEEN-chosen constants, B3's per-call risk on
+these short calls, the offline pricing done while building. Tests `tests/test_v7_prefill_blind.py` (stand-in boards,
+synthetic cells and a stub VM only).
+
+RESULT 2026-11-18: public at the push of 43a8802b (the `--final` registration); run commit 8c9e29a2 (a test-only
+commit on top); one GH200 (Lambda instance 365b52c0, region not recorded for the launch that ran; three earlier
+attempts in us-east-3 refused for capacity), board 8d8469, new to the study, launched 22:02:55Z, termination confirmed
+23:28:45Z, about 86 min and $3.70 at $2.59/h (registered: 84 unit-min, about 125 min, $4.77 at $2.29/h, $5.40 at
+$2.59/h); 14 units, every one exit 0, none dropped, 700 W read back, the 1410 MHz lock held on every timed page (worst
+1410.0 MHz); both f128 byte pages exit 3 at the page (G=64 INVALID on a validity check, the page written), as B3's
+did, and the sag gate read them for the par and passed. Published at `results/published/2026-11-18-nvidia_gh200_480gb-v7p-session`. Scored by
+`score_blind_v7p.py` from a clean checkout: first on the fetched tree's `vm/` at the run commit, then on the published
+copy at 148dbfc1 (git_dirty false), the same reading; the JSON differing only in the session path and the recorded
+checkout. Committed as `scripts/scoring/v7pblind/prefill_blind.score.{json,txt}`; `scripts/scoring/rescore.py
+v7pblind` re-scores it. Since publication the v7 decode blind's `--check` reads DIFFERS on its computed unseen scan
+alone (9 lines against 6); this registration's `--check` reads same (its census runs over the sessions it records).
+Valid: C2_POWER_W=700, LOCK_PROBE_1410 held, G-BAND PASS (registered fallback band), v7pcensus PASS (2 CTAs/SM), b3sag
+PASS (par 64.325 / 612.5 us), G3 PASS (EQUIVALENT, no stratum voided). The host-bound rule dropped 30 of 54 cells (every
+Granite G 1 cell, Qwen2-57B-tp8's tread-1 G 1 cells). **Pooled bar FAILS** (24 cells, rms 3.13%, worst -4.72%, mean
+-2.99%); Granite-3.0-1B-A400M FAILS (6 cells, rms 4.25%, worst -4.72%, mean -4.24%) -> NOT CERTIFIED: below the
+minimum; Granite-3.0-3B-A800M FAILS (6, 3.07%, -3.80%, -3.00%) -> NOT CERTIFIED: below the minimum;
+Qwen2-57B-A14B-tp8 FAILS (12, 2.43%, -3.02%, -2.37%) -> NOT CERTIFIED; **no model CERTIFIED**. B3's E1-TILE
+(DESCRIPTIVE) FAILS. This was the one blind of the third reopening of prefill (owner, 2026-11-18, against the gate's
+NO-GO, P(A) 0.2067); its registered verdict stands, the blind is spent, and by the registration prefill stops here
+(docs/FINDINGS.md, Model v7 prefill blind).

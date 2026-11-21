@@ -1,0 +1,36 @@
+# the two estimates of alpha, the cost of an extra M-tile
+#
+# REGRESSION  fits alpha out of implied_traffic_ratio, which is
+#             time x bandwidth / COMPULSORY BYTES. It depends on the
+#             byte model, on the calibrated bandwidth and on the
+#             estimator. C4 is a confirmed finding that the
+#             compulsory-byte ruler was wrong by 1.85% until it was
+#             fixed, which is why one route is not enough.
+# ABLATION    reads alpha out of the difference between two timings
+#             of the same access pattern, one of which hits L2 where
+#             the other misses. No bytes, no bandwidth, no ridge.
+
+REGRESSION  alpha = 0.558   90% band 0.529 .. 0.588
+            source: the PUBLISHED refit over 10,813 rows -- step 3 produced no readable table in this session, so this number is NOT from this card
+
+ABLATION    alpha in 0.535 .. 0.969   90% interval 0.504 .. 0.970
+            source: step 2b, same session, same thermal state
+            a BRACKET, not a band: the two estimators inside it
+            are biased in opposite directions by whether L2 and
+            HBM service add or compose as a max.
+
+VERDICT     THEY AGREE. The intervals overlap over 0.059.
+            Read the asymmetry honestly: these are different
+            kinds of interval, so overlap is weak evidence of
+            agreement while disjoint would have been strong
+            evidence against. What it buys is that alpha no
+            longer rests on the byte model alone.
+
+  alpha = 0.100 (this repo, retracted): regression says out, ablation says out
+  alpha = 0.330 (TEMPO arXiv:2608.13057): regression says out, ablation says out
+  alpha = 0.558 (the 2026-09-01 refit): regression says IN , ablation says IN 
+
+ablation verdict as the script itself stated it:
+  VERDICT: REFUTED or VOID. 2 gate(s) failed: signal: the weight read is most of what the kernel does; form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires
+
+RECON AGREE

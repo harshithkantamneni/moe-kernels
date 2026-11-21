@@ -1,0 +1,8 @@
+/workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+/workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'vllm_fused_moe' did not import: No module named 'vllm'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=base torch 2.13.0+cu130 / triton 3.7.1 gpu=NVIDIA H200
+[driver] wrote 24 rows -> /workspace/results/fp8-stamp-check/run_07d7dc6c6058_base.csv
+[cli] run_id=07d7dc6c6058 elapsed=19.6s
+{"csv": "/workspace/results/fp8-stamp-check/run_07d7dc6c6058_base.csv", "manifest": "/workspace/results/fp8-stamp-check/run_07d7dc6c6058_base.manifest.jsonl", "run_id": "07d7dc6c6058"}

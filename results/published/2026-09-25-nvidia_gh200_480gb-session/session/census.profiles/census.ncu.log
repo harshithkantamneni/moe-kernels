@@ -1,0 +1,12 @@
+==PROF== Connected to process 5341 (/home/ubuntu/.local/share/uv/python/cpython-3.12.14-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 1 pass
+COUNTER CHILD: 2 cells, 1 calls each after 1 warmups; manifest /home/ubuntu/moe/session/census.profiles/census.manifest.json
+==PROF== Disconnected from process 5341
+==PROF== Report: /home/ubuntu/moe/session/census.profiles/census.ncu-rep

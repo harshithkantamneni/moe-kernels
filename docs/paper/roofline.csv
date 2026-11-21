@@ -1,0 +1,7 @@
+test,model priced from,cells,model rms,model beyond 5%,roofline (counted reads) rms,worst,median,beyond 5%,roofline (counted reads + writes) rms,roofline (predicted bytes) rms,predicted: worst,predicted: beyond 5%,cells where the roofline is closer than the model (counted / predicted),compute-bound cells,peak TFLOPS,bandwidth TB/s
+Mixtral 8x22B,predicted bytes,40,1.71%,0,32.51%,-68.80%,-11.73%,40,32.10%,32.30%,-68.90%,37,0 / 0,0,651.8,3.7263
+Qwen2-57B-A14B,predicted bytes,58,2.71%,0,38.84%,-74.97%,-13.22%,58,37.87%,35.33%,-73.41%,58,0 / 0,0,646.8,3.7262
+OLMoE-1B-7B,counted bytes,76,3.53%,12,47.72%,-77.92%,-25.62%,76,46.49%,47.00%,-77.87%,76,0 / 0,12,641.3,3.7258
+Qwen1.5-MoE-A2.7B,counted bytes,76,1.87%,0,46.67%,-77.68%,-21.30%,76,45.55%,46.07%,-77.52%,76,0 / 0,12,653.9,3.7261
+Phi-3.5-MoE,counted bytes,76,0.57%,0,31.75%,-71.77%,-10.62%,76,31.09%,32.86%,-71.56%,76,0 / 0,0,650.2,3.7257
+JetMoE-8B,counted bytes,58,7.17%,12,43.08%,-75.06%,-43.23%,58,41.94%,44.18%,-76.88%,58,0 / 0,0,651.5,3.7257

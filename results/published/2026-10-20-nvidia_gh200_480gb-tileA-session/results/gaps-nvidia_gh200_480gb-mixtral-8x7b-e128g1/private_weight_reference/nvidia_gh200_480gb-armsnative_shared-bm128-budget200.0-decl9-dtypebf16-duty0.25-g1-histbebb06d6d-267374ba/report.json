@@ -1,0 +1,563 @@
+{
+  "experiment": "private_weight_reference",
+  "kind": "histogram-page",
+  "run_id": "nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbebb06d6d-267374ba",
+  "session_tag": "gh200-20261020T060059Z-p2e-lock1710",
+  "card": "nvidia_gh200_480gb",
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "block_m": 128,
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 3
+  },
+  "duty": 0.25,
+  "repeats": 9,
+  "copies_declared": 9,
+  "arms": [
+    "native",
+    "shared"
+  ],
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "treads": [
+    2
+  ],
+  "bandwidth_gbps": 3725.941591145383,
+  "ridge": 176.36137303760844,
+  "histogram": {
+    "schema": "moe-kernels/histogram-page/1",
+    "file_sha256": "bebb06d6df189f193ec1a72fbdc98cd52549ead35d24742d21429bbed7d08fe3",
+    "page": "mixtral-8x7b-128g1",
+    "shuffle_seed": 20261410,
+    "cells": [
+      {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      }
+    ]
+  },
+  "histogram_gates": {
+    "G1_lock_thermal": {
+      "verdict": "FAIL",
+      "clock_unread": [],
+      "drift": [
+        "PT/native/n2",
+        "PT/shared/n2",
+        "PW/native/n2",
+        "PW/shared/n2",
+        "uniform/native/n2",
+        "uniform/shared/n2",
+        "balanced/native/n2",
+        "balanced/shared/n2"
+      ],
+      "below_top_by_a_step": [],
+      "top_mhz": 1710.0,
+      "lock_slips": {
+        "slipped_repeats": 4,
+        "repeat_rows": 72,
+        "lost_cells": [],
+        "rule": "a lost cell (under --min-clean-repeats clean repeats) is listed, not a FAIL here: the rental-6 scorer's G1 takes the page's slipped-repeat share"
+      }
+    },
+    "G2_host_bound": {
+      "verdict": "PASS",
+      "excluded": [],
+      "rule": "a cell the timer called host-bound is excluded, not voided"
+    },
+    "G3_uniform_control": {
+      "verdict": "SCORED OFFLINE",
+      "rule": "the rental-5 scorer's TOST over the page pair"
+    },
+    "G4_worst_cell_clock": {
+      "verdict": "RECORDED",
+      "worst_mhz": 1710.0,
+      "rule": "the scorer holds the worst cell to the 1710 lock"
+    },
+    "G5_provenance": {
+      "verdict": "PASS",
+      "missing": []
+    }
+  },
+  "treads_table": [
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 1,
+      "clean_repeats": 3,
+      "worst_repeat_mhz": 1665.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.9455519914627075,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 8,
+      "repeats": 3,
+      "host_bound": false,
+      "histogram": "PT",
+      "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+      "shuffle_seed": 20261410,
+      "bincount": [
+        227,
+        221,
+        279,
+        175,
+        366,
+        258,
+        229,
+        293
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 8,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.9609200060367584,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 72,
+      "repeats": 8,
+      "host_bound": false,
+      "histogram": "PT",
+      "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+      "shuffle_seed": 20261410,
+      "bincount": [
+        227,
+        221,
+        279,
+        175,
+        366,
+        258,
+        229,
+        293
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 5,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.9374079704284668,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 8,
+      "repeats": 5,
+      "host_bound": false,
+      "histogram": "PW",
+      "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+      "shuffle_seed": 20261410,
+      "bincount": [
+        402,
+        287,
+        246,
+        73,
+        267,
+        205,
+        219,
+        349
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 7,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.9540320038795471,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 72,
+      "repeats": 7,
+      "host_bound": false,
+      "histogram": "PW",
+      "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+      "shuffle_seed": 20261410,
+      "bincount": [
+        402,
+        287,
+        246,
+        73,
+        267,
+        205,
+        219,
+        349
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 3,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.5759680271148682,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 8,
+      "repeats": 3,
+      "host_bound": false,
+      "histogram": "uniform",
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+      "shuffle_seed": 20261410,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 2,
+      "clean_repeats": 2,
+      "worst_repeat_mhz": 1650.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.5824960470199585,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 72,
+      "repeats": 2,
+      "host_bound": false,
+      "histogram": "uniform",
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+      "shuffle_seed": 20261410,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 4,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.5760240256786346,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 8,
+      "repeats": 4,
+      "host_bound": false,
+      "histogram": "balanced",
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "shuffle_seed": null,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 1,
+      "clean_repeats": 7,
+      "worst_repeat_mhz": 1650.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 1.582032024860382,
+      "sm_clock_load_mhz": 1710.0,
+      "experts_declared": 72,
+      "repeats": 7,
+      "host_bound": false,
+      "histogram": "balanced",
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "shuffle_seed": null,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    }
+  ],
+  "path_census": {
+    "rows": [
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ]
+    ]
+  },
+  "ladder": "NOT APPLICABLE: histogram page (no slope, ratio or ladder-shaped gate)",
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "tag": "G1_lock_thermal",
+      "verdict": "FAIL"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G2_host_bound",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G5_provenance",
+      "verdict": "PASS"
+    }
+  ],
+  "align_probe": {
+    "synthetic": false,
+    "note": "",
+    "cells": [
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.005179999861866236,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.08287999778985977
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.006831999868154526,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10931199789047241
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.005561999976634979,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.08899199962615967
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.0068259998224675655,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10921599715948105
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.005534000229090452,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.08854400366544724
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.006856000050902367,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10969600081443787
+      }
+    ]
+  },
+  "slip_policy": "cell",
+  "lock_mhz": 1710,
+  "min_clean_repeats": 0,
+  "repeat_rows": 72,
+  "lock_slip_rows": 4,
+  "slipped_repeats": [
+    {
+      "histogram": "PT",
+      "n": 2,
+      "arm": "native",
+      "repeat": 8,
+      "mhz": 1665.0
+    },
+    {
+      "histogram": "uniform",
+      "n": 2,
+      "arm": "shared",
+      "repeat": 5,
+      "mhz": 1650.0
+    },
+    {
+      "histogram": "uniform",
+      "n": 2,
+      "arm": "shared",
+      "repeat": 6,
+      "mhz": 1665.0
+    },
+    {
+      "histogram": "balanced",
+      "n": 2,
+      "arm": "shared",
+      "repeat": 0,
+      "mhz": 1650.0
+    }
+  ],
+  "lost_cells": {},
+  "early_stop": null
+}

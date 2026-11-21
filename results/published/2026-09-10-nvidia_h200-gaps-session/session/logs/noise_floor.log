@@ -1,0 +1,303 @@
+# The noise floor this study never measured
+
+THE SIGN, so it cannot be misread. Every difference below is
+
+    delta = alpha(the arm named SECOND) - alpha(the arm named FIRST)
+
+and every printed delta names both arms in that order. A positive delta means the
+SECOND arm measured a HIGHER re-read fraction.
+
+## The num_stages control, and the comparison it scores
+
+Both are paired over the SAME matched cells. Neither needed a GPU and neither has ever been run before.
+
+CONTROL   2026-09-01-nvidia_h200-alpha-surface-s4
+       -> 2026-09-01-nvidia_h200-cross-card-s3
+          varied: num_stages   same machine: True
+          alpha            n=11  2026-09-01-nvidia_h200-cross-card-s3 measures +0.0103 HIGHER than 2026-09-01-nvidia_h200-alpha-surface-s4  sd 0.0328  MDE 0.0308  -> BELOW THE DETECTION LIMIT
+          alpha_corrected  n=11  2026-09-01-nvidia_h200-cross-card-s3 measures +0.0101 HIGHER than 2026-09-01-nvidia_h200-alpha-surface-s4  sd 0.0323  MDE 0.0303  -> BELOW THE DETECTION LIMIT
+          alpha_upper      n=11  2026-09-01-nvidia_h200-cross-card-s3 measures +0.1553 HIGHER than 2026-09-01-nvidia_h200-alpha-surface-s4  sd 0.1744  MDE 0.1634  -> BELOW THE DETECTION LIMIT
+
+UNDER TEST 2026-09-01-nvidia_h200-cross-card-s3
+        -> 2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3
+          varied: gpu   same machine: False
+          alpha            n=11  2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3 measures +0.0152 HIGHER than 2026-09-01-nvidia_h200-cross-card-s3  sd 0.0480  MDE 0.0450  -> BELOW THE DETECTION LIMIT
+          alpha_corrected  n=11  2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3 measures +0.0117 HIGHER than 2026-09-01-nvidia_h200-cross-card-s3  sd 0.0480  MDE 0.0450  -> BELOW THE DETECTION LIMIT
+          alpha_upper      n=11  2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3 measures -0.3325 LOWER than 2026-09-01-nvidia_h200-cross-card-s3  sd 0.1747  MDE 0.1637  -> RESOLVED
+
+READ IT: a scheduling knob on ONE card, at one L2, moves alpha_corrected by 0.0101. A 1.5x change in L2 capacity moves it by 0.0117. The card exceeds the control by +0.0016, against the control's own detection limit of 0.0303 -- a gap 18x smaller than the smallest gap this design could have seen.
+         BOTH differences are themselves under their own detection limits, so the honest statement is not 'the cards agree' but 'this design cannot tell the cards apart, and it cannot tell a card apart from a pipeline stage either'.
+POWER:   at sd_d = 0.0480 the 11-cell paired design detects 0.0450. Detecting the observed 0.0117 needs 134 matched cells, which is 12.2x the cells actually run, i.e. 3.5x in standard error.
+
+Detection limits at sd = 0.0229 (the s3/s4 proxy, an UPPER bound), two-sided 5% at 80% power.
+The last column is how well N pins the FLOOR itself, pooled over 8 cells.
+
+THE DESIGN THE STUDY ACTUALLY RAN is one run per condition with sigma imported from this
+table, which detects 0.0906 in alpha. Everything below is what REPLICATING would buy.
+
+     N   sigma from the two arms   sigma from this floor   floor known to within
+     2           0.1226                 0.0641              1.92x  (8 df)
+     3           0.0694                 0.0523              1.52x  (16 df)
+     4           0.0542                 0.0453              1.39x  (24 df)
+     5           0.0462                 0.0405              1.32x  (32 df)
+     6           0.0410                 0.0370              1.28x  (40 df)
+     8           0.0344                 0.0320              1.23x  (56 df)
+    10           0.0303                 0.0286              1.19x  (72 df)
+
+  effect the study wants to claim        size    replicates needed
+    swizzle swing [mixtral-8x7b]      0.3855   N = 2
+    swizzle swing [qwen2-57b-a14b]    0.0226   N = 18
+    footprint spread at G=1           0.4110   N = 2
+    cross-card L2                     0.0117   N = 61
+
+  N = 6 is NOT set by power -- power alone is satisfied at N = 2 for both big effects. It is set by the last column: below
+  N = 6 the floor is known to worse than 1.5x, and a floor quoted to a factor of three is not a floor.
+
+card     NVIDIA H200 -- read from the attached device
+
+## The plan
+
+4 arm(s) x 3 replicates = 12 sweep processes, cache mode fresh, config device NVIDIA H200
+EVERYTHING IS SAVED TO  /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3
+
+MDE: at the assumed sigma 0.0229 this plan resolves 0.0694 in alpha with N=3 replicates per condition, and 0.0906 at the one-run design the study published.
+     the sigma is ASSUMED, not measured here: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8
+     it is heteroscedastic by model (mixtral-8x7b 0.0486, qwen2-57b-a14b 0.0186), so a per-cell comparison at mixtral G>=8 is against a wider spread than the pool.
+     swizzle swing on mixtral-8x7b is 0.3855, ABOVE the limit, so this design can see it.
+     swizzle swing on qwen2-57b-a14b is 0.0226, BELOW the limit: this design CANNOT see it, and the gate for it is registered as an expected FAIL.
+
+INTERLEAVED. The two swizzles of one model run back to back inside a replicate, so their contrast is paired within minutes rather than across blocks:
+  order: mixtral-8x7b g1,g16,g16,g1,g1,g16   [counterbalanced]
+  order: qwen2-57b-a14b g1,g16,g16,g1,g1,g16   [counterbalanced]
+
+SCOPE of any floor this produces: one card, one session, models mixtral-8x7b, qwen2-57b-a14b; BLOCK_SIZE_N [64], num_stages [4], dtype ['bf16'], seed held FIXED at [0], instrument 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'. It bounds nothing outside that list, and cross-pod noise least of all.
+
+  mixtral_g1     mixtral-8x7b bf16 G=1 BN=64 s=4 r_max=1024  256 s modelled, ~602 s wall x 3 = ~30.1 min
+      rep 1: nvidia_h200-cachefresh-g1-modelmixtral_8x7b-n64-ordercounterbalanced-rep1-s4-settingscell_budget-2b97da97
+      rep 2: nvidia_h200-cachefresh-g1-modelmixtral_8x7b-n64-ordercounterbalanced-rep2-s4-settingscell_budget-8b1a2f3e
+      rep 3: nvidia_h200-cachefresh-g1-modelmixtral_8x7b-n64-ordercounterbalanced-rep3-s4-settingscell_budget-e4470ea2
+  mixtral_g16    mixtral-8x7b bf16 G=16 BN=64 s=4 r_max=1024  256 s modelled, ~602 s wall x 3 = ~30.1 min
+      rep 1: nvidia_h200-cachefresh-g16-modelmixtral_8x7b-n64-ordercounterbalanced-rep1-s4-settingscell_budge-8703f45a
+      rep 2: nvidia_h200-cachefresh-g16-modelmixtral_8x7b-n64-ordercounterbalanced-rep2-s4-settingscell_budge-f64e63ee
+      rep 3: nvidia_h200-cachefresh-g16-modelmixtral_8x7b-n64-ordercounterbalanced-rep3-s4-settingscell_budge-115481d3
+  qwen2_g1       qwen2-57b-a14b bf16 G=1 BN=64 s=4 r_max=1024  256 s modelled, ~602 s wall x 3 = ~30.1 min
+      rep 1: nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_budg-ba7c80c2
+      rep 2: nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep2-s4-settingscell_budg-e6ceea76
+      rep 3: nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep3-s4-settingscell_budg-002f2cd7
+  qwen2_g16      qwen2-57b-a14b bf16 G=16 BN=64 s=4 r_max=1024  256 s modelled, ~602 s wall x 3 = ~30.1 min
+      rep 1: nvidia_h200-cachefresh-g16-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_bud-ef2499ae
+      rep 2: nvidia_h200-cachefresh-g16-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep2-s4-settingscell_bud-448cfbd0
+      rep 3: nvidia_h200-cachefresh-g16-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep3-s4-settingscell_bud-d82883bf
+
+TOTAL: ~120 min of GPU (3072 s modelled, scaled by the 2.35x wall-over-model factor observed on the s4 arm: 127 s logged against 54 s modelled for mixtral_g1).
+
+## Predictions, registered before anything ran
+
+VALIDITY -- a FAIL means no number from part (a) may be quoted.
+  V1  every replicate got its own run id and directory   distinct ids == 3 x arms
+  V2  the planned replicates ran and produced fits       >= 2 cells at n = 3
+  V3  no cell returned identical alpha every time        zero degenerate cells
+  V4  the Triton cache behaved as the mode claims        fresh: >= 1 artefact each
+  V5  the cells share a spread                           max sd / min sd <= 3
+  V6  one instrument across every replicate              instrument == 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'
+  V7  the floor covers more than one model               >= 2 models, or --single-model-floor
+
+CLAIM -- a FAIL is a result, not a broken run.
+  C1 floor size                       expect PASS  sd <= 0.0229
+  C2 cross-card under floor           expect PASS  |0.0117| < MDE
+  C3 swizzle mixtral-8x7b            expect PASS  G=1->G=16, registered at 0.3855
+  C3 swizzle qwen2-57b-a14b          expect FAIL  G=1->G=16, registered at 0.0226
+  C4 card beats stages control        expect FAIL  |card| - |stages| >= MDE
+  C5 sign consistency                 expect FAIL  one sign across three fields
+
+C4 and C5 are registered as EXPECTED FAILURES from the committed reports alone, and
+both are computed here without a GPU. C4 fails because the same 11 cells move
++0.0101 when num_stages goes 4 -> 3 on one card and +0.0117 when the card changes.
+C5 fails because the cross-card difference is +0.0117 in alpha-corrected and
+-0.3325 in alpha-upper -- two anchorings of the same fit, opposite signs -- while
+the num_stages control keeps one sign across all three.
+
+THE QWEN2 C3 IS THE THIRD REGISTERED FAILURE and it is the reason that arm is in
+the plan. Its swizzle effect is 0.0226 at its largest committed H200 cell against
+an N=3 detection limit of 0.0694, and on the A100 it
+changes SIGN between BLOCK_M 32 and 64. Expecting it to fail means the replicate
+arm cannot come back having confirmed a swizzle mechanism on the one model where
+it is twelve sigma and silently said nothing about the model where it is absent.
+Registering all three now means none can be reported later as a discovery.
+  [1/12] mixtral_g1 rep 1/3 launching
+      300 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [2/12] mixtral_g16 rep 1/3 launching
+      304 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [3/12] qwen2_g1 rep 1/3 launching
+      318 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [4/12] qwen2_g16 rep 1/3 launching
+      319 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [5/12] mixtral_g16 rep 2/3 launching
+      301 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [6/12] mixtral_g1 rep 2/3 launching
+      300 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [7/12] qwen2_g16 rep 2/3 launching
+      321 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [8/12] qwen2_g1 rep 2/3 launching
+      321 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [9/12] mixtral_g1 rep 3/3 launching
+      313 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [10/12] mixtral_g16 rep 3/3 launching
+      302 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [11/12] qwen2_g1 rep 3/3 launching
+      327 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+  [12/12] qwen2_g16 rep 3/3 launching
+      323 s  ok (CLAIM_FAIL: the sweep's own claim gate did not pass; its cells are measured and are pooled)
+
+## Between-replicate spread, per cell
+
+  arm              BM   n      mean        sd       cv
+  mixtral_g1       32   3    0.9359    0.0160   1.71%
+  mixtral_g1       64   3    0.9758    0.0021   0.21%
+  mixtral_g16      32   3    0.7009    0.0102   1.45%
+  mixtral_g16      64   3    0.7203    0.0165   2.29%
+  qwen2_g1         32   3    0.6087    0.0229   3.77%
+  qwen2_g1         64   3    0.7299    0.0082   1.13%
+  qwen2_g16        32   3    0.6871    0.0050   0.73%
+  qwen2_g16        64   3    0.6841    0.0133   1.95%
+
+  alpha            between-replicate sd 0.0233 on 2 df, upper 95% 0.1467 -- spreads disagree by 11.28x (> 3), so the cells were NOT pooled; the widest cell (qwen2_g1 BM=32) is the published floor
+  alpha_corrected  between-replicate sd 0.0229 on 2 df, upper 95% 0.1440 -- spreads disagree by 11.18x (> 3), so the cells were NOT pooled; the widest cell (qwen2_g1 BM=32) is the published floor
+  alpha_upper      between-replicate sd 0.0670 on 2 df, upper 95% 0.4212 -- spreads disagree by 4.65x (> 3), so the cells were NOT pooled; the widest cell (mixtral_g16 BM=64) is the published floor
+
+## The instrument every replicate was timed by
+
+  mixtral_g1     rep 1  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  mixtral_g16    rep 1  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  qwen2_g1       rep 1  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  qwen2_g16      rep 1  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  mixtral_g16    rep 2  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  mixtral_g1     rep 2  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  qwen2_g16      rep 2  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  qwen2_g1       rep 2  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  mixtral_g1     rep 3  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  mixtral_g16    rep 3  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  qwen2_g1       rep 3  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+  qwen2_g16      rep 3  queue-deep/l2-flush/settled-warmup/clock-under-load/v4  warmup 300.0 ms  target 400.0 ms  clock-excluded cells None
+
+Detection limits at sd = 0.0229 (MEASURED), two-sided 5% at 80% power.
+The last column is how well N pins the FLOOR itself, pooled over 8 cells.
+
+THE DESIGN THE STUDY ACTUALLY RAN is one run per condition with sigma imported from this
+table, which detects 0.0908 in alpha. Everything below is what REPLICATING would buy.
+
+     N   sigma from the two arms   sigma from this floor   floor known to within
+     2           0.1229                 0.0642              1.92x  (8 df)
+     3           0.0696                 0.0524              1.52x  (16 df)
+     4           0.0543                 0.0454              1.39x  (24 df)
+     5           0.0463                 0.0406              1.32x  (32 df)
+     6           0.0411                 0.0371              1.28x  (40 df)
+     8           0.0345                 0.0321              1.23x  (56 df)
+    10           0.0304                 0.0287              1.19x  (72 df)
+
+  effect the study wants to claim        size    replicates needed
+    swizzle swing [mixtral-8x7b]      0.3855   N = 2
+    swizzle swing [qwen2-57b-a14b]    0.0226   N = 18
+    footprint spread at G=1           0.4110   N = 2
+    cross-card L2                     0.0117   N = 62
+
+  N = 6 is NOT set by power -- power alone is satisfied at N = 2 for both big effects. It is set by the last column: below
+  N = 6 the floor is known to worse than 1.5x, and a floor quoted to a factor of three is not a floor.
+
+## Gates
+
+RESULT: VALIDITY V1_distinct_runs PASS [VALIDITY] every replicate wrote its own directory under its own run id | expected PASS | gate 12 distinct run ids and 12 distinct out dirs | saw 12 ids and 12 dirs over 12 replicates
+[PASS] VALIDITY V1 distinct runs  every replicate wrote its own directory under its own run id
+         gate: 12 distinct run ids and 12 distinct out dirs
+         saw:  12 ids and 12 dirs over 12 replicates
+RESULT: VALIDITY V2_non-vacuity PASS [VALIDITY] the replicates that were planned actually ran and produced fits | expected PASS | gate 12 replicates complete and at least 2 cells with all 3 values present | saw 12 of 12 replicates ok (12 CLAIM_FAIL); 8 full cells of 8 seen
+[PASS] VALIDITY V2 non-vacuity  the replicates that were planned actually ran and produced fits
+         gate: 12 replicates complete and at least 2 cells with all 3 values present
+         saw:  12 of 12 replicates ok (12 CLAIM_FAIL); 8 full cells of 8 seen
+RESULT: VALIDITY V3_not_a_collision PASS [VALIDITY] no cell returned bit-identical alpha in every replicate | expected PASS | gate zero cells with exactly one distinct value across replicates | saw 0 degenerate cells
+[PASS] VALIDITY V3 not a collision  no cell returned bit-identical alpha in every replicate
+         gate: zero cells with exactly one distinct value across replicates
+         saw:  0 degenerate cells
+RESULT: VALIDITY V4_fresh_cache PASS [VALIDITY] every replicate compiled its own Triton artefacts at every setting | expected PASS | gate minimum fresh-artefact count over replicates and settings >= 1 | saw minimum 16 artefacts over 12 replicates
+[PASS] VALIDITY V4 fresh cache  every replicate compiled its own Triton artefacts at every setting
+         gate: minimum fresh-artefact count over replicates and settings >= 1
+         saw:  minimum 16 artefacts over 12 replicates
+RESULT: VALIDITY V5_homogeneity FAIL [VALIDITY] the cells share a spread, so pooling them into one floor is legitimate | expected PASS | gate max cell sd / min cell sd <= 3 in alpha_corrected | saw 11.18x spread across cells
+[FAIL] VALIDITY V5 homogeneity  the cells share a spread, so pooling them into one floor is legitimate  <-- expected PASS
+         gate: max cell sd / min cell sd <= 3 in alpha_corrected
+         saw:  11.18x spread across cells
+         a FAIL here invalidates: nothing -- a FAIL falls back to the WIDEST cell, which is the conservative floor, and the published number says so
+RESULT: VALIDITY V6_one_instrument PASS [VALIDITY] every replicate was timed by the instrument this repo publishes with | expected PASS | gate every report stamps instrument == 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4' | saw instruments seen: 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'
+[PASS] VALIDITY V6 one instrument  every replicate was timed by the instrument this repo publishes with
+         gate: every report stamps instrument == 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'
+         saw:  instruments seen: 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'
+RESULT: VALIDITY V7_scope PASS [VALIDITY] the floor covers more than the one model where the effect is largest | expected PASS | gate >= 2 models among the arms, or --single-model-floor in argv | saw models measured: mixtral-8x7b, qwen2-57b-a14b
+[PASS] VALIDITY V7 scope  the floor covers more than the one model where the effect is largest
+         gate: >= 2 models among the arms, or --single-model-floor in argv
+         saw:  models measured: mixtral-8x7b, qwen2-57b-a14b
+RESULT: CLAIM C1_floor_size FAIL [CLAIM] the measured floor is no wider than the s3/s4 proxy implied (0.0229) | expected PASS | gate pooled between-replicate sd of alpha_corrected <= 0.0229 | saw pooled sd 0.0229 on 2 df, upper 95% 0.1440
+[FAIL] CLAIM    C1 floor size  the measured floor is no wider than the s3/s4 proxy implied (0.0229)  <-- expected PASS
+         gate: pooled between-replicate sd of alpha_corrected <= 0.0229
+         saw:  pooled sd 0.0229 on 2 df, upper 95% 0.1440
+         a FAIL here invalidates: every N chosen against the prior: a wider floor means the whole study is scored against a looser instrument than it assumed
+RESULT: CLAIM C2_cross-card_under_floor PASS [CLAIM] the published cross-card difference is smaller than one run per card could resolve | expected PASS | gate |paired mean| < the known-sigma MDE at the measured floor, n=1 per card | saw |+0.0117| against MDE 0.0908 at the design the study ran, one run per card
+[PASS] CLAIM    C2 cross-card under floor  the published cross-card difference is smaller than one run per card could resolve
+         gate: |paired mean| < the known-sigma MDE at the measured floor, n=1 per card
+         saw:  |+0.0117| against MDE 0.0908 at the design the study ran, one run per card
+RESULT: CLAIM C3_swizzle_mixtral-8x7b PASS [CLAIM] the GROUP_SIZE_M 1 -> 16 swing on mixtral-8x7b is bigger than the floor at every BLOCK_M (registered at 0.3855) | expected PASS | gate |delta| >= the two-sample MDE at every measured BLOCK_M | saw BM=32 -0.2351 vs MDE 0.0407; BM=64 -0.2555 vs MDE 0.0357
+[PASS] CLAIM    C3 swizzle mixtral-8x7b  the GROUP_SIZE_M 1 -> 16 swing on mixtral-8x7b is bigger than the floor at every BLOCK_M (registered at 0.3855)
+         gate: |delta| >= the two-sample MDE at every measured BLOCK_M
+         saw:  BM=32 -0.2351 vs MDE 0.0407; BM=64 -0.2555 vs MDE 0.0357
+RESULT: CLAIM C3_swizzle_qwen2-57b-a14b PASS [CLAIM] the GROUP_SIZE_M 1 -> 16 swing on qwen2-57b-a14b is bigger than the floor at every BLOCK_M (registered at 0.0226) | expected FAIL | gate |delta| >= the two-sample MDE at every measured BLOCK_M | saw BM=32 +0.0784 vs MDE 0.0504; BM=64 -0.0458 vs MDE 0.0336
+[PASS] CLAIM    C3 swizzle qwen2-57b-a14b  the GROUP_SIZE_M 1 -> 16 swing on qwen2-57b-a14b is bigger than the floor at every BLOCK_M (registered at 0.0226)  <-- expected FAIL
+         gate: |delta| >= the two-sample MDE at every measured BLOCK_M
+         saw:  BM=32 +0.0784 vs MDE 0.0504; BM=64 -0.0458 vs MDE 0.0336
+RESULT: CLAIM C4_card_beats_stages_control FAIL [CLAIM] changing the card moves alpha more than changing num_stages on one card | expected FAIL | gate |cross-card mean| - |stages-control mean| >= the control's own paired MDE | saw |+0.0117| - |+0.0101| = +0.0016 against the control's MDE 0.0303 on n=11
+[FAIL] CLAIM    C4 card beats stages control  changing the card moves alpha more than changing num_stages on one card
+         gate: |cross-card mean| - |stages-control mean| >= the control's own paired MDE
+         saw:  |+0.0117| - |+0.0101| = +0.0016 against the control's MDE 0.0303 on n=11
+         a FAIL here invalidates: the L2 reading of the cross-card arm: a pipelining change on ONE card moves alpha as much as a 1.5x change in L2 capacity, so the cross-card difference cannot be attributed to L2
+RESULT: CLAIM C5_sign_consistency FAIL [CLAIM] the cross-card difference points the same way in every alpha estimator | expected FAIL | gate sign(alpha) == sign(alpha_corrected) == sign(alpha_upper) | saw cross-card alpha +0.0152, alpha_corrected +0.0117, alpha_upper -0.3325 | control alpha +0.0103, alpha_corrected +0.0101, alpha_upper +0.1553 (control signs agree: True)
+[FAIL] CLAIM    C5 sign consistency  the cross-card difference points the same way in every alpha estimator
+         gate: sign(alpha) == sign(alpha_corrected) == sign(alpha_upper)
+         saw:  cross-card alpha +0.0152, alpha_corrected +0.0117, alpha_upper -0.3325  |  control alpha +0.0103, alpha_corrected +0.0101, alpha_upper +0.1553  (control signs agree: True)
+         a FAIL here invalidates: the cross-card result in EITHER direction: an effect whose sign depends on which of three anchorings of the same fit you read is not an effect
+
+9 PASS, 4 FAIL, 0 UNKNOWN
+
+EVERYTHING IS SAVED TO /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3
+  summary /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3/noise_floor.json
+  REFUSING --publish: VALIDITY gates that did not pass: V5 homogeneity (FAIL). A VALIDITY gate that did not pass says this run's spread means nothing. A CLAIM gate failing would NOT have stopped this: that is a result about the floor, not a reason to doubt it. Nothing may land in /workspace/moe-kernels/results/published/NOISE_FLOOR.json, which every other script imports as THE floor; the full summary is under /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3 and nothing in results/published was touched.
+
+## How another script uses this
+
+    import importlib.util, sys
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "replicate_noise_floor",
+        Path("scripts/replicate_noise_floor.py").resolve())
+    NF = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = NF
+    spec.loader.exec_module(NF)
+
+    NF.assert_resolvable(delta, "my cross-card claim")   # raises if too small
+    floor = NF.noise_floor()                             # raises if unmeasured
+    control = NF.stages_control()                        # needs no GPU
+
+`assert_resolvable` raises `EffectBelowNoiseFloor` for anything the instrument
+cannot see and `NoiseFloorUnmeasured` while part (a) has not run. Neither ever
+returns a number nobody measured, so a caller that forgets to handle them stops
+rather than silently deciding its effect is real.
+
+AND FOR A CALLER THAT MUST PRINT A LIMIT EVERY SESSION, MEASURED OR NOT:
+
+    sigma, basis, source = NF.sizing_sigma()   # basis is MEASURED or ASSUMED
+
+The two consumers that still read `prior_sd` straight out of the JSON
+(`scripts/alpha_surface.py:prior_sd`, `scripts/bn_decomposition.py:
+published_prior_sd`) are reading the s3/s4 PROXY, and will still be reading it
+after this arm publishes a measured floor into the same file. One line each.
+
+The file is results/published/NOISE_FLOOR.json.
+
+exit     3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable

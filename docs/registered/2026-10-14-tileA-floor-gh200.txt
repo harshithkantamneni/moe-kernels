@@ -1,0 +1,114 @@
+REGISTERED 2026-10-14, before any tile-stage page: the tile stage, rental A, 2026-10-14-tileA-floor-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4
+tool: scorer scripts/scoring/tileA/score_floor.py; tcommon.joint_cF, floor_test, variant_rule, f_form_rule; model v4 scripts/r3_timing_model_v4.py
+
+eta_mma Luo Table 11 per clock, per instruction (registered): pipe {'128x128x64w8s3': {'B': 769.230769, 'W': 538.461538, 'T': 521.083397}, '64x128x64w8s3': {'B': 538.461538, 'W': 365.384615, 'T': 265.16337}, '64x128x64w4s3': {'B': 461.538462, 'W': 288.461538, 'T': 260.541699}}
+  c128 600: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 384 w4 314; T c64w8 302 w4 298
+  c128 750: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 464 w4 405; T c64w8 398 w4 395
+  c128 900: B c64w8 584 w4 515; W c64w8 555 w4 504; T c64w8 498 w4 496
+  c128 1100: B c64w8 692 w4 633; W c64w8 683 w4 638; T c64w8 633 w4 631
+  c128 1300: B c64w8 813 w4 761; W c64w8 814 w4 772; T c64w8 768 w4 766
+eta_mma Luo Table 9 chip-relative (rival): pipe {'128x128x64w8s3': {'B': 769.230769, 'W': 587.038497, 'T': 587.038497}, '64x128x64w8s3': {'B': 538.461538, 'W': 365.384615, 'T': 298.725899}, '64x128x64w4s3': {'B': 461.538462, 'W': 293.519248, 'T': 293.519248}}
+  c128 600: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 368 w4 297; T c64w8 302 w4 297
+  c128 750: B unreachable (the pipe alone exceeds c_128): FALSIFIED by construction; W c64w8 439 w4 382; T c64w8 386 w4 382
+  c128 900: B c64w8 584 w4 515; W c64w8 531 w4 482; T c64w8 485 w4 482
+  c128 1100: B c64w8 692 w4 633; W c64w8 660 w4 617; T c64w8 620 w4 617
+  c128 1300: B c64w8 813 w4 761; W c64w8 791 w4 752; T c64w8 754 w4 752
+lever accounting B: {'lever_cells': 0, 'max_abs_pct': 0.28408, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+lever accounting T: {'lever_cells': 0, 'max_abs_pct': 0.244963, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+lever F-cyc: {'lever_cells': 0, 'max_abs_pct': 0.028845, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+lever eta_mma rival (Table 9 chip-relative): {'lever_cells': 0, 'max_abs_pct': 0.142595, 'verdict_by_construction': 'NOT SEPARATED (fewer than 6 lever cells on rental B)'}
+
+model_v4:
+  definition: v3 with every tile-dependent quantity read from the tile (scripts/r3_timing_model_v4.py docstring): c_time(tile) = c_card x c_counter(tile) / 344.1 and PHI(tile, g) = F(tile, g) / c_counter(tile); geometry, k-steps, grid, dead CTAs and bytes on the tile's geometry; occupancy from the census
+  reduction_to_v3 (design-tile-review 1a): at R3's tile c_counter is 344.1 and c_scale exactly 1.0, PHI is v3's own CTA_FIXED_KSTEPS (1.512 / 2.846): `python scripts/r3_timing_model_v4.py --check` re-prices all 300 registered v3 predictions of rental6-skew and rental7-skew and requires equality with the registered numbers (6 decimals) and with rental 6's pricer bit for bit (tests/test_tile_v4.py runs it)
+  c_counter:
+    R3 tile: 344.1 (the CAL counters' c)
+    mma.sync: 344.1 x MVA2(W_tile, BK, occ) / MVA2(W_R3, 64, occ_R3,g); W from the census PTX (R3's SEEN PTX gives 280)
+    wgmma 128x128x64 w8 s3: c_128, CAL-A (below)
+    wgmma other: mva(D_accounting(tile), Z_wg, occ): Z_wg puts the 128x128 tile at c_128
+    v4cal: the per-tile c and F measured on that tile's CAL pages (CAL-A), the fallback at 64x128
+  F_forms:
+    F-step (registered, v3's own form): PHI in k-steps carries: PHI_wg,g = F_wg,g / c_128 at every wgmma tile; R3's PHI on the mma.sync path
+    F-cyc (rival): F in cycles carries: PHI = F / c_counter(tile)
+    selection_rule: F-step unless, on rental A's two 64x128 w8 pages (the joint fit's F_64,w1 and F_64,w2), F-cyc is nearer the measured F on BOTH GEMMs AND F-step misses it by more than 3 se on at least one (tcommon.f_form_rule); the two forms are equal at 128x128
+  eta_mma:
+    registered: {"m64n128k16 (128x128 w8)": 0.982568, "m64n64k16 (64x128 w8 and w4)": 0.965443}
+    source: Luo et al., 'Dissecting the NVIDIA Hopper Architecture through Microbenchmarking and Multiple Level Analysis', arXiv 2501.12084, Table 11: m64n256k16 dense SS random data, 583 TFLOPS at 1260 MHz on 114 SMs = 0.991 per clock; carried to m64n128k16 and m64n64k16 by Table 9's within-table random-data ratios 659.8 / 665.4 and 648.3 / 665.4
+    why_per_clock (build-tile-review 1): v4 counts MMA cycles at a locked 1710 MHz, so eta is a per-clock efficiency; Table 11 is the only wgmma rate with its clock recorded
+    what_it_is: MEASURED ON AN H800 PCIe (114 SMs, 350 W cap) WITH FP16 INPUTS; Luo attribute the random-data drop of Table 9 to the power cap lowering the clock
+    assumption: REGISTERED ASSUMPTION: BF16 on the GH200 runs at the same per-clock rate as FP16 on the H800 PCIe; untested here
+    rival: {"value": {"m64n128k16": 0.872174, "m64n64k16": 0.856973}, "source": "Luo et al. Table 9: 659.8 (N 128) and 648.3 (N 64) of the 756.5 TFLOPS chip peak at the 1620 MHz whitepaper clock (chip-relative, the power-capped clock folded in)", "status": "printed beside every accounting; NOT SEPARATED on rental B by construction (0 lever cells)"}
+    sensitivity (build-tile-review 1): {"rows": [{"c128": 600.0, "variant": "B", "f_form": "F-step", "note": "unreachable under one rate"}, {"c128": 600.0, "variant": "B", "f_form": "F-cyc", "note": "unreachable under one rate"}, {"c128": 600.0, "variant": "W", "f_form": "F-step", "c64_registered": 384.299384, "c64_rival": 367.605769, "c64_shift_pct": 4.541173, "phi_64x128_max_T_shift_pct": 0.001}, {"c128": 600.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 384.299384, "c64_rival": 367.605769, "c64_shift_pct": 4.541173, "phi_64x128_max_T_shift_pct": 0.001113}, {"c128": 600.0, "variant": "T", "f_form": "F-step", "c64_registered": 302.040993, "c64_rival": 301.797027, "c64_shift_pct": 0.080838, "phi_64x128_max_T_shift_pct": 1e-06}, {"c128": 600.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 302.040993, "c64_rival": 301.797027, "c64_shift_pct": 0.080838, "phi_64x128_max_T_shift_pct": 1e-06}, {"c128": 750.0, "variant": "B", "f_form": "F-step", "note": "unreachable under one rate"}, {"c128": 750.0, "variant": "B", "f_form": "F-cyc", "note": "unreachable under one rate"}, {"c128": 750.0, "variant": "W", "f_form": "F-step", "c64_registered": 463.503054, "c64_rival": 439.462193, "c64_shift_pct": 5.470519, "phi_64x128_max_T_shift_pct": 0.014836}, {"c128": 750.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 463.503054, "c64_rival": 439.462193, "c64_shift_pct": 5.470519, "phi_64x128_max_T_shift_pct": 0.016315}, {"c128": 750.0, "variant": "T", "f_form": "F-step", "c64_registered": 397.971292, "c64_rival": 386.235599, "c64_shift_pct": 3.03848, "phi_64x128_max_T_shift_pct": 0.001153}, {"c128": 750.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 397.971292, "c64_rival": 386.235599, "c64_shift_pct": 3.03848, "phi_64x128_max_T_shift_pct": 0.001324}, {"c128": 900.0, "variant": "B", "f_form": "F-step", "c64_registered": 583.531047, "c64_rival": 583.531047, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 900.0, "variant": "B", "f_form": "F-cyc", "c64_registered": 583.531047, "c64_rival": 583.531047, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 900.0, "variant": "W", "f_form": "F-step", "c64_registered": 555.056578, "c64_rival": 530.916825, "c64_shift_pct": 4.546805, "phi_64x128_max_T_shift_pct": 0.142798}, {"c128": 900.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 555.056578, "c64_rival": 530.916825, "c64_shift_pct": 4.546805, "phi_64x128_max_T_shift_pct": 0.153043}, {"c128": 900.0, "variant": "T", "f_form": "F-step", "c64_registered": 498.412618, "c64_rival": 485.023673, "c64_shift_pct": 2.760472, "phi_64x128_max_T_shift_pct": 0.023539}, {"c128": 900.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 498.412618, "c64_rival": 485.023673, "c64_shift_pct": 2.760472, "phi_64x128_max_T_shift_pct": 0.026027}, {"c128": 1100.0, "variant": "B", "f_form": "F-step", "c64_registered": 691.774884, "c64_rival": 691.774884, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1100.0, "variant": "B", "f_form": "F-cyc", "c64_registered": 691.774884, "c64_rival": 691.774884, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1100.0, "variant": "W", "f_form": "F-step", "c64_registered": 682.99968, "c64_rival": 659.702719, "c64_shift_pct": 3.531433, "phi_64x128_max_T_shift_pct": 0.773054}, {"c128": 1100.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 682.99968, "c64_rival": 659.702719, "c64_shift_pct": 3.531433, "phi_64x128_max_T_shift_pct": 0.783735}, {"c128": 1100.0, "variant": "T", "f_form": "F-step", "c64_registered": 633.294235, "c64_rival": 619.515509, "c64_shift_pct": 2.224113, "phi_64x128_max_T_shift_pct": 0.31154}, {"c128": 1100.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 633.294235, "c64_rival": 619.515509, "c64_shift_pct": 2.224113, "phi_64x128_max_T_shift_pct": 0.322897}, {"c128": 1300.0, "variant": "B", "f_form": "F-step", "c64_registered": 813.298313, "c64_rival": 813.298313, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1300.0, "variant": "B", "f_form": "F-cyc", "c64_registered": 813.298313, "c64_rival": 813.298313, "c64_shift_pct": 0.0, "phi_64x128_max_T_shift_pct": 0.0}, {"c128": 1300.0, "variant": "W", "f_form": "F-step", "c64_registered": 813.586406, "c64_rival": 791.140246, "c64_shift_pct": 2.837191, "phi_64x128_max_T_shift_pct": 1.298474}, {"c128": 1300.0, "variant": "W", "f_form": "F-cyc", "c64_registered": 813.586406, "c64_rival": 791.140246, "c64_shift_pct": 2.837191, "phi_64x128_max_T_shift_pct": 1.310806}, {"c128": 1300.0, "variant": "T", "f_form": "F-step", "c64_registered": 768.160052, "c64_rival": 754.45005, "c64_shift_pct": 1.817218, "phi_64x128_max_T_shift_pct": 0.664786}, {"c128": 1300.0, "variant": "T", "f_form": "F-cyc", "c64_registered": 768.160052, "c64_rival": 754.45005, "c64_shift_pct": 1.817218, "phi_64x128_max_T_shift_pct": 0.668001}], "max_c64_shift_pct": 5.470519, "phi_64x128_max_T_shift_pct": 1.310806, "128x128_T_shift_pct": 0.0, "lever_cells": 0, "c64_shift_beyond_the_3pct_band": ["c128 600 W F-step", "c128 600 W F-cyc", "c128 750 W F-step", "c128 750 W F-cyc", "c128 750 T F-step", "c128 750 T F-cyc", "c128 900 W F-step", "c128 900 W F-cyc", "c128 1100 W F-step", "c128 1100 W F-cyc"], "selection_effect": "the 3% accounting band is DESCRIPTIVE, but its selection decides whether rental B derives c_64 or takes v4cal (D3). Where the eta choice moves c_64 by more than 3% (the cases listed) it can change WHICH accounting holds on rental A's 64x128 pages, so the selection is read under the registered (per-clock) rate only; under v4cal the eta effect on rental B is 0"}
+  eta_smem:
+    value: 0.832
+    status: UNTESTED REUSE: MVA2's eta, fitted on mma.sync LSU wavefronts (rental 4, SEEN-fitted), divides shared bytes on the wgmma path too
+  accountings:
+    B: wgmma operand reads plus cp.async writes, both at 128 B/clk/SM on one port
+    W: operand reads at 128 B/clk/SM, cp.async writes as LDGSTS wavefronts (1 per 512 B)
+    T: tensor-bound only (MMA cycles)
+calibration (CAL-A):
+  pages: f128: OLMoE and Mixtral 8x7B, 128x128x64 w8 s3, G 64 counter pages, treads 1..9 (R3's counter ladder)
+  estimator: tcommon.joint_cF: sm__cycles_elapsed.avg = a(page model, GEMM, arm) + ceil(N_live / 132) (S_g c + F_g), one c for both GEMMs and both models, F_w1 and F_w2, by least squares over the NATIVE and SHARED cells at n 4..9 whose GEMM reads DRAM at no more than 0.5 x 4022 GB/s (each cell's own GEMM's dram_bytes_read over its gpu_time_ns, design-tile-review 9.4); OLMoE S 32 / 16 and Mixtral S 64 / 224 give four depths
+  outputs: c_128, F_wg,w1, F_wg,w2 (3 CAL-A constants), then Z_wg per accounting at the census occupancy (r3_timing_model_v4.z_wg); an accounting whose pipe alone exceeds c_128 is FALSIFIED by construction
+  refusal: fewer than 6 floor-bound cells or a rank-deficient design: NOT SCORED, and rental B does not run (no v4)
+test (BLIND-CALMODEL, DESCRIPTIVE):
+  pages: f64w8: OLMoE and Mixtral 8x7B at 64x128x64 w8 s3, G 64; f64w4 (drop-group w4): OLMoE at w4, printed
+  statistic: per (model, GEMM): u = S c + F; u_meas from the 64x128 joint fit (same estimator), u_pred from each accounting's c_64 and the registered F form; e = u_pred / u_meas - 1
+  rule: an accounting HOLDS when every |e| <= 3% (design-tile-review 9.4: within 3% of u, on the floor-bound n 4..9 cells of each page)
+  status: DESCRIPTIVE (design-tile-review 1c): the accounting reading has no consequence for E1-TILE; B, W and T move rental B's predictions by at most 0.28408% at the nominal constants
+  w4: the w4 page is printed only (w8 and w4 issue different instructions and their per-iteration delay may differ, so T's w8 / w4 = 1.00 is not a hard prediction); when dropped nothing changes
+  mma_sync_32x128_w4: MVA2 on the census wavefronts at 32x128x64 w4 s3: HOLDS / FAILS within 3% of the page's c, printed for D1 (the decode tiles' only floor evidence); MVA2 is SEEN-fitted (D5)
+selection_for_rental_B (D3):
+  accounting: tcommon.variant_rule: the accounting that HOLDS on every scored (model, GEMM) of the 64x128 w8 pages while every other FAILS or is unreachable is SELECTED and rental B's v4 derives c_64 from it; otherwise UNDECIDED and rental B's v4 takes v4cal at 64x128 (the joint fit's c_64, F_64,w1, F_64,w2, CAL-A: 3 conditional constants). At 128x128 v4 and v4cal are the same model (both read c_128 and F_wg)
+  F_form: tcommon.f_form_rule (above)
+  unselected: the other accountings, F-cyc and the eta_mma rival are printed as rivals on rental B; lever counts at the nominal constants below (fewer than 6: NOT SEPARATED by construction, stated before the page)
+  lever_counts_on_B:
+    accounting B: {"lever_cells": 0, "max_abs_pct": 0.28408, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    accounting T: {"lever_cells": 0, "max_abs_pct": 0.244963, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    F-cyc: {"lever_cells": 0, "max_abs_pct": 0.028845, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+    eta_mma rival (Table 9 chip-relative): {"lever_cells": 0, "max_abs_pct": 0.142595, "verdict_by_construction": "NOT SEPARATED (fewer than 6 lever cells on rental B)"}
+parameters:
+  hardware (no fit): 132 SMs, the 1710 MHz lock, 4096 flop/clk/SM dense bf16, 128 B/clk/SM shared, the sm_90 occupancy limits
+  derived or read (no fit): geometry, k-steps, N-tiles, grid, dead CTAs, bytes per k-step and wavefronts from the census PTX, occupancy from the census cubins
+  carried from v3: 22 fitted (T2) + d, kappa, h
+  fitted, new in the timing model: 6:
+    - MVA2 eta, z0, z1 (SEEN-fitted at rental 4; mma.sync, D5)
+    - Z_wg, F_wg,w1, F_wg,w2 (CAL-A on the 128x128 counter pages; c_128 is the calibration's measured c, the analogue of v3's 344.1)
+  selections: 3:
+    - the wgmma accounting B / W / T (DESCRIPTIVE reading, rule above)
+    - the A key v3 / CLAMP / ROWKEY60 / ROWKEY30 (tileA-bytes)
+    - F-step / F-cyc (rule above)
+  uncertain inputs:
+    - eta_mma (Luo Table 11 per clock, H800 PCIe FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857)
+    - eta_smem = MVA2's eta, an untested reuse
+  conditional:
+    - v4cal adds 3 CAL-A constants at 64x128 when no accounting is selected
+    - ROWKEY60's 60 MiB is SEEN-chosen if it is NAMED
+mma_sync_design (derived, DESCRIPTIVE):
+  32x128x64w4s3:
+    occupancy: 5
+    design_wavefronts: 360.0
+    c_counter_w1: 442.138866
+    c_counter_w2: 439.787222
+  16x64x128w4s4:
+    occupancy: 3
+    design_wavefronts: 296.0
+    c_counter_w1: 363.42178
+    c_counter_w2: 361.488817
+  32x64x128w4s3:
+    occupancy: 4
+    design_wavefronts: 432.0
+    c_counter_w1: 530.399355
+    c_counter_w2: 527.578273
+nominal: DESIGN-NOMINAL: c_128 900 counter cycles (design-tile 2.2's mid value), F_wg the R3 tile's CAL 520 / 979, accounting W, F-step, A key CLAMP; for levers, sensitivities and power only, never a registered prediction
+labels:
+  c_128, F_wg, Z_wg: CAL-A
+  64x128 test: BLIND-CALMODEL, DESCRIPTIVE
+  MVA2: SEEN-fitted (D5)
+  eta_mma: SEEN third party, another card and dtype (assumption registered)
+seen_data:
+  - MVA2's eta, z0, z1
+  - the CAL F 520 / 979 and c 344.1 (R3's tile)
+  - Luo et al. Tables 9 and 11

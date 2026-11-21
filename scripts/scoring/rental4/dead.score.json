@@ -1,0 +1,549 @@
+{
+ "registration": "2026-10-06-rental4-dead-gh200",
+ "contrasts": {
+  "A1": {
+   "model": "qwen2-57b-a14b-tp8",
+   "pages": {
+    "c9": "counted",
+    "c15": "counted"
+   },
+   "label": "the c15 page is NOT JOINABLE TO COUNTER BYTES",
+   "treads": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "Delta_n_us": {
+    "3": 23.328036069869995,
+    "4": 22.912025451660156,
+    "5": 22.751986980438232,
+    "6": 22.112011909484863,
+    "7": 22.703975439071655,
+    "8": 22.512048482894897,
+    "9": 22.527992725372314
+   },
+   "align_n_us": {
+    "3": 0.0429993961006403,
+    "4": -0.012000557035207748,
+    "5": 0.02400018274784088,
+    "6": -0.22200029343366623,
+    "7": -0.45400019735097885,
+    "8": -0.28299959376454353,
+    "9": -0.5160002037882805
+   },
+   "Delta_raw_us": 22.703975439071655,
+   "Delta_us": 22.92597573250532,
+   "null_n_us": {
+    "3": 0.9599924087524414,
+    "4": 0.3840029239654541,
+    "5": 0.576019287109375,
+    "6": 0.9599924087524414,
+    "7": 0.4639923572540283,
+    "8": 1.4719963073730469,
+    "9": 0.7680058479309082
+   },
+   "null_control": {
+    "median_us": 0.7680058479309082,
+    "bound_us": 5.1944584096461,
+    "verdict": "PASS"
+   },
+   "z": {
+    "registered": {
+     "D": 1.7933290258812329,
+     "D2": 1.632239702783692,
+     "M": -5.381200297216308,
+     "K5": 2.4423730361170235,
+     "K0": -1.6702936305496427,
+     "SLOT": 2.0373063694503557,
+     "FIXED": 25.473306369450356
+    },
+    "resolution": {
+     "D": 2.323615845703757,
+     "D2": 3.264479405567384,
+     "M": -10.762400594432616,
+     "K5": 4.884746072234047,
+     "K0": -3.3405872610992855,
+     "SLOT": 4.074612738900711,
+     "FIXED": 50.94661273890071
+    }
+   },
+   "sigma_noise_us": 0.9
+  },
+  "A2": {
+   "model": "olmoe-1b-7b",
+   "pages": {
+    "c9": "counted",
+    "c15": "counted"
+   },
+   "label": "the c15 page is NOT JOINABLE TO COUNTER BYTES",
+   "treads": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "Delta_n_us": {
+    "3": 25.056004524230957,
+    "4": 24.28799867630005,
+    "5": 23.263931274414062,
+    "6": 23.855984210968018,
+    "7": 24.448037147521973,
+    "8": 24.23989772796631,
+    "9": 24.480044841766357
+   },
+   "align_n_us": {
+    "3": 0.1300000585615635,
+    "4": -0.02800021320581436,
+    "5": -0.15799980610609055,
+    "6": -0.14199968427419662,
+    "7": -0.36999955773353577,
+    "8": -0.37200096994638443,
+    "9": -0.6070001982152462
+   },
+   "Delta_raw_us": 24.28799867630005,
+   "Delta_us": 24.44599848240614,
+   "null_n_us": {
+    "3": 0.0,
+    "4": -0.6719827651977539,
+    "5": 0.5440115928649902,
+    "6": 0.0,
+    "7": -0.1920461654663086,
+    "8": 0.048041343688964844,
+    "9": 0.031948089599609375
+   },
+   "null_control": {
+    "median_us": 0.0,
+    "bound_us": 8.105222437531415,
+    "verdict": "PASS"
+   },
+   "z": {
+    "registered": {
+     "D": 0.5781824200998124,
+     "D2": 1.2379538693401553,
+     "M": -8.10007279732651,
+     "K5": 0.8411538693401531,
+     "K0": 0.8411538693401531,
+     "SLOT": 3.0566205360068226,
+     "FIXED": 27.16222053600682
+    },
+    "resolution": {
+     "D": 0.7195623264235157,
+     "D2": 2.4759077386803106,
+     "M": -16.20014559465302,
+     "K5": 1.6823077386803063,
+     "K0": 1.6823077386803063,
+     "SLOT": 6.113241072013645,
+     "FIXED": 54.32444107201364
+    }
+   },
+   "sigma_noise_us": 0.9
+  }
+ },
+ "verdicts": {
+  "D": {
+   "verdict": "HOLDS",
+   "z": {
+    "A1": 1.7933290258812329,
+    "A2": 0.5781824200998124
+   }
+  },
+  "D2": {
+   "verdict": "HOLDS",
+   "z": {
+    "A1": 1.632239702783692,
+    "A2": 1.2379538693401553
+   }
+  },
+  "M": {
+   "verdict": "EXCLUDED on ['A1', 'A2']",
+   "z": {
+    "A1": -5.381200297216308,
+    "A2": -8.10007279732651
+   }
+  },
+  "K0": {
+   "verdict": "NOT EXCLUDED",
+   "z": {
+    "A1": -1.6702936305496427,
+    "A2": 0.8411538693401531
+   }
+  },
+  "SLOT": {
+   "verdict": "EXCLUDED on ['A2']",
+   "z": {
+    "A1": 2.0373063694503557,
+    "A2": 3.0566205360068226
+   }
+  },
+  "FIXED": {
+   "verdict": "EXCLUDED on ['A1', 'A2']"
+  },
+  "K5": {
+   "verdict": "NOT TESTED (equals D on A1 and A2; A3 is cut)"
+  }
+ },
+ "resolution_verdicts": {
+  "A1": {
+   "D": "within 3",
+   "D2": "beyond 3",
+   "M": "beyond 3",
+   "K5": "beyond 3",
+   "K0": "beyond 3",
+   "SLOT": "beyond 3",
+   "FIXED": "beyond 3"
+  },
+  "A2": {
+   "D": "within 3",
+   "D2": "within 3",
+   "M": "beyond 3",
+   "K5": "within 3",
+   "K0": "within 3",
+   "SLOT": "beyond 3",
+   "FIXED": "beyond 3"
+  }
+ },
+ "per_gemm_d_printed": {
+  "d_w2_ns": 1.1005172682654245,
+  "d_w1_ns": 0.953078034356059
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "qwen2-57b-a14b-tp8-c9": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2-lock1710",
+     "use": "counted"
+    }
+   },
+   "qwen2-57b-a14b-tp8-c15": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2b-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2b-lock1710",
+     "use": "counted"
+    }
+   },
+   "olmoe-1b-7b-c9": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2c-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2c-lock1710",
+     "use": "counted"
+    }
+   },
+   "olmoe-1b-7b-c15": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2d-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T224900Z-p2d-lock1710",
+     "use": "counted"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "contrasts / A1 / null_control / verdict",
+    "ALL": "PASS",
+    "CLEAN": "PASS",
+    "registered": "PASS"
+   },
+   {
+    "path": "contrasts / A2 / null_control / verdict",
+    "ALL": "PASS",
+    "CLEAN": "PASS",
+    "registered": "PASS"
+   },
+   {
+    "path": "verdicts / D / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "verdicts / D2 / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "verdicts / M / verdict",
+    "ALL": "EXCLUDED on ['A1', 'A2']",
+    "CLEAN": "EXCLUDED on ['A1', 'A2']",
+    "registered": "EXCLUDED on ['A1', 'A2']"
+   },
+   {
+    "path": "verdicts / K0 / verdict",
+    "ALL": "NOT EXCLUDED",
+    "CLEAN": "NOT EXCLUDED",
+    "registered": "NOT EXCLUDED"
+   },
+   {
+    "path": "verdicts / SLOT / verdict",
+    "ALL": "EXCLUDED on ['A2']",
+    "CLEAN": "EXCLUDED on ['A2']",
+    "registered": "EXCLUDED on ['A2']"
+   },
+   {
+    "path": "verdicts / FIXED / verdict",
+    "ALL": "EXCLUDED on ['A1', 'A2']",
+    "CLEAN": "EXCLUDED on ['A1', 'A2']",
+    "registered": "EXCLUDED on ['A1', 'A2']"
+   },
+   {
+    "path": "verdicts / K5 / verdict",
+    "ALL": "NOT TESTED (equals D on A1 and A2; A3 is cut)",
+    "CLEAN": "NOT TESTED (equals D on A1 and A2; A3 is cut)",
+    "registered": "NOT TESTED (equals D on A1 and A2; A3 is cut)"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-06-rental4-dead-gh200",
+   "contrasts": {
+    "A1": {
+     "model": "qwen2-57b-a14b-tp8",
+     "pages": {
+      "c9": "counted",
+      "c15": "counted"
+     },
+     "label": "the c15 page is NOT JOINABLE TO COUNTER BYTES",
+     "treads": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "Delta_n_us": {
+      "3": 23.328036069869995,
+      "4": 22.912025451660156,
+      "5": 22.751986980438232,
+      "6": 22.112011909484863,
+      "7": 22.703975439071655,
+      "8": 22.512048482894897,
+      "9": 22.527992725372314
+     },
+     "align_n_us": {
+      "3": 0.0429993961006403,
+      "4": -0.012000557035207748,
+      "5": 0.02400018274784088,
+      "6": -0.22200029343366623,
+      "7": -0.45400019735097885,
+      "8": -0.28299959376454353,
+      "9": -0.5160002037882805
+     },
+     "Delta_raw_us": 22.703975439071655,
+     "Delta_us": 22.92597573250532,
+     "null_n_us": {
+      "3": 0.9599924087524414,
+      "4": 0.3840029239654541,
+      "5": 0.576019287109375,
+      "6": 0.9599924087524414,
+      "7": 0.4639923572540283,
+      "8": 1.4719963073730469,
+      "9": 0.7680058479309082
+     },
+     "null_control": {
+      "median_us": 0.7680058479309082,
+      "bound_us": 5.1944584096461,
+      "verdict": "PASS"
+     },
+     "z": {
+      "registered": {
+       "D": 1.7933290258812329,
+       "D2": 1.632239702783692,
+       "M": -5.381200297216308,
+       "K5": 2.4423730361170235,
+       "K0": -1.6702936305496427,
+       "SLOT": 2.0373063694503557,
+       "FIXED": 25.473306369450356
+      },
+      "resolution": {
+       "D": 2.323615845703757,
+       "D2": 3.264479405567384,
+       "M": -10.762400594432616,
+       "K5": 4.884746072234047,
+       "K0": -3.3405872610992855,
+       "SLOT": 4.074612738900711,
+       "FIXED": 50.94661273890071
+      }
+     },
+     "sigma_noise_us": 0.9
+    },
+    "A2": {
+     "model": "olmoe-1b-7b",
+     "pages": {
+      "c9": "counted",
+      "c15": "counted"
+     },
+     "label": "the c15 page is NOT JOINABLE TO COUNTER BYTES",
+     "treads": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "Delta_n_us": {
+      "3": 25.056004524230957,
+      "4": 24.28799867630005,
+      "5": 23.263931274414062,
+      "6": 23.855984210968018,
+      "7": 24.448037147521973,
+      "8": 24.23989772796631,
+      "9": 24.480044841766357
+     },
+     "align_n_us": {
+      "3": 0.1300000585615635,
+      "4": -0.02800021320581436,
+      "5": -0.15799980610609055,
+      "6": -0.14199968427419662,
+      "7": -0.36999955773353577,
+      "8": -0.37200096994638443,
+      "9": -0.6070001982152462
+     },
+     "Delta_raw_us": 24.28799867630005,
+     "Delta_us": 24.44599848240614,
+     "null_n_us": {
+      "3": 0.0,
+      "4": -0.6719827651977539,
+      "5": 0.5440115928649902,
+      "6": 0.0,
+      "7": -0.1920461654663086,
+      "8": 0.048041343688964844,
+      "9": 0.031948089599609375
+     },
+     "null_control": {
+      "median_us": 0.0,
+      "bound_us": 8.105222437531415,
+      "verdict": "PASS"
+     },
+     "z": {
+      "registered": {
+       "D": 0.5781824200998124,
+       "D2": 1.2379538693401553,
+       "M": -8.10007279732651,
+       "K5": 0.8411538693401531,
+       "K0": 0.8411538693401531,
+       "SLOT": 3.0566205360068226,
+       "FIXED": 27.16222053600682
+      },
+      "resolution": {
+       "D": 0.7195623264235157,
+       "D2": 2.4759077386803106,
+       "M": -16.20014559465302,
+       "K5": 1.6823077386803063,
+       "K0": 1.6823077386803063,
+       "SLOT": 6.113241072013645,
+       "FIXED": 54.32444107201364
+      }
+     },
+     "sigma_noise_us": 0.9
+    }
+   },
+   "verdicts": {
+    "D": {
+     "verdict": "HOLDS",
+     "z": {
+      "A1": 1.7933290258812329,
+      "A2": 0.5781824200998124
+     }
+    },
+    "D2": {
+     "verdict": "HOLDS",
+     "z": {
+      "A1": 1.632239702783692,
+      "A2": 1.2379538693401553
+     }
+    },
+    "M": {
+     "verdict": "EXCLUDED on ['A1', 'A2']",
+     "z": {
+      "A1": -5.381200297216308,
+      "A2": -8.10007279732651
+     }
+    },
+    "K0": {
+     "verdict": "NOT EXCLUDED",
+     "z": {
+      "A1": -1.6702936305496427,
+      "A2": 0.8411538693401531
+     }
+    },
+    "SLOT": {
+     "verdict": "EXCLUDED on ['A2']",
+     "z": {
+      "A1": 2.0373063694503557,
+      "A2": 3.0566205360068226
+     }
+    },
+    "FIXED": {
+     "verdict": "EXCLUDED on ['A1', 'A2']"
+    },
+    "K5": {
+     "verdict": "NOT TESTED (equals D on A1 and A2; A3 is cut)"
+    }
+   },
+   "resolution_verdicts": {
+    "A1": {
+     "D": "within 3",
+     "D2": "beyond 3",
+     "M": "beyond 3",
+     "K5": "beyond 3",
+     "K0": "beyond 3",
+     "SLOT": "beyond 3",
+     "FIXED": "beyond 3"
+    },
+    "A2": {
+     "D": "within 3",
+     "D2": "within 3",
+     "M": "beyond 3",
+     "K5": "within 3",
+     "K0": "within 3",
+     "SLOT": "beyond 3",
+     "FIXED": "beyond 3"
+    }
+   },
+   "per_gemm_d_printed": {
+    "d_w2_ns": 1.1005172682654245,
+    "d_w1_ns": 0.953078034356059
+   }
+  }
+ }
+}

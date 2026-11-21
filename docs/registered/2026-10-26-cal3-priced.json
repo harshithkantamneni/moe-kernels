@@ -1,0 +1,499 @@
+{
+ "generator": "moe-kernels-work 2026-10-26 build-C3/work/priced_c3.py (offline, read-only; run from refit4/work)",
+ "lomo_constants": {
+  "K1": "[p_128, S0 k-steps] (K1 at the triad)",
+  "N0": "p_128 (null form, carried bw)"
+ },
+ "rows": [
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1278533.9,
+   "gemm": "w1",
+   "label": "PT",
+   "live": 3680,
+   "meas_ms": 0.9127078,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.881713,
+   "pred_ms_N0": 0.8901374,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 653901.0,
+   "gemm": "w2",
+   "label": "PT",
+   "live": 2576,
+   "meas_ms": 0.4668007,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.4609323,
+   "pred_ms_N0": 0.4631172,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1434693.8,
+   "gemm": "w1",
+   "label": "PW",
+   "live": 4160,
+   "meas_ms": 1.0241858,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.9920234,
+   "pred_ms_N0": 1.0007526,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 738523.9,
+   "gemm": "w2",
+   "label": "PW",
+   "live": 2912,
+   "meas_ms": 0.5272105,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.5208449,
+   "pred_ms_N0": 0.5230922,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1004601.8,
+   "gemm": "w1",
+   "label": "uniform",
+   "live": 2560,
+   "meas_ms": 0.7171557,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.7153735,
+   "pred_ms_N0": 0.7205398,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 527688.0,
+   "gemm": "w2",
+   "label": "uniform",
+   "live": 1792,
+   "meas_ms": 0.376701,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.3778172,
+   "pred_ms_N0": 0.3762347,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1000323.7,
+   "gemm": "w1",
+   "label": "balanced",
+   "live": 2560,
+   "meas_ms": 0.7141017,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.7153707,
+   "pred_ms_N0": 0.7205372,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 526218.4,
+   "gemm": "w2",
+   "label": "balanced",
+   "live": 1792,
+   "meas_ms": 0.3756519,
+   "model": "qwen2-57b-a14b",
+   "n": 1,
+   "pred_ms_K1": 0.377819,
+   "pred_ms_N0": 0.3762363,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 2136391.8,
+   "gemm": "w1",
+   "label": "PT",
+   "live": 6560,
+   "meas_ms": 1.5251074,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 1.5024305,
+   "pred_ms_N0": 1.5093079,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1101851.3,
+   "gemm": "w2",
+   "label": "PT",
+   "live": 4592,
+   "meas_ms": 0.7865793,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 0.7768956,
+   "pred_ms_N0": 0.7779451,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 2100213.8,
+   "gemm": "w1",
+   "label": "PW",
+   "live": 6440,
+   "meas_ms": 1.499281,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 1.4735042,
+   "pred_ms_N0": 1.4805248,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1087132.4,
+   "gemm": "w2",
+   "label": "PW",
+   "live": 4508,
+   "meas_ms": 0.7760719,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 0.7767145,
+   "pred_ms_N0": 0.7776997,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1690258.7,
+   "gemm": "w1",
+   "label": "uniform",
+   "live": 5120,
+   "meas_ms": 1.2066261,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 1.1793406,
+   "pred_ms_N0": 1.186343,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 876589.8,
+   "gemm": "w2",
+   "label": "uniform",
+   "live": 3584,
+   "meas_ms": 0.6257718,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 0.6261016,
+   "pred_ms_N0": 0.628009,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 1691429.5,
+   "gemm": "w1",
+   "label": "balanced",
+   "live": 5120,
+   "meas_ms": 1.2074618,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 1.1797816,
+   "pred_ms_N0": 1.1868672,
+   "unit": "b128g1"
+  },
+  {
+   "board": "A2",
+   "const_K1": [
+    7.0,
+    2.25
+   ],
+   "const_N0": [
+    6.25
+   ],
+   "cycles": 875170.8,
+   "gemm": "w2",
+   "label": "balanced",
+   "live": 3584,
+   "meas_ms": 0.6247587,
+   "model": "qwen2-57b-a14b",
+   "n": 2,
+   "pred_ms_K1": 0.6260593,
+   "pred_ms_N0": 0.6279598,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 1915663.7,
+   "gemm": "w1",
+   "label": "PT",
+   "live": 4480,
+   "meas_ms": 1.3675361,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 1.4133151,
+   "pred_ms_N0": 1.4238147,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 825494.6,
+   "gemm": "w2",
+   "label": "PT",
+   "live": 640,
+   "meas_ms": 0.5892964,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 0.5718676,
+   "pred_ms_N0": 0.5742183,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 1902397.5,
+   "gemm": "w1",
+   "label": "PW",
+   "live": 4480,
+   "meas_ms": 1.3580657,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 1.4047029,
+   "pred_ms_N0": 1.415171,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 827500.7,
+   "gemm": "w2",
+   "label": "PW",
+   "live": 640,
+   "meas_ms": 0.5907284,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 0.5710046,
+   "pred_ms_N0": 0.5731157,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 1544428.0,
+   "gemm": "w1",
+   "label": "uniform",
+   "live": 3584,
+   "meas_ms": 1.1025218,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 1.1398945,
+   "pred_ms_N0": 1.1484377,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 650462.9,
+   "gemm": "w2",
+   "label": "uniform",
+   "live": 512,
+   "meas_ms": 0.4643464,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 0.4636498,
+   "pred_ms_N0": 0.4650719,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 1542023.4,
+   "gemm": "w1",
+   "label": "balanced",
+   "live": 3584,
+   "meas_ms": 1.1008052,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 1.1398133,
+   "pred_ms_N0": 1.1483561,
+   "unit": "b128g1"
+  },
+  {
+   "board": "C2",
+   "const_K1": [
+    6.0,
+    2.0
+   ],
+   "const_N0": [
+    5.75
+   ],
+   "cycles": 649237.9,
+   "gemm": "w2",
+   "label": "balanced",
+   "live": 512,
+   "meas_ms": 0.4634718,
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "pred_ms_K1": 0.4635742,
+   "pred_ms_N0": 0.4649784,
+   "unit": "b128g1"
+  }
+ ],
+ "sources_sha256": {
+  "2026-10-22/diag-v5/work/d5.py": "09e86b88d56834f8055e3e0639697563d6fe571b2fe2c542bae398d33f27e12a",
+  "2026-10-22/knee-v5/work/k5.py": "02e06a689ecec4e492deac6c911f6a8fe107c152144850c517a6a8c894b80435",
+  "2026-10-22/refit4/work/bytes4.json": "86a6a2edd6e0096af8f226140904fa4e40b7bd0862d00656c53012a478f968bb",
+  "2026-10-22/refit4/work/knee2r.json": "6dc6d257bea33ac2831f290440fac00b3839b2634a5fd3e039bffc56a68a4c97",
+  "2026-10-22/refit4/work/r4.py": "cbc0587e57e645ac3a6476577dfeb230bfbb38783282ae766da19a2b82b5c3d6",
+  "2026-10-22/refit4/work/refit4.py": "4ab08ff866efd5062077f1e9e86993cbe8ac735ec58b34643b43949cd3f238df",
+  "2026-10-26/build-C3/work/priced_c3.py": "cf97d06306e70b769a4eae58ebe6ca514b70a84fa161c348304aa23a132c511e"
+ },
+ "what": "the priced 128 G 1 GEMM times of C3's cells (A2's E1-CAL cells, NATIVE): refit4 ROUND2's selected knee K1 (triad rate 3726.2 GB/s, p and S0) and the null knee N0 (carried bw 3597.8 GB/s, p), each at its LOMO constants with the priced model held out (knee2r.json), on counted bytes of the board's own b128g1 counter page (Mixtral-8x7B: C2's; Qwen2-57B: A2's), dead CTAs included; meas_ms is that page's counted GEMM time (cycles / 1400.8 MHz, the rows' own conversion)"
+}

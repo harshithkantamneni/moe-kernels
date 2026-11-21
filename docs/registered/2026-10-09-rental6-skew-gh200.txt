@@ -1,0 +1,185 @@
+REGISTERED 2026-10-09, before any rental-6 page: rental 6, 2026-10-09-rental6-skew-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r6 DESIGN.md corrected by design-r6-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-09 (1-6 accepted; h kept and labelled SEEN-FITTED)
+tool: scorer scripts/scoring/rental6/score_skew.py; predictions r6model.py via reg6.py; histograms scripts/skew_synth.py --draw6
+
+mixtral-8x7b: r_v3 - 1 [1.5636, 16.1634] %; T_v3 [1714.051, 9183.628] us
+olmoe-1b-7b: r_v3 - 1 [2.9215, 15.3573] %; T_v3 [552.962, 2199.688] us
+phi-3.5-moe: r_v3 - 1 [3.4786, 23.7909] %; T_v3 [1035.058, 6185.892] us
+rival v2: rms gap 0.218057%, worst 0.769015%, lever cells 7
+rival LT3: rms gap 0.970773%, worst -2.404792%, lever cells 86
+rival H8: rms gap 0.354906%, worst 1.160739%, lever cells 20
+rival v3_all: rms gap 0.133279%, worst -0.61025%, lever cells 4
+rival v3_noca: rms gap 0.000864%, worst 0.003865%, lever cells 0
+rival v3_nob: rms gap 0.21782%, worst 0.768494%, lever cells None
+
+model: model v3 (docs/registered/2026-10-09-rental6-v3-gh200); every cell carries v2, v3, v3_nob, v3_noca, LT3, v3_all and H8 (ms)
+histograms:
+  synthetic: SYNTHETIC: rental 5's fitted Zipf / Dirichlet shapes, (kind, param) log-B interpolated to the new treads (Phi: Mixtral's shapes at Phi's B, owner decision 4), one deterministic draw per (model, n, label) at seed 20261010 + 1000 x shape index + 10 n + label index (PT 0, PW 1, DW 2, PW2 3); shuffle seed 20261010
+  files: (in the JSON)
+cells:
+  common: R3's tile 32x64x64 w8 s4 at G = 8; NATIVE and SHARED at 9 copies (not vLLM's tile: nothing here is the working bar on vLLM's tile)
+  pages:
+    A: PT, PW, uniform, balanced
+    B: DW, uniform, balanced
+    C: PW2 (a second PW draw), uniform, balanced
+  treads:
+    mixtral-8x7b: [3, 6, 16]
+    olmoe-1b-7b: [3, 6, 12]
+    phi-3.5-moe: [2, 4, 12]
+  n_stratum: G3's stratum is the tread's rank within its shape
+  dropped: the permutation cells (owner decision 6); Mixtral's byte page (review (c): lever at most 0.29%)
+rowkey_rival:
+  file: docs/registered/2026-10-09-rental6-skew-hist/rowkey_rival.json
+  sha256: 6f856352138876b2493cec40bd8dae4ca869377f4337f0e51174c83ea7f8ef02
+  tool: scripts/scoring/rental6/rowkeys.py
+  device: mps
+  dtype: float32
+  cpu_float64_check:
+    - {"label": "PT", "n": 3, "arm": "native", "cpu_float64": 598080128.0, "rel_diff": 0.0, "cpu_wall_s": 3.4}
+    - {"label": "PT", "n": 3, "arm": "shared", "cpu_float64": 598080128.0, "rel_diff": 0.0, "cpu_wall_s": 2.71}
+  registered_C_MiB: 39.5
+summary:
+  mixtral-8x7b:
+    r_v3_minus_1_pct: [1.5636, 16.1634]
+    T_v3_us: [1714.051, 9183.628]
+  olmoe-1b-7b:
+    r_v3_minus_1_pct: [2.9215, 15.3573]
+    T_v3_us: [552.962, 2199.688]
+  phi-3.5-moe:
+    r_v3_minus_1_pct: [3.4786, 23.7909]
+    T_v3_us: [1035.058, 6185.892]
+rival_gaps_on_E1:
+  v2:
+    cells: 126
+    rms_pct: 0.218057
+    worst_pct: 0.769015
+    lever_cells_0.18: 7
+  LT3:
+    cells: 126
+    rms_pct: 0.970773
+    worst_pct: -2.404792
+    lever_cells_0.18: 86
+  H8:
+    cells: 126
+    rms_pct: 0.354906
+    worst_pct: 1.160739
+    lever_cells_0.18: 20
+  v3_all:
+    cells: 126
+    rms_pct: 0.133279
+    worst_pct: -0.61025
+    lever_cells_0.18: 4
+  v3_noca:
+    cells: 126
+    rms_pct: 0.000864
+    worst_pct: 0.003865
+    lever_cells_0.18: 0
+  v3_nob:
+    cells: 126
+    rms_pct: 0.21782
+    worst_pct: 0.768494
+    lever_cells_0.18: null
+levers:
+  rule: |T_R / T_v3 - 1| > 3 sigma_page = 0.54% (sigma_page 0.18%, rental 3 rep8)
+  cells:
+    v2: ["olmoe-1b-7b/A/3/PT/shared", "olmoe-1b-7b/A/3/PW/shared", "olmoe-1b-7b/A/3/uniform/shared", "olmoe-1b-7b/B/3/DW/shared", "olmoe-1b-7b/B/3/uniform/shared", "olmoe-1b-7b/C/3/PW2/shared", "olmoe-1b-7b/C/3/uniform/shared"]
+    LT3: ["mixtral-8x7b/A/16/PW/native", "mixtral-8x7b/A/16/PW/shared", "mixtral-8x7b/A/16/uniform/native", "mixtral-8x7b/A/16/uniform/shared", "mixtral-8x7b/A/3/PT/native", "mixtral-8x7b/A/3/PT/shared", "mixtral-8x7b/A/3/PW/native", "mixtral-8x7b/A/3/PW/shared", "mixtral-8x7b/A/3/uniform/native", "mixtral-8x7b/A/3/uniform/shared", "mixtral-8x7b/A/6/PT/native", "mixtral-8x7b/A/6/PT/shared", "mixtral-8x7b/A/6/PW/native", "mixtral-8x7b/A/6/PW/shared", "mixtral-8x7b/A/6/uniform/native", "mixtral-8x7b/A/6/uniform/shared", "mixtral-8x7b/B/16/uniform/native", "mixtral-8x7b/B/16/uniform/shared", "mixtral-8x7b/B/3/DW/native", "mixtral-8x7b/B/3/DW/shared", "mixtral-8x7b/B/3/uniform/native", "mixtral-8x7b/B/3/uniform/shared", "mixtral-8x7b/B/6/DW/native", "mixtral-8x7b/B/6/DW/shared", "mixtral-8x7b/B/6/uniform/native", "mixtral-8x7b/B/6/uniform/shared", "mixtral-8x7b/C/16/uniform/native", "mixtral-8x7b/C/16/uniform/shared", "mixtral-8x7b/C/3/PW2/native", "mixtral-8x7b/C/3/PW2/shared", "mixtral-8x7b/C/3/uniform/native", "mixtral-8x7b/C/3/uniform/shared", "mixtral-8x7b/C/6/PW2/native", "mixtral-8x7b/C/6/PW2/shared", "mixtral-8x7b/C/6/uniform/native", "mixtral-8x7b/C/6/uniform/shared", "olmoe-1b-7b/A/3/PT/native", "olmoe-1b-7b/A/3/PT/shared", "olmoe-1b-7b/A/3/uniform/native", "olmoe-1b-7b/A/3/uniform/shared", "olmoe-1b-7b/A/6/PT/native", "olmoe-1b-7b/A/6/PT/shared", "olmoe-1b-7b/A/6/PW/native", "olmoe-1b-7b/A/6/PW/shared", "olmoe-1b-7b/A/6/uniform/native", "olmoe-1b-7b/A/6/uniform/shared", "olmoe-1b-7b/B/3/DW/native", "olmoe-1b-7b/B/3/DW/shared", "olmoe-1b-7b/B/3/uniform/native", "olmoe-1b-7b/B/3/uniform/shared", "olmoe-1b-7b/B/6/uniform/native", "olmoe-1b-7b/B/6/uniform/shared", "olmoe-1b-7b/C/3/uniform/native", "olmoe-1b-7b/C/3/uniform/shared", "olmoe-1b-7b/C/6/PW2/native", "olmoe-1b-7b/C/6/PW2/shared", "olmoe-1b-7b/C/6/uniform/native", "olmoe-1b-7b/C/6/uniform/shared", "phi-3.5-moe/A/2/PT/native", "phi-3.5-moe/A/2/PT/shared", "phi-3.5-moe/A/2/PW/native", "phi-3.5-moe/A/2/PW/shared", "phi-3.5-moe/A/2/uniform/native", "phi-3.5-moe/A/2/uniform/shared", "phi-3.5-moe/A/4/PT/native", "phi-3.5-moe/A/4/PT/shared", "phi-3.5-moe/A/4/PW/native", "phi-3.5-moe/A/4/PW/shared", "phi-3.5-moe/A/4/uniform/native", "phi-3.5-moe/A/4/uniform/shared", "phi-3.5-moe/B/2/DW/native", "phi-3.5-moe/B/2/DW/shared", "phi-3.5-moe/B/2/uniform/native", "phi-3.5-moe/B/2/uniform/shared", "phi-3.5-moe/B/4/DW/native", "phi-3.5-moe/B/4/DW/shared", "phi-3.5-moe/B/4/uniform/native", "phi-3.5-moe/B/4/uniform/shared", "phi-3.5-moe/C/2/PW2/native", "phi-3.5-moe/C/2/PW2/shared", "phi-3.5-moe/C/2/uniform/native", "phi-3.5-moe/C/2/uniform/shared", "phi-3.5-moe/C/4/PW2/native", "phi-3.5-moe/C/4/PW2/shared", "phi-3.5-moe/C/4/uniform/native", "phi-3.5-moe/C/4/uniform/shared"]
+    H8: ["olmoe-1b-7b/A/3/PT/shared", "olmoe-1b-7b/A/3/PW/shared", "olmoe-1b-7b/A/3/uniform/shared", "olmoe-1b-7b/A/6/PT/shared", "olmoe-1b-7b/A/6/PW/shared", "olmoe-1b-7b/A/6/uniform/shared", "olmoe-1b-7b/B/3/DW/shared", "olmoe-1b-7b/B/3/uniform/shared", "olmoe-1b-7b/B/6/DW/shared", "olmoe-1b-7b/B/6/uniform/shared", "olmoe-1b-7b/C/3/PW2/shared", "olmoe-1b-7b/C/3/uniform/shared", "olmoe-1b-7b/C/6/PW2/shared", "olmoe-1b-7b/C/6/uniform/shared", "phi-3.5-moe/A/2/PW/shared", "phi-3.5-moe/A/2/uniform/shared", "phi-3.5-moe/B/2/DW/shared", "phi-3.5-moe/B/2/uniform/shared", "phi-3.5-moe/C/2/PW2/shared", "phi-3.5-moe/C/2/uniform/shared"]
+    v3_all: ["mixtral-8x7b/A/3/PT/shared", "mixtral-8x7b/A/3/uniform/shared", "mixtral-8x7b/B/3/uniform/shared", "mixtral-8x7b/C/3/uniform/shared"]
+    v3_noca: []
+gates:
+  G1_lock_thermal: R3's G1_lock_thermal PASS and the page's slipped repeat rows (R3 lock_slip_repeats) at most 10% of its repeat rows; a HELD_WITH_SLIPS page within that passes; a page failing it counts in ALL and is dropped in CLEAN (rental 2's rule 3)
+  repeats: a cell is VALID with at least 6 clean repeats of 9 (clean: not lock-slipped, not drift-excluded); its time and clock are R3's medians over the clean repeats; else the cell is dropped; every slipped repeat is printed with its clock
+  G2_host_bound: rental 3's registered host rule (T_v3 + F240 >= 0.40 ms on the REGISTERED prediction, F240 0.067551 ms; every rental-6 E1 cell passes it) AND the page's timer flag host_bound; a pair needs both cells
+  G4_cell_clock: the cell's clean-repeat median clock at least 1705 MHz, else the CELL is dropped (a cell in [1695, 1705) too)
+  G5_provenance: as rental 5: histogram file sha256, every row's counts_sha256, bincount_ok, the shuffle seed; else the page is NOT SCORED
+  G3: rental 5's text verbatim, with delta_v3 (the registered uniform / balanced - 1 under v3, 0 on every pair): d_i = T(uniform)/T(balanced) - 1 - delta_v3,i on every valid (shape, page, n, arm), NATIVE and SHARED pooled; equivalence if the 90% cluster-t CI of mean(d), clustered on page (df = pages - 1), lies within +-0.36%; Q = sum (d_i - mean)^2 / (2 x 0.0018^2) against chi2(N - 1); if p < 0.01 the TOST per n-stratum voids only the failing strata's histogram cells, otherwise a failure voids every histogram cell; unseen shapes' token-order prior N(-0.13%, 0.15%)
+  G3_void_all:
+    rule: OWNER DECISION 2026-10-09: if G3 FAILS and Cochran Q does not reject, every histogram cell is voided and E1-SKEW reads NOT SCORED (rental 5's strict rule kept). E1 is ALSO printed DESCRIPTIVELY on the voided cells (score_skew.py: E1-SKEW 'descriptive', the same statistic and the same bars, labelled 'DESCRIPTIVE, NOT A VERDICT'); it decides nothing and is not the registered E1-SKEW
+    risk: the design stated P(G3 passes with Q not rejecting) 0.94, a 6% risk. The build review's simulation (OLMoE at its SEEN rental-5 token-order effect -0.24%, Mixtral and Phi at the N(-0.13%, 0.15%) prior, cell noise sqrt2 x 0.18%, cluster = page, df 8) gives 0.79, and 0.65 to 0.70 under harsher assumptions (OLMoE at -0.30%, or a 0.1% page sd): about 21 to 35% that G3 does not pass cleanly, mostly from OLMoE's -0.24%. Of that, the void-everything branch (the TOST fails, Q does not reject) is about 9 to 14%; the rest is Q rejecting, where the per-stratum TOSTs void only the failing strata
+    provenance: build-r6-review g3_sim.py (seed 1, R 100000): registered prior P(pass, Q ok) 0.791, P(Q rejects) 0.122; OLMoE -0.30%: 0.699, 0.166; + page sd 0.1%: 0.646, 0.231
+  no_report: a page with no report.json is NOT SCORED; cells.csv is never read
+  views: ALL and CLEAN (rental 2's rule 3, r3common.two_views); the registered verdict is the combination rule's
+counter_clock_rule:
+  rule: lock_gate.check_page PASS (nvidia-smi before and after within 15 MHz of the lock, the null kernel and base twin where present), then each cell's SM clock (sm__cycles_elapsed.avg / gpu_time_ns, median over its GEMMs of at least 0.5 ms, else the page's median) in [1640, 1710] MHz; a cell outside is dropped and the page continues
+  replaces: the unmeetable 1705 MHz cut on counter pages (cycles over duration is a lower bound on the clock)
+  derivation: the smi-held lock-1710 published counter pages: 3025 of 3033 cells (99.74%) pass; the one off-lock page (the 8x22B floor, smi 1980 MHz) fails check_page and 0 of its 4 cells are in the band
+  under_lock_control: the published floor pages locked UNDER 1710 are the under-lock negative control: the six floor1005 pages (rental 2 and rental 3: Mixtral tp2 / tp4 / tp8, Qwen2-57B tp8, Granite) and the rental-3 Mixtral tp4 floor1410 page each PASS check_page (their own lock is in force) and give 0 cells in [1640, 1710] MHz (cells at 1004-1005 and 1396-1405 MHz; Granite's cells carry no clock); tests/test_scoring_rental6.py checks it
+  limits: the under-lock control pages sit 18% and 41% under the lock: the band cannot see a sag under about 4%; it was derived from smi-held pages only, and the smi bracket cannot see a sag inside a capture
+tests:
+  E1-SKEW:
+    statistic: e = T_v3 / T_meas - 1 (T_v3 the registered prediction carried to the page's own A: r6model.reprice) over every valid histogram cell (PT PW PW2 DW uniform)
+    rule: HOLDS if rms <= 2%, max |e| <= 5% (the time bar) and |mean e| <= 1% (owner decision 3), each over the POOLED valid cells (all shapes, both arms); per shape and per arm printed; in ALL and CLEAN
+    on_G3_void_all: NOT SCORED; E1 is printed DESCRIPTIVELY on the voided cells, not a verdict (gates.G3_void_all, owner decision 2026-10-09)
+    rms_max: 0.02
+    max_abs: 0.05
+    mean_max: 0.01
+    rental5_bands_printed: {"rms_max": 0.012, "max_abs": 0.03, "mean_max": 0.006}
+    power: (in the JSON)
+  E1-UNI:
+    statistic: e on the balanced cells
+    rule: the E1-SKEW bar, printed
+  E1-rivals:
+    rule: rental 5's: a rival is EXCLUDED if its rms on its lever cells is at least 2x v3's there and at least 0.76%; UNDECIDED below 6 surviving lever cells
+    rivals: ["v2", "LT3", "H8", "v3_all", "v3_noca"]
+    rival_factor: 2.0
+    rival_floor: 0.0076
+    min_lever_cells: 6
+  SKEW-RATIO:
+    statistic: r = T(h) / T(uniform), same page, n and arm; e = r_v3 / r_meas - 1 (A cancels on a block-scan pair)
+    rule: rental 5's: HOLDS if rms <= 1.5% and max |e| <= 4%; LT3 and U by the rival rule on their ratio lever cells (LT3 |r_LT3 - r_v3| > 0.75%, U |r_v3 - 1| > 4.5%); LT3 expected UNDECIDED by construction
+    rms_max: 0.015
+    max_abs: 0.04
+  B-SKEW:
+    statistic: e_B = q_v3 / q_counted - 1 per (cell, GEMM), q = (dram_bytes_read - n x operand) / W_g, on the byte pages under the clock rule
+    rule: HOLDS if every PT / PW (cell, GEMM) row has |e_B| <= 5% and their rms <= 3%, POOLED over OLMoE and Phi and both GEMMs EXCEPT OLMoE w1 skewed rows (OPEN-L2SKEW, scored apart); per shape and per GEMM printed; PT and PW only because they are the byte page's only skewed labels
+    max_abs: 0.05
+    rms_max: 0.03
+  OPEN-L2SKEW:
+    what: OLMoE w1 PT / PW rows, scored apart: OPEN (no model change follows from them)
+    prior: v3 FAILS here (rental 5 read +8% at n 4 and +25% at n 16; (a) does not move a skewed cell)
+    rule: v3: HOLDS / FAILS by the B-SKEW bar on these rows; ROWKEY (the rival at 39.5 MiB, priced in byte_predictions): BETTER if every row's |e| <= 5% and its rms <= 0.5 x v3's on the same rows, else NOT BETTER; 60 MiB printed
+  B-CA:
+    statistic: e_B on the w1 uniform and balanced rows, pooled over the byte pages; per shape printed
+    rule: v3 HOLDS if every row's |e_B| <= 3%; v3_noca (q_pred_v3_noca) is EXCLUDED if its rms is at least 2x v3's and at least 3%
+    max_abs: 0.03
+    noca_factor: 2.0
+    noca_floor: 0.03
+  E2-SKEW:
+    statistic: time from counted bytes under v3 (r6model.Pricer.price_counted, the page's A) against the timed page's same (model, n, label, arm) cell (page A)
+    rule: HOLDS if rms <= 2%, worst <= 5% and |mean| <= 1.5%; the DECOMPOSITION ln(T_v3 / T_meas) = ln(T_v3 / T_c) + ln(T_c / T_meas) printed per cell
+    rms_max: 0.02
+    max_abs: 0.05
+    mean_max: 0.015
+  calibration_line: secondary, descriptive at 3 shapes: below 6 clusters NOT RESOLVED
+noise:
+  sigma_page: 0.0018
+  lever_sigma: 0.18% only (review (h) 13); 0.11% and 0.078% printed in the design
+labels:
+  mixtral-8x7b: BLIND-CALMODEL; balanced n 3, 6 SEEN replicates
+  olmoe-1b-7b: BLIND draws, IN-SAMPLE for (b); balanced n <= 9 SEEN
+  phi-3.5-moe: BLIND; balanced n 2, 4 SEEN replicates; n 12 BLIND
+scorer_ambiguities:
+  1 Q1 c15-c9 clause: over the Q1 pages' valid control pairs of the test (copies 9 and 15): mean g(c15) - mean g(c9), |.| <= 1.5 us; no se; both sides needed, else UNDECIDED
+  2 se: cluster-robust CR1 on (model, n) clusters, ddof via C / (C - 1); one cluster: iid sd / sqrt(N), ddof 1
+  3 g_R: the rival's registered per-pair (S - N)_R - (S - N)_v3, both carried to the page's A, averaged over the same valid pairs
+  4 Q1-C se and distance: se_D = sqrt2 x 0.45 us (registered); distance is 1-D on D = x15 - x9
+  5 rival positions: functions of the MEASURED x9: CALL D = 0, DEAD D = (ratio - 1) x9
+  6 align statistic: median over probe repeats per (arm, n), arm minus native, same page; histogram-independent (S3 test); a histogram cell takes A at its tread
+  7 host rule: rental 3's F240 rule on the REGISTERED v3 prediction (T + 0.067551 >= 0.40 ms) AND the page's timer flag; both drop
+  8 drift-excluded repeat: not clean (clean = neither lock-slipped nor drift-excluded)
+  9 page G1 vs scorer G1: R3's G1 PASS AND slipped rows <= 10%: a page failing either counts in ALL and is dropped in CLEAN
+  10 G4 in [1695, 1705): the CELL is dropped; the page stays
+  11 B-SKEW scope: PT and PW (the byte page's only skewed labels); per (cell, GEMM) rows, POOLED over shapes and GEMMs except OLMoE w1 skewed (OPEN-L2SKEW); per shape and GEMM printed
+  12 B-CA pooling: pooled over the byte pages' w1 uniform / balanced rows; per shape printed
+  13 lever sigma: 0.18% (rental 3 rep8): threshold 0.54%
+  14 E1 mean: pooled over all valid histogram cells, in each view; the registered verdict is rental 2's rule 3 combination
+  15 second K: within 3% = |r/r_H - 1| <= 0.03; ns 4..9; F CAL 520 / 979; max_dram_frac 0.5
+  16 JetMoE n 4: priced (rental6-q1 predictions); a block-scan control pair in Q1-H
+  17 SEEN-table proxy: rental6-v3's align_proxy block (r6model.align_proxy over the published reports)
+missing: a missing page's cells are NOT SCORED; the nine skew pages carry nodrop=1 and no shared drop-group
+seen_data:
+  - the histograms' shapes are SEEN routing statistics
+  - h SEEN-FITTED; content_a SEEN-SELECTED
+  - sigma_page SEEN

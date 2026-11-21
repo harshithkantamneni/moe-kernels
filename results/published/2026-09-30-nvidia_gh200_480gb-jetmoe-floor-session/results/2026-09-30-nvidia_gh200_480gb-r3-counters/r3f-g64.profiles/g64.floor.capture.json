@@ -1,0 +1,142 @@
+{
+  "argv": [
+    "/usr/local/cuda-13.0/bin/ncu",
+    "--target-processes",
+    "all",
+    "--replay-mode",
+    "kernel",
+    "--cache-control",
+    "all",
+    "--clock-control",
+    "base",
+    "--nvtx",
+    "-k",
+    "regex:^fused_moe_kernel$",
+    "--kernel-name-base",
+    "function",
+    "--launch-skip",
+    "28",
+    "--launch-count",
+    "28",
+    "--metrics",
+    "dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_srcunit_tex_op_read.sum,launch__grid_size,gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__cycles_active.avg,lts__cycles_elapsed.avg,sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active,sm__inst_executed_pipe_tensor_op_hmma.sum,smsp__issue_active.avg.pct_of_peak_sustained_active,smsp__inst_executed.sum,smsp__inst_executed_op_ldsm.sum,smsp__inst_executed_op_ldgsts.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed,l1tex__data_bank_reads.avg.pct_of_peak_sustained_elapsed,l1tex__data_bank_writes.avg.pct_of_peak_sustained_elapsed,l1tex__throughput.avg.pct_of_peak_sustained_active,l1tex__m_xbar2l1tex_read_bytes.sum,lts__t_sectors.avg.pct_of_peak_sustained_elapsed,lts__throughput.avg.pct_of_peak_sustained_elapsed,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active,smsp__warp_issue_stalled_barrier_per_warp_active.pct,smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct,smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct,smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct,smsp__warp_issue_stalled_lg_throttle_per_warp_active.pct,smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct,smsp__warp_issue_stalled_wait_per_warp_active.pct,smsp__warp_issue_stalled_not_selected_per_warp_active.pct,smsp__warp_issue_stalled_selected_per_warp_active.pct,smsp__warp_issue_stalled_dispatch_stall_per_warp_active.pct,smsp__warp_issue_stalled_no_instruction_per_warp_active.pct,smsp__warp_issue_stalled_drain_per_warp_active.pct,smsp__warp_issue_stalled_membar_per_warp_active.pct,smsp__warp_issue_stalled_branch_resolving_per_warp_active.pct,smsp__warp_issue_stalled_sleeping_per_warp_active.pct,smsp__warp_issue_stalled_misc_per_warp_active.pct,smsp__warp_issue_stalled_tex_throttle_per_warp_active.pct,smsp__warp_issue_stalled_imc_miss_per_warp_active.pct",
+    "--export",
+    "/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.profiles/g64.floor.ncu-rep",
+    "--force-overwrite",
+    "--",
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "/home/ubuntu/moe/repo/scripts/private_weight_reference.py",
+    "--counter-child",
+    "/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.profiles/g64.floor.plan.json"
+  ],
+  "binary": "/usr/local/cuda-13.0/bin/ncu",
+  "version": "Version 2025.3.1.0 (build 36398880) (public-release)",
+  "returncode": 0,
+  "metrics_asked": [
+    "dram__bytes_read.sum",
+    "dram__bytes_write.sum",
+    "lts__t_sectors_srcunit_tex_op_read.sum",
+    "launch__grid_size",
+    "gpu__time_duration.sum",
+    "sm__cycles_elapsed.avg",
+    "sm__cycles_active.avg",
+    "lts__cycles_elapsed.avg",
+    "sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active",
+    "sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active",
+    "sm__inst_executed_pipe_tensor_op_hmma.sum",
+    "smsp__issue_active.avg.pct_of_peak_sustained_active",
+    "smsp__inst_executed.sum",
+    "smsp__inst_executed_op_ldsm.sum",
+    "smsp__inst_executed_op_ldgsts.sum",
+    "l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed",
+    "l1tex__data_bank_reads.avg.pct_of_peak_sustained_elapsed",
+    "l1tex__data_bank_writes.avg.pct_of_peak_sustained_elapsed",
+    "l1tex__throughput.avg.pct_of_peak_sustained_active",
+    "l1tex__m_xbar2l1tex_read_bytes.sum",
+    "lts__t_sectors.avg.pct_of_peak_sustained_elapsed",
+    "lts__throughput.avg.pct_of_peak_sustained_elapsed",
+    "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+    "sm__warps_active.avg.pct_of_peak_sustained_active",
+    "smsp__warp_issue_stalled_barrier_per_warp_active.pct",
+    "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+    "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+    "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+    "smsp__warp_issue_stalled_lg_throttle_per_warp_active.pct",
+    "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+    "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+    "smsp__warp_issue_stalled_not_selected_per_warp_active.pct",
+    "smsp__warp_issue_stalled_selected_per_warp_active.pct",
+    "smsp__warp_issue_stalled_dispatch_stall_per_warp_active.pct",
+    "smsp__warp_issue_stalled_no_instruction_per_warp_active.pct",
+    "smsp__warp_issue_stalled_drain_per_warp_active.pct",
+    "smsp__warp_issue_stalled_membar_per_warp_active.pct",
+    "smsp__warp_issue_stalled_branch_resolving_per_warp_active.pct",
+    "smsp__warp_issue_stalled_sleeping_per_warp_active.pct",
+    "smsp__warp_issue_stalled_misc_per_warp_active.pct",
+    "smsp__warp_issue_stalled_tex_throttle_per_warp_active.pct",
+    "smsp__warp_issue_stalled_imc_miss_per_warp_active.pct"
+  ],
+  "metrics_dropped": [],
+  "metrics_query": "ncu --query-metrics listed 3565 base metric names",
+  "clock_control": "base",
+  "lock_mhz": null,
+  "probe_clock_control": null,
+  "smi_before": {
+    "utc": "2026-09-30T06:06:28Z",
+    "argv": [
+      "nvidia-smi",
+      "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+      "--format=csv,noheader,nounits"
+    ],
+    "returncode": 0,
+    "rows": [
+      {
+        "uuid": "GPU-bc866d34-823e-318c-0d90-432d23305492",
+        "clocks.sm": "1980",
+        "power.draw": "148.70",
+        "power.limit": "700.00",
+        "clocks_event_reasons.active": "0x0000000000000000",
+        "persistence_mode": "Enabled"
+      }
+    ],
+    "error": ""
+  },
+  "smi_after": {
+    "utc": "2026-09-30T06:06:55Z",
+    "argv": [
+      "nvidia-smi",
+      "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+      "--format=csv,noheader,nounits"
+    ],
+    "returncode": 0,
+    "rows": [
+      {
+        "uuid": "GPU-bc866d34-823e-318c-0d90-432d23305492",
+        "clocks.sm": "1980",
+        "power.draw": "150.80",
+        "power.limit": "700.00",
+        "clocks_event_reasons.active": "0x0000000000000000",
+        "persistence_mode": "Enabled"
+      }
+    ],
+    "error": ""
+  },
+  "card": {
+    "name": "NVIDIA GH200 480GB",
+    "slug": "nvidia_gh200_480gb",
+    "uuid": "bc866d34-823e-318c-0d90-432d23305492",
+    "sm_count": 132,
+    "l2_bytes": 62914560,
+    "capability": "9.0",
+    "memory_bytes": 101468602368,
+    "driver": "580.105.08",
+    "study_role": "the primary card"
+  },
+  "stack": {
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "commit": "e6b1e20b4e7e66c156c13d722b011d08051ff5ce"
+}

@@ -1,0 +1,12 @@
+{
+ "gate": "census",
+ "verdict": "PASS",
+ "file": "/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ta2/tile-census.json",
+ "equality": {
+  "verdict": "EQUAL",
+  "compared": 72,
+  "drift": []
+ },
+ "path_mismatch": [],
+ "why": ""
+}

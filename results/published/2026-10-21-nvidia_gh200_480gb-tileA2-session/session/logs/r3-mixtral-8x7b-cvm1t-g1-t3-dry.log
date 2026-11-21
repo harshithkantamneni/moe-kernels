@@ -1,0 +1,26 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist0c725879cf03323a-49ac5848
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json (sha256 0c725879cf03323a...), page convl-mixtral-8x7b-g1, 4 cells x arms = 4 timed cells, token-row shuffle seed 20261020; R3's balanced ladder is NOT run (--treads ignored)
+arms        native; PRIVATE cannot run skewed
+  ridge       177.27 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 660.5 TFLOP/s bf16 over 3726.2 GB/s (triad pattern); calibrated 2026-10-20 at 36291487
+experts     native declares E=8; shared declares E x n_decl = 72 at every cell
+            n_decl = 9 against n_max = 3 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 3 against the 3 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261020T224556Z-p2g-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-cvm1t/private_weight_reference/nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist0c725879cf03323a-49ac5848
+slips       --slip-policy cell at the 1710 MHz lock: a repeat under 1695 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native, 3 repeats, about 0 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=3   PT               native         small-batch  220c03aaea5ef16d
+  n=3   PW               native         small-batch  d6c33a3b84f86171
+  n=3   uniform          native         small-batch  41ae04250782ed3e
+  n=3   balanced         native         small-batch  74234e98afe7498f
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================

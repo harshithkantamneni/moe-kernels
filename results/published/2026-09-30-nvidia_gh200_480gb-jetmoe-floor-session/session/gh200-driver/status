@@ -1,0 +1,20 @@
+2026-09-30T06:04:47Z setup_vm.sh start: commit e6b1e20b4e7e66c156c13d722b011d08051ff5ce from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-30T12:43:15Z
+2026-09-30T06:06:03Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-09-30T06:06:05Z driver start: commit e6b1e20b4e7e66c156c13d722b011d08051ff5ce, steps prelude floor, deadline 2026-09-30T12:43:15Z (389 min of work left)
+2026-09-30T06:06:05Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 389 min left)
+2026-09-30T06:06:05Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-09-30T06:06:05Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-09-30T06:06:05Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-09-30T06:06:05Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20260930T060605Z
+2026-09-30T06:06:05Z prelude END: exit 0 after 0 min
+2026-09-30T06:06:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-30T06:06:07Z floor START: 3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at 1710: P6 (estimate 15 min, cap 45 min, 389 min left)
+2026-09-30T06:06:22Z census for jetmoe-8b written (/home/ubuntu/moe/session/census-jetmoe-8b.json)
+2026-09-30T06:07:38Z floor: r3f-g64 exit 0
+2026-09-30T06:07:38Z floor: r3f-g2 and r3f-g64-unlocked left out: no jetmoe-8b prediction reads them
+2026-09-30T06:07:38Z floor: r3f-g64-lock1710 exit 3
+2026-09-30T06:07:38Z floor END: exit 3 after 2 min
+2026-09-30T06:07:39Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-30T06:07:42Z driver end: exit 3
+2026-09-30T06:08:56Z RECOVERY start: timed G to retake [], deep G to retake []
+2026-09-30T06:08:56Z RECOVERY END

@@ -1,0 +1,1805 @@
+...............................................F........................ [  1%]
+........................................................................ [  3%]
+...........F............................................................ [  4%]
+........................................................................ [  6%]
+.................................................F..FF.................. [  7%]
+..................F.....F...............FF.............................. [  9%]
+........................................................................ [ 10%]
+..............................s......................................... [ 12%]
+.............F.....F..........................F......................... [ 13%]
+........................................................................ [ 15%]
+..F..............................................ss..................... [ 16%]
+.................................FFFF.s................................. [ 18%]
+.......F.......................FF....................................... [ 19%]
+....................................F................................... [ 21%]
+...............................................................F........ [ 22%]
+............................................s.s......................... [ 24%]
+...........s.................................................FF....F.... [ 25%]
+........................................................................ [ 27%]
+...............F....................................F................... [ 28%]
+.......F................................................................ [ 30%]
+..................................................F..................... [ 31%]
+...................................F.................................... [ 33%]
+.......................................................F................ [ 34%]
+................................................F...........F........... [ 36%]
+..............F......................................................... [ 37%]
+.............................................................F.......... [ 39%]
+.......................................FF............................... [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................F............... [ 45%]
+........................F.............F............FFFFFF..............F [ 47%]
+..F..F...F
+=================================== FAILURES ===================================
+___ test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names ____
+
+    def test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names():
+        """THE CONDITION THE REPORT LINE DROPPED. `w` is `alpha_b + phi` in weight
+        reads only AT THE RATE THE MEMORY BRANCH ACHIEVED. Every docstring in this
+        change carried that clause; the one line a reader of report.txt actually
+        sees said flatly that w "is an UPPER bound on the weight miss fraction",
+        against a denominator built from the card's TRIAD calibration.
+    
+        A weight stream is a pure READ, and this card's own committed `read_stream`
+        pattern is faster than its triad ceiling. Divided by the read rate the same
+        published tile_cap ladder reads HIGHER than the number the report calls a
+        bound, by more than the width of the gap being bounded, so the unqualified
+        sentence can be false. Both rates come out of the committed calibration
+        file rather than being typed here, because a test that pins a rate is stale
+        the next time the card is calibrated."""
+        import yaml
+    
+        from moe.bench.roofline import HARDWARE_DIR
+        card = yaml.safe_load((HARDWARE_DIR / "measured_nvidia_h200.yaml").read_text())
+        read_rate = next(p["gbps"] for p in card["detail"]["bandwidth_patterns"]
+                         if p["pattern"] == "read_stream")
+    
+        rows, triad = _corpus_rows("tile_cap")
+        slope = _ladder_slope_ms(
+            rows, "tiles_per_expert",
+            lambda r: (int(float(r["block_m"])) == 16
+                       and float(r["tile_eff"]) >= 1.0
+                       and int(float(r["tiles_per_expert"])) >= 3))
+        at_triad = weight_streams_per_tile(slope, MIX, "bf16", triad).streams
+        at_read = weight_streams_per_tile(slope, MIX, "bf16", read_rate).streams
+    
+        assert read_rate > triad, "a pure read is not slower than the triad ceiling"
+        assert at_triad == pytest.approx(1.0514, abs=5e-5)
+>       assert at_read == pytest.approx(1.1085, abs=5e-5)
+E       assert 1.108706940778609 == 1.1085 ± 5.0e-05
+E         
+E         comparison failed
+E         Obtained: 1.108706940778609
+E         Expected: 1.1085 ± 5.0e-05
+
+tests/test_ai_model.py:1222: AssertionError
+_____ test_a_replay_is_scored_against_the_ruler_the_run_was_measured_with ______
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_replay_is_scored_agains0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd8bb65c470>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8babed0d0>
+
+    def test_a_replay_is_scored_against_the_ruler_the_run_was_measured_with(
+            tmp_path, monkeypatch, capsys):
+        """`--replay` carries no card, and both new gates divide by one.
+    
+        Without the plan's own roof a finished, passing run comes back INVALID
+        purely because it was re-reported on a laptop, which is the shape of a false
+        retraction. The synthetic path writes a plan for exactly this reason.
+        """
+        monkeypatch.setenv("MOE_RESULTS_DIR", str(tmp_path))
+        AB.main(["--synthetic", "refit"])
+        capsys.readouterr()
+        out_dir = next((tmp_path / "alias_ablation").glob("*synthetic-refit"))
+        plan = json.loads((out_dir / "plan.json").read_text())
+        assert plan["roof_bytes_s"] == AB.SYNTHETIC_ROOF_BYTES_S
+        assert plan["l2_bytes"] == AB.SYNTHETIC_L2_BYTES
+        assert plan["alias_extent"] == AB.DEFAULT_ALIAS_EXTENT
+        code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                               capsys)
+        assert code == exit_codes.DONE
+        assert "plan.json" in out
+        verdicts = {line.name: line.verdict
+                    for line in exit_codes.parse_result_lines(out)}
+        for name, verdict in verdicts.items():
+            if name.startswith(("headroom", "attribution")):
+                assert verdict == exit_codes.PASS, name
+        (out_dir / "plan.json").unlink()
+        code, _ = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                             capsys)
+        # No plan, no ruler, no verdict: UNKNOWN on a VALIDITY gate is INVALID.
+>       assert code == exit_codes.INVALID
+E       assert 0 == 3
+E        +  where 3 = exit_codes.INVALID
+
+tests/test_alias_ablation.py:2674: AssertionError
+_ test_a_stated_ridge_with_no_bandwidth_refuses_instead_of_building_a_hybrid_roof _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_stated_ridge_with_no_ba0')
+capsys = <_pytest.capture.CaptureFixture object at 0x7ddac427d790>
+
+    def test_a_stated_ridge_with_no_bandwidth_refuses_instead_of_building_a_hybrid_roof(
+            tmp_path, capsys):
+        """THE DEFECT IN ONE COMMAND.
+    
+        `--ridge 145.8` is the A100's own contemporaneous figure. On a box with no
+        calibration, `resolve_bandwidth` used to hand back 4374.5 GB/s -- an H200
+        triad ceiling -- and the run proceeded with `model_roof = 145.8 x 4374.5`,
+        a roof belonging to no card, printed as this one's. Nothing in the output
+        said so.
+        """
+        rc = BM.main(["--ridge", "145.8", "--dry-run", "--out", str(tmp_path)])
+        assert rc == exit_codes.REFUSED
+        printed = capsys.readouterr().out
+        assert "REFUSED" in printed
+>       assert "4374.5" in printed, "the refusal must name the constant it will not use"
+E       AssertionError: the refusal must name the constant it will not use
+E       assert '4374.5' in 'experiment  block_m_crossing / nvidia_h200-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-probes6-r...ed worlds, or the bare command on the pod.\n========================================================================\n'
+
+tests/test_block_m_crossing_sweep.py:194: AssertionError
+_ test_the_hypothesis_bandwidth_is_only_reachable_beside_the_hypothesis_ridge __
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_the_hypothesis_bandwidth_0')
+
+    def test_the_hypothesis_bandwidth_is_only_reachable_beside_the_hypothesis_ridge(
+            tmp_path):
+        """A laptop plan may assume the H200 pair, because BOTH halves then come
+        from the same 2026-08-26 calibration and nothing was measured to mislabel.
+        Asserting a ridge closes that escape, which is what the first test above
+        exercises from the other side."""
+        args = BM.build_parser().parse_args(["--dry-run"])
+        rb = BM.resolve_bandwidth(args)
+>       assert rb.source == "hypothesis"
+E       AssertionError: assert 'calibration' == 'hypothesis'
+E         
+E         - hypothesis
+E         + calibration
+
+tests/test_block_m_crossing_sweep.py:233: AssertionError
+______ test_resolve_bandwidth_still_unpacks_as_the_pair_it_used_to_return ______
+
+    def test_resolve_bandwidth_still_unpacks_as_the_pair_it_used_to_return():
+        """THE COMPATIBLE PATH. `scripts/tile_cap_test.py:1760` does
+        `bandwidth, bw_source = SWEEP.resolve_bandwidth(args)` outside a try, and
+        that script is not this one's to edit."""
+        args = BM.build_parser().parse_args(["--dry-run"])
+        bandwidth, source = BM.resolve_bandwidth(args)
+>       assert bandwidth == pytest.approx(BM.PUBLISHED_H200_TRIAD_GBPS)
+E       assert 4378.033255567562 == 4374.5 ± 0.0043745
+E         
+E         comparison failed
+E         Obtained: 4378.033255567562
+E         Expected: 4374.5 ± 0.0043745
+
+tests/test_block_m_crossing_sweep.py:246: AssertionError
+______________ test_a_refusal_exits_refused_and_measures_nothing _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_refusal_exits_refused_a0')
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87dd1ec30>
+
+    def test_a_refusal_exits_refused_and_measures_nothing(tmp_path, capsys):
+        rc = BM.main(["--ridge", "145.8", "--out", str(tmp_path)])
+        assert rc == exit_codes.REFUSED
+>       assert "REFUSED" in capsys.readouterr().out
+E       assert 'REFUSED' in 'experiment  block_m_crossing / nvidia_h200-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-probes6-r... this sweep overrides.\nOn the pod: source the vllm venv (scripts/setup_runpod.sh vllm). Off GPU: --self-test 0.558.\n'
+E        +  where 'experiment  block_m_crossing / nvidia_h200-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-probes6-r... this sweep overrides.\nOn the pod: source the vllm venv (scripts/setup_runpod.sh vllm). Off GPU: --self-test 0.558.\n' = CaptureResult(out="experiment  block_m_crossing / nvidia_h200-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_...ep overrides.\nOn the pod: source the vllm venv (scripts/setup_runpod.sh vllm). Off GPU: --self-test 0.558.\n", err='').out
+E        +    where CaptureResult(out="experiment  block_m_crossing / nvidia_h200-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_...ep overrides.\nOn the pod: source the vllm venv (scripts/setup_runpod.sh vllm). Off GPU: --self-test 0.558.\n", err='') = readouterr()
+E        +      where readouterr = <_pytest.capture.CaptureFixture object at 0x7dd87dd1ec30>.readouterr
+
+tests/test_block_m_crossing_sweep.py:760: AssertionError
+______ test_every_report_carries_a_provenance_block_with_the_audited_keys ______
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_every_report_carries_a_pr0')
+
+    def test_every_report_carries_a_provenance_block_with_the_audited_keys(tmp_path):
+        """The gate the audit wrote: none of the 26 published reports carries a
+        commit, a card, a ruler source or an instrument."""
+        _, payload = run(["--self-test", str(REFIT)], tmp_path)
+        assert {"git_sha", "gpu_name", "ridge_source", "bandwidth_source",
+                "instrument"} <= set(payload)
+        block = payload["provenance"]
+        assert block["git_sha"], "this repository is a git checkout"
+        assert block["utc"]
+        assert block["python"]
+        assert block["target_ms"] == pytest.approx(400.0)
+        # And what it could NOT determine is named rather than guessed.
+>       assert "gpu_name" in block["missing"], "there is no card on this box"
+E       AssertionError: there is no card on this box
+E       assert 'gpu_name' in {'iters': 'supplied as None', 'sglang': 'package not installed', 'vllm': 'package not installed'}
+
+tests/test_block_m_crossing_sweep.py:900: AssertionError
+----------------------------- Captured stdout call -----------------------------
+experiment  block_m_crossing / synthetic-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-plant0.558-probes6-r1-0269ee23
+card        nvidia_h200
+            the line above is the HOST of a planted run. The run id's card component is 'synthetic' and the attached card travels as `synthhost`.
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+grid        69 rows-per-expert x 4 block sizes = 276 cells
+            r in [28, 1056], tokens step 4, T in [112, 4224]
+bandwidth   4378.0 GB/s, source=calibration: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)
+ridge       151.43 Op/B, source=calibration: measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b
+ridge band  141.62-154.13 Op/B, this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling
+WRITES TO   /tmp/pytest-of-root/pytest-0/test_every_report_carries_a_pr0/block_m_crossing/synthetic-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-plant0.558-probes6-r1-0269ee23
+            cells.csv (appended per cell), report.txt, report.json, triton-cache/
+
+TILE RESOURCE PLAN, one CTA, at an UNKNOWN device (--capability MAJOR.MINOR gives the shared-memory verdict; the register check runs regardless)
+  BLOCK_M=  32  smem     48 KiB of       ?  acc     8 reg/thread of 255  ok
+  BLOCK_M=  64  smem     64 KiB of       ?  acc    16 reg/thread of 255  ok
+  BLOCK_M= 128  smem     96 KiB of       ?  acc    32 reg/thread of 255  ok
+  BLOCK_M= 256  smem    160 KiB of       ?  acc    64 reg/thread of 255  ok
+
+SELF TEST: cells GENERATED from the model at alpha=0.558. Nothing here was measured.
+The gates below are being run against a world we constructed, which tests the gates and not the hardware.
+
+PREDICTIONS, stated before the run and not adjusted after it
+  alpha 0.558 (band 0.529-0.588), bf16 at 2 bytes, ridge 151.4 Op/B, band 141.6-154.1 Op/B
+  ridge source: calibration: measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s (triad pattern); calibrated 2026-09-21 at 81f80b7b
+  ridge band source: this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling
+  bandwidth source: 4378.0 GB/s, calibration: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)
+  iterations per trial: none recorded (nothing was timed; a self-test's cells carry iters=0)
+  BLOCK_M   AI cap   crossing @ridge 141.6       crossing @ridge 154.1
+       32     57.3   NO CROSSING EVER       NO CROSSING EVER    
+          BLOCK_M=32 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 57.3 Op/B sits at or below the ridge 141.6 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number
+       64    114.7   NO CROSSING EVER       NO CROSSING EVER    
+          BLOCK_M=64 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 114.7 Op/B sits at or below the ridge 141.6 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number
+      128    229.4   r=  220.7 T=     883 n=2   r=  240.1 T=     961 n=2
+      256    458.8   r=  141.6 T=     566 n=1   r=  154.1 T=     617 n=1
+  128-over-256 crossing ratio: 1.558x at the low ridge, 1.558x at the high one; the retracted alpha=0.1 says 1.100x. MODEL, not measurement: no crossing has been observed by this study.
+  every AI cap above is 2*BM/(alpha*b) from a FITTED alpha and is HIGH by ai_model.lin_overstatement = 1+phi+delta (alpha_a is unmeasured anywhere in this repo and delta is taken as 0, so each range is a bracket and a lower bound): BM=32 1.01-1.51x, BM=64 1.02-2.02x, BM=128 1.04-3.03x, BM=256 1.07-5.06x
+  GATE 3 will test alpha > 0.33 (midpoint of 0.558 and 0.1) as an INFORMATIONAL line; the VERDICT is whether the fitted alpha's interval overlaps the band [0.529, 0.588], in both directions
+  GATE 4 will test BLOCK_M=64 against the roof in fractions of ridge x bandwidth: this run's ceiling 0.757, the retracted world's 1.000, so the gate is 0.95 (reached the roof) and 0.879 (passed its own ceiling)
+
+MEASURED  mixtral-8x7b bf16  276 cells, 61 of them exactly-full tile stacks
+  compute plateau 658.4 TFLOP/s useful, taken as the roof every roof fraction below is against
+  that plateau is 99.3% of ridge x bandwidth (663 TFLOP/s). Far below 100% means nothing in the sweep reached a roof and every roof fraction is relative to something that is not one.
+  per-cell timing spread, median 0.00%
+  compute reference: BLOCK_M=256 ladder, 4 treads, proportional to 0.6%: compute branch 1.0984 ms per tile, fixed cost 0.0300 ms
+    LEVEL roof fraction      0.991   gate <= 1.10 of ridge x bandwidth (a compute branch cannot beat the roof)
+    LEVEL non-vacuity        0.213   gate <  1.00 of one full weight read, scaled to the smallest block size (at or above, NO tread anywhere can be memory bound and every alpha is unidentifiable by construction)
+      floor                 0.211   of the roof, = 2 BM_min / (b x ridge): the smallest swept tile's own AI cap at alpha=1, over the ridge
+      footing            DENSE. The memory branch is compared against one full weight read at the measured pin rate, so the floor is a fraction of the dense GEMM roof. A fused layer counting only its two GEMMs' FLOPs has never exceeded 0.756 of that roof, so a floor above 0.756 cannot be met by any fused-layer reference on any card.
+    LEVEL vs smaller BM      1.000   gate <= 1.25 at matched exactly-full rows, over 4 comparison(s)
+  132 SMs (assumed H200 default 132), one resident CTA per SM assumed for every wave count
+  up-GEMM waves run 27.2 to 896.0 across the sweep. The smallest is the smallest tile stack, and even it is many waves deep, so no cell here is a partial-wave measurement and occupancy cannot be the thing that moved between two adjacent cells.
+
+THE LADDER: milliseconds per exactly-full tile stack, which is where gates 2, 3 and 4 are read
+  alpha is a LOWER bound (the fused layer's fixed cost sits in the denominator); alpha-hi takes that cost out, and alpha-corrected also removes activation traffic
+  alpha here is B/(A+B), which is (alpha_b+phi)/(1+phi+delta) and NOT a weight miss fraction: see moe/bench/ai_model.py and LadderFit.alpha
+  w is B divided by one full stream of the ROUTED expert weight set (the set the fused grouped GEMM streams; a shared expert, where the model has one, is a different kernel and is not in this count): 2.8186 GB in 0.6438 ms at 4378.0 GB/s (calibration: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern)). No fitted level, no intercept, no fixed cost. It scales 1:1 in that rate, and under the three-term model it is alpha_b + phi AT THIS RATE, so it bounds the weight miss fraction from above only if the memory branch achieved this bandwidth, which this run did not measure. A weight stream is a pure read and the rate above is whichever pattern the source names, so this line reads the card's own bandwidth_patterns rather than quoting one card's gap: on card=nvidia_h200 the measured read_stream pattern is 4612.9 GB/s, 5.37% ABOVE the 4378.0 GB/s this report divides by, so every w below RISES by that much at the read rate and the printed number is not an upper bound there.
+  D>A marks a ladder whose reference fixed cost stands above its own fitted intercept. alpha-hi = B/(A+B-D) exceeds 1 exactly when D>A and the column has a value at all; where D also exceeds the whole level A+B the alpha-hi column reads n/a, because B/(A+B-D) is then a division by a level that is zero or negative and is not reported. Either way those rows are arithmetic about an extrapolation and not a miss fraction. Such a ladder is LABELLED and kept: refusing it would have deleted four of bn_decomposition's six cells on 2026-09-10. w does not depend on A or D at all.
+  BLOCK_M  treads  memory-bound  alpha   alpha-corrected  alpha-hi  w streams/tile  D>A  B ms/tile  C ms/tile  fit err
+       32      33            33  0.537           0.528     0.562         0.5673    .     0.3652        n/a   0.00%
+       64      16            16  0.541           0.524     0.566         0.5766    .     0.3712        n/a   0.00%
+      128       8             1    n/a             n/a       n/a            n/a  n/a        n/a     0.5442   2.21%
+           BLOCK_M=128 has 1 memory-bound tread(s), under the 3 a verdict needs
+      256       4             0    n/a             n/a       n/a            n/a  n/a        n/a     1.0884   0.00%
+           BLOCK_M=256 is the compute reference, so by the assumption that qualified it there is no memory branch here to fit
+  alpha scored by gate 3: 0.524 [0.524, 0.566]  (systematic [0.524, 0.566]: activation-corrected to fixed-cost-corrected; bootstrap [0.524, 0.524] over 400 resamples of 16 treads)
+  the same ladder in weight-stream units: w 0.5766 weight-streams/M-tile at 4378.0 GB/s (calibration: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern); 2.8186 GB in 0.6438 ms, mixtral-8x7b bf16)
+  consistency: compute branch should scale with BLOCK_M -- C(256)/C(128) = 2.00x against 2.00x predicted
+
+GATES
+RESULT: VALIDITY override_took_effect PASS [VALIDITY/OBSERVED] override_config changed the kernel at every setting | measured fresh Triton artefacts per setting: BM=32:1, BM=64:1, BM=128:1, BM=256:1 | gate >= 1 per setting
+GATE 0  PASS      [VALIDITY/OBSERVED] override_config changed the kernel at every setting
+          measured fresh Triton artefacts per setting: BM=32:1, BM=64:1, BM=128:1, BM=256:1   gate >= 1 per setting
+
+RESULT: CLAIM tile_steps PASS [CLAIM/OBSERVED] time steps at T = n x BLOCK_M x E/k | measured median step minus tread +12.46% | gate >= +6.37% (half the model's step) and > 3x noise (0.00%)
+GATE 1  PASS      [CLAIM/OBSERVED] time steps at T = n x BLOCK_M x E/k
+          measured median step minus tread +12.46%   gate >= +6.37% (half the model's step) and > 3x noise (0.00%)
+          47 boundaries bracketed, 0 where the tread moved at least as much as the step
+          median step +12.62%, median tread +0.05%, model step +12.75%
+          waves are printed on both sides of every step so occupancy can be ruled out as the cause:
+          BM= 32 n= 1 T=   128 r=    32  tread  +0.11%  STEP +52.96%  (model +55.40%)  waves   27.2/  54.3
+          BM= 32 n= 2 T=   256 r=    64  tread  +0.07%  STEP +34.45%  (model +35.47%)  waves   54.3/  81.5
+          BM= 32 n= 3 T=   384 r=    96  tread  +0.05%  STEP +25.53%  (model +26.08%)  waves   81.5/ 108.6
+          BM= 32 n= 4 T=   512 r=   128  tread  +0.04%  STEP +20.28%  (model +20.62%)  waves  108.6/ 135.8
+          BM= 32 n= 5 T=   640 r=   160  tread  +0.03%  STEP +16.82%  (model +17.06%)  waves  135.8/ 162.9
+          BM= 32 n= 6 T=   768 r=   192  tread  +0.03%  STEP +14.37%  (model +14.54%)  waves  162.9/ 190.1
+          BM= 32 n= 7 T=   896 r=   224  tread  +0.16%  STEP +12.62%  (model +12.75%)  waves  190.1/ 217.2
+          BM= 32 n= 8 T=  1024 r=   256  tread  +0.05%  STEP +11.15%  (model +11.25%)  waves  217.2/ 244.4
+          BM= 32 n= 9 T=  1152 r=   288  tread  +0.08%  STEP +10.10%  (model +10.18%)  waves  244.4/ 271.5
+          BM= 32 n=10 T=  1280 r=   320  tread  +0.04%  STEP  +9.09%  (model  +9.16%)  waves  271.5/ 298.7
+          BM= 32 n=11 T=  1408 r=   352  tread  +0.10%  STEP  +8.36%  (model  +8.42%)  waves  298.7/ 325.8
+          BM= 32 n=12 T=  1536 r=   384  tread  +0.03%  STEP  +7.68%  (model  +7.73%)  waves  325.8/ 353.0
+          BM= 32 n=13 T=  1664 r=   416  tread  +0.06%  STEP  +7.21%  (model  +7.26%)  waves  353.0/ 380.1
+          BM= 32 n=16 T=  2048 r=   512  tread  +0.05%  STEP  +5.88%  (model  +5.91%)  waves  434.4/ 461.6
+          BM= 32 n=17 T=  2176 r=   544  tread  +0.05%  STEP  +5.60%  (model  +5.62%)  waves  461.6/ 488.7
+          BM= 32 n=20 T=  2560 r=   640  tread  +0.04%  STEP  +4.75%  (model  +4.77%)  waves  543.0/ 570.2
+          BM= 32 n=21 T=  2688 r=   672  tread  +0.04%  STEP  +4.57%  (model  +4.59%)  waves  570.2/ 597.3
+          BM= 32 n=24 T=  3072 r=   768  tread  +0.03%  STEP  +3.99%  (model  +4.00%)  waves  651.6/ 678.8
+          BM= 32 n=25 T=  3200 r=   800  tread  +0.03%  STEP  +3.87%  (model  +3.88%)  waves  678.8/ 705.9
+          BM= 64 n= 1 T=   256 r=    64  tread  +0.11%  STEP +52.49%  (model +54.90%)  waves   27.2/  54.3
+          BM= 64 n= 2 T=   512 r=   128  tread  +0.07%  STEP +34.06%  (model +35.05%)  waves   54.3/  81.5
+          BM= 64 n= 3 T=   768 r=   192  tread  +0.05%  STEP +25.21%  (model +25.75%)  waves   81.5/ 108.6
+          BM= 64 n= 4 T=  1024 r=   256  tread  +0.08%  STEP +20.05%  (model +20.39%)  waves  108.6/ 135.8
+          BM= 64 n= 5 T=  1280 r=   320  tread  +0.07%  STEP +16.62%  (model +16.85%)  waves  135.8/ 162.9
+          BM= 64 n= 6 T=  1536 r=   384  tread  +0.06%  STEP +14.19%  (model +14.36%)  waves  162.9/ 190.1
+          BM= 64 n= 7 T=  1792 r=   448  tread  +0.21%  STEP +12.54%  (model +12.67%)  waves  190.1/ 217.2
+          BM= 64 n= 8 T=  2048 r=   512  tread  +0.09%  STEP +11.03%  (model +11.13%)  waves  217.2/ 244.4
+          BM= 64 n= 9 T=  2304 r=   576  tread  +0.16%  STEP  +9.99%  (model +10.07%)  waves  244.4/ 271.5
+          BM= 64 n=10 T=  2560 r=   640  tread  +0.07%  STEP  +9.00%  (model  +9.06%)  waves  271.5/ 298.7
+          BM= 64 n=11 T=  2816 r=   704  tread  +0.14%  STEP  +8.30%  (model  +8.36%)  waves  298.7/ 325.8
+          BM= 64 n=12 T=  3072 r=   768  tread  +0.06%  STEP  +7.60%  (model  +7.64%)  waves  325.8/ 353.0
+          BM= 64 n=13 T=  3328 r=   832  tread  +0.12%  STEP  +7.11%  (model  +7.15%)  waves  353.0/ 380.1
+          BM= 64 n=14 T=  3584 r=   896  tread  +0.11%  STEP  +6.63%  (model  +6.66%)  waves  380.1/ 407.3
+          BM= 64 n=15 T=  3840 r=   960  tread  +0.10%  STEP  +6.21%  (model  +6.24%)  waves  407.3/ 434.4
+          BM= 64 n=16 T=  4096 r=  1024  tread  +0.10%  STEP  +5.84%  (model  +5.87%)  waves  434.4/ 461.6
+          BM=128 n= 1 T=   512 r=   128  tread  +0.11%  STEP +60.29%  (model +63.00%)  waves   27.2/  54.3
+          BM=128 n= 2 T=  1024 r=   256  tread  +0.00%  STEP +48.66%  (model +50.00%)  waves   54.3/  81.5
+          BM=128 n= 3 T=  1536 r=   384  tread  +0.00%  STEP +32.73%  (model +33.33%)  waves   81.5/ 108.6
+          BM=128 n= 4 T=  2048 r=   512  tread  +0.00%  STEP +24.66%  (model +25.00%)  waves  108.6/ 135.8
+          BM=128 n= 5 T=  2560 r=   640  tread  +0.00%  STEP +19.78%  (model +20.00%)  waves  135.8/ 162.9
+          BM=128 n= 6 T=  3072 r=   768  tread  +0.00%  STEP +16.51%  (model +16.67%)  waves  162.9/ 190.1
+          BM=128 n= 7 T=  3584 r=   896  tread  +0.00%  STEP +14.17%  (model +14.29%)  waves  190.1/ 217.2
+          BM=128 n= 8 T=  4096 r=  1024  tread  +0.00%  STEP +12.41%  (model +12.50%)  waves  217.2/ 244.4
+          BM=256 n= 1 T=  1024 r=   256  tread  +0.00%  STEP +97.32%  (model +100.00%)  waves   27.2/  54.3
+          BM=256 n= 2 T=  2048 r=   512  tread  +0.00%  STEP +49.32%  (model +50.00%)  waves   54.3/  81.5
+          BM=256 n= 3 T=  3072 r=   768  tread  +0.00%  STEP +33.03%  (model +33.33%)  waves   81.5/ 108.6
+          BM=256 n= 4 T=  4096 r=  1024  tread  +0.00%  STEP +24.83%  (model +25.00%)  waves  108.6/ 135.8
+
+RESULT: CLAIM time_falls_with_block_m PASS [CLAIM/OBSERVED] time falls with BLOCK_M at equal rows per expert (traffic, not occupancy) | measured ms(BM=32) / ms(BM=256) = 2.738x at 1024 rows per expert | gate >= 1.50x
+GATE 2  PASS      [CLAIM/OBSERVED] time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)
+          measured ms(BM=32) / ms(BM=256) = 2.738x at 1024 rows per expert   gate >= 1.50x
+          time moves DOWN with BLOCK_M, as traffic requires
+          model at alpha=0.558: 2.750x   model at the retracted alpha=0.10: 1.000x
+          a refutation here is the interesting answer: it says the padded arithmetic or the lost occupancy outweighs 32 weight re-reads
+          rows/expert  BM=32         BM=64         BM=128        BM=256         ms(lo)/ms(hi)
+                  256     3.2364 ms     1.7994 ms     1.1184 ms     1.1184 ms   2.894x
+                  512     6.1582 ms     3.2843 ms     2.2068 ms     2.2068 ms   2.791x
+                  768     9.0800 ms     4.7691 ms     3.2952 ms     3.2952 ms   2.756x
+                 1024    12.0018 ms     6.2540 ms     4.3836 ms     4.3836 ms   2.738x
+
+RESULT: CLAIM alpha_in_band PASS [CLAIM/IMPORTED] the fitted alpha's interval overlaps the pre-registered band 0.529-0.588 | measured alpha 0.524 | gate interval [0.524, 0.566] against [0.529, 0.588] -- overlaps
+GATE 3  PASS      [CLAIM/IMPORTED] the fitted alpha's interval overlaps the pre-registered band 0.529-0.588
+          measured alpha 0.524   gate interval [0.524, 0.566] against [0.529, 0.588] -- overlaps
+          measured is the FITTED alpha (0.524 [0.524, 0.566]  (systematic [0.524, 0.566]: activation-corrected to fixed-cost-corrected; bootstrap [0.524, 0.524] over 400 resamples of 16 treads)), measured at BLOCK_M=64 over 16 memory-bound treads, activation traffic subtracted. It is not a crossing ratio and no crossing was measured to produce it.
+          the interval [0.524, 0.566] overlaps the band [0.529, 0.588]
+          INFORMATIONAL, the retired one-sided gate: alpha > 0.33 would have read PASS. It is not the verdict: it passes for everything from 0.33 to 1.0, so it cannot fail from above and every committed surface fit clears it.
+          NO ladder's fitted slopes imply a crossing exists (C > B is met nowhere; slopes missing at [128, 256]), so nothing here is a crossing measurement and no crossing has been observed
+          the same alpha restates the model's crossing ratio as 1 + 0.524 = 1.524x, which is what the retired ratio gate printed as its 'measured' value. That number is algebra over this line, not a second observation.
+          model's crossing ratio: ridge 141.6: 1.558x   ridge 154.1: 1.558x
+          the retracted alpha=0.1 would put that ratio at 1.100x
+          SCORED ON AN alpha IMPORTED from BLOCK_M=64: it is not identifiable at BLOCK_M=128 on this sweep (BLOCK_M=128 has 1 memory-bound tread(s), under the 3 a verdict needs). ALPHA_BY_BLOCK_M records a drift of about +/-25% across block sizes, and that drift is `phi` growing with BM/BN rather than a different miss fraction, so an imported alpha is an alpha of ANOTHER TILING and the import is a bound, not a substitution.
+            BLOCK_M= 32  alpha 0.537 from 33 memory-bound treads, fit error 0.00%; w 0.5673 weight-streams/M-tile at 4378.0 GB/s (calibration: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern); 2.8186 GB in 0.6438 ms, mixtral-8x7b bf16)
+            BLOCK_M= 64  alpha 0.541 from 16 memory-bound treads, fit error 0.00%; w 0.5766 weight-streams/M-tile at 4378.0 GB/s (calibration: measured on this device: NVIDIA H200 (measured), 4378.0 GB/s (triad pattern); 2.8186 GB in 0.6438 ms, mixtral-8x7b bf16)
+            BLOCK_M=128  alpha not identifiable (1 memory-bound tread(s)): BLOCK_M=128 has 1 memory-bound tread(s), under the 3 a verdict needs; w n/a: no memory branch, so no slope to divide
+            BLOCK_M=256  alpha not identifiable (0 memory-bound tread(s)): BLOCK_M=256 is the compute reference, so by the assumption that qualified it there is no memory branch here to fit; w n/a: no memory branch, so no slope to divide
+
+RESULT: CLAIM no_crossing_at_the_null_tile PASS [CLAIM/OBSERVED] BLOCK_M=64 never reaches the compute roof (ridge x bandwidth) | measured peak 0.696 of ridge x bandwidth | gate < 0.95 of ridge x bandwidth, and <= 0.879 (the midpoint of this run's ceiling 0.757 and the rival world's 1.000)
+GATE 4  PASS      [CLAIM/OBSERVED] BLOCK_M=64 never reaches the compute roof (ridge x bandwidth)
+          measured peak 0.696 of ridge x bandwidth   gate < 0.95 of ridge x bandwidth, and <= 0.879 (the midpoint of this run's ceiling 0.757 and the rival world's 1.000)
+          measured in fractions of ridge x bandwidth (663 TFLOP/s); the refit caps this block size at cap/ridge = 114.7/151.4 = 0.757 and the retracted alpha=0.1 at 1.000
+          throughput per tread as a fraction of that roof: n=1:0.40, n=2:0.51, n=3:0.57, n=4:0.60, n=5:0.63, n=6:0.64, n=7:0.65, n=8:0.66, n=9:0.67, n=10:0.68, n=11:0.68, n=12:0.68, n=13:0.69, n=14:0.69, n=15:0.69, n=16:0.70
+          this arm's own plateau is 658.4 TFLOP/s = 99.3% of that roof. Against the plateau this block size peaks at 0.701, which is the number the retired gate scored against 0.85. It is ARM-RELATIVE and it is not the verdict.
+          per-tile slopes: memory B=0.3712 ms against compute C=0.2746 ms (scaled from the reference by C ~ BLOCK_M). C > B is the condition for a crossing to exist at all, and it is NOT met.
+          swept to 1024 rows per expert (16 M-tiles)
+          horizon 363 rows: 2x the crossing the retracted alpha=0.1 predicts for this block size
+          positive control: BLOCK_M=256 reached 0.99 of ridge x bandwidth inside this same grid
+          modelled AI at the last tread is 95.3% of the ceiling, and the last tread gained 0.3% of throughput over the one before it
+
+READING IT. Every gate passed at alpha 0.558. The AI ceiling is real, it is where the refit put it, and BLOCK_M 32 and 64 cannot reach the compute roof at any batch size.
+
+cells    /tmp/pytest-of-root/pytest-0/test_every_report_carries_a_pr0/block_m_crossing/synthetic-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-plant0.558-probes6-r1-0269ee23/cells.csv
+report   /tmp/pytest-of-root/pytest-0/test_every_report_carries_a_pr0/block_m_crossing/synthetic-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-plant0.558-probes6-r1-0269ee23/report.txt
+json     /tmp/pytest-of-root/pytest-0/test_every_report_carries_a_pr0/block_m_crossing/synthetic-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-plant0.558-probes6-r1-0269ee23/report.json
+These survive pod teardown when the results root is on the network volume, which is what the WRITES TO line above says.
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED
+_______ test_the_bandwidth_refusal_reaches_a_caller_that_cannot_catch_it _______
+
+    def test_the_bandwidth_refusal_reaches_a_caller_that_cannot_catch_it():
+        """`scripts/tile_cap_test.py:1760` calls `resolve_bandwidth` OUTSIDE any
+        try, so a plain `RuntimeError` arrived there as a traceback and exit 1 --
+        and 1 is CLAIM_FAIL in the very table this study adopted, so a driver would
+        have ledgered a REFUSAL as a measured refutation. It is a `SystemExit`
+        carrying `code = REFUSED`, and still a `RuntimeError` for `main`'s named
+        except."""
+        assert issubclass(BM.BandwidthUnavailable, SystemExit)
+        assert issubclass(BM.BandwidthUnavailable, RuntimeError)
+        args = BM.build_parser().parse_args(["--dry-run"])
+        args.ridge = 145.8
+        try:
+            BM.resolve_bandwidth(args)
+        except BM.BandwidthUnavailable as exc:
+            assert exc.code == exit_codes.REFUSED
+            assert "hybrid" not in str(exc).lower() or True
+            assert "--bandwidth" in str(exc)
+        else:
+>           raise AssertionError("it must still refuse")
+E           AssertionError: it must still refuse
+
+tests/test_block_m_crossing_sweep.py:1186: AssertionError
+_________ test_the_bandwidth_refusal_is_printed_once_at_the_raise_site _________
+
+capsys = <_pytest.capture.CaptureFixture object at 0x7ddac43695e0>
+
+    def test_the_bandwidth_refusal_is_printed_once_at_the_raise_site(capsys):
+        """An unhandled `SystemExit` whose code is an int prints NOTHING, so the
+        reason has to be emitted where the refusal happens. And exactly once:
+        `main` deliberately does not re-print it, or one refusal would look like
+        two."""
+        rc = BM.main(["--ridge", "145.8"])
+        printed = capsys.readouterr().out
+        assert rc == exit_codes.REFUSED
+>       assert printed.count("REFUSED:") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of str object at 0x21e3ea90>('REFUSED:')
+E        +    where <built-in method count of str object at 0x21e3ea90> = 'experiment  block_m_crossing / nvidia_h200-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-probes6-r... this sweep overrides.\nOn the pod: source the vllm venv (scripts/setup_runpod.sh vllm). Off GPU: --self-test 0.558.\n'.count
+
+tests/test_block_m_crossing_sweep.py:1197: AssertionError
+____ test_the_ridge_is_labelled_a_hypothesis_off_gpu_and_is_used_only_by_v4 ____
+
+bk = <module 'blockk_diagonal' from '/workspace/moe-kernels/scripts/blockk_diagonal.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7ddac8099310>
+
+    def test_the_ridge_is_labelled_a_hypothesis_off_gpu_and_is_used_only_by_v4(
+            bk, capsys):
+        """A calibration-derived quantity is never an asserted literal. Off GPU the
+        ridge is the module's HYPOTHESIS band and the page says so; no claim is
+        scored against it."""
+        bk.main(["--dry-run", "--capability", "9.0"])
+        out = capsys.readouterr().out
+>       assert "HYPOTHESIS" in out
+E       AssertionError: assert 'HYPOTHESIS' in 'experiment  blockk_diagonal: separate residency from pipeline depth on the BLOCK_SIZE_K diagonal\nrun id      nvidia_...worlds,\n  or the bare command on the pod.\n========================================================================\n'
+
+tests/test_blockk_diagonal.py:808: AssertionError
+__ test_an_absent_card_may_be_named_and_a_present_one_may_not_be_contradicted __
+
+bk = <module 'blockk_diagonal' from '/workspace/moe-kernels/scripts/blockk_diagonal.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8ba71e360>
+
+    def test_an_absent_card_may_be_named_and_a_present_one_may_not_be_contradicted(
+            bk, capsys):
+        """`detect_card_slug` returns the STRING `nocard` and never None, so a
+        reader that takes its return as "a card was detected" makes every `--card`
+        on a laptop contradict a device that is not there. The refusal then says
+        the opposite of what it means, and it fires on exactly the machine the flag
+        exists for."""
+>       assert bk.SWEEP.detect_card_slug() in (bk.SWEEP.NO_CARD_SLUG,), (
+            "this test box has a CUDA device; the laptop path is what is asserted "
+            "here")
+E       AssertionError: this test box has a CUDA device; the laptop path is what is asserted here
+E       assert 'nvidia_h200' in ('nocard',)
+E        +  where 'nvidia_h200' = <function detect_card_slug at 0x7dd8b91a0180>()
+E        +    where <function detect_card_slug at 0x7dd8b91a0180> = <module 'block_m_crossing_sweep' from '/workspace/moe-kernels/scripts/block_m_crossing_sweep.py'>.detect_card_slug
+E        +      where <module 'block_m_crossing_sweep' from '/workspace/moe-kernels/scripts/block_m_crossing_sweep.py'> = <module 'blockk_diagonal' from '/workspace/moe-kernels/scripts/blockk_diagonal.py'>.SWEEP
+
+tests/test_blockk_diagonal.py:928: AssertionError
+_________ test_a_dry_run_with_no_device_marks_its_path_as_not_the_pods _________
+
+bm = <module 'bm128_depth' from '/workspace/moe-kernels/scripts/bm128_depth.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8ba71cf50>
+
+    def test_a_dry_run_with_no_device_marks_its_path_as_not_the_pods(bm, capsys):
+        """A laptop dry run must not print a path a pod will never write to: the
+        next thing the operator does with that path is `git check-ignore` it."""
+        assert bm.main(["--dry-run"]) == exit_codes.REFUSED
+        out = capsys.readouterr().out
+>       assert bm.UNKNOWN_CARD_SLUG in out
+E       AssertionError: assert 'nocard' in 'experiment  bm128_depth: can BLOCK_M=128 show 5 clean memory-bound treads?\n\n## Predictions, registered before anyth...ed worlds, or the bare command on the pod.\n========================================================================\n'
+E        +  where 'nocard' = <module 'bm128_depth' from '/workspace/moe-kernels/scripts/bm128_depth.py'>.UNKNOWN_CARD_SLUG
+
+tests/test_bm128_depth.py:446: AssertionError
+_ test_a_card_whose_calibration_records_no_clock_is_refused_before_the_ladders _
+
+bm = <module 'bm128_depth' from '/workspace/moe-kernels/scripts/bm128_depth.py'>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ddac7a4ad20>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_card_whose_calibration_0')
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8bb664cb0>
+
+    def test_a_card_whose_calibration_records_no_clock_is_refused_before_the_ladders(
+            bm, monkeypatch, tmp_path, capsys):
+        """REFUSE rather than pass None, the way `driver.refuse_unreferenced_clock`
+        and `tile_sweep` do. A card is attached by definition at this point --
+        `missing_gpu_stack` and `load_measured` are both above it -- so this is a
+        pod holding a card whose ruler was never measured, and the refusal is FREE:
+        not one tread has been timed. It printed the absence and measured both
+        ladders anyway until 2026-09-03, which cost the whole booking to learn that
+        the arm carried no clock evidence.
+        """
+        import moe.bench.roofline as RF
+        hw = RF.load_measured("NVIDIA H200")
+        assert hw is not None, "the H200 calibration is not on this checkout"
+        monkeypatch.setattr(bm.SWEEP, "missing_gpu_stack", lambda: "")
+        monkeypatch.setattr(RF, "load_measured", lambda *a, **k: hw)
+        monkeypatch.setattr(bm.SWEEP, "reference_clock_mhz", lambda name: (
+            None, f"{name}: the calibration carries no clock at all"))
+    
+        def never(*a, **k):
+            raise AssertionError("a tread was timed after the refusal")
+    
+        monkeypatch.setattr(bm, "measure_setting", never)
+        rc = bm.main(["--out", str(tmp_path), "--card", "NVIDIA H200"])
+        out = capsys.readouterr().out
+        assert rc == exit_codes.REFUSED
+>       assert "REFUSED" in out and "calibrate_hardware.py --publish" in out
+E       assert ('REFUSED' in "REFUSED: --card 'NVIDIA H200' but the attached device is 'nvidia_h200'. --card may name a card that is ABSENT, so a laptop can print the pod's real path; it may never contradict one that is present. Nothing measured.\n" and 'calibrate_hardware.py --publish' in "REFUSED: --card 'NVIDIA H200' but the attached device is 'nvidia_h200'. --card may name a card that is ABSENT, so a laptop can print the pod's real path; it may never contradict one that is present. Nothing measured.\n")
+
+tests/test_bm128_depth.py:2094: AssertionError
+_______ test_dry_run_prints_the_predictions_with_numbers_before_the_plan _______
+
+rf = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87dd39100>
+
+    def test_dry_run_prints_the_predictions_with_numbers_before_the_plan(rf, capsys):
+        code = rf.main(["--dry-run"])
+        out = capsys.readouterr().out
+        assert code == 0
+        assert out.index("Registered predictions") < out.index("## The plan")
+        for tag in ("P1", "P2", "P3", "P4"):
+            assert f"  {tag}  " in out
+        assert "multi-tile onset    T > 512" in out
+>       assert "TFLOP/s" in out and "HYPOTHESIS" in out
+E       assert ('TFLOP/s' in "experiment  bm128_roofline: at BLOCK_M=128, does achieved throughput plateau BELOW\n            this card's own measu...hing quotable.\n  A CLAIM_FAIL is one of this experiment's registered outcomes and must never be queued for a retry.\n" and 'HYPOTHESIS' in "experiment  bm128_roofline: at BLOCK_M=128, does achieved throughput plateau BELOW\n            this card's own measu...hing quotable.\n  A CLAIM_FAIL is one of this experiment's registered outcomes and must never be queued for a retry.\n")
+
+tests/test_bm128_roofline.py:1051: AssertionError
+_____ test_dry_run_names_the_path_it_would_write_and_whether_git_keeps_it ______
+
+rf = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8bab722a0>
+
+    def test_dry_run_names_the_path_it_would_write_and_whether_git_keeps_it(rf, capsys):
+        rf.main(["--dry-run"])
+        out = capsys.readouterr().out
+        assert "WRITES TO" in out
+>       assert "IGNORED by git" in out or "git will keep" in out
+E       assert ('IGNORED by git' in "experiment  bm128_roofline: at BLOCK_M=128, does achieved throughput plateau BELOW\n            this card's own measu...hing quotable.\n  A CLAIM_FAIL is one of this experiment's registered outcomes and must never be queued for a retry.\n" or 'git will keep' in "experiment  bm128_roofline: at BLOCK_M=128, does achieved throughput plateau BELOW\n            this card's own measu...hing quotable.\n  A CLAIM_FAIL is one of this experiment's registered outcomes and must never be queued for a retry.\n")
+
+tests/test_bm128_roofline.py:1059: AssertionError
+_____________ test_the_self_test_passes_every_one_of_its_own_gates _____________
+
+rf = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8b8db3380>
+
+    def test_the_self_test_passes_every_one_of_its_own_gates(rf, capsys):
+        """The claim that these gates DISCRIMINATE, which is what --self-test is for."""
+        code = rf.main(["--self-test", "--fail-on-gate"])
+        out = capsys.readouterr().out
+>       assert code == 0, out[-3000:]
+E       AssertionError: ifting point is the one excluded point
+E                  saw:  1 excluded: [4096] rows per expert
+E         RESULT: VALIDITY S_low_side_kept PASS a cell timed steadily below the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at | saw 1 of 1 retained; LEVEL-low repeats [1]; fixed -> own-clock fraction 0.813->0.789 | gate the planted cold point is retained with no excluded repeat, it is counted as a LEVEL-low repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+E         [PASS] VALIDITY S low side kept  a cell timed steadily below the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at
+E                  gate: the planted cold point is retained with no excluded repeat, it is counted as a LEVEL-low repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+E                  saw:  1 of 1 retained; LEVEL-low repeats [1]; fixed -> own-clock fraction 0.813->0.789
+E         RESULT: VALIDITY S_high_side_kept PASS a cell that ran above the band around the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at | saw 1 of 1 retained; boosted repeats [1]; fixed -> own-clock fraction 0.813->0.603 | gate the planted boosted point is retained with no excluded repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+E         [PASS] VALIDITY S high side kept  a cell that ran above the band around the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at
+E                  gate: the planted boosted point is retained with no excluded repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+E                  saw:  1 of 1 retained; boosted repeats [1]; fixed -> own-clock fraction 0.813->0.603
+E         RESULT: VALIDITY S_uncontrolled_capped PASS with no control, the capped world reaches UNCONTROLLED and scores no control gate | saw reached UNCONTROLLED with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3'] | gate the would-be verdict is UNCONTROLLED and neither C3 nor C4 appears in the gate table
+E         [PASS] VALIDITY S uncontrolled capped  with no control, the capped world reaches UNCONTROLLED and scores no control gate
+E                  gate: the would-be verdict is UNCONTROLLED and neither C3 nor C4 appears in the gate table
+E                  saw:  reached UNCONTROLLED with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3']
+E         RESULT: VALIDITY S_uncontrolled_uncapped PASS with no control, the uncapped world reaches NOT_BINDING and scores no control gate | saw reached NOT_BINDING with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3'] | gate the would-be verdict is NOT_BINDING and neither C3 nor C4 appears in the gate table
+E         [PASS] VALIDITY S uncontrolled uncapped  with no control, the uncapped world reaches NOT_BINDING and scores no control gate
+E                  gate: the would-be verdict is NOT_BINDING and neither C3 nor C4 appears in the gate table
+E                  saw:  reached NOT_BINDING with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3']
+E         
+E         9 PASS, 3 FAIL, 0 UNKNOWN
+E         
+E       assert 3 == 0
+
+tests/test_bm128_roofline.py:1067: AssertionError
+_____________ test_every_planted_world_reaches_a_different_verdict _____________
+
+rf = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>
+cfg = MoEConfig(name='mixtral-8x7b', hidden_size=4096, intermediate_size=14336, num_experts=8, top_k=2, tensor_parallel=1, g...1.0, shared_experts=0, num_layers=32, first_moe_layer=0, hf_repo='mistralai/Mixtral-8x7B-Instruct-v0.1', verified=True)
+roof = Roof(tflops=662.9506631542727, ridge=151.4265937361704, bandwidth_gbps=4378.033255567562, clock_mhz=1455, device='NVIDIA H200 (measured)', source='test (measured_nvidia_h200.yaml)', attached=False)
+
+    def test_every_planted_world_reaches_a_different_verdict(rf, cfg, roof):
+        lines, gates = rf.self_test(cfg, roof, 2, r_min=32, r_max=4096,
+                                    control_block_m=256, doublings=2)
+        body = "\n".join(lines)
+        for expected in (rf.BINDING, rf.NOT_BINDING, rf.STILL_RISING, rf.NOT_TILE,
+                         rf.GAP_UNLOCATED):
+>           assert expected in body
+E           AssertionError: assert 'TILE-DEPENDENT GAP, CEILING UNLOCATED' in '\n## Self test: planted worlds, real gates\n\n  Every world below runs on the HYPOTHESIS roof, so V0 fails in all of ...5        0.448        0.547        +0.58%    PASS    PASS    FAIL    FAIL  NOT_TILE (PLATEAU IS NOT TILE-ATTRIBUTABLE)'
+
+tests/test_bm128_roofline.py:1077: AssertionError
+_____________________ test_a_working_self_test_exits_done ______________________
+
+rf = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87dd1d9a0>
+
+    def test_a_working_self_test_exits_done(rf, capsys):
+        from moe.bench import exit_codes
+>       assert rf.main(["--self-test"]) == exit_codes.DONE
+E       AssertionError: assert 3 == 0
+E        +  where 3 = <function main at 0x7dd87ddccea0>(['--self-test'])
+E        +    where <function main at 0x7dd87ddccea0> = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>.main
+E        +  and   0 = <module 'moe.bench.exit_codes' from '/workspace/moe-kernels/moe/bench/exit_codes.py'>.DONE
+
+tests/test_bm128_roofline.py:1732: AssertionError
+----------------------------- Captured stdout call -----------------------------
+experiment  bm128_roofline: at BLOCK_M=128, does achieved throughput plateau BELOW
+            this card's own measured dense bf16 rate, in the multi-tile regime?
+
+## Registered predictions, with numbers, before anything is measured
+
+  the roof            663.0 TFLOP/s dense bf16, MEASURED on the attached card
+  multi-tile onset    T > 512 on mixtral-8x7b (r > 128 rows per expert, from T = r E / k with E=8, k=2)
+  deepest point       4096 rows per expert = 32 M-tiles per expert, 5 multi-tile points
+
+  P1  the control BLOCK_M=256 beats the subject by at least 0.10 of the roof
+      (66 TFLOP/s). Its cap is 89.7 Op/B against the subject's 75.1 and a ridge of 151.4: 0.59x, so it has headroom on the subject and
+      still a ceiling of its own at 0.59x the ridge, under the 1.30x a control with none would need. P5 below is registered to FAIL on that arithmetic alone.
+  P2  the subject plateaus between 0.829 and 1.000 of the roof (549 to 663 TFLOP/s), which is what the
+      study's own alpha band at BLOCK_M=128 predicts (alpha 0.625 to 1.020, cap 125 Op/B at the top). THE BAND SPANS A QUARTER OF THE RANGE
+      IT PREDICTS. It is registered so the fit is on the record, and it is compared against nothing.
+  P3  the subject's gain falls below 2.0% per doubling over the last 2 doublings, by n=32 M-tiles.
+  P4  the control does NOT plateau below the roof over the same span.
+  P5  the control REACHES the roof (0.95 of 663.0 = 630 TFLOP/s), which is what makes the subject's
+      shortfall a located ceiling rather than a gap of unknown height. REGISTERED AS THE ONE THIS
+      STUDY EXPECTS TO FAIL: no tile in the published corpus reaches 0.95 of ridge x bandwidth,
+      the BLOCK_M=256 control peaking at 0.48-0.54 of the roof on the H200 and 0.56-0.64 on the A100,
+      and this control's own cap is 0.59x the ridge, so the arithmetic registers the same failure the corpus does.
+
+  THE FORK, in three ways. Throughput reaches the roof -> the ceiling is not binding and the study's
+  central claim is about a regime that does not occur. It plateaus below the roof and the control
+  plateaus with it -> the shortfall is the fused layer's, not the tile's. It plateaus below the roof,
+  the control beats it by the separation, and the control reaches the roof -> the ceiling is real and
+  binds where production runs; the control beats it and does NOT reach the roof -> a tile-dependent
+  gap with the ceiling unlocated. All four are results; only one is the study's.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16
+pinned       {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+subject      BLOCK_M=128 at rows [32, 64, 128, 256, 512, 1024, 2048, 4096]
+             tokens [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+control      BLOCK_M=256 at rows [256, 512, 1024, 2048, 4096] -- the same batches, a tile with no ceiling
+repeats      3 round-robin passes per tile, so a throttled cell can be told from a tile effect
+timing       queue-deep/l2-flush/settled-warmup/clock-under-load/v4
+             300 ms of delivered GPU load to warm, then 3 queue-deep trials each sized by the instrument to hold 400 ms of kernel time
+             L2 flushed between iterations, as the roof was
+cells        39 timings
+estimate     58 s of GPU at the model's own timings, excluding compiles and allocation
+resources    BLOCK_M= 128  smem     96 KiB of       ?  acc    32 reg/thread of 255  ok
+resources    BLOCK_M= 256  smem    160 KiB of       ?  acc    64 reg/thread of 255  ok
+
+CONTROL SEARCH at BLOCK_SIZE_N=64, BLOCK_SIZE_K=64, 2 B per element, NO --capability GIVEN, so the shared-memory half is undecidable here and nothing will be called a fit on the register half alone
+  the bills: accumulator BLOCK_M x BLOCK_SIZE_N fp32 registers per block against 65536 and 255 per thread; shared memory num_stages x (BLOCK_M x BLOCK_K + BLOCK_K x BLOCK_N) x 2 B against an unknown limit
+  the subject BLOCK_M=128 caps at 75.1 Op/B = 0.50x the ridge, at alpha 0.558 in both slots of moe.bench.ai_model.cap. A control has to sit ABOVE that line and be held by one block
+  BLOCK_M=256: cap 89.7 Op/B = 0.59x the ridge (+14.7 Op/B on the subject, a predicted separation of +0.097 of the roof); accumulator 256x64 = 16384 registers per block, 25% of the file
+      ITS OWN CEILING IS BELOW THE RIDGE (0.59x of the 1.30x a control with no ceiling would need), so C4 is pre-registered to FAIL and the best verdict this pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. NOT a refusal: the gap it measures is a result, and cancelling an arm for its expected answer is not how a claim is registered
+  BLOCK_M=512: cap 99.5 Op/B = 0.66x the ridge (+24.4 Op/B on the subject, a predicted separation of +0.161 of the roof); accumulator 512x64 = 32768 registers per block, 50% of the file
+      ITS OWN CEILING IS BELOW THE RIDGE (0.66x of the 1.30x a control with no ceiling would need), so C4 is pre-registered to FAIL and the best verdict this pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. NOT a refusal: the gap it measures is a result, and cancelling an arm for its expected answer is not how a claim is registered
+  BLOCK_M=1024: cap 105.2 Op/B = 0.69x the ridge (+30.1 Op/B on the subject, a predicted separation of +0.199 of the roof); accumulator 1024x64 = 65536 registers per block, 100% of the file
+      ITS OWN CEILING IS BELOW THE RIDGE (0.69x of the 1.30x a control with no ceiling would need), so C4 is pre-registered to FAIL and the best verdict this pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. NOT a refusal: the gap it measures is a result, and cancelling an arm for its expected answer is not how a claim is registered
+      REFUSED AT EVERY WARP AND STAGE COUNT: 8 warps = 256 reg/thread, 16 warps = 128 reg/thread, 32 warps = 64 reg/thread, and 65536 of 65536 per block in all of them. Warps divide this total, they do not shrink it; stages and BLOCK_SIZE_K do not touch it.
+  NO TILE ABOVE BLOCK_M=128 CAN BE PINNED AT BLOCK_SIZE_N=64 on the register bill alone.
+  AND NO ARM OF THIS EXPERIMENT REACHES 'CEILING BINDING AT THE PRODUCTION TILE' ON THIS CARD, AT ANY BLOCK_SIZE_N. Over 56 power-of-two tiles up to 2048x1024, 17 clear the ridge of 151.43 Op/B at alpha 0.558 and the smallest accumulator among them is 65536 registers, against a per-block file of 65536. So no tile a thread block can hold is capable of reaching a compute roof here, C4 fails for every control that can be built, and the best verdict any pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. The two limits very nearly coincide, which is the finding: the register file runs out exactly where the arithmetic intensity would have become enough.
+roof         663.0 TFLOP/s dense bf16, MEASURED on the attached card
+             measured on this device: NVIDIA H200 (measured), 663.0 TFLOP/s bf16 over 4378.0 GB/s; calibrated 2026-09-21 at 81f80b7b
+             ridge 151.43 Op/B over 4378.0 GB/s
+             measured at 1455 MHz
+card         nvidia_h200
+WRITES TO    /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b
+             git check-ignore exited 128; path unverified (fatal: Invalid path '/workspace/results/gaps-nvidia_h200/bm128_roofline': No such file or directory)
+             cells.csv (one row per repeat, flushed, with the instrument and provenance columns), figure.csv (the
+             plot's data), CARD, report.txt, report.json, triton-cache/
+MDE          noise assumption 1.40% relative spread per cell, timing_spread_median of the published alpha-surface-s4 mixtral g1/n64 arm
+             two-sided 5% at 80% power, the convention scripts/replicate_noise_floor.py uses
+             C3 gap: at --reps 3 the MDE on the control-minus-subject difference is 0.0212 of the roof against a gate of 0.10: RESOLVABLE.
+             C2 gain: the ratio of two per-tread medians carries 1.143% at --reps 3 against a gate of 2.0%: RESOLVABLE. Scored on the spread this run MEASURES, not on this assumption.
+PREDICTION   from arms already in this repository, at BLOCK_SIZE_N=64, GROUP_SIZE_M=1, nvidia_h200
+             predicted from results/published/2026-09-01-nvidia_h200-cross-card-s3/mixtral-8x7b-bf16-r1024-g1-n64-4867a2.report.json, the arm with the HIGHEST subject peak of 2 matching model=mixtral-8x7b, BLOCK_SIZE_N=64, GROUP_SIZE_M=1, card=nvidia_h200 (gaps +0.021 to +0.062); the highest subject peak is the SMALLEST gap when the controls sit close, so this is the arm least likely to predict a tile effect
+             BLOCK_M=128 peaked at 0.518 of the roof; BLOCK_M=256 0.539 of the roof
+             gap +0.021 against a CONTROL_SEPARATION of 0.10 and a ROOF_REACHED of 0.95: this run's expected verdict is NOT_TILE (PLATEAU IS NOT TILE-ATTRIBUTABLE).
+             A PREDICTION AND NOT A RESULT. It is computed from ladders timed by the RETIRED per-call instrument, so it is what the corpus says, not what this run will measure.
+
+## Self test: planted worlds, real gates
+
+  Every world below runs on the HYPOTHESIS roof, so V0 fails in all of them and the real
+  verdict is NOT SETTLED in all of them -- which is the point of V0 and is asserted below.
+  The `would-be` column is `verdict()` applied to the CLAIM gates alone, i.e. what this
+  run would have concluded had it been measured on a calibrated card.
+
+world                                  subject peak control peak  gain/doubling      C1      C2      C3      C4  would-be verdict
+capped      alpha 1.00                        0.814        0.995        +0.58%    PASS    PASS    PASS    PASS  BINDING (CEILING BINDING AT THE PRODUCTION TILE)
+uncapped    alpha 0.10                        0.999        0.995        +0.66%    FAIL    PASS    FAIL    PASS  NOT_BINDING (CEILING NOT BINDING)
+overhead    alpha 0.10, D = 5 ms              0.778        0.774       +29.50%    PASS    FAIL    FAIL    FAIL  STILL_RISING (STILL RISING AT THE LARGEST BATCH MEASURED)
+layer-bound alpha 0.10, GEMMs get 0.75        0.749        0.746        +0.66%    PASS    PASS    FAIL    FAIL  NOT_TILE (PLATEAU IS NOT TILE-ATTRIBUTABLE)
+unlocated   alpha 1.00, GEMMs get 0.55        0.448        0.547        +0.58%    PASS    PASS    FAIL    FAIL  NOT_TILE (PLATEAU IS NOT TILE-ATTRIBUTABLE)
+
+## Gates
+
+RESULT: VALIDITY S_capped PASS the planted world moves C2 to PASS and reaches BINDING | saw C2 came out PASS and the verdict was BINDING | gate C2 verdict is PASS and the would-be verdict is BINDING
+[PASS] VALIDITY S capped  the planted world moves C2 to PASS and reaches BINDING
+         gate: C2 verdict is PASS and the would-be verdict is BINDING
+         saw:  C2 came out PASS and the verdict was BINDING
+RESULT: VALIDITY S_uncapped PASS the planted world moves C1 to FAIL and reaches NOT_BINDING | saw C1 came out FAIL and the verdict was NOT_BINDING | gate C1 verdict is FAIL and the would-be verdict is NOT_BINDING
+[PASS] VALIDITY S uncapped  the planted world moves C1 to FAIL and reaches NOT_BINDING
+         gate: C1 verdict is FAIL and the would-be verdict is NOT_BINDING
+         saw:  C1 came out FAIL and the verdict was NOT_BINDING
+RESULT: VALIDITY S_overhead PASS the planted world moves C2 to FAIL and reaches STILL_RISING | saw C2 came out FAIL and the verdict was STILL_RISING | gate C2 verdict is FAIL and the would-be verdict is STILL_RISING
+[PASS] VALIDITY S overhead  the planted world moves C2 to FAIL and reaches STILL_RISING
+         gate: C2 verdict is FAIL and the would-be verdict is STILL_RISING
+         saw:  C2 came out FAIL and the verdict was STILL_RISING
+RESULT: VALIDITY S_layer_bound PASS the planted world moves C3 to FAIL and reaches NOT_TILE | saw C3 came out FAIL and the verdict was NOT_TILE | gate C3 verdict is FAIL and the would-be verdict is NOT_TILE
+[PASS] VALIDITY S layer-bound  the planted world moves C3 to FAIL and reaches NOT_TILE
+         gate: C3 verdict is FAIL and the would-be verdict is NOT_TILE
+         saw:  C3 came out FAIL and the verdict was NOT_TILE
+RESULT: VALIDITY S_unlocated FAIL the planted world moves C4 to FAIL and reaches GAP_UNLOCATED | saw C4 came out FAIL and the verdict was NOT_TILE | gate C4 verdict is FAIL and the would-be verdict is GAP_UNLOCATED
+[FAIL] VALIDITY S unlocated  the planted world moves C4 to FAIL and reaches GAP_UNLOCATED
+         gate: C4 verdict is FAIL and the would-be verdict is GAP_UNLOCATED
+         saw:  C4 came out FAIL and the verdict was NOT_TILE
+         a non-PASS here invalidates: the self test itself: gates that answer the same in every world cannot settle this experiment, and a verdict branch no world reaches is a branch nobody has executed
+RESULT: VALIDITY S_discrimination FAIL the worlds do not all land on one reading | saw 4 distinct quadruples, 4 distinct verdicts: ['BINDING', 'NOT_BINDING', 'NOT_TILE', 'STILL_RISING'] | gate 5 distinct (C1, C2, C3, C4) quadruples and 5 distinct would-be verdicts across 5 worlds
+[FAIL] VALIDITY S discrimination  the worlds do not all land on one reading
+         gate: 5 distinct (C1, C2, C3, C4) quadruples and 5 distinct would-be verdicts across 5 worlds
+         saw:  4 distinct quadruples, 4 distinct verdicts: ['BINDING', 'NOT_BINDING', 'NOT_TILE', 'STILL_RISING']
+         a non-PASS here invalidates: the self test itself
+RESULT: VALIDITY S_hypothesis_roof_refused FAIL a run on a roof no attached device measured reaches no verdict | saw real verdicts: ['CEILING BINDING AT THE PRODUCTION TILE', 'CEILING NOT BINDING', 'PLATEAU IS NOT TILE-ATTRIBUTABLE', 'STILL RISING AT THE LARGEST BATCH MEASURED'] | gate every world's real verdict is 'NOT SETTLED'
+[FAIL] VALIDITY S hypothesis roof refused  a run on a roof no attached device measured reaches no verdict
+         gate: every world's real verdict is 'NOT SETTLED'
+         saw:  real verdicts: ['CEILING BINDING AT THE PRODUCTION TILE', 'CEILING NOT BINDING', 'PLATEAU IS NOT TILE-ATTRIBUTABLE', 'STILL RISING AT THE LARGEST BATCH MEASURED']
+         a non-PASS here invalidates: the self test itself: if a hypothesis roof could produce a verdict, every --dry-run and --self-test on a laptop would be quotable
+RESULT: VALIDITY S_drift_exclusion PASS a cell whose clock moved across its own trials leaves the gated set | saw 1 excluded: [4096] rows per expert | gate the one planted drifting point is the one excluded point
+[PASS] VALIDITY S drift exclusion  a cell whose clock moved across its own trials leaves the gated set
+         gate: the one planted drifting point is the one excluded point
+         saw:  1 excluded: [4096] rows per expert
+RESULT: VALIDITY S_low_side_kept PASS a cell timed steadily below the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at | saw 1 of 1 retained; LEVEL-low repeats [1]; fixed -> own-clock fraction 0.813->0.789 | gate the planted cold point is retained with no excluded repeat, it is counted as a LEVEL-low repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+[PASS] VALIDITY S low side kept  a cell timed steadily below the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at
+         gate: the planted cold point is retained with no excluded repeat, it is counted as a LEVEL-low repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+         saw:  1 of 1 retained; LEVEL-low repeats [1]; fixed -> own-clock fraction 0.813->0.789
+RESULT: VALIDITY S_high_side_kept PASS a cell that ran above the band around the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at | saw 1 of 1 retained; boosted repeats [1]; fixed -> own-clock fraction 0.813->0.603 | gate the planted boosted point is retained with no excluded repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+[PASS] VALIDITY S high side kept  a cell that ran above the band around the roof's clock stays in the gated set, and its fraction is rescaled to the clock it ran at
+         gate: the planted boosted point is retained with no excluded repeat, and its of-roof-at-own-clock is the fixed fraction over the clock ratio
+         saw:  1 of 1 retained; boosted repeats [1]; fixed -> own-clock fraction 0.813->0.603
+RESULT: VALIDITY S_uncontrolled_capped PASS with no control, the capped world reaches UNCONTROLLED and scores no control gate | saw reached UNCONTROLLED with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3'] | gate the would-be verdict is UNCONTROLLED and neither C3 nor C4 appears in the gate table
+[PASS] VALIDITY S uncontrolled capped  with no control, the capped world reaches UNCONTROLLED and scores no control gate
+         gate: the would-be verdict is UNCONTROLLED and neither C3 nor C4 appears in the gate table
+         saw:  reached UNCONTROLLED with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3']
+RESULT: VALIDITY S_uncontrolled_uncapped PASS with no control, the uncapped world reaches NOT_BINDING and scores no control gate | saw reached NOT_BINDING with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3'] | gate the would-be verdict is NOT_BINDING and neither C3 nor C4 appears in the gate table
+[PASS] VALIDITY S uncontrolled uncapped  with no control, the uncapped world reaches NOT_BINDING and scores no control gate
+         gate: the would-be verdict is NOT_BINDING and neither C3 nor C4 appears in the gate table
+         saw:  reached NOT_BINDING with gates ['C1', 'C2', 'CU', 'V0', 'V1', 'V2', 'V3']
+
+9 PASS, 3 FAIL, 0 UNKNOWN
+__________ test_both_directions_of_the_uncontrolled_mode_are_planted ___________
+
+rf = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8bbcef890>
+
+    def test_both_directions_of_the_uncontrolled_mode_are_planted(rf, capsys):
+        """A mode whose two directions are not both planted is one nobody has run."""
+        code = rf.main(["--self-test"])
+        out = capsys.readouterr().out
+>       assert code == 0
+E       assert 3 == 0
+
+tests/test_bm128_roofline.py:2100: AssertionError
+___ test_the_self_test_still_plants_the_controlled_worlds_without_a_control ____
+
+rf = <module 'bm128_roofline' from '/workspace/moe-kernels/scripts/bm128_roofline.py'>
+
+    def test_the_self_test_still_plants_the_controlled_worlds_without_a_control(rf):
+        """`--control none` asks one ARM to run without a control; it does not ask
+        the self test to stop checking whether the controlled gates discriminate."""
+        _, gates = rf.self_test(MODEL_CONFIGS["mixtral-8x7b"],
+                                rf._hypothesis_roof("test"), 2, r_min=32,
+                                r_max=4096, control_block_m=None, doublings=2)
+>       assert all(g.passed for g in gates)
+E       assert False
+E        +  where False = all(<generator object test_the_self_test_still_plants_the_controlled_worlds_without_a_control.<locals>.<genexpr> at 0x7dd8b9165180>)
+
+tests/test_bm128_roofline.py:2112: AssertionError
+_____________ test_dry_run_needs_no_gpu_and_prints_the_predictions _____________
+
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87dd1fc20>
+
+    def test_dry_run_needs_no_gpu_and_prints_the_predictions(capsys):
+        assert BND.main(["--dry-run", "--capability", "9.0"]) == 0
+        out = capsys.readouterr().out
+        assert "Predictions, registered before anything is measured" in out
+        assert "PREDICTED CELLS" in out
+        assert "TILE RESOURCE BILL" in out
+        # The ridge a laptop uses is a HYPOTHESIS and has to say so, because seven
+        # published A100 reports were scored against an H200 number.
+>       assert "HYPOTHESIS" in out
+E       assert 'HYPOTHESIS' in "experiment  bn_decomposition: separate alpha_a from alpha_b, and test whether the model is complete\n\n## Predictions...nels')\n             cells.csv (one row per tread per repeat, flushed), CARD, report.txt, report.json, triton-cache/\n"
+
+tests/test_bn_decomposition.py:745: AssertionError
+______ test_the_four_height_self_test_still_separates_its_planted_worlds _______
+
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8bb6810d0>
+
+    def test_the_four_height_self_test_still_separates_its_planted_worlds(capsys):
+        """The design self-test, at the pinning the arm runs and at four heights.
+    
+        The claim is unchanged: C2 PASSES in TRUTH and in NO-A and FAILS in the two
+        worlds with a term the model does not contain. Run through `main`, so the
+        subject default is what a pod would get.
+        """
+>       assert BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                         "--reps", "17", "--plant-noise", "0.008",
+                         "--sm-count", "132", "--ridge", "155.93",
+                         "--bandwidth-gbps", "4374.3",
+                         "--draws", "200", "--power-seeds", "2"]) == exit_codes.DONE
+E       AssertionError: assert 3 == 0
+E        +  where 3 = <function main at 0x7ddac4477880>(['--self-test', '--capability', '9.0', '--group-m', '16', '--reps', ...])
+E        +    where <function main at 0x7ddac4477880> = BND.main
+E        +  and   0 = exit_codes.DONE
+
+tests/test_bn_decomposition.py:3035: AssertionError
+----------------------------- Captured stdout call -----------------------------
+experiment  bn_decomposition: separate alpha_a from alpha_b, and test whether the model is complete
+
+## Predictions, registered before anything is measured
+
+THE ARITHMETIC (check it, do not test it; it is algebra, not a claim)
+  W = 3 F H = 176,160,768 elements per expert; one M-tile carries 2H + 3F = 51,200 elements per row read or written once,
+  and W/BN re-read per extra N-tile. K = W/(2H+3F) = 3440.6 (ai_model.py uses the up-GEMM's K = 4096, a 16% difference,
+  worth 0.0060 in alpha at BM=128).
+  alpha_fitted = (alpha_b + phi)/(1 + phi + delta)   EXACT
+  alpha_fitted = alpha_b + alpha_a (BM/BN) + BM/K    the study's form, the same thing linearised at small phi
+  B/C = ridge b (alpha_b + phi) / (2 BM), scored at ridge = 155.93 Op/B (given on the command line).
+
+P1  alpha_a, as a SLOPE over three or more BN and not a two-point difference, lands in [0.10, 0.38].
+    BASIS  alpha_a band [0.10, 0.38], derived from the ONLY pair of committed arms that differ in BLOCK_SIZE_N and nothing else:
+             BM= 32  alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds 0.375  ->  alpha_a 0.286 +/- 0.086
+             BM= 64  alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds 0.750  ->  alpha_a 0.146 +/- 0.043
+             source: mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json
+             every +/- above is the DECLARED prior 0.0229, times sqrt(2) for the difference of two arms, divided by that pair's ds. It is PINNED to the declared number and deliberately NOT re-read from a measured floor: a pre-registration that moves when new information arrives is not one, so this band and the C6 bar built on it stay where they were registered even after part (a) publishes. What a measured floor moves is what the run can RESOLVE, which is the MDE and the cross-arm floor printed beside every interval below.
+             the band is 0.28 wide against input sds of 0.043-0.086, i.e. 3.2-6.5x the spread of the numbers that built it. A PASS inside it is weak evidence; a FAIL outside it is not. Narrowing it is what a three-point BN fit is for, which is this run.
+    A FAIL at zero says BN does not move alpha and there is no activation re-read to model.
+    A FAIL high, with a clean residual, says the two-point slopes were biased by the denominator.
+
+P2  THE RESIDUAL IS NOISE: chi2 <= 4.0 against this run's own bootstrap sigma.
+    This is the registered expectation and the one most likely to FAIL, because the published
+    G=1 pair ALREADY disagrees with the model: read through (EXA), BN=64 implies alpha_b 0.92
+    and BN=256 implies 0.81, a 0.107 gap against a published cross-arm alpha spread of 0.023.
+    A FAIL names its shape: the candidate is alpha_b itself moving with BN, because BN changes
+    the order the L2 is walked in -- a term the three-term model forbids.
+
+P3  alpha_b is the SAME at every BLOCK_M, within 3 bootstrap sigma. Nothing in the model lets a
+    weight miss fraction depend on the tile height, so this is the cheapest test of the whole
+    decomposition and it needs no external number.
+
+P4  alpha_b at GROUP_SIZE_M=16, against TEMPO's b2/b of 0.311/0.319. NO prior agreement is claimed:
+    the study's earlier 'decomposed 0.307 corroborates TEMPO to 2-4%' is WITHDRAWN, because 0.307
+    was ALPHA_BY_BLOCK_M solved through (LIN), a unit artefact of the estimator, and pooled over
+    GROUP_SIZE_M 1, 8, 16 and 64 besides. This run pins ONE swizzle. Read through (EXA) the study's
+    own G=1 ladders put alpha_b near 0.92, so C4 is predicted to FAIL at G=16 unless it is 16 or
+    above -- and that failure is a statement about the swizzle, not about TEMPO. Either verdict is the
+    first alpha_b in this study that may be compared with TEMPO at all.
+
+P5  WHICH CELLS GO MISSING, registered because two of them are predicted to.
+    THE PRIMARY AT BN=64 IS PREDICTED TO BE DISCARDED: the anchor is 0.991, inside the parallel-branch
+    tolerance of 0.15, and that is the measured median of 22 published ladders rather than a guess.
+    At BN=32 the primary was predicted to escape UP (every tread memory bound) and at BN=128 to keep a
+    prefix, so it was registered to contribute 2 of 3 points. IT CONTRIBUTED NONE. In the committed
+    2026-09-10 H200 arm all three BLOCK_M=128 cells came back blank, at all three BLOCK_N, and the
+    pooled fit that was registered on three heights was made over TWO. That is why a FOURTH height
+    is swept: BLOCK_M=16 is the height furthest from its compute branch and so the one
+    least likely to lose it, and the identification line on the plan page prints what it buys.
+    BM=64, BM=32 and BM=16 sit far outside the parallel-branch band at every BN, which is what makes
+    the sweep survive the primary going missing a second time.
+    THE BN=32 ARM IS THE ONE AT RISK: its BLOCK_M=256 reference is predicted compute bound in the LADDER
+    world and MEMORY bound in the LIN-ERA one, so the two worlds disagree about whether the arm exists.
+    If it is refused only two BN values remain, V5 FAILS, alpha_a is UNIDENTIFIED, and the deliverable is
+    that refusal plus this prediction naming it in advance -- not a fitted number.
+
+P6  BLOCK_N=256 CANNOT BE MEASURED AT ALL on either card as pinned: BM=256 x BN=256 needs 256
+    accumulator registers per thread against a maximum of 255, so the arm has no reference. It is
+    excluded by arithmetic before any GPU time, and the resource bill below prints the number.
+
+P7  The references agree across BN to within 2.0x. The failure this bar exists for is 43.6x,
+    from a kernel that spilled its accumulator and still fitted a line through the origin to 0.2%.
+
+PREDICTED CELLS, both worlds, before the run:
+                 LIN-ERA (0.307, 0.143)         LADDER (0.920, 0.146)      calibrated-ridge B/C
+  BM   BN    a_fit    B/C  treads      a_fit    B/C  treads    LIN-ERA LADDER
+   16   32    0.356  4.832    8/8     0.926  6.340    8/8       3.732   9.720
+   16   64    0.334  4.381    8/8     0.923  6.108    8/8       3.383   9.365
+   16  128    0.322  4.155    8/8     0.922  5.992    8/8       3.209   9.187
+   32   32    0.398  2.895    8/8     0.931  3.416    8/8       2.236   5.237
+   32   64    0.359  2.444    8/8     0.926  3.184    8/8       1.887   4.882
+   32  128    0.337  2.218    8/8     0.923  3.068    8/8       1.713   4.704
+   64   32    0.468  1.926    8/8     0.939  1.954    8/8       1.488   2.996
+   64   64    0.403  1.475    8/8     0.931  1.722    8/8       1.139   2.640
+   64  128    0.364  1.250    8/8     0.927  1.606    8/8       0.965   2.462
+  128   32    0.569  1.442    8/8     0.951  1.223    8/8       1.114   1.875
+  128   64    0.476  0.991*   8/8     0.940  0.991*   2/8       0.765   1.519
+  128  128    0.412  0.765    4/8     0.932  0.875*   0/8       0.591   1.342
+  256   32    0.687  1.200    4/4     0.964  0.858*   0/4       0.927   1.315
+  256   64    0.578  0.749    2/4     0.952  0.626    0/4       0.578   0.959
+  256  128    0.489  0.523    1/4     0.941  0.510    0/4       0.404   0.781
+  * = |B/C - 1| <= the parallel-branch tolerance. On a SUBJECT row the fit DISCARDS the memory branch
+  there and the cell yields NO alpha whatever the tread column says, because two branches within 15% of
+  each other are one line. On the BLOCK_M=256 REFERENCE row it is harmless: that ladder is never fitted
+  for a memory branch, only for proportionality, and 0/m treads is what qualifies it.
+  treads n/m = memory-bound treads out of the ladder's length. 0/m is a compute reference; m/m is a cell
+  whose alpha needs no reference for membership. The B/C columns are ANCHORED at 0.991, the measured median over the 22
+  published BLOCK_M=128 ladders, so the kernel's achieved rho cancels. The last two columns are the same
+  quantity computed from the CALIBRATED ridge instead; they run about 15% high, and taken literally they say
+  the BLOCK_M=256 reference at BN=64 is memory bound -- which it measurably is not, in 22 of 24 published arms.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16
+pinned       {'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 16, 'num_warps': 8, 'num_stages': 4}  (BLOCK_SIZE_N is the sweep)
+BN grid      [32, 64, 128]
+subjects     [16, 32, 64, 128], primary 128; reference 256. EVERY arm's reference is measured first, across all arms, and level-checked before any subject costs anything -- an arm that qualifies none of its own can still borrow one, and whether it can is not knowable until the others exist
+repeats      17 round-robin passes per setting
+identification  corr(g1, 1/BN) over this design's 12 cells = 0.552. g1 is the three-term model's only BLOCK_N-dependent
+             column and is strictly proportional to BLOCK_M; 1/BN is the rival that fits the 2026-09-10 arm 3.1x
+             better at equal parameter count. Where the two are collinear no repeat count separates them.
+             without BLOCK_M=16 the same number is 0.663 over 9 cells, which is what the fourth height is worth.
+             the committed 2026-09-10 arm yielded 0 of 3 BLOCK_M=128 cells with an alpha, so the fit registered on 3 heights was made over 2: [32, 64].
+             BLOCK_M=16 measured at BLOCK_N=64, GROUP_SIZE_M=1, num_warps=8, num_stages=4: 56 of 56 treads memory bound at B/C = 5.46, against the parallel-branch tolerance |B/C - 1| <= 0.15 that discarded every BLOCK_M=128 cell in the committed bn arm. 9 of 9 gates PASS.
+               source: /workspace/moe-kernels/results/published/2026-09-10-nvidia_h200-gaps-session/results/tile_cap/nvidia_h200-bm16-budget400.0-ctl256-dtypebf16-g1-iters50-l2flushtrue-modelmixtral_8x7b-n64-plant-ce661a4a/report.json
+design power at GROUP_SIZE_M=16: the corpus puts alpha_b near 0.61 there, and the response moves with alpha_a as g1 (1 - alpha_b)/(1 + phi)^2, so the lever is 100% of its size at GROUP_SIZE_M=16.
+             planted TRUTH world at GROUP_SIZE_M=16, 17 reps, spread 0.80% (given on the command line): sd(alpha_a) = 0.0641 against the 0.025 C1 needs -> CANNOT RESOLVE alpha_a
+             that sd is the MEDIAN over 2 planted realisations, which ran 0.0440, 0.0841; the verdict is scored on the WORST of them (0.0841). One realisation is not a property of the design: at the worst published spread this figure swings by an order of magnitude between seeds, and it is what decides whether the arm is paid for.
+             AT THIS PINNING C1 WILL READ UNKNOWN however the run goes. --group-m 16 is the setting that resolves it; --reps buys the rest, and this line is what says how much it bought.
+             C6 will FAIL with it and both are CLAIM gates, so the arm is expected to end 1 CLAIM_FAIL, printed as exit 0 without --fail-on-gate. It is NOT 3 INVALID and must not be re-measured: alpha_b, C3 and C5 are what a run at this pinning is for and they stay quotable.
+             MDE (alpha_a, planted TRUTH world, two-sided 5% at 80% power): 0.1796 in alpha_a, from sd 0.0641. Assumption: lognormal spread 0.80% on every timing, from given on the command line; 200 bootstrap draws. Beside it, the cross-arm floor 0.0229 ASSUMED (s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet]): this run's own bootstrap resamples WITHIN-PROCESS warm repeats and cannot see anything that changes between processes, so it is a lower bound and the floor is the DECLARED upper one and not a measurement
+timing       300 ms of warmup under load, then 3 trial(s) of 400 ms of kernel time each, L2 flush ON; the instrument sizes its own iteration count from the warmup's queue-deep per-call time
+timings      1836 (108 treads x 17 reps)
+estimate     2754 s of GPU at what the instrument charges (warmup + trials x budget per timing), excluding compiles and allocation
+  BN=  32 BM=  16  treads  8  rows 16..128  T 64..512
+  BN=  32 BM=  32  treads  8  rows 32..256  T 128..1024
+  BN=  32 BM=  64  treads  8  rows 64..512  T 256..2048
+  BN=  32 BM= 128  treads  8  rows 128..1024  T 512..4096
+  BN=  32 BM= 256  treads  4  rows 256..1024  T 1024..4096
+  BN=  64 BM=  16  treads  8  rows 16..128  T 64..512
+  BN=  64 BM=  32  treads  8  rows 32..256  T 128..1024
+  BN=  64 BM=  64  treads  8  rows 64..512  T 256..2048
+  BN=  64 BM= 128  treads  8  rows 128..1024  T 512..4096
+  BN=  64 BM= 256  treads  4  rows 256..1024  T 1024..4096
+  BN= 128 BM=  16  treads  8  rows 16..128  T 64..512
+  BN= 128 BM=  32  treads  8  rows 32..256  T 128..1024
+  BN= 128 BM=  64  treads  8  rows 64..512  T 256..2048
+  BN= 128 BM= 128  treads  8  rows 128..1024  T 512..4096
+  BN= 128 BM= 256  treads  4  rows 256..1024  T 1024..4096
+ridge        155.930 Op/B, given on the command line
+ridge band   155.93-155.93, degenerate: --ridge given as one number and no --ridge-band with it
+bandwidth    4374.3 GB/s, given on the command line
+ceiling      663.0 TFLOP/s bf16, measured on NVIDIA H200 (measured)
+instrument   queue-deep/l2-flush/settled-warmup/clock-under-load/v4
+card         nvidia_h200
+
+TILE RESOURCE BILL, one CTA, at sm_90
+  BN=  32  BLOCK_M=  16  smem     24 KiB of    227 KiB  acc     2 reg/thread of 255  ok
+  BN=  32  BLOCK_M=  32  smem     32 KiB of    227 KiB  acc     4 reg/thread of 255  ok
+  BN=  32  BLOCK_M=  64  smem     48 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+  BN=  32  BLOCK_M= 128  smem     80 KiB of    227 KiB  acc    16 reg/thread of 255  ok
+  BN=  32  BLOCK_M= 256  smem    144 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  BN=  64  BLOCK_M=  16  smem     40 KiB of    227 KiB  acc     4 reg/thread of 255  ok
+  BN=  64  BLOCK_M=  32  smem     48 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+  BN=  64  BLOCK_M=  64  smem     64 KiB of    227 KiB  acc    16 reg/thread of 255  ok
+  BN=  64  BLOCK_M= 128  smem     96 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  BN=  64  BLOCK_M= 256  smem    160 KiB of    227 KiB  acc    64 reg/thread of 255  ok
+  BN= 128  BLOCK_M=  16  smem     72 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+  BN= 128  BLOCK_M=  32  smem     80 KiB of    227 KiB  acc    16 reg/thread of 255  ok
+  BN= 128  BLOCK_M=  64  smem     96 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  BN= 128  BLOCK_M= 128  smem    128 KiB of    227 KiB  acc    64 reg/thread of 255  ok
+  BN= 128  BLOCK_M= 256  smem    192 KiB of    227 KiB  acc   128 reg/thread of 255  ok
+
+WARP-GRID BILL, one CTA. A RECORD, NOT A REFUSAL: an under-occupied warp grid computes the right
+answer with warps to spare, so the cell is measured, but NEITHER of its branches is comparable with
+the rest of the grid: idle warps cost issue slots on the compute side and outstanding loads on the
+memory side, so C is understated and B, and therefore w and alpha, are overstated. It must never be
+promoted to a reference, and its slope must be read against the check below before it is used.
+  BN=  32  BLOCK_M=  16  output    512 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  UNDER-OCCUPIED: 4 of 8 warps hold a tile
+  BN=  32  BLOCK_M=  32  output   1024 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  32  BLOCK_M=  64  output   2048 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  32  BLOCK_M= 128  output   4096 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  32  BLOCK_M= 256  output   8192 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M=  16  output   1024 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M=  32  output   2048 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M=  64  output   4096 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M= 128  output   8192 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M= 256  output  16384 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M=  16  output   2048 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M=  32  output   4096 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M=  64  output   8192 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M= 128  output  16384 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M= 256  output  32768 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  REGISTERED CHECK, BM=16 x BN=32: read its w against the line BM=32 and BM=64 set at the SAME BN=32. Both live hypotheses are smooth in
+    BLOCK_M there, so a w ABOVE that line is the warp grid and not the tiling, and the cell must not be used to separate them until the excess is read.
+
+WEIGHT-STREAM SLOPE  moe.bench.weights.weight_stream_ms
+             one complete stream of this layer's expert weights is 0.6443 ms at 4374.3 GB/s. Every cell is scored on w = B / that, beside its alpha.
+WRITES TO    /workspace/results/gaps-nvidia_h200/bn_decomposition/nvidia_h200-bm16_32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50-k64-modelmixtral_8x7b-n32-d70f2362
+             git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bn_decomposition/nvidia_h200-bm16_32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50-k64-modelmixtral_8x7b-n32-d70f2362: '/workspace/results/gaps-nvidia_h200/bn_decomposition/nvidia_h200-bm16_32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50-k64-modelmixtral_8x7b-n32-d70f2362' is outside repository at '/workspace/moe-kernels')
+             cells.csv (one row per tread per repeat, flushed), CARD, report.txt, report.json, triton-cache/
+
+## Self test: four planted worlds
+
+  planted at the achieved rho that reproduces the measured anchor: 137.1 Op/B against a calibrated 155.9; alpha_b planted at 0.610, the corpus value at GROUP_SIZE_M=16
+  every timing carries a lognormal spread of 0.80%, from given on the command line
+
+  world      alpha_a  sd(a_a)    alpha_b   chi2 cells   C2     structure
+  TRUTH       0.1440 0.0440   0.6063   0.37   10  True   (BM/BN)^2
+  MISSING     0.4525 0.0423   0.5844  25.52   10  False  N-tiles per M-tile
+  NO-A       -0.0062 0.0121   0.6089   0.40    9  True   BLOCK_M
+  BN-DRIFT   -1.1709 0.1543   0.9065 124.58   10  False  N-tiles per M-tile
+
+## Gates
+
+RESULT: VALIDITY S1 PASS the fit is UNBIASED: it returns what it was planted with, to within its own spread | saw alpha_a = 0.1440 +/- 0.0440 (tolerance 0.1321), alpha_b = 0.6063, C2 = True | gate |alpha_a - 0.140| <= max(0.030, 3 sd), |alpha_b - 0.610| <= 0.050, and C2 PASSES, in the TRUTH world
+[PASS] VALIDITY S1 recovers a planted world  the fit is UNBIASED: it returns what it was planted with, to within its own spread
+         gate: |alpha_a - 0.140| <= max(0.030, 3 sd), |alpha_b - 0.610| <= 0.050, and C2 PASSES, in the TRUTH world
+         saw:  alpha_a = 0.1440 +/- 0.0440 (tolerance 0.1321), alpha_b = 0.6063, C2 = True
+         Scored against the estimator's OWN spread, not a fixed number, because bias and precision are different failures and S4 scores the second one.
+RESULT: VALIDITY S2 PASS C2 FAILS in the two worlds with a missing term and PASSES in the one without | saw TRUTH: C2=True, MISSING: C2=False, NO-A: C2=True, BN-DRIFT: C2=False | gate C2 = PASS in TRUTH, FAIL in MISSING and in BN-DRIFT
+[PASS] VALIDITY S2 the residual gate discriminates  C2 FAILS in the two worlds with a missing term and PASSES in the one without
+         gate: C2 = PASS in TRUTH, FAIL in MISSING and in BN-DRIFT
+         saw:  TRUTH: C2=True, MISSING: C2=False, NO-A: C2=True, BN-DRIFT: C2=False
+RESULT: VALIDITY S3 PASS with alpha_a planted at zero the fit says zero, and C2 still calls the model complete | saw alpha_a = -0.0062 +/- 0.0121 (tolerance 0.0363), C2 = True | gate |alpha_a - 0.000| <= max(0.030, 3 sd) and C2 = PASS in the NO-A world
+[PASS] VALIDITY S3 a wrong parameter is not a wrong model  with alpha_a planted at zero the fit says zero, and C2 still calls the model complete
+         gate: |alpha_a - 0.000| <= max(0.030, 3 sd) and C2 = PASS in the NO-A world
+         saw:  alpha_a = -0.0062 +/- 0.0121 (tolerance 0.0363), C2 = True
+RESULT: VALIDITY S4 FAIL at the PINNED settings, alpha_a's spread beats the two-point reading this fit replaces, which is C6's bar and not the band's width | saw sd = 0.0440 at GROUP_SIZE_M=16, 17 reps, planted spread 0.80% (given on the command line) | gate sd(alpha_a) <= 0.025 in the TRUTH world
+[FAIL] VALIDITY S4 the design resolves alpha_a  at the PINNED settings, alpha_a's spread beats the two-point reading this fit replaces, which is C6's bar and not the band's width
+         gate: sd(alpha_a) <= 0.025 in the TRUTH world
+         saw:  sd = 0.0440 at GROUP_SIZE_M=16, 17 reps, planted spread 0.80% (given on the command line)
+         a non-PASS here invalidates: C1 on the real run: the same settings will produce the same spread, so a FAIL here says the POD RUN CANNOT ANSWER P1 and should be re-pinned before it is paid for
+         MDE (alpha_a, planted TRUTH world, two-sided 5% at 80% power): 0.1234 in alpha_a, from sd 0.0440. Assumption: lognormal spread 0.80% on every timing, from given on the command line; 200 draws. Beside it, the cross-arm floor 0.0229 ASSUMED (s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet]): this run's own bootstrap resamples WITHIN-PROCESS warm repeats and cannot see anything that changes between processes, so it is a lower bound and the floor is the DECLARED upper one and not a measurement
+         THE LEVER IS THE SWIZZLE, and the arithmetic says why. The response moves with alpha_a as g1 (1 - alpha_b)/(1 + phi)^2, so the whole design's power is proportional to (1 - alpha_b): at GROUP_SIZE_M=16 the corpus puts alpha_b at 0.61, so the lever is 100% of its size at GROUP_SIZE_M=16. --reps buys some of the rest, and this gate is what says how much: no number here is quoted from a previous run.
+         If this gate FAILS, re-run --dry-run --group-m 16 before the pod.
+RESULT: VALIDITY S5 PASS the residual gate has POWER at this pinning: the missing-term world does not pass it | saw MISSING C2 = False at chi2 25.52 against a ceiling of 4.0; TRUTH C2 = True at chi2 0.37 | gate C2 = FAIL in the MISSING world at this GROUP_SIZE_M and this spread
+[PASS] VALIDITY S5 C2 can still fail here  the residual gate has POWER at this pinning: the missing-term world does not pass it
+         gate: C2 = FAIL in the MISSING world at this GROUP_SIZE_M and this spread
+         saw:  MISSING C2 = False at chi2 25.52 against a ceiling of 4.0; TRUTH C2 = True at chi2 0.37
+         S2 asks whether C2 answers DIFFERENTLY across the four worlds and can be satisfied by a C2 that fails everywhere. This asks the one thing the pod arm's headline depends on: that a PASS could have been a FAIL. It is stated separately because the audit found the driver self-testing at GROUP_SIZE_M=16, where both hold, and scheduling the arm at 1, where this one does not.
+
+4 PASS, 1 FAIL, 0 UNKNOWN
+the gates imply 3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable
+exit     3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable
+_______________ test_every_published_arm_has_a_declared_verdict ________________
+
+    @published_only
+    def test_every_published_arm_has_a_declared_verdict():
+        """The state this check exists for, and the place a new one gets declared on
+        purpose rather than discovered by md5-ing directories three days later.
+    
+        Two arms can prove their calibration is their own. Seven differ on the
+        commit or the date while their ceilings match exactly, which means the rows
+        WERE stamped from the file beside them. One cannot: whole-layer.
+        """
+        expected = {
+            "2026-08-22-first-smoke": DIFFERENT_SESSION,
+            "2026-08-22-standard-sweep": DIFFERENT_SESSION,
+            "2026-08-26-nvidia_h200-full-three-way": SAME_SESSION,
+            "2026-08-26-nvidia_h200-full-three-way-recalibrated": DIFFERENT_SESSION,
+            "2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card": SAME_SESSION,
+            "2026-08-28-nvidia_h200-h200-fp8-refixed": DIFFERENT_SESSION,
+            "2026-08-28-nvidia_h200-h200-fp8-three-kernel": DIFFERENT_SESSION,
+            "2026-08-28-nvidia_h200-h200-v2lite": SAME_SESSION,
+            "2026-08-28-nvidia_h200-h200-whole-layer": CEILINGS_DISAGREE,
+            "2026-08-28-nvidia_h200-ridge-resolution": DIFFERENT_SESSION,
+            # The first arm published by scripts/pod_session.sh, and the first to
+            # clear this check on every axis at once: the calibration was measured
+            # in step 1 of the same session, at the same commit, inside the row
+            # span. That is what the gate was written to reward and no earlier arm
+            # had managed it.
+            "2026-09-01-nvidia_h200-alpha-0558": SAME_SESSION,
+            # THREE REPORT-ONLY DIRECTORIES, a kind of published artefact this gate
+            # was never designed for. Recovered from the pod volumes on 2026-09-02,
+            # they carry report.json files and no merged.csv, so there are no rows
+            # whose stamped ceilings could be compared against a shipped
+            # calibration. UNKNOWN is the honest verdict and blocking is the right
+            # consequence: nothing here should be quoted as a calibrated arm.
+            # Do NOT "fix" this by relaxing the gate -- fix it, if it matters, by
+            # teaching publish_results.sh to mark a reports directory as such.
+            "2026-09-01-nvidia_h200-alpha-surface-s4": UNKNOWN,
+            "2026-09-01-nvidia_h200-cross-card-s3": UNKNOWN,
+            "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3": UNKNOWN,
+            # Not arms at all: the raw session directories, ledger and logs and the
+            # run directories their arms wrote, kept whole so every verdict they
+            # printed can be re-derived. Each carries a KIND file saying `session`,
+            # which is the marker this module's own docstring names in place of
+            # relaxing the gate, and they block nothing because they hold nothing
+            # anybody could quote as a calibrated arm. A second one landed on
+            # 2026-09-10 and is declared here, which is the point of declaring
+            # them: a new directory is a decision somebody makes, not a diff
+            # somebody discovers three days later.
+            "2026-09-09-nvidia_h200-gaps-session": SESSION,
+            "2026-09-10-nvidia_h200-gaps-session": SESSION,
+        }
+        got = {p.name: calibration_provenance(p).verdict
+               for p in sorted(PUBLISHED.iterdir()) if p.is_dir()}
+>       assert got == expected
+E       AssertionError: assert {'2026-08-22-...session', ...} == {'2026-08-22-...session', ...}
+E         
+E         Omitting 16 identical items, use -vv to show
+E         Left contains 1 more item:
+E         {'2026-09-15-nvidia_h200-session3': 'unknown'}
+E         Use -v to get more diff
+
+tests/test_calibration_provenance.py:402: AssertionError
+_________ test_only_whole_layer_is_blocked_among_arms_that_carry_rows __________
+
+    @published_only
+    def test_only_whole_layer_is_blocked_among_arms_that_carry_rows():
+        """The distinction the gate does not draw and this test now does.
+    
+        whole-layer is blocked for a SCIENTIFIC reason: its rows were stamped
+        against a calibration that is not the one shipped beside them, which is what
+        cost C5 its target. The three 2026-09 report-only directories are blocked
+        for a STRUCTURAL one: they hold report.json files and no merged.csv, so
+        there are no rows to check and UNKNOWN is the only honest answer.
+    
+        Collapsing the two would let a real provenance failure hide among a growing
+        pile of report directories, which is precisely the shape of the defect this
+        whole module exists to catch.
+        """
+        arms, reports = [], []
+        for p in sorted(PUBLISHED.iterdir()):
+            if not p.is_dir() or not calibration_provenance(p).blocking_reason:
+                continue
+            (arms if list(p.glob("merged.csv")) else reports).append(p.name)
+        assert arms == ["2026-08-28-nvidia_h200-h200-whole-layer"]
+>       assert reports == [
+            "2026-09-01-nvidia_h200-alpha-surface-s4",
+            "2026-09-01-nvidia_h200-cross-card-s3",
+            "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+        ]
+E       AssertionError: assert ['2026-09-01-...200-session3'] == ['2026-09-01-...a-surface-s3']
+E         
+E         Left contains one more item: '2026-09-15-nvidia_h200-session3'
+E         Use -v to get more diff
+
+tests/test_calibration_provenance.py:425: AssertionError
+__________ test_the_committed_report_is_what_the_code_produces_today ___________
+
+    @published_only
+    def test_the_committed_report_is_what_the_code_produces_today():
+        """The artifact exists so the next reader inherits the answer instead of
+        md5-ing ten directories. It is only worth inheriting if it is current, so it
+        is regenerated here and compared byte for byte."""
+        report = PUBLISHED / "CALIBRATION_PROVENANCE.md"
+        assert report.exists(), f"missing; regenerate with:\n    {REPORT_COMMAND}"
+        arms = [p for p in PUBLISHED.iterdir() if p.is_dir()]
+>       assert report.read_text() == provenance_report(arms), (
+            f"stale. Regenerate with:\n    {REPORT_COMMAND}")
+E       AssertionError: stale. Regenerate with:
+E             .venv/bin/python -m moe.bench.published results/published/*/ > results/published/CALIBRATION_PROVENANCE.md
+E       assert '# Does each ...n a number.\n' == '# Does each ...n a number.\n'
+E         
+E         Skipping 2709 identical leading characters in diff, use -v to show
+E           fused** |
+E         - | `2026-09-15-nvidia_h200-session3` | unknown | n/a | n/a | n/a | **refused** |
+E           
+E         - **12 of 17 arms pass**: their calibration is either their own or declared derived. 5 does not.
+E         ?          ^                                                                         ^...
+E         
+E         ...Full output truncated (35 lines hidden), use '-vv' to show
+
+tests/test_calibration_provenance.py:497: AssertionError
+_____ test_every_off_gpu_mode_exits_the_code_its_own_page_implies[argv5-2] _____
+
+argv = [], code = 2
+
+    @pytest.mark.parametrize("argv,code", OFF_GPU_MODES)
+    def test_every_off_gpu_mode_exits_the_code_its_own_page_implies(argv, code):
+        """THE PROPERTY, over every mode: a log with RESULT lines recomputes the
+        process's own exit code, and a log with none exits REFUSED. A script that
+        prints one thing and exits another is the defect moe/bench/exit_codes.py is
+        named against."""
+        got = run(argv)
+>       assert got.returncode == code, (argv, got.stdout[-3000:], got.stderr[-2000:])
+E       AssertionError: ([], ' stand and pooled EXA alpha_b is near 0.974 with the BLOCK_M ladder monotone
+E                 a FAIL    a FAIL is a RESU...ore it could reach a verdict. This is the apparatus failing, not a finding about the card, so it exits 4 and not 1.
+E         ')
+E       assert 4 == 2
+E        +  where 4 = CompletedProcess(args=['/workspace/venvs/base/bin/python', '/workspace/moe-kernels/scripts/clock_elasticity.py'], retu...ore it could reach a verdict. This is the apparatus failing, not a finding about the card, so it exits 4 and not 1.\n').returncode
+
+tests/test_clock_elasticity.py:91: AssertionError
+_________ test_time_duty_refuses_off_gpu_unless_every_seam_is_injected _________
+
+    def test_time_duty_refuses_off_gpu_unless_every_seam_is_injected():
+        """`time_kernel`'s own terms, for its own reason: an instrument that invents
+        numbers when its device is missing is worse than one that stops."""
+>       with pytest.raises(T.TimingRefused) as caught:
+E       Failed: DID NOT RAISE TimingRefused
+
+tests/test_clock_elasticity.py:582: Failed
+________________ test_a_measuring_run_without_a_card_is_refused ________________
+
+    def test_a_measuring_run_without_a_card_is_refused():
+        got = run([])
+>       assert got.returncode == exit_codes.REFUSED
+E       AssertionError: assert 4 == 2
+E        +  where 4 = CompletedProcess(args=['/workspace/venvs/base/bin/python', '/workspace/moe-kernels/scripts/clock_elasticity.py'], retu...ore it could reach a verdict. This is the apparatus failing, not a finding about the card, so it exits 4 and not 1.\n').returncode
+E        +  and   2 = exit_codes.REFUSED
+
+tests/test_clock_elasticity.py:856: AssertionError
+_____________________ test_readme_arm_counts_are_the_trees _____________________
+
+    def test_readme_arm_counts_are_the_trees():
+        arms = _arms()
+        with_csv = [a for a in arms if (a / "merged.csv").exists()]
+        reports = sum(1 for a in arms for _ in a.glob("*.report.json"))
+        ladder_arms = [a for a in arms if not (a / "merged.csv").exists()
+                       and any(a.glob("*.report.json"))]
+>       assert _readme_int(r"(\d+) published arms") == len(arms), len(arms)
+E       AssertionError: 15
+E       assert 14 == 15
+E        +  where 14 = _readme_int('(\\d+) published arms')
+E        +  and   15 = len([PosixPath('/workspace/moe-kernels/results/published/2026-08-22-first-smoke'), PosixPath('/workspace/moe-kernels/resul...-a100-cross-card'), PosixPath('/workspace/moe-kernels/results/published/2026-08-28-nvidia_h200-h200-fp8-refixed'), ...])
+
+tests/test_docs.py:73: AssertionError
+_ test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_pin _
+
+    def test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_pin():
+        """THE PRE-REGISTERED PREDICTION, RE-DERIVED FROM THE CELLS IT COMES FROM.
+    
+        The driver books two counter arms at `--block-m 64`, `--block-n 32` and
+        128, and every page that describes them quotes the same discriminator:
+        3.85 GB of weight-set-equivalent per M-tile at BLOCK_N=32 against 2.06 GB
+        at 128, 1.87x apart. Those are not figures typed into prose: they are the
+        2026-09-10 `bn_g16` ladder slopes at BLOCK_M=64, divided by the time to
+        stream mixtral's whole expert weight set once at this card's own
+        calibrated triad rate.
+    
+        THE BLOCK_M MATTERS AND IT IS WHY THIS TEST EXISTS. At BLOCK_M=32, which
+        is the default `dram_counter_route.py` runs at when no `--block-m` is
+        passed, the same slopes give 3.53 GB against 1.93 GB at 1.84x. Until
+        2026-09-10 the driver booked ONE counter arm that passed no `--block-m`
+        and no `--block-n`, so it ran that BLOCK_M=32 cell at a single BLOCK_N
+        while quoting the BLOCK_M=64 figures. A page whose numbers are computed at
+        a different cell from the one the arm runs is exactly the defect this file
+        is for."""
+        import yaml
+        card = yaml.safe_load(
+            (ROOT / "moe" / "bench" / "hardware"
+             / "measured_nvidia_h200.yaml").read_text())
+        triad_gbps = card["memory"]["bandwidth_tb_s"] * 1000.0
+        # The weight set is the plan page's own compulsory W, read off the page
+        # rather than retyped, so a change to the model config moves both.
+        plan = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
+             "--dry-run", "--card", "nvidia_h200", "--block-m", "64",
+             "--block-n", "32"],
+            capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+        assert plan.returncode == 0, plan.stderr[-800:]
+        m = re.search(r"W\s+compulsory\s+([\d.]+) GB", plan.stdout)
+        assert m, plan.stdout[:900]
+        w_gb = float(m.group(1))
+        stream_ms = w_gb / triad_gbps * 1000.0
+>       assert round(stream_ms, 4) == 0.6443, stream_ms
+E       AssertionError: 0.6437982161089373
+E       assert 0.6438 == 0.6443
+E        +  where 0.6438 = round(0.6437982161089373, 4)
+
+tests/test_docs.py:564: AssertionError
+__ test_contrast_reproduces_the_analysis_separation_from_the_committed_cells ___
+
+    def test_contrast_reproduces_the_analysis_separation_from_the_committed_cells():
+        """3.86 GB against 2.06 GB per M-tile at BLOCK_M=64, re-fitted here.
+    
+        These are the figures the 2026-09-10 analysis pre-registers the contrast
+        on. Nothing is transcribed: the slopes come out of
+        results/published/2026-09-10-.../bn_decomposition/*/cells.csv with the
+        synthesis's own estimator (median per tread, OLS on the medians) and the
+        denominator out of this card's calibration.
+        """
+        cells = {c.name: c for c in contrast_plan(64)}
+        gbps, _ = measured_bandwidth_gbps("nvidia_h200")
+        W = weight_bytes_total(MIXTRAL)
+        stream = weight_stream_ms(W, gbps)
+>       assert stream == pytest.approx(0.6443, abs=5e-4)
+E       assert 0.6437987387180328 == 0.6443 ± 5.0e-04
+E         
+E         comparison failed
+E         Obtained: 0.6437987387180328
+E         Expected: 0.6443 ± 5.0e-04
+
+tests/test_dram_counter_route.py:1500: AssertionError
+________________ test_skipped_graph_row_is_written_not_dropped _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_skipped_graph_row_is_writ0')
+
+    def test_skipped_graph_row_is_written_not_dropped(tmp_path):
+        cfg = cfg_for(tmp_path, graph_modes=(True,), l2_modes=(True,),
+                      hardware=fake_hw(bw_bytes_s=1.0), graph_min_launch_share=0.5)
+>       D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                    cfg, routing=lambda s: None, info=FAKE_INFO)
+
+tests/test_driver.py:628: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+moe/bench/driver.py:1569: in run_sweep
+    total += run_cell(spec, names, impl, cfg, routing, writer,
+../venvs/base/lib/python3.12/site-packages/torch/utils/_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+moe/bench/driver.py:1310: in run_cell
+    return _run_modes(spec, pipe, span, impl, keyed, make_row, cfg, routing,
+../venvs/base/lib/python3.12/site-packages/torch/utils/_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+moe/bench/driver.py:1326: in _run_modes
+    refuse_unreferenced_clock(cfg, spec.dtype)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+cfg = RunConfig(out_dir=PosixPath('/tmp/pytest-of-root/pytest-0/test_skipped_graph_row_is_writ0'), run_id='54443341b563', en...erence_clock_resolver=<function reference_clock at 0x7ddac6726a20>, reference_clock_resolvers={}, family_references={})
+dtype = 'fp32'
+
+    def refuse_unreferenced_clock(cfg: RunConfig, dtype: str | None = None) -> None:
+        """Raise if this cell would measure an attached card with no LEVEL reference.
+    
+        CHECKED BESIDE `refuse_dropped_retired_knobs`, per cell and just before the
+        first thing that costs anything, for the reason that function gives: a
+        sweep can construct a config it never measures with, and a refusal at
+        construction would fail a run whose every cell is declined by the pin.
+        Per cell is also what makes it per DTYPE: the cell's format names the
+        GEMM whose clock it is levelled against, and a run may carry both.
+        """
+        modes = unreferenced_clock(cfg, dtype)
+        if modes:
+>           raise ReferenceClockRefused(_reference_clock_refusal(cfg, modes, dtype))
+E           moe.bench.driver.ReferenceClockRefused: the graph mode of this run measures on `timing.time_kernel` against the card 'NVIDIA H200', and no clock was resolved for its bf16 GEMM, the roof a fp32 cell is scored against: NVIDIA H200 (measured) records 1455 MHz, but the roof this run is scored against is 'fake', which is a different profile. LEVEL asks whether the card sat at the clock THE ROOF was measured at, and a datasheet roof was never measured at any clock.
+E               Without a reference, `timing.clock_flags` leaves clock_level_ok None on every cell, so no row can say where its clock sat relative to the GEMM its roof was measured with, and `roof_at_cell_clock_tflops` is refused for the same reason: the arm carries the fixed-roof fraction alone, with no way on the row to state the issue-rate bias in it. (DRIFT still fires; it compares a cell's own first and last samples and needs no reference.) A sweep whose rows cannot be placed against the ruler is not a conservative sweep, it is an unexamined one, and it costs the same rental as one that can.
+E               Two ways out, both cheap: run `python scripts/calibrate_hardware.py --publish` on this box, which measures this card's roofs and writes the clock each dense GEMM ran at into moe/bench/hardware/, or pass RunConfig(reference_clock_mhz=...) with the clock you are levelling against and say in the write-up where the number came from.
+
+moe/bench/driver.py:367: ReferenceClockRefused
+_____________ test_a_policy_skipped_graph_row_names_no_instrument ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_policy_skipped_graph_ro0')
+
+    def test_a_policy_skipped_graph_row_names_no_instrument(tmp_path):
+        cfg = cfg_for(tmp_path, graph_modes=(True,), l2_modes=(True,),
+                      hardware=fake_hw(bw_bytes_s=1.0), graph_min_launch_share=0.5)
+>       D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                    cfg, routing=lambda s: None, info=FAKE_INFO)
+
+tests/test_driver.py:839: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+moe/bench/driver.py:1569: in run_sweep
+    total += run_cell(spec, names, impl, cfg, routing, writer,
+../venvs/base/lib/python3.12/site-packages/torch/utils/_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+moe/bench/driver.py:1310: in run_cell
+    return _run_modes(spec, pipe, span, impl, keyed, make_row, cfg, routing,
+../venvs/base/lib/python3.12/site-packages/torch/utils/_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+moe/bench/driver.py:1326: in _run_modes
+    refuse_unreferenced_clock(cfg, spec.dtype)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+cfg = RunConfig(out_dir=PosixPath('/tmp/pytest-of-root/pytest-0/test_a_policy_skipped_graph_ro0'), run_id='34019a5428c0', en...erence_clock_resolver=<function reference_clock at 0x7ddac6726a20>, reference_clock_resolvers={}, family_references={})
+dtype = 'fp32'
+
+    def refuse_unreferenced_clock(cfg: RunConfig, dtype: str | None = None) -> None:
+        """Raise if this cell would measure an attached card with no LEVEL reference.
+    
+        CHECKED BESIDE `refuse_dropped_retired_knobs`, per cell and just before the
+        first thing that costs anything, for the reason that function gives: a
+        sweep can construct a config it never measures with, and a refusal at
+        construction would fail a run whose every cell is declined by the pin.
+        Per cell is also what makes it per DTYPE: the cell's format names the
+        GEMM whose clock it is levelled against, and a run may carry both.
+        """
+        modes = unreferenced_clock(cfg, dtype)
+        if modes:
+>           raise ReferenceClockRefused(_reference_clock_refusal(cfg, modes, dtype))
+E           moe.bench.driver.ReferenceClockRefused: the graph mode of this run measures on `timing.time_kernel` against the card 'NVIDIA H200', and no clock was resolved for its bf16 GEMM, the roof a fp32 cell is scored against: NVIDIA H200 (measured) records 1455 MHz, but the roof this run is scored against is 'fake', which is a different profile. LEVEL asks whether the card sat at the clock THE ROOF was measured at, and a datasheet roof was never measured at any clock.
+E               Without a reference, `timing.clock_flags` leaves clock_level_ok None on every cell, so no row can say where its clock sat relative to the GEMM its roof was measured with, and `roof_at_cell_clock_tflops` is refused for the same reason: the arm carries the fixed-roof fraction alone, with no way on the row to state the issue-rate bias in it. (DRIFT still fires; it compares a cell's own first and last samples and needs no reference.) A sweep whose rows cannot be placed against the ruler is not a conservative sweep, it is an unexamined one, and it costs the same rental as one that can.
+E               Two ways out, both cheap: run `python scripts/calibrate_hardware.py --publish` on this box, which measures this card's roofs and writes the clock each dense GEMM ran at into moe/bench/hardware/, or pass RunConfig(reference_clock_mhz=...) with the clock you are levelling against and say in the write-up where the number came from.
+
+moe/bench/driver.py:367: ReferenceClockRefused
+_________ test_no_card_attached_records_the_reason_and_measures_anyway _________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_no_card_attached_records_0')
+
+    def test_no_card_attached_records_the_reason_and_measures_anyway(tmp_path):
+        """The other world, and why the refusal turns on the CARD rather than on
+        the clock alone. Off a GPU there is nothing to be level against: the
+        instrument itself refuses unless the caller injected the fakes that stand in
+        for CUDA, and an injected clock sampler has no card behind it. Refusing here
+        would fail every laptop test in this file over a machine fact."""
+        cfg = cfg_for(tmp_path, reference_clock_resolver=RF.reference_clock,
+                      timer=partial(levelling_timer, load_mhz=1500.0))
+>       assert cfg.reference_clock_card == ""
+E       AssertionError: assert 'NVIDIA H200' == ''
+E         
+E         + NVIDIA H200
+
+tests/test_driver.py:1312: AssertionError
+________ test_the_measured_alpha_caps_block_m_128_below_the_h200_ridge _________
+
+ceilings = Ceilings(name='NVIDIA H200 (measured)', bandwidth_bytes_s=4378033255567.562, peak_flops={'bf16': 662950663154272.6, 'f...he samples taken while the calibration's dense GEMM ran (bf16 GEMM)", reference_clocks={'bf16': 1455.0, 'fp8': 1395.0})
+
+    def test_the_measured_alpha_caps_block_m_128_below_the_h200_ridge(ceilings):
+        """The fact that decided this script's estimand.
+    
+        `2 BM / (alpha b)` at BLOCK_SIZE_M=128, GROUP_SIZE_M=1 and bf16 is 152.4
+        against a measured ridge of 162.8, so the config vLLM's ladder actually picks
+        across the decode range cannot be compute bound at any batch. A flat-versus-
+        steep branch test therefore cannot find a roofline crossing on it, which is
+        why the TILT and not the branch shift is what the gates read.
+        """
+        alpha = DTC.alpha_for_group(1)
+        cap = 2 * 128 / (alpha * 2)
+>       assert cap < ceilings.ridge(DTC.BF16)
+E       assert 152.38095238095238 < 151.4265937361704
+E        +  where 151.4265937361704 = ridge('bf16')
+E        +    where ridge = Ceilings(name='NVIDIA H200 (measured)', bandwidth_bytes_s=4378033255567.562, peak_flops={'bf16': 662950663154272.6, 'f...he samples taken while the calibration's dense GEMM ran (bf16 GEMM)", reference_clocks={'bf16': 1455.0, 'fp8': 1395.0}).ridge
+E        +    and   'bf16' = DTC.BF16
+
+tests/test_dtype_tile_confound.py:772: AssertionError
+_______ test_a_run_off_gpu_refuses_rather_than_labelling_itself_an_h200 ________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_run_off_gpu_refuses_rat0')
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8747fcf80>
+
+    def test_a_run_off_gpu_refuses_rather_than_labelling_itself_an_h200(
+            tmp_path, capsys):
+        """R6. The literal "NVIDIA H200" was the fallback, and it did two jobs.
+    
+        It named the plan for a card the machine might not be, and, because the
+        lookup device decides which of vLLM's tuned files `resolve_tile` reads, it
+        chose the tuned half of the confound for a card that may ship no tuned file
+        at all. There is no CUDA device in this test process, which is the live
+        case.
+        """
+        code = DTC.main(["--dry-run", "--out-dir", str(tmp_path)])
+        assert code == exit_codes.REFUSED
+        out = capsys.readouterr().out
+>       assert "NoCardToLabel" in out
+E       AssertionError: assert 'NoCardToLabel' in '# Is the fp8/bf16 crossing shift the DTYPE or the TILE?\n\nrun id nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_1..._1536_2048_3072_4096_6-77928810/plan.json.\n========================================================================\n'
+
+tests/test_dtype_tile_confound.py:1772: AssertionError
+_____________ test_the_named_flag_is_what_makes_the_refused_run_go _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_the_named_flag_is_what_ma0')
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd8747fcc50>
+
+    def test_the_named_flag_is_what_makes_the_refused_run_go(tmp_path, capsys):
+        """The refusal above points at --card, so --card had better be enough."""
+        assert DTC.main(["--dry-run", "--card", H200,
+                         "--out-dir", str(tmp_path)]) == exit_codes.REFUSED
+        out = capsys.readouterr().out
+        assert "NoCardToLabel" not in out
+        plans = list(tmp_path.glob("*/plan.json"))
+        assert len(plans) == 1
+        plan = json.loads(plans[0].read_text())
+        for key in ("git_sha", "gpu_name", "ridge_source", "bandwidth_source",
+                    "instrument"):
+            assert key in plan, key
+        assert plan["provenance"]["instrument"] == DTC.timing.TIMING_BASIS
+>       assert plan["provenance"]["missing"]["gpu_name"], (
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            "off GPU the block must say WHY it has no card, not leave it blank")
+E       KeyError: 'gpu_name'
+
+tests/test_dtype_tile_confound.py:1790: KeyError
+_____ test_the_dry_run_prints_the_ridge_and_its_source_before_any_gpu_time _____
+
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87c631280>
+
+    def test_the_dry_run_prints_the_ridge_and_its_source_before_any_gpu_time(capsys):
+        """A plan that does not say which card's ceiling it is planning against is
+        the plan that produced seven hybrid reports. `--dry-run` has to run off GPU
+        and has to print the ridge, its band and where both came from."""
+        # REFUSED, not DONE: nothing was measured. The ridge lines below are the
+        # assertion and they are printed either way.
+        assert BM.main(["--dry-run"]) == BM.exit_codes.REFUSED
+        out = capsys.readouterr().out
+        assert "\nridge  " in out and "ridge band " in out
+>       assert "HYPOTHESIS" in out, "a planning ridge that does not say it is one"
+E       AssertionError: a planning ridge that does not say it is one
+E       assert 'HYPOTHESIS' in 'experiment  block_m_crossing / nvidia_h200-budget400.0-dtypebf16-flushtrue-g1-iters50-modelmixtral_8x7b-n64-probes6-r...ed worlds, or the bare command on the pod.\n========================================================================\n'
+
+tests/test_gate_units_and_ridge.py:483: AssertionError
+____________________ test_graph_policy_skips_a_long_kernel _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_graph_policy_skips_a_long0')
+
+    def test_graph_policy_skips_a_long_kernel(tmp_path):
+        """A cell whose predicted time dwarfs a kernel launch is not worth timing
+        twice; the row must say so rather than silently vanishing.
+    
+        The policy triggers on PREDICTED time, so a toy cell on real H200 bandwidth
+        is predicted to be microseconds and the policy correctly says "measure it".
+        A deliberately slow hardware profile is what forces the skip branch.
+        """
+        from moe.bench.roofline import Hardware
+        slow = Hardware(name="slow", bandwidth_bytes_s=1.0,
+                        peak_flops={"bf16": 1e12, "fp32": 1e12}, source="test")
+        cfg = make_cfg(tmp_path, graph_modes=(True,), graph_min_launch_share=0.5,
+                       hardware=slow)
+>       D.run_sweep([(toy(), NAMES, "gpu_ref_up_gemm")], cfg, routing=lambda s: None)
+
+tests/test_gpu.py:289: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+moe/bench/driver.py:1569: in run_sweep
+    total += run_cell(spec, names, impl, cfg, routing, writer,
+../venvs/base/lib/python3.12/site-packages/torch/utils/_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+moe/bench/driver.py:1310: in run_cell
+    return _run_modes(spec, pipe, span, impl, keyed, make_row, cfg, routing,
+../venvs/base/lib/python3.12/site-packages/torch/utils/_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+moe/bench/driver.py:1326: in _run_modes
+    refuse_unreferenced_clock(cfg, spec.dtype)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+cfg = RunConfig(out_dir=PosixPath('/tmp/pytest-of-root/pytest-0/test_graph_policy_skips_a_long0'), run_id='96e3837bbb56', en...erence_clock_resolver=<function reference_clock at 0x7ddac6726a20>, reference_clock_resolvers={}, family_references={})
+dtype = 'bf16'
+
+    def refuse_unreferenced_clock(cfg: RunConfig, dtype: str | None = None) -> None:
+        """Raise if this cell would measure an attached card with no LEVEL reference.
+    
+        CHECKED BESIDE `refuse_dropped_retired_knobs`, per cell and just before the
+        first thing that costs anything, for the reason that function gives: a
+        sweep can construct a config it never measures with, and a refusal at
+        construction would fail a run whose every cell is declined by the pin.
+        Per cell is also what makes it per DTYPE: the cell's format names the
+        GEMM whose clock it is levelled against, and a run may carry both.
+        """
+        modes = unreferenced_clock(cfg, dtype)
+        if modes:
+>           raise ReferenceClockRefused(_reference_clock_refusal(cfg, modes, dtype))
+E           moe.bench.driver.ReferenceClockRefused: the graph mode of this run measures on `timing.time_kernel` against the card 'NVIDIA H200', and no clock was resolved for its bf16 GEMM, the roof a bf16 cell is scored against: NVIDIA H200 (measured) records 1455 MHz, but the roof this run is scored against is 'slow', which is a different profile. LEVEL asks whether the card sat at the clock THE ROOF was measured at, and a datasheet roof was never measured at any clock.
+E               Without a reference, `timing.clock_flags` leaves clock_level_ok None on every cell, so no row can say where its clock sat relative to the GEMM its roof was measured with, and `roof_at_cell_clock_tflops` is refused for the same reason: the arm carries the fixed-roof fraction alone, with no way on the row to state the issue-rate bias in it. (DRIFT still fires; it compares a cell's own first and last samples and needs no reference.) A sweep whose rows cannot be placed against the ruler is not a conservative sweep, it is an unexamined one, and it costs the same rental as one that can.
+E               Two ways out, both cheap: run `python scripts/calibrate_hardware.py --publish` on this box, which measures this card's roofs and writes the clock each dense GEMM ran at into moe/bench/hardware/, or pass RunConfig(reference_clock_mhz=...) with the clock you are levelling against and say in the write-up where the number came from.
+
+moe/bench/driver.py:367: ReferenceClockRefused
+__________________________ test_full_calibration_runs __________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_full_calibration_runs0')
+
+    @pytest.mark.slow
+    def test_full_calibration_runs(tmp_path):
+        from moe.bench.calibrate import calibrate
+        cal = calibrate(target_bytes=1 << 30, gemm_n=2048, settle=False)
+        assert cal.achieved_bandwidth_gbps > 0
+        assert cal.achieved_bf16_tflops > 0
+        assert cal.gpu_name
+>       assert len(cal.bandwidth_patterns) == 4
+E       AssertionError: assert 5 == 4
+E        +  where 5 = len((BandwidthResult(pattern='read_stream', bytes_moved=1073741824, ms_p50=0.2380639985203743, ms_min=0.2372799962759018, ...in rate by 94%); unflushed so the timed window cannot shed writeback', sm_clock_start_mhz=1980, sm_clock_end_mhz=1980)))
+E        +    where (BandwidthResult(pattern='read_stream', bytes_moved=1073741824, ms_p50=0.2380639985203743, ms_min=0.2372799962759018, ...in rate by 94%); unflushed so the timed window cannot shed writeback', sm_clock_start_mhz=1980, sm_clock_end_mhz=1980)) = Calibration(gpu_name='NVIDIA H200', achieved_bandwidth_gbps=4374.477801561975, ceiling_pattern='triad', achieved_bf16_...80, 'sm_clock_start_mhz': 1980, 'sm_clock_end_mhz': 1980, 'clock_level_ok': None, 'clock_drift_ok': True}, refusals=()).bandwidth_patterns
+
+tests/test_gpu.py:533: AssertionError
+_______ test_the_monotone_law_passes_every_gate_and_the_verdict_says_so ________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_the_monotone_law_passes_e0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd87ce4fbf0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87ce4ff50>
+
+    def test_the_monotone_law_passes_every_gate_and_the_verdict_says_so(
+            tmp_path, monkeypatch, capsys):
+        code, out = run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+>       assert "VERDICT: PREDICTION HELD" in out
+E       AssertionError: assert 'VERDICT: PREDICTION HELD' in '# GROUP_SIZE_M sweep: is alpha a scalar?   (81f80b7)\n\ncard: NVIDIA H200   instrument: queue-deep/l2-flush/settled-w...elmixtral_8x7b-2bm16-3planb804cb56cd5c-4wm300.0-5tr3-6flushtrue-7budget200.0-9d8495f4-synthetic-monotone/cells.jsonl\n'
+
+tests/test_group_m_sweep.py:76: AssertionError
+_______________ test_a_scalar_alpha_fails_the_falling_alpha_gate _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_scalar_alpha_fails_the_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd8747e1d60>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87e5c6d20>
+
+    def test_a_scalar_alpha_fails_the_falling_alpha_gate(tmp_path, monkeypatch, capsys):
+        code, out = run_report(["--synthetic", "flat"], tmp_path, monkeypatch, capsys)
+>       assert "VERDICT: PREDICTION REFUTED" in out
+E       AssertionError: assert 'VERDICT: PREDICTION REFUTED' in '# GROUP_SIZE_M sweep: is alpha a scalar?   (81f80b7)\n\ncard: NVIDIA H200   instrument: queue-deep/l2-flush/settled-w...1modelmixtral_8x7b-2bm16-3planb804cb56cd5c-4wm300.0-5tr3-6flushtrue-7budget200.0-9d8495f4-synthetic-flat/cells.jsonl\n'
+
+tests/test_group_m_sweep.py:83: AssertionError
+__________ test_a_launch_order_artefact_fails_the_single_tile_control __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_launch_order_artefact_f0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd87c774740>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87c775850>
+
+    def test_a_launch_order_artefact_fails_the_single_tile_control(
+            tmp_path, monkeypatch, capsys):
+        """The failure mode the whole control rung exists for.
+    
+        Under `order` the time falls by 25% with GROUP_SIZE_M in BOTH rungs, which is
+        what an occupancy or wave-quantisation effect looks like. The fit sees
+        nothing (a per-setting level is absorbed by the intercept) and the control
+        sees everything, which is the pair of signatures that says "not a re-read".
+        """
+        code, out = run_report(["--synthetic", "order"], tmp_path, monkeypatch, capsys)
+>       assert "[FAIL] P4" in out
+E       AssertionError: assert '[FAIL] P4' in '# GROUP_SIZE_M sweep: is alpha a scalar?   (81f80b7)\n\ncard: NVIDIA H200   instrument: queue-deep/l2-flush/settled-w...modelmixtral_8x7b-2bm16-3planb804cb56cd5c-4wm300.0-5tr3-6flushtrue-7budget200.0-9d8495f4-synthetic-order/cells.jsonl\n'
+
+tests/test_group_m_sweep.py:98: AssertionError
+____ test_a_run_with_no_effect_anywhere_leaves_the_control_gate_untestable _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_run_with_no_effect_anyw0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd87c775610>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87c7749b0>
+
+    def test_a_run_with_no_effect_anywhere_leaves_the_control_gate_untestable(
+            tmp_path, monkeypatch, capsys):
+        """P4 is a RATIO, so two noise floors must not divide into a verdict.
+    
+        Under `flat` neither rung moves by more than a tenth of a percent. Calling
+        that "the effect is an artefact" would be a confident answer about an effect
+        that is not there.
+        """
+        _, out = run_report(["--synthetic", "flat"], tmp_path, monkeypatch, capsys)
+>       assert "[NOT TESTABLE] P4" in out
+E       AssertionError: assert '[NOT TESTABLE] P4' in '# GROUP_SIZE_M sweep: is alpha a scalar?   (81f80b7)\n\ncard: NVIDIA H200   instrument: queue-deep/l2-flush/settled-w...1modelmixtral_8x7b-2bm16-3planb804cb56cd5c-4wm300.0-5tr3-6flushtrue-7budget200.0-9d8495f4-synthetic-flat/cells.jsonl\n'
+
+tests/test_group_m_sweep.py:112: AssertionError
+__________ test_a_synthetic_report_can_never_be_read_as_a_measurement __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_synthetic_report_can_ne1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd87c5c34d0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87c5c0e00>
+
+    def test_a_synthetic_report_can_never_be_read_as_a_measurement(
+            tmp_path, monkeypatch, capsys):
+        _, out = run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+        assert "*** SYNTHETIC" in out
+>       directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+tests/test_group_m_sweep.py:119: StopIteration
+____ test_replaying_synthetic_rows_still_announces_that_they_are_synthetic _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_replaying_synthetic_rows_1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd87c5c0860>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87c5c09e0>
+
+    def test_replaying_synthetic_rows_still_announces_that_they_are_synthetic(
+            tmp_path, monkeypatch, capsys):
+        """`--replay` does not carry `--synthetic`, so provenance has to travel.
+    
+        Without the check inside the report, a synthetic directory replayed a week
+        later prints a clean table with no banner at all and reads as a pod result.
+        """
+        run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+>       directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+tests/test_group_m_sweep.py:133: StopIteration
+______________ test_no_cell_in_the_shipped_plan_is_compute_bound _______________
+
+default_plan = Plan(model='mixtral-8x7b', dtype='bf16', block_m=16, tokens=(16, 32, 64, 128, 256, 384, 448), group_m=(1, 8, 16, 32, 6...71456.0)), fixed_tile={'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 256, 'num_warps': 4, 'num_stages': 3}, cell_budget_ms=200.0)
+
+    def test_no_cell_in_the_shipped_plan_is_compute_bound(default_plan):
+        """The trap that would produce a clean, confident, wrong flat line.
+    
+        Above the ridge the time is set by padded ARITHMETIC, which GROUP_SIZE_M
+        cannot move, so a compute-bound design reports alpha flat across the ladder
+        and looks exactly like a refutation of the mechanism.
+        """
+        # The H200's OWN band low end, off its committed calibration, not the
+        # withdrawn cross-machine 160.3 this test scored against until 2026-09-03.
+        limit = GM.MEMORY_BOUND_MARGIN * GM.resolve_ridge_band(GM.SYNTHETIC_CARD, "bf16").low
+        worst = max(c.arith_intensity for c in default_plan.cells)
+>       assert worst <= limit, f"worst compulsory AI {worst:.1f} exceeds {limit:.1f}"
+E       AssertionError: worst compulsory AI 127.6 exceeds 127.5
+E       assert 127.6383541637085 <= 127.46238511055188
+
+tests/test_group_m_sweep.py:360: AssertionError
+___________ test_every_preflight_gate_passes_on_the_shipped_defaults ___________
+
+default_plan = Plan(model='mixtral-8x7b', dtype='bf16', block_m=16, tokens=(16, 32, 64, 128, 256, 384, 448), group_m=(1, 8, 16, 32, 6...71456.0)), fixed_tile={'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 256, 'num_warps': 4, 'num_stages': 3}, cell_budget_ms=200.0)
+
+    def test_every_preflight_gate_passes_on_the_shipped_defaults(default_plan):
+        ridge = GM.resolve_ridge_band(GM.SYNTHETIC_CARD, "bf16")
+        gates = GM.preflight(default_plan, ridge.low, ridge.card)
+        failed = [g.name for g in gates if g.ok is not True]
+>       assert not failed, f"the shipped design fails its own preflight: {failed}"
+E       AssertionError: the shipped design fails its own preflight: ['regime: every cell is memory bound']
+E       assert not ['regime: every cell is memory bound']
+
+tests/test_group_m_sweep.py:381: AssertionError
+_________ test_a_run_without_a_gpu_says_so_and_is_refused_not_invalid __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_a_run_without_a_gpu_says_1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dd87477d4c0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87477d9d0>
+
+    def test_a_run_without_a_gpu_says_so_and_is_refused_not_invalid(
+            tmp_path, monkeypatch, capsys):
+        """REFUSED (2), not INVALID (3).
+    
+        3 tells the driver "measured, then a VALIDITY gate failed: there is a
+        directory of cells that must not be scored, and do NOT retry this arm".
+        Nothing was measured, there is no directory, and the arm is free to retry on
+        a box that has a GPU. The two codes are treated oppositely, which is why
+        they are two codes.
+        """
+        code, out = run_report(["--run"], tmp_path, monkeypatch, capsys)
+>       assert "CANNOT RUN HERE" in out
+E       AssertionError: assert 'CANNOT RUN HERE' in '# GROUP_SIZE_M sweep: is alpha a scalar?   (81f80b7)\n\ncard: NVIDIA H200   instrument: queue-deep/l2-flush/settled-w...ha/nvidia_h200-1modelmixtral_8x7b-2bm16-3planb804cb56cd5c-4wm300.0-5tr3-6flushtrue-7budget200.0-9d8495f4/cells.jsonl\n'
+
+tests/test_group_m_sweep.py:435: AssertionError
+_____________ test_records_from_another_plan_are_ignored_and_named _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_records_from_another_plan0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ddac7bb40b0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7dd87477fa10>
+
+    def test_records_from_another_plan_are_ignored_and_named(
+            tmp_path, monkeypatch, capsys):
+        """A `--replay` with different flags must not silently report on a subset."""
+        run_report(["--synthetic", "monotone"], tmp_path, monkeypatch, capsys)
+>       directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+tests/test_group_m_sweep.py:477: StopIteration
+=============================== warnings summary ===============================
+moe/baselines/__init__.py:13
+  /workspace/moe-kernels/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+    return load_package(__path__, __name__, "baseline", strict)
+
+moe/baselines/__init__.py:13
+  /workspace/moe-kernels/moe/baselines/__init__.py:13: UserWarning: baseline 'vllm_fused_moe' did not import: No module named 'vllm'
+    return load_package(__path__, __name__, "baseline", strict)
+
+tests/test_gpu.py::test_reference_pipeline_is_not_capturable_and_says_so
+tests/test_gpu.py::test_graph_policy_measures_a_short_kernel
+  /workspace/venvs/base/lib/python3.12/site-packages/torch/cuda/graphs.py:169: UserWarning: The CUDA Graph is empty. This usually means that the graph was attempted to be captured on wrong device or stream. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/cuda/CUDAGraph.cpp:210.)
+    super().capture_end()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_block_m_sweep.py:782: this asserts the laptop path
+SKIPPED [1] tests/test_bm128_roofline.py:542: this box has a device; the refusal is the off-GPU path
+SKIPPED [1] tests/test_bm128_roofline.py:550: this box has a device
+SKIPPED [1] tests/test_bm128_roofline.py:1098: this box has a device
+SKIPPED [1] tests/test_calibrate_hardware.py:457: a GPU is present, so the refusal branch cannot be taken
+SKIPPED [1] tests/test_calibrate_hardware.py:477: a GPU is present, so the card is always visible here
+SKIPPED [1] tests/test_calibrate_read_variants.py:268: needs a machine with no GPU
+FAILED tests/test_ai_model.py::test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names
+FAILED tests/test_alias_ablation.py::test_a_replay_is_scored_against_the_ruler_the_run_was_measured_with
+FAILED tests/test_block_m_crossing_sweep.py::test_a_stated_ridge_with_no_bandwidth_refuses_instead_of_building_a_hybrid_roof
+FAILED tests/test_block_m_crossing_sweep.py::test_the_hypothesis_bandwidth_is_only_reachable_beside_the_hypothesis_ridge
+FAILED tests/test_block_m_crossing_sweep.py::test_resolve_bandwidth_still_unpacks_as_the_pair_it_used_to_return
+FAILED tests/test_block_m_crossing_sweep.py::test_a_refusal_exits_refused_and_measures_nothing
+FAILED tests/test_block_m_crossing_sweep.py::test_every_report_carries_a_provenance_block_with_the_audited_keys
+FAILED tests/test_block_m_crossing_sweep.py::test_the_bandwidth_refusal_reaches_a_caller_that_cannot_catch_it
+FAILED tests/test_block_m_crossing_sweep.py::test_the_bandwidth_refusal_is_printed_once_at_the_raise_site
+FAILED tests/test_blockk_diagonal.py::test_the_ridge_is_labelled_a_hypothesis_off_gpu_and_is_used_only_by_v4
+FAILED tests/test_blockk_diagonal.py::test_an_absent_card_may_be_named_and_a_present_one_may_not_be_contradicted
+FAILED tests/test_bm128_depth.py::test_a_dry_run_with_no_device_marks_its_path_as_not_the_pods
+FAILED tests/test_bm128_depth.py::test_a_card_whose_calibration_records_no_clock_is_refused_before_the_ladders
+FAILED tests/test_bm128_roofline.py::test_dry_run_prints_the_predictions_with_numbers_before_the_plan
+FAILED tests/test_bm128_roofline.py::test_dry_run_names_the_path_it_would_write_and_whether_git_keeps_it
+FAILED tests/test_bm128_roofline.py::test_the_self_test_passes_every_one_of_its_own_gates
+FAILED tests/test_bm128_roofline.py::test_every_planted_world_reaches_a_different_verdict
+FAILED tests/test_bm128_roofline.py::test_a_working_self_test_exits_done - As...
+FAILED tests/test_bm128_roofline.py::test_both_directions_of_the_uncontrolled_mode_are_planted
+FAILED tests/test_bm128_roofline.py::test_the_self_test_still_plants_the_controlled_worlds_without_a_control
+FAILED tests/test_bn_decomposition.py::test_dry_run_needs_no_gpu_and_prints_the_predictions
+FAILED tests/test_bn_decomposition.py::test_the_four_height_self_test_still_separates_its_planted_worlds
+FAILED tests/test_calibration_provenance.py::test_every_published_arm_has_a_declared_verdict
+FAILED tests/test_calibration_provenance.py::test_only_whole_layer_is_blocked_among_arms_that_carry_rows
+FAILED tests/test_calibration_provenance.py::test_the_committed_report_is_what_the_code_produces_today
+FAILED tests/test_clock_elasticity.py::test_every_off_gpu_mode_exits_the_code_its_own_page_implies[argv5-2]
+FAILED tests/test_clock_elasticity.py::test_time_duty_refuses_off_gpu_unless_every_seam_is_injected
+FAILED tests/test_clock_elasticity.py::test_a_measuring_run_without_a_card_is_refused
+FAILED tests/test_docs.py::test_readme_arm_counts_are_the_trees - AssertionEr...
+FAILED tests/test_docs.py::test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_pin
+FAILED tests/test_dram_counter_route.py::test_contrast_reproduces_the_analysis_separation_from_the_committed_cells
+FAILED tests/test_driver.py::test_skipped_graph_row_is_written_not_dropped - ...
+FAILED tests/test_driver.py::test_a_policy_skipped_graph_row_names_no_instrument
+FAILED tests/test_driver.py::test_no_card_attached_records_the_reason_and_measures_anyway
+FAILED tests/test_dtype_tile_confound.py::test_the_measured_alpha_caps_block_m_128_below_the_h200_ridge
+FAILED tests/test_dtype_tile_confound.py::test_a_run_off_gpu_refuses_rather_than_labelling_itself_an_h200
+FAILED tests/test_dtype_tile_confound.py::test_the_named_flag_is_what_makes_the_refused_run_go
+FAILED tests/test_gate_units_and_ridge.py::test_the_dry_run_prints_the_ridge_and_its_source_before_any_gpu_time
+FAILED tests/test_gpu.py::test_graph_policy_skips_a_long_kernel - moe.bench.d...
+FAILED tests/test_gpu.py::test_full_calibration_runs - AssertionError: assert...
+FAILED tests/test_group_m_sweep.py::test_the_monotone_law_passes_every_gate_and_the_verdict_says_so
+FAILED tests/test_group_m_sweep.py::test_a_scalar_alpha_fails_the_falling_alpha_gate
+FAILED tests/test_group_m_sweep.py::test_a_launch_order_artefact_fails_the_single_tile_control
+FAILED tests/test_group_m_sweep.py::test_a_run_with_no_effect_anywhere_leaves_the_control_gate_untestable
+FAILED tests/test_group_m_sweep.py::test_a_synthetic_report_can_never_be_read_as_a_measurement
+FAILED tests/test_group_m_sweep.py::test_replaying_synthetic_rows_still_announces_that_they_are_synthetic
+FAILED tests/test_group_m_sweep.py::test_no_cell_in_the_shipped_plan_is_compute_bound
+FAILED tests/test_group_m_sweep.py::test_every_preflight_gate_passes_on_the_shipped_defaults
+FAILED tests/test_group_m_sweep.py::test_a_run_without_a_gpu_says_so_and_is_refused_not_invalid
+FAILED tests/test_group_m_sweep.py::test_records_from_another_plan_are_ignored_and_named
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 50 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+50 failed, 2185 passed, 7 skipped, 4 warnings in 1465.34s (0:24:25)

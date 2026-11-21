@@ -1,0 +1,34 @@
+[mma] dumping Triton IR and PTX to /workspace/session/20260901T214218Z/ptx/mixtral-8x7b-T256
+/workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=vllm 0.27.1 gpu=NVIDIA H200
+INFO 09-01 22:26:59 [fused_moe.py:1148] Using configuration from /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=8,N=14336,device_name=NVIDIA_H200.json for MoE layer.
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+[driver] wrote 2 rows -> /workspace/results-ptx/run_55dadaa8a5c3_vllm.csv
+[cli] run_id=55dadaa8a5c3 elapsed=3.6s
+{"csv": "/workspace/results-ptx/run_55dadaa8a5c3_vllm.csv", "manifest": "/workspace/results-ptx/run_55dadaa8a5c3_vllm.manifest.jsonl", "run_id": "55dadaa8a5c3"}
+
+=== which config vLLM resolved (quote this, do not derive it) ===
+INFO 09-01 22:26:59 [fused_moe.py:1148] Using configuration from /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=8,N=14336,device_name=NVIDIA_H200.json for MoE layer.
+[mma] found 2 PTX file(s)
+
+=== tensor core instructions, by kernel ===
+  fused_moe_kernel.ptx                                 wgmma=8      mma.sync=0      ld.global=26
+  fused_moe_kernel.ptx                                 wgmma=8      mma.sync=0      ld.global=22
+
+=== exact instruction shapes seen ===
+      8 wgmma.mma_async.sync.aligned.m64n256k16.f32.bf16.bf16
+      4 wgmma.wait_group.sync.aligned
+      2 wgmma.fence.sync.aligned
+      2 wgmma.commit_group.sync.aligned
+
+=== verdict ===
+  kernels containing wgmma   : 2
+  kernels containing mma.sync: 0
+  -> C3 REFUTED: warpgroup MMA is present. Triton is reaching M=64
+     some other way, and the inference from BLOCK_SIZE_M=16 was wrong.
+
+  PTX kept at /workspace/session/20260901T214218Z/ptx/mixtral-8x7b-T256, run log at /workspace/session/20260901T214218Z/ptx/mixtral-8x7b-T256/run.log.
+  Both are transient pod output until they are committed; FINDINGS lists
+  that as the reason C1 and C3 cannot be checked without a GPU.

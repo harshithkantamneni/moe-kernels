@@ -1,0 +1,71 @@
+alpha(G) chain  alpha_g-nvidia_h200-20260924T041829Z   (NEW)
+  card        nvidia_h200
+  nvidia-smi  NVIDIA H200, 580.159.04, 700.00 W
+  session     /workspace/session/alpha_g-nvidia_h200-20260924T041829Z
+  results     /workspace/results/gaps-nvidia_h200   (exported as MOE_RESULTS_DIR to every arm)
+  ledger      /workspace/session/alpha_g-nvidia_h200-20260924T041829Z/CHAIN-dryrun.tsv
+  ladder      G in {2}, seeds {0}, ratio arms at duty 0.25, elasticity states 1.0 0.5 0.25
+  interpreters base /workspace/venvs/base/bin/python / vllm /workspace/venvs/vllm/bin/python
+  DRY RUN: every arm's own --dry-run is run and priced; nothing is measured
+
+== preflight
+preflight-r1     DONE       rc=0     5s  log agrees: RESULT lines imply 0
+preflight-r3     DONE       rc=0     8s  log agrees: RESULT lines imply 0
+
+== preconditions (the driver's thermal, calibrate; pin_probe-n64-g1 for the record)
+preconditions    DONE       rc=0    53s  the driver's own ARMS.tsv carries each arm's second opinion
+    priced 480 s: the driver's own arm_minutes: thermal 3, calibrate 3, pin_probe-n64-g1 2 min
+
+== counter-probe: can this pod read a DRAM counter (informational; gates nothing)
+counter-probe    SKIPPED    a dry run does not run it: it launches one kernel under ncu on the card. Priced ~60 s, the driver's own arm_minutes for counter_plan (the same probe); capped on the pod at 1800 s (3 x 60 s is under the 1800 s floor); informational, it gates nothing and runs on every measuring pass
+
+== tests/test_gpu.py on this card, from the base venv (gated)
+gpu-tests        DONE       rc=0     5s  pytest exit 0: 38 tests collected in 0.48s
+    priced 53 s: 38 tests at 1.39 s each, session 5's pod rate
+
+== the alignment probe under the graph, on this card, from the vllm venv (gated)
+probe-check      SKIPPED    a dry run does not run it: it times the card. Priced ~120 s, a documented allowance (it prints no plan); capped on the pod at 1800 s (3 x 120 s is under the 1800 s floor)
+
+== the ratio, shared over private, off the cap, seed 0 at every G (the pilot: r3-g2-s0)
+r3-g2-s0         REFUSED    rc=2     4s  
+    priced 590 s off its own plan: 581 s the ladder's wall at the plan's duty + 9 s the alignment probe, timed at full duty on top of it
+    capped on the pod at 1800 s (3 x 590 s is under the 1800 s floor)
+
+== clock elasticity per geometry (the regime word)
+r1-g2            REFUSED    rc=2     5s  
+    priced 1124 s off its own plan: 1124 s the plan's wall figure
+    capped on the pod at 3372 s (3 x its plan's 1124 s)
+
+== the ratio, shared over private, the later seeds, scored with the earlier ones
+
+== the whole suite, uncapped, from the base venv (a record; gates nothing; only on END_SUITE=run)
+suite            SKIPPED    END_SUITE=skip (the default): the end suite was not requested; a dry run neither collects nor prices it, and END_SUITE=run does both
+
+PRICE, off the arms' own plans: 1 elasticity runs + 1 ratio runs = 1714 s of arms
+  (a ratio run is its plan's wall line at duty 0.25 plus the alignment probe's
+  seconds at full duty; an elasticity run is its plan's wall figure at duty 1.0 0.5 0.25),
+  tests/test_gpu.py ~53 s (38 tests) before them at 1.39 s a test,
+  session 5's pod rate, and no end suite (END_SUITE=skip, the default; END_SUITE=run prices it),
+  plus the preconditions ~480 s (the driver's own arm_minutes: thermal 3, calibrate 3, pin_probe-n64-g1 2 min),
+  the counter probe ~60 s (the driver's own arm_minutes for counter_plan, the same probe),
+  the probe check ~120 s (an allowance: it prints no plan), per-run compiles and
+  weight copies ~60 s (60 s a ratio run, an allowance) and exfil ~300 s
+  (an allowance) = 2787 s
+  = 47 min; at $4.59/h about $3.55. Book 2 h.
+  NOT in that figure: pod boot and checkout, any arm that REFUSES and is re-run,
+  the seeds a V7 FAIL at seed 0 skips (less), and the follow-up that FAIL prints, run
+  by hand after the chain: ~26 min a G, 1 seeds at --duty 0.1 at 1521 s each (R3's own
+  plan at 0.1, 1461 s, plus 60 s) (more).
+on the pod, first:
+    git -C /workspace/moe-kernels checkout -- moe/bench/hardware/measured_nvidia_h200.yaml
+    git -C /workspace/moe-kernels fetch origin && git -C /workspace/moe-kernels checkout -B r3-align origin/r3-align
+    git -C /workspace/moe-kernels log -1 --format=%h    # must print the head that was pushed
+then detached, APPENDING, so a --resume keeps the earlier passes' console:
+    cd /workspace/moe-kernels && nohup setsid bash scripts/alpha_g_chain.sh >> /workspace/alpha_g_chain.out 2>&1 < /dev/null &
+and watch:      tail -f /workspace/alpha_g_chain.out   (and $SESSION/CHAIN.tsv)
+ledger    /workspace/session/alpha_g-nvidia_h200-20260924T041829Z/CHAIN-dryrun.tsv
+read a pair on the laptop:  .venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --replicate-of RUN0/report.json
+  (PAIRS-by-G.tsv already reads every seed of a G together that way; PAIRS-README.txt is the legend)
+the ruler this session scored against is /workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml, TRACKED and dirty after
+  calibrate: commit it with the results. copy off before releasing the pod:
+    tar czf /workspace/exfil-alpha_g-nvidia_h200.tar.gz -C "/workspace/session" "alpha_g-nvidia_h200-20260924T041829Z" -C "/workspace/results" "gaps-nvidia_h200" -C "/workspace/moe-kernels" "moe/bench/hardware/measured_nvidia_h200.yaml" -C "/workspace/moe-kernels" results/calibration/<the run dir calibrate prints> -C "/workspace" "alpha_g_chain.out"

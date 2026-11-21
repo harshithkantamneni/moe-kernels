@@ -1,0 +1,1541 @@
+{
+  "family": "r3-arms",
+  "kind": "summary",
+  "card": {
+    "name": "NVIDIA GH200 480GB",
+    "slug": "nvidia_gh200_480gb",
+    "uuid": "35b064df-a166-0d27-d867-682c0a299866",
+    "sm_count": 132,
+    "l2_bytes": 62914560,
+    "capability": "9.0",
+    "memory_bytes": 101468602368,
+    "driver": "580.105.08",
+    "study_role": "the primary card"
+  },
+  "commit": "436e41c68d0b68e8f6e14b7d0500733a6bdd6ca0",
+  "pages": [
+    {
+      "path": "/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-atile-r3-counters/lock1710/r3c-g16.json",
+      "group_m": 16,
+      "exit": 3,
+      "estimates": {
+        "alpha_bracket": {
+          "total": [
+            0.014256080748542788,
+            0.049631524464440704
+          ],
+          "w1": [
+            0.025057402111235083,
+            0.04653701782226566
+          ],
+          "w2": [
+            -0.0076604933965774,
+            0.055932308378673704
+          ]
+        },
+        "alpha_bracket_note": "the least and greatest OLS slope over SHARED's weight-only q, from the lowest single call of SHARED or NATIVE, less e, to the highest; e PRIVATE's excess over n at its highest call",
+        "alpha_bracket_shared": {
+          "total": [
+            0.01430234757680729,
+            0.04955920870341949
+          ],
+          "w1": [
+            0.02509068080357138,
+            0.04652760823567707
+          ],
+          "w2": [
+            -0.007569085984002993,
+            0.05565275464739115
+          ]
+        },
+        "e_P": {
+          "total": {
+            "1": 0.0018512180873326844,
+            "2": 0.022255670456658994,
+            "3": 0.03357841855003718,
+            "4": 0.06233542306082551,
+            "5": 0.09173148018973265,
+            "6": 0.13880339122953878,
+            "7": 0.1544747125534771,
+            "8": 0.16665286109560995,
+            "9": 0.23439879644485018
+          },
+          "w1": {
+            "1": 0.002679279872349394,
+            "2": 0.02079827444893967,
+            "3": 0.02954510280064193,
+            "4": 0.04032271248953734,
+            "5": 0.06639943804059723,
+            "6": 0.09136526925223176,
+            "7": 0.10268020629882812,
+            "8": 0.0723969595772882,
+            "9": 0.14891024998256164
+          },
+          "w2": {
+            "1": 0.0001950945172990437,
+            "2": 0.025170462472098087,
+            "3": 0.041645050048828125,
+            "4": 0.10662078857421875,
+            "5": 0.1441623142787387,
+            "6": 0.2353848048618863,
+            "7": 0.2594729832240521,
+            "8": 0.3590300423758368,
+            "9": 0.40537588936942015
+          }
+        },
+        "q_S_bracket": {
+          "total": {
+            "1": [
+              0.999900636218843,
+              1.0019683837890625
+            ],
+            "2": [
+              1.0085378374372214,
+              1.0315152122860864
+            ],
+            "3": [
+              1.127952394031343,
+              1.1624332609630768
+            ],
+            "4": [
+              0.9715142022995726,
+              1.036334809802827
+            ],
+            "5": [
+              1.203417823428199,
+              1.297443571544829
+            ],
+            "6": [
+              1.151634034656343,
+              1.2935413178943453
+            ],
+            "7": [
+              1.2503954569498712,
+              1.4080089387439547
+            ],
+            "8": [
+              0.8371431259881885,
+              1.0045115152994792
+            ],
+            "9": [
+              1.2887827555338516,
+              1.526858193533761
+            ]
+          },
+          "w1": {
+            "1": [
+              0.9998713902064731,
+              1.0028629302978516
+            ],
+            "2": [
+              0.990095411028181,
+              1.0116966792515345
+            ],
+            "3": [
+              1.0995077405657085,
+              1.1301116943359375
+            ],
+            "4": [
+              0.9564437866210932,
+              0.9969166346958706
+            ],
+            "5": [
+              1.181086676461356,
+              1.2477692195347379
+            ],
+            "6": [
+              1.1531968797956198,
+              1.244661603655134
+            ],
+            "7": [
+              1.265853336879185,
+              1.3686346326555523
+            ],
+            "8": [
+              0.9188030787876671,
+              0.9912888663155691
+            ],
+            "9": [
+              1.3414532797677172,
+              1.4904136657714844
+            ]
+          },
+          "w2": {
+            "1": [
+              0.999882289341518,
+              1.0001792907714844
+            ],
+            "2": [
+              1.0446722848074776,
+              1.0712067740304128
+            ],
+            "3": [
+              1.183615003313337,
+              1.2279695783342635
+            ],
+            "4": [
+              1.001211438860212,
+              1.1152806963239397
+            ],
+            "5": [
+              1.2462866646902901,
+              1.3968086242675781
+            ],
+            "6": [
+              1.146615709577288,
+              1.3913274492536274
+            ],
+            "7": [
+              1.2180524553571421,
+              1.4869025094168526
+            ],
+            "8": [
+              0.6698570251464846,
+              1.0311344691685267
+            ],
+            "9": [
+              1.1834090096609928,
+              1.5998475211007255
+            ]
+          }
+        },
+        "alpha_slope": {
+          "total": 0.04593739080681372,
+          "w1": 0.04361149470011393,
+          "w2": 0.05058918302021329
+        },
+        "residual": 0.32732988630229887,
+        "residual_note": "a scalar summary; meaningful where the ladder is affine",
+        "alpha_slope_private": {
+          "total": 1.0277297085555144,
+          "w1": 1.015475672767276,
+          "w2": 1.0522377801319913
+        },
+        "alpha_ratio": 0.048486710056443505,
+        "alpha_ratio_bracket": [
+          0.04825831775446244,
+          0.048723140334483994
+        ],
+        "alpha_diff": 0.01820768225129954,
+        "q_S": {
+          "total": {
+            "1": 1.0018929981050038,
+            "2": 1.031120360843719,
+            "3": 1.1618358672611298,
+            "4": 1.0349434746636283,
+            "5": 1.2957885378882998,
+            "6": 1.2920115637400795,
+            "7": 1.4060258411225819,
+            "8": 1.0039236886160714,
+            "9": 1.5249893551781064
+          },
+          "w1": {
+            "1": 1.0027819133940197,
+            "2": 1.0113358270554316,
+            "3": 1.129213878086635,
+            "4": 0.9968263535272507,
+            "5": 1.2476451510474795,
+            "6": 1.2446478889102028,
+            "7": 1.3686072939918155,
+            "8": 0.9912245614188058,
+            "9": 1.4903856913248696
+          },
+          "w2": {
+            "1": 1.0001151675269717,
+            "2": 1.070689428420294,
+            "3": 1.227079845610119,
+            "4": 1.111177716936384,
+            "5": 1.3920753115699405,
+            "6": 1.3867389133998327,
+            "7": 1.4808629353841147,
+            "8": 1.0293219430106026,
+            "9": 1.5941966828845795
+          }
+        },
+        "q_P": {
+          "total": {
+            "1": 1.0018066527351501,
+            "2": 2.0212823776971724,
+            "3": 3.0332640996055,
+            "4": 4.061374664306641,
+            "5": 5.09083744836232,
+            "6": 6.1378323388478115,
+            "7": 7.152937450106181,
+            "8": 8.16493927486359,
+            "9": 9.231058514307417
+          },
+          "w1": {
+            "1": 1.0026324135916573,
+            "2": 2.0203370593843006,
+            "3": 3.0295076824369884,
+            "4": 4.040008908226377,
+            "5": 5.065394719441732,
+            "6": 6.0908903394426614,
+            "7": 7.101855777558826,
+            "8": 8.070025943574452,
+            "9": 9.148606436593193
+          },
+          "w2": {
+            "1": 1.0001551310221355,
+            "2": 2.0231730143229165,
+            "3": 3.040776933942522,
+            "4": 4.104106176467169,
+            "5": 5.141722906203497,
+            "6": 6.231716337658111,
+            "7": 7.255100795200893,
+            "8": 8.354765937441872,
+            "9": 9.395962669735864
+          }
+        },
+        "q_N": {
+          "total": {
+            "1": 1.0018105885339161,
+            "2": 1.0311937483530196,
+            "3": 1.1620308406769284,
+            "4": 1.0351146516345797,
+            "5": 1.2961732168046256,
+            "6": 1.2925663902646018,
+            "7": 1.4061938694545202,
+            "8": 1.00416988796658,
+            "9": 1.5248611692398315
+          },
+          "w1": {
+            "1": 1.0026473999023438,
+            "2": 1.0114236559186662,
+            "3": 1.1296619233630953,
+            "4": 0.9968813033331009,
+            "5": 1.2476816631498793,
+            "6": 1.2446230933779763,
+            "7": 1.3685460771833147,
+            "8": 0.9912464505150205,
+            "9": 1.4903885977608817
+          },
+          "w2": {
+            "1": 1.000136965797061,
+            "2": 1.070733933221726,
+            "3": 1.2267686753045945,
+            "4": 1.1115813482375372,
+            "5": 1.3931563241141183,
+            "6": 1.3884529840378534,
+            "7": 1.4814894539969308,
+            "8": 1.0300167628696986,
+            "9": 1.5938063121977308
+          }
+        }
+      },
+      "group_model": {
+        "1": 1.0,
+        "2": 1.0,
+        "3": 1.125,
+        "4": 1.0,
+        "5": 1.25,
+        "6": 1.25,
+        "7": 1.375,
+        "8": 1.0,
+        "9": 1.5
+      },
+      "not_asked": []
+    },
+    {
+      "path": "/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-atile-r3-counters/lock1710/r3c-g32.json",
+      "group_m": 32,
+      "exit": 3,
+      "estimates": {
+        "alpha_bracket": {
+          "total": [
+            -0.057019600035652235,
+            0.03910580589657739
+          ],
+          "w1": [
+            -0.021357840583437926,
+            0.024330243610200385
+          ],
+          "w2": [
+            -0.1291152499970936,
+            0.06899435860770087
+          ]
+        },
+        "alpha_bracket_note": "the least and greatest OLS slope over SHARED's weight-only q, from the lowest single call of SHARED or NATIVE, less e, to the highest; e PRIVATE's excess over n at its highest call",
+        "alpha_bracket_shared": {
+          "total": [
+            -0.05670893835642973,
+            0.03778312622554718
+          ],
+          "w1": [
+            -0.021356037684849276,
+            0.023747044517880338
+          ],
+          "w2": [
+            -0.1279997416904995,
+            0.06611442565917966
+          ]
+        },
+        "e_P": {
+          "total": {
+            "1": 0.0016237894694011157,
+            "2": 0.021140143984839987,
+            "3": 0.06605511619931193,
+            "4": 0.1717827206566218,
+            "5": 0.2055922008696056,
+            "6": 0.2647194635300405,
+            "7": 0.38091477893647596,
+            "8": 0.5488537379673541,
+            "9": 0.6375312805175781
+          },
+          "w1": {
+            "1": 0.0023403167724609375,
+            "2": 0.019555228097098087,
+            "3": 0.04818480355399002,
+            "4": 0.10458483014787934,
+            "5": 0.12036487034388976,
+            "6": 0.1517878941127231,
+            "7": 0.19137328011648957,
+            "8": 0.2100723811558325,
+            "9": 0.3119098118373316
+          },
+          "w2": {
+            "1": 0.0002332414899552937,
+            "2": 0.0244047982352118,
+            "3": 0.10341535295758897,
+            "4": 0.31616919381277864,
+            "5": 0.3760468619210382,
+            "6": 0.49443817138671875,
+            "7": 0.7676042829241077,
+            "8": 1.2291336059570312,
+            "9": 1.2887742178780695
+          }
+        },
+        "q_S_bracket": {
+          "total": {
+            "1": [
+              0.99983887445359,
+              1.0017965407598586
+            ],
+            "2": [
+              1.032133556547619,
+              1.0817529587518602
+            ],
+            "3": [
+              1.0213648478190103,
+              1.0933414640880765
+            ],
+            "4": [
+              0.9296989440917971,
+              1.1079521179199219
+            ],
+            "5": [
+              1.0265303112211681,
+              1.2375179472423734
+            ],
+            "6": [
+              0.958087739490328,
+              1.2261875697544644
+            ],
+            "7": [
+              0.8402439299083901,
+              1.229972112746466
+            ],
+            "8": [
+              0.5346645173572364,
+              1.0905015127999442
+            ],
+            "9": [
+              0.7208337329682848,
+              1.3642242068336123
+            ]
+          },
+          "w1": {
+            "1": [
+              0.9997457776750838,
+              1.0025634765625
+            ],
+            "2": [
+              1.006767545427595,
+              1.0414104461669922
+            ],
+            "3": [
+              0.965367725917271,
+              1.0177225385393414
+            ],
+            "4": [
+              0.8948448726109097,
+              0.999964850289481
+            ],
+            "5": [
+              1.0041762760707307,
+              1.125235148838588
+            ],
+            "6": [
+              0.9707682473318917,
+              1.1230961935860768
+            ],
+            "7": [
+              0.927703039986747,
+              1.1193711417061942
+            ],
+            "8": [
+              0.7815301077706464,
+              0.991659436907087
+            ],
+            "9": [
+              0.929415021623885,
+              1.2419659750802177
+            ]
+          },
+          "w2": {
+            "1": [
+              0.9998643057686942,
+              1.0002632141113281
+            ],
+            "2": [
+              1.0827707563127793,
+              1.162437983921596
+            ],
+            "3": [
+              1.1299182346888954,
+              1.2529193333217075
+            ],
+            "4": [
+              0.9894163949149,
+              1.3239266531808036
+            ],
+            "5": [
+              1.0703163146972654,
+              1.4627761840820312
+            ],
+            "6": [
+              0.9283000401088171,
+              1.4325714111328125
+            ],
+            "7": [
+              0.6573889596121647,
+              1.451380593436105
+            ],
+            "8": [
+              0.03810228620256684,
+              1.2882548740931918
+            ],
+            "9": [
+              0.30345807756696397,
+              1.6091466631208147
+            ]
+          }
+        },
+        "alpha_slope": {
+          "total": 0.030938111158905844,
+          "w1": 0.019089612506684814,
+          "w2": 0.05463510846334791
+        },
+        "residual": 0.1470082087676543,
+        "residual_note": "a scalar summary; meaningful where the ladder is affine",
+        "alpha_slope_private": {
+          "total": 1.0795575318513093,
+          "w1": 1.0353362734355622,
+          "w2": 1.1680000486828033
+        },
+        "alpha_ratio": 0.03232628591405709,
+        "alpha_ratio_bracket": [
+          0.03173940433630079,
+          0.032927656462565444
+        ],
+        "alpha_diff": -0.048619420692403326,
+        "q_S": {
+          "total": {
+            "1": 1.0016387455047122,
+            "2": 1.0783492194281683,
+            "3": 1.0901841663178944,
+            "4": 1.1051820421975758,
+            "5": 1.2337415786016555,
+            "6": 1.2253269619411893,
+            "7": 1.2224976070343503,
+            "8": 1.0890944344656808,
+            "9": 1.3614585513160342
+          },
+          "w1": {
+            "1": 1.0023517608642578,
+            "2": 1.0388065519787015,
+            "3": 1.0159889402843656,
+            "4": 0.999693825131371,
+            "5": 1.1248969123477026,
+            "6": 1.1228760310581751,
+            "7": 1.1191968463716053,
+            "8": 0.9916181110200428,
+            "9": 1.2416877746582031
+          },
+          "w2": {
+            "1": 1.0002127147856212,
+            "2": 1.1574345543271018,
+            "3": 1.2385746183849518,
+            "4": 1.3161584763299852,
+            "5": 1.4514309111095611,
+            "6": 1.4302288237072174,
+            "7": 1.4290991283598402,
+            "8": 1.2840470813569567,
+            "9": 1.6010001046316964
+          }
+        },
+        "q_P": {
+          "total": {
+            "1": 1.0015702626061818,
+            "2": 2.020778474353609,
+            "3": 3.065819392128596,
+            "4": 4.171320234026227,
+            "5": 5.201111748105004,
+            "6": 6.26275634765625,
+            "7": 7.373326316712394,
+            "8": 8.538396926153274,
+            "9": 9.630106910826667
+          },
+          "w1": {
+            "1": 1.0022776467459542,
+            "2": 2.0195164453415644,
+            "3": 3.0477466583251953,
+            "4": 4.10195559547061,
+            "5": 5.119495573497955,
+            "6": 6.1507393064953035,
+            "7": 7.188397089640299,
+            "8": 8.208940051850819,
+            "9": 9.307732899983723
+          },
+          "w2": {
+            "1": 1.0001554943266369,
+            "2": 2.023302532377697,
+            "3": 3.1019648597353977,
+            "4": 4.310049511137462,
+            "5": 5.364344097319104,
+            "6": 6.486790429978144,
+            "7": 7.743184770856585,
+            "8": 9.197310674758185,
+            "9": 10.274854932512556
+          }
+        },
+        "q_N": {
+          "total": {
+            "1": 1.001701173328218,
+            "2": 1.056521279471261,
+            "3": 1.0910817100888206,
+            "4": 1.1048291524251301,
+            "5": 1.2358089628673734,
+            "6": 1.2246440705798922,
+            "7": 1.2261055234878784,
+            "8": 1.085086459205264,
+            "9": 1.3602695767841642
+          },
+          "w1": {
+            "1": 1.0024810064406622,
+            "2": 1.0268423897879464,
+            "3": 1.0139694213867188,
+            "4": 0.9997767493838355,
+            "5": 1.1248965490432012,
+            "6": 1.1227978297642298,
+            "7": 1.1192384447370256,
+            "8": 0.9916276477632069,
+            "9": 1.2413955870128814
+          },
+          "w2": {
+            "1": 1.0001415071033297,
+            "2": 1.1158790588378906,
+            "3": 1.2453062874930245,
+            "4": 1.3149339585077195,
+            "5": 1.457633790515718,
+            "6": 1.4283365522112166,
+            "7": 1.4398396809895835,
+            "8": 1.2720040820893785,
+            "9": 1.5980175563267298
+          }
+        }
+      },
+      "group_model": {
+        "1": 1.0,
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0,
+        "5": 1.125,
+        "6": 1.125,
+        "7": 1.125,
+        "8": 1.0,
+        "9": 1.25
+      },
+      "not_asked": []
+    },
+    {
+      "path": "/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-atile-r3-counters/lock1710/r3c-g64.json",
+      "group_m": 64,
+      "exit": 3,
+      "estimates": {
+        "alpha_bracket": {
+          "total": [
+            -0.12053208426823699,
+            0.0822836194719587
+          ],
+          "w1": [
+            -0.08641986846923835,
+            0.012462348029727038
+          ],
+          "w2": [
+            -0.1921887170700799,
+            0.2226843970162528
+          ]
+        },
+        "alpha_bracket_note": "the least and greatest OLS slope over SHARED's weight-only q, from the lowest single call of SHARED or NATIVE, less e, to the highest; e PRIVATE's excess over n at its highest call",
+        "alpha_bracket_shared": {
+          "total": [
+            -0.12036662026057172,
+            0.07800065903436569
+          ],
+          "w1": [
+            -0.08623664038521911,
+            0.011162694295247369
+          ],
+          "w2": [
+            -0.19171768370128806,
+            0.21266067141578315
+          ]
+        },
+        "e_P": {
+          "total": {
+            "1": 0.0012479509626115437,
+            "2": 0.02017593383789018,
+            "3": 0.06932213192894343,
+            "4": 0.17574982416062124,
+            "5": 0.3568534851074219,
+            "6": 0.6180463518415182,
+            "7": 0.9139693123953672,
+            "8": 1.2339750017438629,
+            "9": 1.3219749813988102
+          },
+          "w1": {
+            "1": 0.0018095288957868938,
+            "2": 0.01904651096888932,
+            "3": 0.04824665614536805,
+            "4": 0.09933989388602171,
+            "5": 0.16495759146554168,
+            "6": 0.2630827767508368,
+            "7": 0.3889459882463733,
+            "8": 0.5785958426339288,
+            "9": 0.6860689435686389
+          },
+          "w2": {
+            "1": 0.00018256051199760925,
+            "2": 0.022434779575892794,
+            "3": 0.11147308349609375,
+            "4": 0.32856968470982206,
+            "5": 0.7406452723911832,
+            "6": 1.3279735020228793,
+            "7": 1.9640159606933594,
+            "8": 2.587195260184153,
+            "9": 2.593787057059151
+          }
+        },
+        "q_S_bracket": {
+          "total": {
+            "1": [
+              0.9998919169108071,
+              1.0016355968656991
+            ],
+            "2": [
+              1.0333575294131327,
+              1.093197958809989
+            ],
+            "3": [
+              1.0196580432710192,
+              1.1231654939197357
+            ],
+            "4": [
+              0.9411879039946056,
+              1.1483446756998699
+            ],
+            "5": [
+              0.8271240960984005,
+              1.2057802109491258
+            ],
+            "6": [
+              0.6323176792689729,
+              1.2651327224004838
+            ],
+            "7": [
+              0.45021674746558893,
+              1.3738178071521576
+            ],
+            "8": [
+              0.24797403244745064,
+              1.4921686081659224
+            ],
+            "9": [
+              0.29305339994884605,
+              1.6319718133835563
+            ]
+          },
+          "w1": {
+            "1": [
+              0.9998411451067244,
+              1.0023926326206754
+            ],
+            "2": [
+              1.0075588226318362,
+              1.0435954502650668
+            ],
+            "3": [
+              0.9671284811837335,
+              1.0306900569370816
+            ],
+            "4": [
+              0.903384617396763,
+              1.0130549839564733
+            ],
+            "5": [
+              0.8352315085274828,
+              1.0078315734863281
+            ],
+            "6": [
+              0.7343690054757257,
+              1.00054931640625
+            ],
+            "7": [
+              0.6118632725306914,
+              1.0031659262520927
+            ],
+            "8": [
+              0.4237469264439171,
+              1.0092075892857142
+            ],
+            "9": [
+              0.4500658852713444,
+              1.1432298932756697
+            ]
+          },
+          "w2": {
+            "1": [
+              0.9999171665736608,
+              1.0002049037388392
+            ],
+            "2": [
+              1.0849549429757255,
+              1.1958329336983817
+            ],
+            "3": [
+              1.1247171674455916,
+              1.311178479875837
+            ],
+            "4": [
+              1.0167944771902895,
+              1.418924059186663
+            ],
+            "5": [
+              0.8102607727050779,
+              1.604379381452288
+            ],
+            "6": [
+              0.4270738874162947,
+              1.7942995343889507
+            ],
+            "7": [
+              0.12692369733537978,
+              2.11712156023298
+            ],
+            "8": [
+              -0.14947400774274655,
+              2.471820286342076
+            ],
+            "9": [
+              -0.03355571201869312,
+              2.6094556535993303
+            ]
+          }
+        },
+        "alpha_slope": {
+          "total": 0.0710315300674035,
+          "w1": 0.006292187221466535,
+          "w2": 0.20051021575927738
+        },
+        "residual": 0.05102214030060734,
+        "residual_note": "a scalar summary; meaningful where the ladder is affine",
+        "alpha_slope_private": {
+          "total": 1.182408893928326,
+          "w1": 1.0865417768084813,
+          "w2": 1.3741431281680154
+        },
+        "alpha_ratio": 0.06331539721039556,
+        "alpha_ratio_bracket": [
+          0.06253055197314263,
+          0.06397127261719882
+        ],
+        "alpha_diff": -0.11137736386092234,
+        "q_S": {
+          "total": {
+            "1": 1.0011860075451078,
+            "2": 1.0914754110669334,
+            "3": 1.1215381925068204,
+            "4": 1.1460420517694383,
+            "5": 1.2044036501929873,
+            "6": 1.2619090004572793,
+            "7": 1.3652464245992992,
+            "8": 1.4844780573769223,
+            "9": 1.6210861206054688
+          },
+          "w1": {
+            "1": 1.0016960870651972,
+            "2": 1.0419872828892298,
+            "3": 1.0290667215983074,
+            "4": 1.011901582990374,
+            "5": 1.0071724482945033,
+            "6": 1.000188736688523,
+            "7": 1.0012939089820498,
+            "8": 1.006290072486514,
+            "9": 1.1396664210728236
+          },
+          "w2": {
+            "1": 1.0001658485049292,
+            "2": 1.1904516674223402,
+            "3": 1.3064811343238467,
+            "4": 1.414322989327567,
+            "5": 1.5988660539899553,
+            "6": 1.7853495279947915,
+            "7": 2.0931514558337985,
+            "8": 2.440854027157738,
+            "9": 2.583925519670759
+          }
+        },
+        "q_P": {
+          "total": {
+            "1": 1.0011955140128967,
+            "2": 2.0199605548192583,
+            "3": 3.067598433721633,
+            "4": 4.1734364827473955,
+            "5": 5.347505296979632,
+            "6": 6.595072852240669,
+            "7": 7.904064783974299,
+            "8": 9.224740164620536,
+            "9": 10.310101948087178
+          },
+          "w1": {
+            "1": 1.0017198835100447,
+            "2": 2.0188438778831843,
+            "3": 3.047988619123186,
+            "4": 4.098027910505023,
+            "5": 5.163658232915969,
+            "6": 6.259161722092402,
+            "7": 7.385291054135277,
+            "8": 8.566574096679688,
+            "9": 9.680114201136998
+          },
+          "w2": {
+            "1": 1.000146775018601,
+            "2": 2.0221939086914062,
+            "3": 3.106818062918527,
+            "4": 4.324253627232143,
+            "5": 5.715199425106957,
+            "6": 7.266895112537202,
+            "7": 8.941612243652344,
+            "8": 10.541072300502233,
+            "9": 11.570077441987538
+          }
+        },
+        "q_N": {
+          "total": {
+            "1": 1.001593574645027,
+            "2": 1.057657453748915,
+            "3": 1.0911880977570063,
+            "4": 1.1181800478980655,
+            "5": 1.1852027045355904,
+            "6": 1.2527012900700645,
+            "7": 1.3730749705481151,
+            "8": 1.4882802811879958,
+            "9": 1.624953920879061
+          },
+          "w1": {
+            "1": 1.0023309616815477,
+            "2": 1.0278010595412481,
+            "3": 1.0159717741466703,
+            "4": 1.0031052544003443,
+            "5": 1.0005411420549666,
+            "6": 0.9976815723237538,
+            "7": 1.0021791003999256,
+            "8": 1.0052769070579892,
+            "9": 1.1402122860863095
+          },
+          "w2": {
+            "1": 1.0001188005719865,
+            "2": 1.1173702421642484,
+            "3": 1.2416207449776786,
+            "4": 1.348329634893508,
+            "5": 1.5545258294968378,
+            "6": 1.7627407255626861,
+            "7": 2.114866710844494,
+            "8": 2.4542870294480097,
+            "9": 2.5944371904645647
+          }
+        }
+      },
+      "group_model": {
+        "1": 1.0,
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0,
+        "5": 1.0,
+        "6": 1.0,
+        "7": 1.0,
+        "8": 1.0,
+        "9": 1.125
+      },
+      "not_asked": []
+    }
+  ],
+  "timed_reference": null,
+  "gates": [
+    {
+      "number": "g16.V0",
+      "kind": "VALIDITY",
+      "claim": "the page names the live card it was measured on",
+      "verdict": "PASS",
+      "measured": "CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 7269a7, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.",
+      "threshold": "a card block with ['name', 'uuid', 'sm_count', 'l2_bytes', 'capability', 'driver']",
+      "invalidates": "every number on the page: bytes without the card they came from cannot be compared with anything, least of all with that card's own timing",
+      "lines": []
+    },
+    {
+      "number": "g16.V1",
+      "kind": "VALIDITY",
+      "claim": "every launch is attributed: exact count, every grid equal to the child's, and a census that measured GEMMS_PER_CALL",
+      "verdict": "PASS",
+      "measured": "162 launches over 27 cells, every grid matched",
+      "threshold": "exact count; grids equal; census GEMMS_PER_CALL = 2",
+      "invalidates": "every byte on the page: a launch counted twice or into the wrong cell is the per-call trap in another form, and it still fits a line",
+      "lines": []
+    },
+    {
+      "number": "g16.V2",
+      "kind": "VALIDITY",
+      "claim": "every STRICT metric is a number on every launch",
+      "verdict": "PASS",
+      "measured": "5 fields x 54 GEMM cells",
+      "threshold": "no missing value, never a 0.0 default",
+      "invalidates": "every estimate: a metric that was not measured is not a zero",
+      "lines": []
+    },
+    {
+      "number": "g16.V3",
+      "kind": "VALIDITY",
+      "claim": "at n=1 each cell's K calls read the same bytes",
+      "verdict": "PASS",
+      "measured": "worst gated (max - min) / median 0.0208%",
+      "threshold": "<= 1% per call and per GEMM in every n=1 cell, and in every cell whose page carries no per-GEMM call list",
+      "invalidates": "the instrument (the counter, the cache flush, the attribution): at n=1 no weight slab is read by two tiles, so the order tiles run in cannot move the bytes, and a spread there says something else did",
+      "lines": [
+        "deeper treads, not gated, spread up to 0.6647% (shared/9): re-reads L2 catches or misses with the order tiles run in, carried into SHARED's bracket as its farthest calls"
+      ]
+    },
+    {
+      "number": "g16.V4",
+      "kind": "VALIDITY",
+      "claim": "at n=1 the arms are one call and each reads one weight set",
+      "verdict": "PASS",
+      "measured": "|R_S(1)/R_P(1) - 1| = 0.0086% against 0.5000%; q(1) native 1.0018, shared 1.0019, private 1.0018",
+      "threshold": "<= max(0.5%, 3 x the repeat spread); q(1) in [0.97, 1.03]",
+      "invalidates": "the byte model's intercept: if one call reads other than W at n=1, q is not a re-read fraction",
+      "lines": [
+        "at n=1 SHARED and PRIVATE route every tile to copy 0: they are the same call, so their bytes must agree"
+      ]
+    },
+    {
+      "number": "g16.V5",
+      "kind": "VALIDITY",
+      "claim": "the PRIVATE arm re-reads the whole weight set per tile",
+      "verdict": "PASS",
+      "measured": "every q_P(n)/n in [0.97, 1.5]; slope 1.0277",
+      "threshold": "0.97 n <= q_P(n) <= 1.5 n per GEMM; slope of q_P,total in [0.97, 1.5]",
+      "invalidates": "the apparatus. Below the floor, weight bytes are MISSING, which is impossible for an arm whose every tile reads its own copy: the counter, the attribution or the relabelling is broken (V9 should agree). Above 1.5 n is a per-call or double-count error",
+      "lines": [
+        "PRIVATE's excess over n is activation re-read, and a full thrash adds at most 0.4978 of W_w1, 0.4922 of W_w2 per tread ((BM/BN)(1 - 1/num_pid_n)), inside the ceiling: V5 cannot tell a thrash from a sound page, and C6 reads it"
+      ]
+    },
+    {
+      "number": "g16.V6",
+      "kind": "VALIDITY",
+      "claim": "the arms request the same L2 read sectors",
+      "verdict": "PASS",
+      "measured": "20 comparisons held; nearest its tolerance 0.4040% of 1.3% at n=2 w1 (NATIVE against SHARED)",
+      "threshold": "max/min - 1 <= 0.5% over the three arms at every (n, GEMM) on a card that counts every load; on one that coalesces L2 reads (compute capability 9.0 and up) SHARED against PRIVATE at n=1 within 0.5%, and NATIVE against SHARED where their live pids agree within 1.3% at every tread",
+      "invalidates": "the arms' identity: they issue identical loads (one kernel binary per GEMM; the dead CTAs the wider 72-slot declaration adds each load one expert id and exit), so where the count sees every load, or two arms issue the same tiles in the same order, a difference in requests is a different call",
+      "lines": [
+        "compute capability 9.0, at or above Hopper's 9.0: an L2 Request Coalescer can merge reads of one sector before the L2 counts them, most likely what put this count below the loads on the GH200 and the H100 (no counter on this page sits before it), so V6 holds two pairs: SHARED against PRIVATE at n=1, one call (both route every tile to copy 0), within 0.5%, and NATIVE against SHARED where NATIVE's grid gives every live tile SHARED's pid, the same tiles under another declaration, within 1.3% at every tread",
+        "not held: PRIVATE at n >= 2 (its tiles read their own copies); their loads there rest on V5, V7 and V9 until a page carries a load count taken before the coalescer (docs/COUNTERS.md 6.8)",
+        "not gated: over the three arms at every tread the widest gap is 12.1911% at n=2 w2"
+      ]
+    },
+    {
+      "number": "g16.V7",
+      "kind": "VALIDITY",
+      "claim": "NATIVE and SHARED read the same DRAM bytes",
+      "verdict": "PASS",
+      "measured": "every (n, GEMM) within tolerance",
+      "threshold": "|R_N/R_S - 1| <= max(1%, 3 x that GEMM's own repeat spread in either cell), and the two arms' calls no more than 1% apart where the page lists them",
+      "invalidates": "SHARED as the study's call: if the declaration moved the bytes, SHARED measures a call vLLM does not make",
+      "lines": []
+    },
+    {
+      "number": "g16.V8",
+      "kind": "VALIDITY",
+      "claim": "the DRAM counter and the L2 counters agree",
+      "verdict": "PASS",
+      "measured": "every GEMM cell's DRAM bytes within tolerance of 32 x fill sectors",
+      "threshold": "|dram_bytes_read / (32 x lts__d_sectors_fill_device) - 1| <= 2%",
+      "invalidates": "the counter itself: DRAM bytes and the L2 sectors filled from DRAM are two readings of one traffic",
+      "lines": []
+    },
+    {
+      "number": "g16.V9",
+      "kind": "VALIDITY",
+      "claim": "the private arm allocated and READ distinct weight copies",
+      "verdict": "PASS",
+      "measured": "5 of 5 parts",
+      "threshold": "all 5 parts of the proof",
+      "invalidates": "the private ladder is not a no-reuse reference at all, and the ratio is a number about the apparatus",
+      "lines": [
+        "PASS     addresses: the n copies occupy disjoint contiguous address ranges spanning exactly n x the weight set, in both w1 and w2",
+        "         9 copies x 8 experts span 12683575296 bytes against 12683575296 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+        "PASS     sentinels: a distinct value written into each copy reads back from that copy and from no other, and the original bytes are restored before anything else reads them",
+        "         wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+        "PASS     kernel_read: zeroing ONE copy c at a time, for every c >= 1, changes EXACTLY the private output rows of the tokens routed to copy c and no others, so every tile reads its own copy and no tile reads another's",
+        "         every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=1: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=2: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=3: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=4: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=5: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=6: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=7: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=8: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True",
+        "PASS     shared_blind: each of those zeroings leaves the shared arm's output bitwise unchanged, and restoring the copy restores the private output bitwise, so the changes above are the private mapping and not a corruption",
+        "         the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output",
+        "PASS     same_layer: with nothing zeroed, the private arm's output is bitwise equal to the shared arm's, so the relabelling computes the same layer",
+        "         private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)"
+      ]
+    },
+    {
+      "number": "g16.V10",
+      "kind": "VALIDITY",
+      "claim": "every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock",
+      "verdict": "FAIL",
+      "measured": "off the lock: private/1 w2 1757 MHz (fit: w1 1702.9 MHz + 12.7 us over 27 cells; w2 1695.1 MHz + 8.7 us over 27 cells)",
+      "threshold": "each GEMM's duration = t0 + sm__cycles_elapsed.avg / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, and no cell over 3 steps off the lock's line",
+      "invalidates": "every byte on the page as a reading at 1710 MHz, the clock the timed pages it is compared with ran at; its bytes stand only as readings at the clocks its cells name",
+      "lines": []
+    },
+    {
+      "number": "g16.C1",
+      "kind": "CLAIM",
+      "claim": "SHARED's w1 weight reads are what the group model counts",
+      "verdict": "REFUSE",
+      "measured": "n=1 [0.9999, 1.0029]/1.0000, n=2 [0.9901, 1.0117]/1.0000, n=3 [1.0995, 1.1301]/1.1250, n=4 [0.9564, 0.9969]/1.0000, n=5 [1.1811, 1.2478]/1.2500, n=6 [1.1532, 1.2447]/1.2500, n=7 [1.2659, 1.3686]/1.3750, n=8 [0.9188, 0.9913]/1.0000, n=9 [1.3415, 1.4904]/1.5000",
+      "threshold": "|q_S,w1(n) - group_reads| <= 5% x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree",
+      "invalidates": "the pid-order reuse model: w1 has 2F/BN N-tiles per M-row, far more than the CTAs in flight, so nothing is shared across groups",
+      "lines": [
+        "INCONCLUSIVE at n=[5, 6, 7, 8, 9]: the two edges of SHARED's weight-only bracket (farthest calls, less e) disagree there; e (PRIVATE's excess over n, n=5 0.0664, n=6 0.0914, n=7 0.1027, n=8 0.0724, n=9 0.1489) is the activation re-read PRIVATE measured, which bounds SHARED's, and the counter cannot split weight from activation bytes inside one GEMM",
+        "w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g16.C2",
+      "kind": "CLAIM",
+      "claim": "SHARED's w2 weight reads never exceed the group model's count",
+      "verdict": "FAIL",
+      "measured": "n=1 [0.9999, 1.0002]/1.0000, n=2 [1.0447, 1.0712]/1.0000, n=3 [1.1836, 1.2280]/1.1250, n=4 [1.0012, 1.1153]/1.0000, n=5 [1.2463, 1.3968]/1.2500, n=6 [1.1466, 1.3913]/1.2500, n=7 [1.2181, 1.4869]/1.3750, n=8 [0.6699, 1.0311]/1.0000, n=9 [1.1834, 1.5998]/1.5000",
+      "threshold": "q_S,w2(n) <= 1.05 x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree",
+      "invalidates": "the model's ceiling: co-residency can only remove WEIGHT reads, never add them. An activation re-read is not a weight read, and q_S counts one as if it were: at G >= E n every live M-tile is in one group, every column pass walks them all, and where that pass outgrows the L2 the A repeats reach DRAM (up to (BM/BN)(1 - 1/num_pid_n) of W_w2 per tread). The lower edge takes them out, so only a FAIL on both edges refutes the model",
+      "lines": [
+        "INCONCLUSIVE at n=[2, 4, 5, 6, 7, 9]: the two edges of SHARED's weight-only bracket (farthest calls, less e) disagree there; e (PRIVATE's excess over n, n=2 0.0252, n=4 0.1066, n=5 0.1442, n=6 0.2354, n=7 0.2595, n=9 0.4054) is the activation re-read PRIVATE measured, which bounds SHARED's, and the counter cannot split weight from activation bytes inside one GEMM",
+        "w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g16.C6",
+      "kind": "CLAIM",
+      "claim": "PRIVATE reads no more than one weight set per tile",
+      "verdict": "PASS",
+      "measured": "n=1 +0.0018, n=2 +0.0106, n=3 +0.0111, n=4 +0.0153, n=5 +0.0182, n=6 +0.0230, n=7 +0.0218, n=8 +0.0206, n=9 +0.0257  (q_P/n - 1; w1 +0.0026, +0.0102, +0.0098, +0.0100, +0.0131, +0.0151, +0.0146, +0.0088, +0.0165; w2 +0.0002, +0.0116, +0.0136, +0.0260, +0.0283, +0.0386, +0.0364, +0.0443, +0.0440)",
+      "threshold": "q_P,total(n) <= 1.03 n at every n, on PRIVATE's lowest and highest call; UNKNOWN where they straddle it",
+      "invalidates": "a FAIL is a finding about BYTES: PRIVATE reads its weights exactly n times by construction, so its excess over n is what it re-read of everything else, activations above all, and the per-GEMM split localises it. It says the private arm's timed G-cost is bytes SHARED does not pay only as far as SHARED re-reads less, which the bracket bounds and does not measure",
+      "lines": [
+        "at n=[1, 2] (G >= E n = 8 n) every live M-tile sits in one group and every column pass walks them all, in SHARED as in PRIVATE: SHARED is exposed to the same re-reads there, over narrower slabs",
+        "w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)",
+        "w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g32.V0",
+      "kind": "VALIDITY",
+      "claim": "the page names the live card it was measured on",
+      "verdict": "PASS",
+      "measured": "CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 7269a7, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.",
+      "threshold": "a card block with ['name', 'uuid', 'sm_count', 'l2_bytes', 'capability', 'driver']",
+      "invalidates": "every number on the page: bytes without the card they came from cannot be compared with anything, least of all with that card's own timing",
+      "lines": []
+    },
+    {
+      "number": "g32.V1",
+      "kind": "VALIDITY",
+      "claim": "every launch is attributed: exact count, every grid equal to the child's, and a census that measured GEMMS_PER_CALL",
+      "verdict": "PASS",
+      "measured": "162 launches over 27 cells, every grid matched",
+      "threshold": "exact count; grids equal; census GEMMS_PER_CALL = 2",
+      "invalidates": "every byte on the page: a launch counted twice or into the wrong cell is the per-call trap in another form, and it still fits a line",
+      "lines": []
+    },
+    {
+      "number": "g32.V2",
+      "kind": "VALIDITY",
+      "claim": "every STRICT metric is a number on every launch",
+      "verdict": "PASS",
+      "measured": "5 fields x 54 GEMM cells",
+      "threshold": "no missing value, never a 0.0 default",
+      "invalidates": "every estimate: a metric that was not measured is not a zero",
+      "lines": []
+    },
+    {
+      "number": "g32.V3",
+      "kind": "VALIDITY",
+      "claim": "at n=1 each cell's K calls read the same bytes",
+      "verdict": "PASS",
+      "measured": "worst gated (max - min) / median 0.0475%",
+      "threshold": "<= 1% per call and per GEMM in every n=1 cell, and in every cell whose page carries no per-GEMM call list",
+      "invalidates": "the instrument (the counter, the cache flush, the attribution): at n=1 no weight slab is read by two tiles, so the order tiles run in cannot move the bytes, and a spread there says something else did",
+      "lines": [
+        "deeper treads, not gated, spread up to 1.3584% (shared/4): re-reads L2 catches or misses with the order tiles run in, carried into SHARED's bracket as its farthest calls"
+      ]
+    },
+    {
+      "number": "g32.V4",
+      "kind": "VALIDITY",
+      "claim": "at n=1 the arms are one call and each reads one weight set",
+      "verdict": "PASS",
+      "measured": "|R_S(1)/R_P(1) - 1| = 0.0068% against 0.5000%; q(1) native 1.0017, shared 1.0016, private 1.0016",
+      "threshold": "<= max(0.5%, 3 x the repeat spread); q(1) in [0.97, 1.03]",
+      "invalidates": "the byte model's intercept: if one call reads other than W at n=1, q is not a re-read fraction",
+      "lines": [
+        "at n=1 SHARED and PRIVATE route every tile to copy 0: they are the same call, so their bytes must agree"
+      ]
+    },
+    {
+      "number": "g32.V5",
+      "kind": "VALIDITY",
+      "claim": "the PRIVATE arm re-reads the whole weight set per tile",
+      "verdict": "PASS",
+      "measured": "every q_P(n)/n in [0.97, 1.5]; slope 1.0796",
+      "threshold": "0.97 n <= q_P(n) <= 1.5 n per GEMM; slope of q_P,total in [0.97, 1.5]",
+      "invalidates": "the apparatus. Below the floor, weight bytes are MISSING, which is impossible for an arm whose every tile reads its own copy: the counter, the attribution or the relabelling is broken (V9 should agree). Above 1.5 n is a per-call or double-count error",
+      "lines": [
+        "PRIVATE's excess over n is activation re-read, and a full thrash adds at most 0.4978 of W_w1, 0.4922 of W_w2 per tread ((BM/BN)(1 - 1/num_pid_n)), inside the ceiling: V5 cannot tell a thrash from a sound page, and C6 reads it"
+      ]
+    },
+    {
+      "number": "g32.V6",
+      "kind": "VALIDITY",
+      "claim": "the arms request the same L2 read sectors",
+      "verdict": "PASS",
+      "measured": "10 comparisons held; nearest its tolerance 0.2319% of 1.3% at n=4 w2 (NATIVE against SHARED)",
+      "threshold": "max/min - 1 <= 0.5% over the three arms at every (n, GEMM) on a card that counts every load; on one that coalesces L2 reads (compute capability 9.0 and up) SHARED against PRIVATE at n=1 within 0.5%, and NATIVE against SHARED where their live pids agree within 1.3% at every tread",
+      "invalidates": "the arms' identity: they issue identical loads (one kernel binary per GEMM; the dead CTAs the wider 72-slot declaration adds each load one expert id and exit), so where the count sees every load, or two arms issue the same tiles in the same order, a difference in requests is a different call",
+      "lines": [
+        "compute capability 9.0, at or above Hopper's 9.0: an L2 Request Coalescer can merge reads of one sector before the L2 counts them, most likely what put this count below the loads on the GH200 and the H100 (no counter on this page sits before it), so V6 holds two pairs: SHARED against PRIVATE at n=1, one call (both route every tile to copy 0), within 0.5%, and NATIVE against SHARED where NATIVE's grid gives every live tile SHARED's pid, the same tiles under another declaration, within 1.3% at every tread",
+        "not held: PRIVATE at n >= 2 (its tiles read their own copies), and NATIVE at n=1 w1, n=1 w2, n=2 w1, n=2 w2, n=5 w1, n=5 w2, n=6 w1, n=6 w2, n=9 w1, n=9 w2 (its live tiles run at other pids; V7 holds it on DRAM bytes); their loads there rest on V5, V7 and V9 until a page carries a load count taken before the coalescer (docs/COUNTERS.md 6.8)",
+        "not gated: over the three arms at every tread the widest gap is 11.5054% at n=2 w2"
+      ]
+    },
+    {
+      "number": "g32.V7",
+      "kind": "VALIDITY",
+      "claim": "NATIVE and SHARED read the same DRAM bytes",
+      "verdict": "FAIL",
+      "measured": "n=2 w2 calls apart by 2.6815% of SHARED's mean",
+      "threshold": "|R_N/R_S - 1| <= max(1%, 3 x that GEMM's own repeat spread in either cell), and the two arms' calls no more than 1% apart where the page lists them",
+      "invalidates": "SHARED as the study's call: if the declaration moved the bytes, SHARED measures a call vLLM does not make",
+      "lines": []
+    },
+    {
+      "number": "g32.V8",
+      "kind": "VALIDITY",
+      "claim": "the DRAM counter and the L2 counters agree",
+      "verdict": "PASS",
+      "measured": "every GEMM cell's DRAM bytes within tolerance of 32 x fill sectors",
+      "threshold": "|dram_bytes_read / (32 x lts__d_sectors_fill_device) - 1| <= 2%",
+      "invalidates": "the counter itself: DRAM bytes and the L2 sectors filled from DRAM are two readings of one traffic",
+      "lines": []
+    },
+    {
+      "number": "g32.V9",
+      "kind": "VALIDITY",
+      "claim": "the private arm allocated and READ distinct weight copies",
+      "verdict": "PASS",
+      "measured": "5 of 5 parts",
+      "threshold": "all 5 parts of the proof",
+      "invalidates": "the private ladder is not a no-reuse reference at all, and the ratio is a number about the apparatus",
+      "lines": [
+        "PASS     addresses: the n copies occupy disjoint contiguous address ranges spanning exactly n x the weight set, in both w1 and w2",
+        "         9 copies x 8 experts span 12683575296 bytes against 12683575296 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+        "PASS     sentinels: a distinct value written into each copy reads back from that copy and from no other, and the original bytes are restored before anything else reads them",
+        "         wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+        "PASS     kernel_read: zeroing ONE copy c at a time, for every c >= 1, changes EXACTLY the private output rows of the tokens routed to copy c and no others, so every tile reads its own copy and no tile reads another's",
+        "         every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=1: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=2: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=3: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=4: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=5: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=6: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=7: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=8: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True",
+        "PASS     shared_blind: each of those zeroings leaves the shared arm's output bitwise unchanged, and restoring the copy restores the private output bitwise, so the changes above are the private mapping and not a corruption",
+        "         the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output",
+        "PASS     same_layer: with nothing zeroed, the private arm's output is bitwise equal to the shared arm's, so the relabelling computes the same layer",
+        "         private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)"
+      ]
+    },
+    {
+      "number": "g32.V10",
+      "kind": "VALIDITY",
+      "claim": "every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock",
+      "verdict": "PASS",
+      "measured": "all 54 within the band (fit: w1 1706.3 MHz + 14.2 us over 27 cells; w2 1696.9 MHz + 9.2 us over 27 cells)",
+      "threshold": "each GEMM's duration = t0 + sm__cycles_elapsed.avg / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, and no cell over 3 steps off the lock's line",
+      "invalidates": "every byte on the page as a reading at 1710 MHz, the clock the timed pages it is compared with ran at; its bytes stand only as readings at the clocks its cells name",
+      "lines": []
+    },
+    {
+      "number": "g32.C1",
+      "kind": "CLAIM",
+      "claim": "SHARED's w1 weight reads are what the group model counts",
+      "verdict": "REFUSE",
+      "measured": "n=1 [0.9997, 1.0026]/1.0000, n=2 [1.0068, 1.0414]/1.0000, n=3 [0.9654, 1.0177]/1.0000, n=4 [0.8948, 1.0000]/1.0000, n=5 [1.0042, 1.1252]/1.1250, n=6 [0.9708, 1.1231]/1.1250, n=7 [0.9277, 1.1194]/1.1250, n=8 [0.7815, 0.9917]/1.0000, n=9 [0.9294, 1.2420]/1.2500",
+      "threshold": "|q_S,w1(n) - group_reads| <= 5% x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree",
+      "invalidates": "the pid-order reuse model: w1 has 2F/BN N-tiles per M-row, far more than the CTAs in flight, so nothing is shared across groups",
+      "lines": [
+        "INCONCLUSIVE at n=[4, 5, 6, 7, 8, 9]: the two edges of SHARED's weight-only bracket (farthest calls, less e) disagree there; e (PRIVATE's excess over n, n=4 0.1046, n=5 0.1204, n=6 0.1518, n=7 0.1914, n=8 0.2101, n=9 0.3119) is the activation re-read PRIVATE measured, which bounds SHARED's, and the counter cannot split weight from activation bytes inside one GEMM",
+        "w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g32.C2",
+      "kind": "CLAIM",
+      "claim": "SHARED's w2 weight reads never exceed the group model's count",
+      "verdict": "FAIL",
+      "measured": "n=1 [0.9999, 1.0003]/1.0000, n=2 [1.0828, 1.1624]/1.0000, n=3 [1.1299, 1.2529]/1.0000, n=4 [0.9894, 1.3239]/1.0000, n=5 [1.0703, 1.4628]/1.1250, n=6 [0.9283, 1.4326]/1.1250, n=7 [0.6574, 1.4514]/1.1250, n=8 [0.0381, 1.2883]/1.0000, n=9 [0.3035, 1.6091]/1.2500",
+      "threshold": "q_S,w2(n) <= 1.05 x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree",
+      "invalidates": "the model's ceiling: co-residency can only remove WEIGHT reads, never add them. An activation re-read is not a weight read, and q_S counts one as if it were: at G >= E n every live M-tile is in one group, every column pass walks them all, and where that pass outgrows the L2 the A repeats reach DRAM (up to (BM/BN)(1 - 1/num_pid_n) of W_w2 per tread). The lower edge takes them out, so only a FAIL on both edges refutes the model",
+      "lines": [
+        "INCONCLUSIVE at n=[4, 5, 6, 7, 8, 9]: the two edges of SHARED's weight-only bracket (farthest calls, less e) disagree there; e (PRIVATE's excess over n, n=4 0.3162, n=5 0.3760, n=6 0.4944, n=7 0.7676, n=8 1.2291, n=9 1.2888) is the activation re-read PRIVATE measured, which bounds SHARED's, and the counter cannot split weight from activation bytes inside one GEMM",
+        "w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=[3, 4, 5, 6, 7, 8, 9] (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g32.C6",
+      "kind": "CLAIM",
+      "claim": "PRIVATE reads no more than one weight set per tile",
+      "verdict": "FAIL",
+      "measured": "n=1 +0.0016, n=2 +0.0104, n=3 +0.0219, n=4 +0.0428, n=5 +0.0402, n=6 +0.0438, n=7 +0.0533, n=8 +0.0673, n=9 +0.0700  (q_P/n - 1; w1 +0.0023, +0.0098, +0.0159, +0.0255, +0.0239, +0.0251, +0.0269, +0.0261, +0.0342; w2 +0.0002, +0.0117, +0.0340, +0.0775, +0.0729, +0.0811, +0.1062, +0.1497, +0.1417)",
+      "threshold": "q_P,total(n) <= 1.03 n at every n, on PRIVATE's lowest and highest call; UNKNOWN where they straddle it",
+      "invalidates": "a FAIL is a finding about BYTES: PRIVATE reads its weights exactly n times by construction, so its excess over n is what it re-read of everything else, activations above all, and the per-GEMM split localises it. It says the private arm's timed G-cost is bytes SHARED does not pay only as far as SHARED re-reads less, which the bracket bounds and does not measure",
+      "lines": [
+        "at n=[1, 2, 3, 4] (G >= E n = 8 n) every live M-tile sits in one group and every column pass walks them all, in SHARED as in PRIVATE: SHARED is exposed to the same re-reads there, over narrower slabs",
+        "w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)",
+        "w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=[3, 4, 5, 6, 7, 8, 9] (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g64.V0",
+      "kind": "VALIDITY",
+      "claim": "the page names the live card it was measured on",
+      "verdict": "PASS",
+      "measured": "CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 7269a7, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.",
+      "threshold": "a card block with ['name', 'uuid', 'sm_count', 'l2_bytes', 'capability', 'driver']",
+      "invalidates": "every number on the page: bytes without the card they came from cannot be compared with anything, least of all with that card's own timing",
+      "lines": []
+    },
+    {
+      "number": "g64.V1",
+      "kind": "VALIDITY",
+      "claim": "every launch is attributed: exact count, every grid equal to the child's, and a census that measured GEMMS_PER_CALL",
+      "verdict": "PASS",
+      "measured": "162 launches over 27 cells, every grid matched",
+      "threshold": "exact count; grids equal; census GEMMS_PER_CALL = 2",
+      "invalidates": "every byte on the page: a launch counted twice or into the wrong cell is the per-call trap in another form, and it still fits a line",
+      "lines": []
+    },
+    {
+      "number": "g64.V2",
+      "kind": "VALIDITY",
+      "claim": "every STRICT metric is a number on every launch",
+      "verdict": "PASS",
+      "measured": "5 fields x 54 GEMM cells",
+      "threshold": "no missing value, never a 0.0 default",
+      "invalidates": "every estimate: a metric that was not measured is not a zero",
+      "lines": []
+    },
+    {
+      "number": "g64.V3",
+      "kind": "VALIDITY",
+      "claim": "at n=1 each cell's K calls read the same bytes",
+      "verdict": "PASS",
+      "measured": "worst gated (max - min) / median 0.0196%",
+      "threshold": "<= 1% per call and per GEMM in every n=1 cell, and in every cell whose page carries no per-GEMM call list",
+      "invalidates": "the instrument (the counter, the cache flush, the attribution): at n=1 no weight slab is read by two tiles, so the order tiles run in cannot move the bytes, and a spread there says something else did",
+      "lines": [
+        "deeper treads, not gated, spread up to 1.5469% (private/6): re-reads L2 catches or misses with the order tiles run in, carried into SHARED's bracket as its farthest calls"
+      ]
+    },
+    {
+      "number": "g64.V4",
+      "kind": "VALIDITY",
+      "claim": "at n=1 the arms are one call and each reads one weight set",
+      "verdict": "PASS",
+      "measured": "|R_S(1)/R_P(1) - 1| = 0.0009% against 0.5000%; q(1) native 1.0016, shared 1.0012, private 1.0012",
+      "threshold": "<= max(0.5%, 3 x the repeat spread); q(1) in [0.97, 1.03]",
+      "invalidates": "the byte model's intercept: if one call reads other than W at n=1, q is not a re-read fraction",
+      "lines": [
+        "at n=1 SHARED and PRIVATE route every tile to copy 0: they are the same call, so their bytes must agree"
+      ]
+    },
+    {
+      "number": "g64.V5",
+      "kind": "VALIDITY",
+      "claim": "the PRIVATE arm re-reads the whole weight set per tile",
+      "verdict": "PASS",
+      "measured": "every q_P(n)/n in [0.97, 1.5]; slope 1.1824",
+      "threshold": "0.97 n <= q_P(n) <= 1.5 n per GEMM; slope of q_P,total in [0.97, 1.5]",
+      "invalidates": "the apparatus. Below the floor, weight bytes are MISSING, which is impossible for an arm whose every tile reads its own copy: the counter, the attribution or the relabelling is broken (V9 should agree). Above 1.5 n is a per-call or double-count error",
+      "lines": [
+        "PRIVATE's excess over n is activation re-read, and a full thrash adds at most 0.4978 of W_w1, 0.4922 of W_w2 per tread ((BM/BN)(1 - 1/num_pid_n)), inside the ceiling: V5 cannot tell a thrash from a sound page, and C6 reads it"
+      ]
+    },
+    {
+      "number": "g64.V6",
+      "kind": "VALIDITY",
+      "claim": "the arms request the same L2 read sectors",
+      "verdict": "PASS",
+      "measured": "6 comparisons held; nearest its tolerance 0.2054% of 0.5% at n=1 w1 (SHARED against PRIVATE)",
+      "threshold": "max/min - 1 <= 0.5% over the three arms at every (n, GEMM) on a card that counts every load; on one that coalesces L2 reads (compute capability 9.0 and up) SHARED against PRIVATE at n=1 within 0.5%, and NATIVE against SHARED where their live pids agree within 1.3% at every tread",
+      "invalidates": "the arms' identity: they issue identical loads (one kernel binary per GEMM; the dead CTAs the wider 72-slot declaration adds each load one expert id and exit), so where the count sees every load, or two arms issue the same tiles in the same order, a difference in requests is a different call",
+      "lines": [
+        "compute capability 9.0, at or above Hopper's 9.0: an L2 Request Coalescer can merge reads of one sector before the L2 counts them, most likely what put this count below the loads on the GH200 and the H100 (no counter on this page sits before it), so V6 holds two pairs: SHARED against PRIVATE at n=1, one call (both route every tile to copy 0), within 0.5%, and NATIVE against SHARED where NATIVE's grid gives every live tile SHARED's pid, the same tiles under another declaration, within 1.3% at every tread",
+        "not held: PRIVATE at n >= 2 (its tiles read their own copies), and NATIVE at n=1 w1, n=1 w2, n=2 w1, n=2 w2, n=3 w1, n=3 w2, n=4 w1, n=4 w2, n=5 w1, n=5 w2, n=6 w1, n=6 w2, n=9 w1, n=9 w2 (its live tiles run at other pids; V7 holds it on DRAM bytes); their loads there rest on V5, V7 and V9 until a page carries a load count taken before the coalescer (docs/COUNTERS.md 6.8)",
+        "not gated: over the three arms at every tread the widest gap is 11.5388% at n=2 w2"
+      ]
+    },
+    {
+      "number": "g64.V7",
+      "kind": "VALIDITY",
+      "claim": "NATIVE and SHARED read the same DRAM bytes",
+      "verdict": "FAIL",
+      "measured": "n=2 w1 -1.3557% against 1.0000%; n=2 w1 calls apart by 1.1012% of SHARED's mean; n=2 w2 -6.0594% against 4.2737%; n=2 w2 calls apart by 4.8967% of SHARED's mean; and 9 more",
+      "threshold": "|R_N/R_S - 1| <= max(1%, 3 x that GEMM's own repeat spread in either cell), and the two arms' calls no more than 1% apart where the page lists them",
+      "invalidates": "SHARED as the study's call: if the declaration moved the bytes, SHARED measures a call vLLM does not make",
+      "lines": []
+    },
+    {
+      "number": "g64.V8",
+      "kind": "VALIDITY",
+      "claim": "the DRAM counter and the L2 counters agree",
+      "verdict": "PASS",
+      "measured": "every GEMM cell's DRAM bytes within tolerance of 32 x fill sectors",
+      "threshold": "|dram_bytes_read / (32 x lts__d_sectors_fill_device) - 1| <= 2%",
+      "invalidates": "the counter itself: DRAM bytes and the L2 sectors filled from DRAM are two readings of one traffic",
+      "lines": []
+    },
+    {
+      "number": "g64.V9",
+      "kind": "VALIDITY",
+      "claim": "the private arm allocated and READ distinct weight copies",
+      "verdict": "PASS",
+      "measured": "5 of 5 parts",
+      "threshold": "all 5 parts of the proof",
+      "invalidates": "the private ladder is not a no-reuse reference at all, and the ratio is a number about the apparatus",
+      "lines": [
+        "PASS     addresses: the n copies occupy disjoint contiguous address ranges spanning exactly n x the weight set, in both w1 and w2",
+        "         9 copies x 8 experts span 12683575296 bytes against 12683575296 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+        "PASS     sentinels: a distinct value written into each copy reads back from that copy and from no other, and the original bytes are restored before anything else reads them",
+        "         wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+        "PASS     kernel_read: zeroing ONE copy c at a time, for every c >= 1, changes EXACTLY the private output rows of the tokens routed to copy c and no others, so every tile reads its own copy and no tile reads another's",
+        "         every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=1: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=2: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=3: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=4: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=5: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=6: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=7: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=8: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True",
+        "PASS     shared_blind: each of those zeroings leaves the shared arm's output bitwise unchanged, and restoring the copy restores the private output bitwise, so the changes above are the private mapping and not a corruption",
+        "         the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output",
+        "PASS     same_layer: with nothing zeroed, the private arm's output is bitwise equal to the shared arm's, so the relabelling computes the same layer",
+        "         private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)"
+      ]
+    },
+    {
+      "number": "g64.V10",
+      "kind": "VALIDITY",
+      "claim": "every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock",
+      "verdict": "FAIL",
+      "measured": "off the lock: native/1 w2 1783 MHz; private/1 w2 1783 MHz; shared/1 w2 1776 MHz (fit: w1 1706.4 MHz + 14.7 us over 27 cells; w2 1700.1 MHz + 11.3 us over 27 cells)",
+      "threshold": "each GEMM's duration = t0 + sm__cycles_elapsed.avg / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, and no cell over 3 steps off the lock's line",
+      "invalidates": "every byte on the page as a reading at 1710 MHz, the clock the timed pages it is compared with ran at; its bytes stand only as readings at the clocks its cells name",
+      "lines": []
+    },
+    {
+      "number": "g64.C1",
+      "kind": "CLAIM",
+      "claim": "SHARED's w1 weight reads are what the group model counts",
+      "verdict": "REFUSE",
+      "measured": "n=1 [0.9998, 1.0024]/1.0000, n=2 [1.0076, 1.0436]/1.0000, n=3 [0.9671, 1.0307]/1.0000, n=4 [0.9034, 1.0131]/1.0000, n=5 [0.8352, 1.0078]/1.0000, n=6 [0.7344, 1.0005]/1.0000, n=7 [0.6119, 1.0032]/1.0000, n=8 [0.4237, 1.0092]/1.0000, n=9 [0.4501, 1.1432]/1.1250",
+      "threshold": "|q_S,w1(n) - group_reads| <= 5% x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree",
+      "invalidates": "the pid-order reuse model: w1 has 2F/BN N-tiles per M-row, far more than the CTAs in flight, so nothing is shared across groups",
+      "lines": [
+        "INCONCLUSIVE at n=[4, 5, 6, 7, 8, 9]: the two edges of SHARED's weight-only bracket (farthest calls, less e) disagree there; e (PRIVATE's excess over n, n=4 0.0993, n=5 0.1650, n=6 0.2631, n=7 0.3889, n=8 0.5786, n=9 0.6861) is the activation re-read PRIVATE measured, which bounds SHARED's, and the counter cannot split weight from activation bytes inside one GEMM",
+        "w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=[6, 7, 8, 9] (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g64.C2",
+      "kind": "CLAIM",
+      "claim": "SHARED's w2 weight reads never exceed the group model's count",
+      "verdict": "FAIL",
+      "measured": "n=1 [0.9999, 1.0002]/1.0000, n=2 [1.0850, 1.1958]/1.0000, n=3 [1.1247, 1.3112]/1.0000, n=4 [1.0168, 1.4189]/1.0000, n=5 [0.8103, 1.6044]/1.0000, n=6 [0.4271, 1.7943]/1.0000, n=7 [0.1269, 2.1171]/1.0000, n=8 [-0.1495, 2.4718]/1.0000, n=9 [-0.0336, 2.6095]/1.1250",
+      "threshold": "q_S,w2(n) <= 1.05 x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree",
+      "invalidates": "the model's ceiling: co-residency can only remove WEIGHT reads, never add them. An activation re-read is not a weight read, and q_S counts one as if it were: at G >= E n every live M-tile is in one group, every column pass walks them all, and where that pass outgrows the L2 the A repeats reach DRAM (up to (BM/BN)(1 - 1/num_pid_n) of W_w2 per tread). The lower edge takes them out, so only a FAIL on both edges refutes the model",
+      "lines": [
+        "INCONCLUSIVE at n=[4, 5, 6, 7, 8, 9]: the two edges of SHARED's weight-only bracket (farthest calls, less e) disagree there; e (PRIVATE's excess over n, n=4 0.3286, n=5 0.7406, n=6 1.3280, n=7 1.9640, n=8 2.5872, n=9 2.5938) is the activation re-read PRIVATE measured, which bounds SHARED's, and the counter cannot split weight from activation bytes inside one GEMM",
+        "w2 column passes not held by this card's 60 MiB L2: SHARED at n=[7, 8, 9], PRIVATE at n=[3, 4, 5, 6, 7, 8, 9] (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    },
+    {
+      "number": "g64.C6",
+      "kind": "CLAIM",
+      "claim": "PRIVATE reads no more than one weight set per tile",
+      "verdict": "FAIL",
+      "measured": "n=1 +0.0012, n=2 +0.0100, n=3 +0.0225, n=4 +0.0434, n=5 +0.0695, n=6 +0.0992, n=7 +0.1292, n=8 +0.1531, n=9 +0.1456  (q_P/n - 1; w1 +0.0017, +0.0094, +0.0160, +0.0245, +0.0327, +0.0432, +0.0550, +0.0708, +0.0756; w2 +0.0001, +0.0111, +0.0356, +0.0811, +0.1430, +0.2111, +0.2774, +0.3176, +0.2856)",
+      "threshold": "q_P,total(n) <= 1.03 n at every n, on PRIVATE's lowest and highest call; UNKNOWN where they straddle it",
+      "invalidates": "a FAIL is a finding about BYTES: PRIVATE reads its weights exactly n times by construction, so its excess over n is what it re-read of everything else, activations above all, and the per-GEMM split localises it. It says the private arm's timed G-cost is bytes SHARED does not pay only as far as SHARED re-reads less, which the bracket bounds and does not measure",
+      "lines": [
+        "at n=[1, 2, 3, 4, 5, 6, 7, 8] (G >= E n = 8 n) every live M-tile sits in one group and every column pass walks them all, in SHARED as in PRIVATE: SHARED is exposed to the same re-reads there, over narrower slabs",
+        "w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=[6, 7, 8, 9] (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)",
+        "w2 column passes not held by this card's 60 MiB L2: SHARED at n=[7, 8, 9], PRIVATE at n=[3, 4, 5, 6, 7, 8, 9] (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)"
+      ]
+    }
+  ],
+  "run_id": "nvidia_gh200_480gb-anchor-modeanalyse-payloadhome_ubuntu_moe_results_2026_10_01_nvidia_gh200_480-69d1becf",
+  "git_sha": "436e41c68d0b68e8f6e14b7d0500733a6bdd6ca0",
+  "gpu_name": "NVIDIA GH200 480GB",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "arithmetic-over-r3-counter-pages/no-kernel-timed",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "436e41c68d0b68e8f6e14b7d0500733a6bdd6ca0",
+    "git_dirty": false,
+    "git_dirty_files": 0,
+    "utc": "2026-10-01T20:47:46+00:00",
+    "hostname": "192-222-56-91",
+    "gpu_name": "NVIDIA GH200 480GB",
+    "driver_version": "580.105.08",
+    "cuda_version": "12.8",
+    "python": "3.10.12",
+    "torch": "2.7.0",
+    "triton": "3.3.0",
+    "vllm": null,
+    "sglang": null,
+    "instrument": "arithmetic-over-r3-counter-pages/no-kernel-timed",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "vllm": "package not installed",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}

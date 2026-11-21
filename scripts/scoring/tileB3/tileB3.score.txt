@@ -1,0 +1,17 @@
+TILE RENTAL B3 (2026-11-04-tileB3-gh200): BLIND (E1-TILE at the working-model bar)
+  pages: results/published/2026-11-05-nvidia_gh200_480gb-tileB3-session
+  commit: {"checked": true, "sha": "a56080792f7404ce56f62eafc70335e66d9a6af1"}
+  board: {"c2_power_env": "C2_POWER_W=700", "g_band": "PASS", "g_band_which": "fallback (registered: the primary band left joint_cF None)", "lock_probe": "LOCK_PROBE_1410=held", "valid": true, "why": ""}
+  gates: {"census": {"verdict": "PASS", "why": ""}, "sag": {"verdict": "PASS", "why": ""}, "sag64": {"verdict": "PASS", "why": ""}}
+  par (on-board F1): [59.815, 612.5]
+  par64 (on-board 64x128 F1): [39.465, 337.5]
+E1-TILE (rms <= 3%, every cell within 8%, |mean| <= 1.5%): FAILS
+  pooled: {"cells": 84, "mean": 0.002935, "rms": 0.02407, "worst": -0.08217}
+  phi-3.5-moe: FAILS {"cells": 30, "mean": 0.013024, "rms": 0.034963, "worst": -0.08217}
+  qwen1.5-moe-a2.7b: HOLDS {"cells": 30, "mean": -0.007401, "rms": 0.011805, "worst": -0.036769}
+  jetmoe-8b: HOLDS {"cells": 18, "mean": 0.005653, "rms": 0.020496, "worst": 0.038225}
+  deepseek-v2-lite: HOLDS {"cells": 6, "mean": -0.003993, "rms": 0.006498, "worst": -0.009545}
+certification: {"jetmoe-8b": "NOT CERTIFIED (E1-TILE reads FAILS)", "phi-3.5-moe": "NOT CERTIFIED (3 pages in CLEAN, bar FAILS)", "qwen1.5-moe-a2.7b": "NOT CERTIFIED (E1-TILE reads FAILS)"}
+scope: A B3 pass certifies the frozen round-5 model's NATIVE time at vLLM's two reachable wgmma tiles (128x128x64 w8 s3 at G 1 and G 16, 64x128x64 w8 s3 at G 1; prefill) on the GH200 at 1410 MHz and 700 W, on the registered cells only (B2's 84: Phi-3.5-MoE 30, Qwen1.5-MoE-A2.7B 30, JetMoE-8B 18, deepseek-v2-lite 6 pooled), at the working-model bar (rms <= 3%, every cell within 8%, |mean| <= 1.5%), each CERTIFIED model named. It does not certify B2's bar, any other lock, power limit, tile, card or model, decode, SHARED cells, the byte law (B-BYTES is DESCRIPTIVE), the per-call constant at other numel, or either sag on another board
+bytes (DESCRIPTIVE): {"B-BYTES (DESCRIPTIVE)": {"per_gemm": {"w1": {"cells": 17, "mean": 0.03597, "rms": 0.050625, "worst": 0.093547}, "w2": {"cells": 17, "mean": 0.001663, "rms": 0.009102, "worst": -0.015435}}, "reading": "outside B2's B-BYTES bar"}, "E2-TILE (DESCRIPTIVE, 128x128 cells)": {"stats": {"cells": 17, "mean": -0.010499, "rms": 0.014864, "worst": -0.032348}, "within B2's E2 bar (2%, 5%, 1.5%)": true}}
+sag drift (DESCRIPTIVE): {"early": {"A_us": 48.36, "tau_us": 575.0}, "repeat": {"A_us": 39.82, "cells": 54, "rms_us": 5.64, "tau_us": 400.0}, "sag_at_1ms_us": {"early": 39.86, "repeat": 36.55}}

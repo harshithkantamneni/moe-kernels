@@ -1,0 +1,129 @@
+# GROUP_SIZE_M sweep: is alpha a scalar?   (d9190b2)
+
+output directory: /workspace/session/20260901T214218Z/group_m
+Everything below is written there as report.md, beside plan.json and cells.jsonl.
+
+## the design
+
+model mixtral-8x7b  dtype bf16  BLOCK_SIZE_M 16 FORCED
+other tile constants held fixed from E=8,N=14336,device_name=NVIDIA_H200.json key 16: {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 256, 'num_warps': 4, 'num_stages': 3}
+GROUP_SIZE_M ladder [1, 8, 16, 32, 64]
+196 routing realisations x 5 settings x 1 pass(es) = 980 timings
+rough wall clock, from the byte model: 10 min of kernel plus compilation
+
+| T | rows/expert | M-tiles | tiles/expert | x (min..max) | AI | rung |
+|---:|---:|---:|---:|---|---:|---|
+| 16 | 4 | 4..8 | 1.00..1.00 | 0.00..0.00 | 4 | CONTROL (one tile per expert) |
+| 32 | 8 | 7..10 | 1.00..1.33 | 0.00..0.33 | 8 | MIXED |
+| 64 | 16 | 10..13 | 1.25..1.86 | 0.25..0.86 | 16 | multi-tile |
+| 128 | 32 | 18..21 | 2.38..3.00 | 1.37..2.00 | 32 | multi-tile |
+| 256 | 64 | 34..38 | 4.25..5.14 | 3.25..4.14 | 64 | multi-tile |
+| 384 | 96 | 50..53 | 6.25..7.29 | 5.24..6.27 | 96 | multi-tile |
+| 448 | 112 | 59..61 | 7.38..8.43 | 6.36..7.41 | 112 | multi-tile |
+
+SATURATION, which is why the M-tile count is in the table above. The swizzle groups
+GROUP_SIZE_M consecutive M-tiles, so once g reaches a rung's own num_pid_m the map
+is plain column-major and every larger g is the SAME order:
+  T=16: num_pid_m 4, so GROUP_SIZE_M [8, 16, 32, 64] are ONE setting there, not 4
+  T=32: num_pid_m 7, so GROUP_SIZE_M [8, 16, 32, 64] are ONE setting there, not 4
+  T=64: num_pid_m 10, so GROUP_SIZE_M [16, 32, 64] are ONE setting there, not 3
+  T=128: num_pid_m 18, so GROUP_SIZE_M [32, 64] are ONE setting there, not 2
+  T=256: num_pid_m 34, so GROUP_SIZE_M [64] are ONE setting there, not 1
+  T=384: num_pid_m 50, so GROUP_SIZE_M [64] are ONE setting there, not 1
+  T=448: num_pid_m 59, so GROUP_SIZE_M [64] are ONE setting there, not 1
+  It bites the single-tile CONTROL rungs hardest, since they hold the fewest
+  M-tiles. The control can still separate g=1 from the grouped orders, which is
+  what P4 asks of it, but it cannot resolve the grouped ones from each other.
+  THE SECOND ARM THAT FIXES IT, and it is worth running both because they fail in
+  opposite directions:
+    --model qwen2-57b-a14b --tokens 32,64,128,256,512,768,1024
+  E=64 and k=8 put num_pid_m near 550 at the top rung, so nothing saturates, and
+  the tiles-per-expert ladder is the same 1 to 9. The cost is that one expert's
+  up-GEMM weights are 37 MB against mixtral's 235 MB, so on qwen2 L2 may already
+  absorb the re-read at GROUP_SIZE_M=1 and leave the swizzle nothing to save. A
+  large effect on mixtral and a small one on qwen2 is the mechanism; a large one
+  on both, with the control flat, is stronger still.
+
+measured ridge band 160.3-176.2 FLOP/byte; every cell above is below 90% of the low end, so implied_traffic_ratio
+is a traffic bound rather than a statement about padded arithmetic.
+
+CONFOUND BOUND: activation re-reads per extra M-tile over weight re-reads per extra
+M-tile is exactly BLOCK_M / BLOCK_N = 16/64 = 0.25, so at most 20% of any alpha
+fitted here is activation traffic. GROUP_SIZE_M moves that term the OPPOSITE way,
+so a falling alpha is a NET traffic statement and not a pure weight one.
+
+### preflight
+
+  [PASS] regime: every cell is memory bound
+          max compulsory AI 127.6 at T=448 against 90% of ridge 160.3 = 144.3
+  [PASS] regime: the multi-tile rung has re-reads to save
+          156 of 196 cells span more than one tile per expert, deepest 8.43 tiles/expert
+  [PASS] control: a single-tile rung exists
+          40 cells where every active expert is exactly one tile (tokens [16, 32])
+  [PASS] design: the predicted floor is inside the swept ladder
+          predicted knee g* = 4.4 tiles per expert, ladder [1, 8, 16, 32, 64]
+  [PASS] design: the tile count varies inside a token count
+          34 distinct x values; within-token spread 1.048
+
+## measuring: 980 timings to do, 0 already on disk
+[group_m] override hook vllm.model_executor.layers.fused_moe.override_config  device NVIDIA H200
+
+## the measurements
+
+  980 records, 980 timed, 0 failed or unmeasured
+  148 cells drifted more than 5% in SM clock and are flagged; their
+  time is not the kernel's and a paired comparison across settings is what
+  protects the result from them.
+  980 cells recorded the config vLLM actually resolved; 0 disagreed
+  with what was forced. A disagreement means the sweep swept nothing.
+  bandwidth for implied_traffic_ratio: 4.37 TB/s (measured (NVIDIA H200 (measured))).
+  The fitted alpha does not depend on it; the ratio's level does.
+
+## alpha per GROUP_SIZE_M
+
+| GROUP_SIZE_M | n | discriminating | intercepts | alpha | 90% band | residual RMS | placebo |
+|---:|---:|---:|---:|---:|---|---:|---:|
+| 1 | 156 | 156 | 6 | 1.022 | 0.675..1.537 | 0.0582 | 0.004 |
+| 8 | 156 | 156 | 6 | 0.584 | 0.392..0.869 | 0.0470 | 0.007 |
+| 16 | 156 | 156 | 6 | 0.624 | 0.440..0.896 | 0.0437 | 0.002 |
+| 32 | 156 | 156 | 6 | 0.600 | 0.409..0.863 | 0.0430 | -0.000 |
+| 64 | 156 | 156 | 6 | 0.587 | 0.394..0.860 | 0.0430 | -0.005 |
+
+A setting is IDENTIFIED when it has at least 20 discriminating rows,
+3 intercepts and a band no wider than 0.15. Residual RMS is model
+adequacy in log units, not sampling error: if it is far above the timing
+repeatability the bands are optimistic and only the ORDER of the alphas survives.
+
+## the paired time table, which is what the control gate reads
+
+| GROUP_SIZE_M | multi-tile ms / ms(ref) | single-tile ms / ms(ref) |
+|---:|---:|---:|
+| 1 | 1.0000 | 1.0000 |
+| 8 | 0.7382 | 1.0009 |
+| 16 | 0.7214 | 1.0002 |
+| 32 | 0.7150 | 1.0001 |
+| 64 | 0.7133 | 1.0001 |
+
+Paired inside each cell on identical tensors, so the cell's own level cancels.
+
+## gates
+
+  [PASS] correctness: the swizzle did not change the result
+          980 settings compared against their cell's reference setting; 0 differed
+  [FAIL] identification: every setting fitted a usable alpha
+          0 of 5 settings identified; the rest had too few discriminating rows, too few intercepts, or too wide a band
+  [NOT TESTABLE] P1 alpha falls from the smallest to the largest GROUP_SIZE_M
+          fewer than two identified settings
+  [NOT TESTABLE] P2 no adjacent inversion
+          same
+  [NOT TESTABLE] P3 a floor above the knee
+          same
+  [PASS] P4 the effect is specific to the multi-tile regime
+          multi-tile time effect 28.7%, single-tile control 0.1%; the control must be at most 33% of it
+  [PASS] P5 permuting the response inside each group collapses alpha
+          largest permuted alpha 0.007 against a limit of 0.10
+
+VERDICT: PREDICTION REFUTED. 1 gate(s) failed: identification: every setting fitted a usable alpha
+
+[group_m] report written to /workspace/session/20260901T214218Z/group_m/report.md
+[group_m] measurements at  /workspace/session/20260901T214218Z/group_m/cells.jsonl

@@ -1,0 +1,8 @@
+== 2026-11-12T02:06:04Z step decodebytes: RR counter page at the 1410 lock (dram_counter_route_rr.py over the pinned route's functions, family rr-counter): docs/registered/2026-11-11-rr-pages/rr-64.json; every fused_moe_kernel launch grid held to vLLM's own (the spy's readback)
+COUNTER ROUTE rr-counter: page docs/registered/2026-11-11-rr-pages/rr-64.json (sha256 056a6df486adb48d...), 40 cells on ['64x128x64w8s3'], 12 shapes, NATIVE, one weight copy each
+  2 warm-up calls per cell (the readback first, skipped by ncu), then 3 measured calls: 240 profiled launches (w1 and w2), about 8.3 min
+  ncu over the pinned route's r3_ncu_argv: --cache-control all, --clock-control none under the driver's lock, -k regex:^fused_moe_kernel$, kernel replay; the grids held to the child's readback (attribute_launches)
+  child: scripts/dram_counter_route_rr.py --counter-child (RR's probe's Card and inputs, the plain kernel)
+RESULT: VALIDITY grid PASS 40 cells, 240 launches attributed; /home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-mixtral-8x7b-c64-r3-counters/lock1410/r3d.json
+2026-11-12T02:13:50Z decodebytes: RESULT: VALIDITY grid PASS 40 cells, 240 launches attributed; /home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-mixtral-8x7b-c64-r3-counters/lock1410/r3d.j
+2026-11-12T02:13:50Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-mixtral-8x7b-c64-r3-counters/lock1410/r3d.json)

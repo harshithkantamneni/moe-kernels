@@ -1,9 +1,11 @@
 """Measure what this machine can actually do, since we cannot read its counters.
 
 Nsight Compute needs GPU performance counters, which need a host-level
-`NVreg_RestrictProfilingToAdminUsers=0` that a container tenant cannot set. On a
-rented pod `ncu` fails with ERR_NVGPUCTRPERM, so DRAM traffic cannot be measured
-directly.
+`NVreg_RestrictProfilingToAdminUsers=0` that a container tenant cannot set, or a
+capability the provider grants. No counter read has succeeded on a rented pod in
+this study (two were refused with ERR_NVGPUCTRPERM, 2026-08-25 and 2026-09-15;
+`scripts/dram_counter_route.py --probe` asks each pod), so DRAM traffic is not
+measured directly.
 
 What can be measured without any counter access is the machine's *achievable*
 ceilings, using ordinary kernels and a clock. That turns the roofline from a
@@ -20,16 +22,61 @@ reports whichever pattern the hardware happens to like best, which is a property
 of the benchmark rather than of the workload.
 
 So every pattern is measured and recorded, and one is *named* as the ceiling
-with the reason written down. The default is `triad`, the canonical STREAM
-metric: mixed read/write traffic, widely published, and therefore comparable to
-other people's numbers. Because all four are recorded, anyone (including you)
-can recompute a roofline against a different denominator without re-running.
+with the reason written down. Because all of them are recorded, anyone
+(including you) can recompute a roofline against a different denominator without
+re-running, which is what `moe/bench/recompute.py` exists to do.
 
-For a Mixture-of-Experts grouped GEMM at small batch, traffic is roughly 95%
-streaming reads of expert weights, so a read-dominated denominator would be most
-representative of that regime. But `read` here is a torch.sum tree reduction,
-which reports ATen's reduction rate rather than the DRAM read rate, so it is
-measured and recorded and guarded against ever becoming the ceiling.
+THE READ CEILING IS A REDUCTION, AND IT IS NAMED AS ONE
+-------------------------------------------------------
+Until 2026-09-02 this file measured a pattern called `read` with `torch.sum`,
+called it "the closest analogue to streaming expert weights", and left it at
+that. A reduction is not a read. It is renamed `read_reduce`, because what it
+measures is the rate at which ATen can CONSUME a stream, and a consumer that
+also combines cannot be faster than one that only loads. So:
+
+    read_reduce is a LOWER BOUND on this machine's DRAM read rate, not an
+    estimate of it.
+
+That bound has already moved once under its own shape. The 2026-08-27 fix
+reduced a `[rows, n/rows]` view along the CONTIGUOUS axis instead of a 1-D
+buffer to a single scalar, which removed the global combine and gained 1.7%
+(4389.4 -> 4469.6 GB/s) with no change to the traffic. A shape change worth 1.7%
+means the shape was still in the number, so `read_stream` is measured beside it:
+a Triton kernel in `moe/bench/read_probe.py` where each program loads its own
+tiles and stores ONE float, so there is no cross-CTA combine at all. The gap
+between the two is what the reduction shape still costs. When Triton is
+unavailable the pattern is ABSENT and the refusal is recorded; it is never a
+zero and never silently the reduction's number under a different name.
+
+WHICH DENOMINATOR THIS STUDY SHOULD USE, DECIDED RATHER THAN DEFAULTED
+----------------------------------------------------------------------
+The matched denominator is a READ denominator, and the argument is a traffic
+mix, not a preference. An MoE layer at decode moves `3 F H b` bytes of expert
+weights per expert against `(2 H + 3 F) act_b` bytes per row of activations; at
+mixtral that is 352 MB against 102 KB per expert, and roughly half the
+activation traffic is stores. The workload is therefore about 98.5% reads.
+`triad` is 2 reads and 1 write, so 33% of it is a store stream this workload
+does not have.
+
+Using triad anyway is not neutral. On the H200, triad reads 4374.8 GB/s and
+read_reduce 4469.6, so triad puts the ridge at 162.8 where the matched ruler
+puts it at 159.4. A HIGHER ridge means more cells classify as memory bound and
+crossings move to larger batch, which is the direction of this study's own
+headline claim. The ruler in use flatters the conclusion by 2.2%, and if the
+true read rate is above the reduction's lower bound the bias is larger still.
+
+So the decision, and it has two halves:
+
+  * `DEFAULT_CEILING` STAYS `triad`. Every published row in `results/published/`
+    was stamped against it, and moving it silently would re-baseline eleven arms
+    in a commit nobody could audit. triad is also the only figure comparable to
+    anyone else's STREAM number.
+  * `MATCHED_CEILING` names the ruler the traffic actually matches, and
+    `ridge_band()` returns both ends. Any crossing quoted within one tile tread
+    of the boundary must be quoted against the band, not against one end.
+
+`scripts/ruler_rebaseline.py` measures what adopting the matched ruler would do
+to the existing published rows. Adopt it there, on evidence, or not at all.
 
 HOW MUCH DOES THE CHOICE ACTUALLY MATTER
 ----------------------------------------
@@ -44,21 +91,113 @@ straight through the ridge band, NOT because MoE arithmetic intensity is
 bimodal. Off-grid runs (`--tokens 640,768,1536`) land squarely in it, and
 nothing constrains the grid. The choice is real; the shipped sweeps happen not
 to exercise it.
+
+AND IT IS THE SMALLER HALF OF THE PROBLEM. Across the six distinct calibrations
+of ONE H200 that ship inside the published arms, bandwidth reproduces to 0.06%
+and the compute term moves 9.9% (docs/INSTRUMENTATION.md section 6). The
+denominator question above is worth 2.2%; the numerator's own session-to-session
+instability is worth four times that, and it is what the study's 160.3-176.2
+ridge band actually is.
+
+WHAT CLOCK WAS IT MEASURED AT
+-----------------------------
+Every ceiling here is normalised against a clock, and until 2026-09-02 the GEMM's
+clock was a SINGLE `nvidia-smi` sample taken AFTER `time_eager` had already
+synchronised -- that is, with the GPU idle and already boosting back up. Across
+the eleven committed H200 calibrations that field reads 1485, 1500, 1515, 1530,
+1530, 1560, 1560, 1845, 1845, 1905 and 1935 MHz, a 30% spread on one card, while
+the compute settle plateau in the same files sits at 1455-1515 and the achieved
+rate moves only 12%. `gemm_efficiency_pct` is linear in that number, so the same
+card reports 87.4% and 68.4% efficiency for the same kernel.
+
+`clock_under_load` therefore samples WHILE the queue is deep and the kernel is
+running, returns the median with the spread, and raises `ClockUnavailable`
+rather than returning a zero that would read as a measured zero. The old
+post-hoc sample is still recorded as `clock_after_idle_mhz`, because the gap
+between the two is the size of the artefact and deleting it would erase the
+evidence that it was there.
 """
 from __future__ import annotations
 
+import statistics
 from dataclasses import asdict, dataclass, field
+from datetime import date
+from pathlib import Path
 
-import torch
-
-from . import timing as T
+# TORCH AND `timing` ARE IMPORTED INSIDE THE FUNCTIONS THAT MEASURE, never here.
+#
+# WHY. Half of this module is arithmetic over a YAML file that was written on a
+# pod: `read_stamp`, `ridge_flop_per_byte`, `implied_traffic_ratio` and
+# `l2_absorbed_bytes` never touch a device. `moe/bench/published.py`,
+# `moe/bench/tile_resolve.py` and `scripts/alpha_refit.py` reach them from a
+# laptop, and `alpha_refit`'s own docstring promises "no GPU, no torch". With
+# `import torch` at module scope that promise was false: the audit found the
+# three off-GPU analysis entry points unable to start in an environment holding
+# only the four declared dependencies (numpy, pandas, matplotlib, pyyaml), and
+# torch is in none of them. `published.py` had already worked around it once,
+# with a deferred `from .calibrate import read_stamp` and a comment saying why;
+# a workaround at one call site does not fix the module that needs it.
+#
+# `from . import timing as T` moves for the same reason and not a different one:
+# `moe/bench/timing.py` imports torch at ITS module scope, so leaving the timing
+# import here would keep torch on the import path of every reader of a stamp,
+# and the lazy `import torch` below would buy nothing.
+#
+# THE RULE, so this does not drift back: a function that calls `torch.` or `T.`
+# imports them as its first statements. A function that only reads a file must
+# still import cleanly with neither installed, and
+# `tests/test_analysis_tools.py::test_calibrate_imports_without_torch` blocks
+# torch at the finder and asserts exactly that.
 
 #: Pattern whose figure becomes `achieved_bandwidth_gbps` unless overridden.
+#: DELIBERATELY STILL triad. See the module docstring: every row in
+#: `results/published/` was stamped against it, and the matched ruler below is
+#: adopted on the evidence `scripts/ruler_rebaseline.py` produces, not by
+#: changing a constant.
 DEFAULT_CEILING = "triad"
+
+#: The read patterns, best first. `matched_ceiling` walks this in order, so a
+#: session that got a Triton probe uses it and one that did not falls back to
+#: the reduction's lower bound rather than to triad.
+READ_PATTERNS = ("read_stream", "read_reduce")
+
+#: The denominator this study's traffic actually matches: ~98.5% reads, against
+#: triad's 67%. NOT the default, on purpose. It is what `ridge_band()` puts at
+#: the other end of the band and what the re-baseline script prices.
+MATCHED_CEILING = READ_PATTERNS[0]
 
 #: Buffers must dwarf L2 (60 MiB on H200) and run long enough that launch and
 #: clock ramp are not a meaningful fraction of the measurement.
 DEFAULT_BUFFER_BYTES = 8 << 30
+
+#: How far the clock samples taken during one measurement may spread before the
+#: measurement is not at a single clock at all. 5% is the same threshold
+#: `clock_ramped` uses across patterns, so one number means one thing here.
+CLOCK_SPREAD_TOL_PCT = 5.0
+
+#: How far a GEMM's clock under load may sit from the settle plateau that
+#: preceded it. Wider than the spread tolerance because the settle plateau is
+#: itself sampled between polls and the GEMM is a different kernel; 10% is still
+#: far tighter than the 30% the post-hoc sample was moving by.
+CLOCK_VS_SETTLE_TOL_PCT = 10.0
+
+
+#: The substring every disowned-read note ends with. STABLE ON PURPOSE: the
+#: A100's committed calibration carries the 2026-08-28 wording
+#: ("reduction-limited, ...") and anything that reads published yaml has to
+#: recognise both. Only this tail is load bearing.
+DISOWNED = "not a valid ceiling"
+
+
+class ClockUnavailable(RuntimeError):
+    """No usable SM clock was sampled while the load was actually running.
+
+    A typed refusal. `ClockState.sample()` returns 0 MHz when NVML is absent or
+    the container forbids it, and a zero flowing into `sustained_peak_tflops`
+    would make the silicon's peak zero, `gemm_efficiency_pct` infinite, and none
+    of it would look wrong in the yaml. The caller decides whether a calibration
+    without a clock is still worth writing; this refuses to invent one.
+    """
 
 
 @dataclass(frozen=True)
@@ -100,6 +239,16 @@ class Calibration:
     #: the reported pass is the size of the warm-up effect, and a large gap
     #: means the settle did not do its job.
     warmup_pass: dict = field(default_factory=dict)
+    #: Full `LoadedClock` records for the two GEMMs: the samples taken WHILE
+    #: each was running, their spread, and the post-hoc idle sample the old code
+    #: published. `gemm_clock_mhz` above is the median of the first of these,
+    #: kept as a scalar because every consumer already reads it that way.
+    gemm_clock: dict = field(default_factory=dict)
+    fp8_gemm_clock: dict = field(default_factory=dict)
+    #: Quantities this run could not measure, each with its reason. Never a
+    #: substituted value: a missing `read_stream` is an absent pattern plus a
+    #: line here, so a reader can tell "not measured" from "measured as slow".
+    refusals: tuple[str, ...] = ()
 
     @property
     def warmup_drift_pct(self) -> float:
@@ -115,22 +264,83 @@ class Calibration:
 
     @property
     def clock_ramped(self) -> bool:
-        """Did the SM clock move materially across the bandwidth patterns?
+        """Did the SM clock move materially ACROSS or WITHIN the patterns?
 
         True means the patterns were measured at different clocks and are not
         comparable to each other, let alone publishable as ceilings.
+
+        Both ends of every pattern count. Reading only `sm_clock_start_mhz`
+        missed the shape that actually matters: a pattern that STARTS at the
+        plateau and ends 500 MHz lower has thrown its own average, and four such
+        patterns all starting at 1980 would have reported a spread of zero.
         """
-        clks = [p.sm_clock_start_mhz for p in self.bandwidth_patterns
-                if p.sm_clock_start_mhz > 0]
+        clks = [c for p in self.bandwidth_patterns
+                for c in (p.sm_clock_start_mhz, p.sm_clock_end_mhz) if c > 0]
         if len(clks) < 2:
             return False
-        return (max(clks) - min(clks)) / max(clks) > 0.05
+        return (max(clks) - min(clks)) / max(clks) * 100.0 > CLOCK_SPREAD_TOL_PCT
+
+    @property
+    def clock_established(self) -> bool | None:
+        """Was the GEMM's clock a plateau, or a number sampled off a ramp?
+
+        None when no under-load samples were taken at all, which is the state a
+        `--no-settle` smoke run is in and is not the same as a failure.
+
+        Two conditions, and both are about the same 2026-09-02 finding. The
+        samples taken during the GEMM must agree with each other, and their
+        median must agree with the compute settle that preceded it. Eleven
+        committed calibrations of one H200 recorded 1485-1935 MHz for this
+        field while their own settle histories sat at 1455-1515, and nothing in
+        any of those files says which number described the GEMM.
+        """
+        gemm = self.gemm_clock or {}
+        median = gemm.get("median_mhz") or 0
+        if not median:
+            return None
+        if (gemm.get("spread_pct") or 0.0) > CLOCK_SPREAD_TOL_PCT:
+            return False
+        plateau = (self.settle or {}).get("final_mhz") or 0
+        if not plateau:
+            return None
+        return abs(median - plateau) / plateau * 100.0 <= CLOCK_VS_SETTLE_TOL_PCT
 
     def pattern(self, name: str) -> BandwidthResult | None:
         for p in self.bandwidth_patterns:
             if p.pattern == name:
                 return p
         return None
+
+    def matched_pattern(self) -> BandwidthResult | None:
+        """The best available READ ruler, or None if no read pattern survived.
+
+        Walks `READ_PATTERNS` in order, so the Triton stream probe wins when it
+        ran and the reduction's lower bound is used when it did not. A pattern
+        the guard demoted -- one that came in below triad, which a read cannot
+        legitimately do -- is skipped, because the note on it says it is not a
+        valid ceiling and a band built from it would be a band built from a
+        number this file has already disowned.
+        """
+        for name in READ_PATTERNS:
+            found = self.pattern(name)
+            if found is not None and DISOWNED not in found.note:
+                return found
+        return None
+
+    def ridge_band(self) -> tuple[float, float] | None:
+        """(low, high) FLOP/byte across the named ceiling and the matched one.
+
+        The honest form of the ridge. The two ends are the same silicon measured
+        against two rulers that differ by which traffic mix they impose, and a
+        crossing that lands between them is not resolved by this calibration.
+        None when there is no read pattern to put at the other end, rather than
+        a degenerate band of one number twice.
+        """
+        matched = self.matched_pattern()
+        if matched is None:
+            return None
+        ends = (self.ridge_point(), self.ridge_point(matched.gbps))
+        return (min(ends), max(ends))
 
     def ridge_point(self, bandwidth_gbps: float | None = None) -> float:
         """FLOP/byte above which a kernel can be compute bound, as measured."""
@@ -174,7 +384,48 @@ class Calibration:
             p.pattern: round(self.ridge_point(p.gbps), 1)
             for p in self.bandwidth_patterns
         }
+        # The band, written down, so nobody has to know which two of the four
+        # patterns are the defensible ends. `null` when no read pattern
+        # survived, which is a statement and not a missing value.
+        band = self.ridge_band()
+        d["ridge_band"] = [round(band[0], 1), round(band[1], 1)] if band else None
+        matched = self.matched_pattern()
+        d["matched_ceiling_pattern"] = matched.pattern if matched else None
+        d["matched_ceiling_gbps"] = round(matched.gbps, 1) if matched else None
+        d["clock_established"] = self.clock_established
+        d["clock_ramped"] = self.clock_ramped
+        d["refusals"] = list(self.refusals)
         return d
+
+    def settle_lines(self) -> list[str]:
+        """Both settles, each labelled with the measurement it governs.
+
+        Exists because the memory settle was MEASURED from 2026-08-27 and never
+        PRINTED: `scripts/calibrate_hardware.py` rendered only the top-level
+        `settle` dict, so its output read "settle reached at 1500 MHz" followed
+        by "clocks 1500 -> 1980 MHz", which is exactly what an unsettled ramp
+        looks like. `docs/STUDY.md` still listed this work as not done five days
+        after it was done, on the strength of that output. A measurement nobody
+        can see in the report is not evidence.
+        """
+        def render(label: str, info: dict, governs: str) -> str:
+            if not info:
+                return f"{label:<18}NOT RUN            governs {governs}"
+            if info.get("skipped"):
+                return f"{label:<18}SKIPPED            governs {governs}"
+            state = "reached" if info.get("settled") else "TIMED OUT"
+            return (f"{label:<18}{state} at {info.get('final_mhz', 0)} MHz"
+                    f"   governs {governs}\n"
+                    f"{'':<18}history {info.get('clock_history_mhz') or []}")
+
+        settle = self.settle or {}
+        return [
+            render("settle compute", {k: v for k, v in settle.items()
+                                      if k != "bandwidth_settle"},
+                   "the bf16 and fp8 GEMMs"),
+            render("settle memory", settle.get("bandwidth_settle") or {},
+                   "the four bandwidth patterns"),
+        ]
 
 
 def _elems(target_bytes: int) -> int:
@@ -200,8 +451,231 @@ def clocks_settled(history: list[int], tol_pct: float) -> bool:
     return (max(recent) - min(recent)) / max(recent) * 100.0 <= tol_pct
 
 
+@dataclass(frozen=True)
+class LoadedClock:
+    """The clock a measurement actually ran at, plus how sure of it we are.
+
+    Every field is here because a scalar was not enough. `samples` is kept so a
+    bimodal set (half at the plateau, half at boost) is visible rather than
+    averaged into a plausible middle; `spread_pct` is the summary a gate reads;
+    `after_idle_mhz` is the single post-hoc sample the old code published, kept
+    beside the honest one so the size of the artefact is auditable.
+    """
+
+    label: str
+    samples: tuple[int, ...]
+    median_mhz: int
+    spread_pct: float
+    #: Post-hoc sample, taken after synchronise with the GPU idle. This is what
+    #: `gemm_clock_mhz` used to be, and on the H200 it ran 1485-1935 across
+    #: eleven calibrations of one card.
+    after_idle_mhz: int
+    temp_c: int = 0
+    #: Board power under the load, W, or 0.0 when no reader answered. Taken at
+    #: the same NVML call as the clock samples (`timing.ClockState.power_w`).
+    #: A GEMM pinned at the board limit is power capped, and a clock read near
+    #: boost for such a GEMM is not credible whatever NVML said. THE 2026-09-09
+    #: H200 CALIBRATION IS SUCH A GEMM: 1485 MHz at 691 W under a 700 W cap,
+    #: which is why the kernels that draw more hold a lower clock and why a
+    #: clock below this one names a tile rather than a fault.
+    power_w: float = 0.0
+    #: Which reader took `samples`: `timing.CLOCK_SOURCE_NVML` on every record
+    #: this function writes, because `clock_under_load` REFUSES the forked
+    #: nvidia-smi fallback (see there). Recorded so the yaml says so, the way
+    #: a `KernelTiming` row carries `clock_source`, and a reader comparing the
+    #: two clocks can see they came through one kind of reader.
+    source: str = "nvml"
+
+    def as_dict(self) -> dict:
+        d = asdict(self)
+        d["samples"] = list(self.samples)
+        d.update(self.under_load_verdict())
+        return d
+
+    def under_load_verdict(self) -> dict:
+        """The keys `calibrate_hardware.under_load_clock_verdict` scores, in
+        `timing.clock_flags`' own vocabulary.
+
+        WHY THEY ARE HERE. On 2026-09-09, the first H200 session on the merged
+        tree, arm 0 sampled the clock under load (1470 MHz, five NVML samples,
+        spread 2.0%), and its own `not_throttled` gate came back UNKNOWN,
+        "predates the under-load clock verdict": this record carried samples,
+        median and spread, and the scorer reads `clock_drift_ok` and
+        `clock_level_ok`. Two sites, one vocabulary, written at neither.
+        UNKNOWN counts against a CLAIM gate, so a sound calibration exited
+        CLAIM_FAIL and every arm below it was refused.
+
+        DRIFT is the question this RECORD can answer out of its own fields:
+        first and last under-load samples within `timing.DRIFT_FRACTION`, the
+        rule `timing.clock_flags` applies to a cell. LEVEL is None BY
+        CONSTRUCTION, not by omission: this record IS the reference clock a
+        roof is quoted at, and a comparison of a clock against itself is not a
+        verdict. A record with no samples carries both as None, which the
+        scorer reads as UNKNOWN, never as a pass.
+
+        DRIFT IS NOT THE ONLY QUESTION A CALIBRATION IS ASKED, and this
+        docstring said it was until 2026-09-11. That day a rented H200
+        collapsed from its 1980 MHz maximum to its 345 MHz floor under
+        sustained GEMM and stayed there; first and last samples agreed
+        exactly, drift 0.0, and `scripts/calibrate_hardware.py` published a
+        ruler whose ridge read 73.6 against that card's real ~156. The missing
+        term is FLOOR, the median against THE CARD'S OWN MAXIMUM SM CLOCK, and
+        it is deliberately NOT computed here: the maximum is a property of the
+        silicon that no calibration measures, so it is read off the device by
+        `timing.max_sm_clock_mhz` and passed to
+        `calibrate_hardware.under_load_clock_verdict`, which scores all three
+        terms together. `sm_clock_load_mhz` below is the median that term
+        reads, which is why it is on this record at all.
+        """
+        from . import timing as T
+
+        if not self.samples:
+            return {"sm_clock_load_mhz": None, "sm_clock_start_mhz": None,
+                    "sm_clock_end_mhz": None, "clock_level_ok": None,
+                    "clock_drift_ok": None}
+        start, end = self.samples[0], self.samples[-1]
+        _level, drift = T.clock_flags(self.median_mhz, start, end, None)
+        return {"sm_clock_load_mhz": self.median_mhz, "sm_clock_start_mhz": start,
+                "sm_clock_end_mhz": end, "clock_level_ok": None,
+                "clock_drift_ok": drift}
+
+
+def _power_draw_w() -> float:
+    """Board power in watts, or 0.0 when it cannot be read.
+
+    0.0 rather than a refusal ONLY because nothing divides by it: it is recorded
+    to separate a power-capped GEMM from a clock-limited one, and an unavailable
+    reading leaves that question open rather than answering it wrongly.
+
+    THE FORKED READER IS THE FALLBACK, not the reader. `nvidia-smi power.draw`
+    costs a fork plus an NVML init, tens of milliseconds, so the watts landed
+    that long after the clock they are supposed to sit beside;
+    `timing.nvml_power_w` is the same binding the clock comes through and costs
+    tens of microseconds, so `ClockState.sample` now carries both from one
+    call and this is only reached where that binding is absent.
+    """
+    from . import timing as T
+
+    watts = T.nvml_power_w()
+    if watts > 0:
+        return watts
+    vals = T._nvidia_smi("power.draw")
+    if not vals:
+        return 0.0
+    try:
+        return float(vals[0].split()[0])
+    except (ValueError, IndexError):
+        return 0.0
+
+
+def clock_under_load(step, label: str, samples: int = 5,
+                     seconds_per_sample: float = 0.4) -> LoadedClock:
+    """Sample the SM clock WHILE `step` is running, not after it has stopped.
+
+    THE FAILURE THIS EXISTS FOR, measured 2026-09-02 across the eleven committed
+    H200 calibrations. `measure_bf16_gemm` sampled the clock immediately after
+    `time_eager` returned, and `time_eager` ends with a synchronise, so the
+    sample was taken with the GPU idle and already climbing back toward its
+    1980 MHz idle boost. That field reads 1485, 1500, 1515, 1530, 1530, 1560,
+    1560, 1845, 1845, 1905 and 1935 MHz for the same card and the same kernel,
+    a 30% spread, while the achieved rate moved 12% and the compute settle
+    plateau in the same files sat at 1455-1515. `sustained_peak_tflops` is
+    linear in it, so `gemm_efficiency_pct` reads 87.4% in one file and 68.4% in
+    another for the same GEMM.
+
+    The method is the one `settle_clocks` already proved: feed the queue for a
+    while so the governor is responding to a real load, then sample with work
+    still in flight, and only then synchronise. Sampling between two synchronises
+    measures an idle GPU no matter how much work surrounds it.
+
+    THE SAMPLER IS NVML ONLY, THE SAME RULE `timing.time_kernel` HOLDS ITSELF
+    TO. `ClockState.sample()` falls back to a forked nvidia-smi when pynvml is
+    missing, and until 2026-09-03 this function took whatever came back. Four
+    queued 8192^3 GEMMs are ~5.6 ms of work; a fork plus an NVML init is tens
+    of milliseconds; so on a box without `nvidia-ml-py` every "under-load"
+    sample here landed on an idle GPU, with no note, and the roof's reference
+    clock was the post-hoc idle artefact this function exists to replace,
+    under the name of the fix. `time_kernel` refuses exactly that fallback
+    inside its timed region (`nvml_clock_reader`); the two instruments now
+    agree. A forked sample REFUSES with the reason, before any of the two
+    seconds of GEMM are spent, and `_with_clock` records the refusal in the
+    calibration so the yaml says why it carries no clock.
+
+    Raises `ClockUnavailable` rather than returning zeros. Three usable samples
+    is the floor because two cannot disagree with each other.
+    """
+    import time
+
+    import torch
+
+    from . import timing as T
+
+    T.require_cuda()
+    probe = T.ClockState.sample()
+    if probe.source != T.CLOCK_SOURCE_NVML:
+        raise ClockUnavailable(
+            f"{label}: the clock reader on this host is {probe.source!r}, not "
+            "NVML. A forked nvidia-smi answers tens of milliseconds after it "
+            "is asked, and four queued GEMMs are ~5.6 ms of work, so every "
+            "sample it took here would land on an idle GPU and be the post-hoc "
+            "idle artefact this sampler exists to replace. Install nvidia-ml-py "
+            "in the pod venv; nothing normalised against a clock may be quoted "
+            "from this run.")
+    step()
+    torch.cuda.synchronize()
+
+    got: list[int] = []
+    temps: list[int] = []
+    powers: list[float] = []
+    for _ in range(samples):
+        stop = time.monotonic() + seconds_per_sample
+        while time.monotonic() < stop:
+            step()
+            torch.cuda.synchronize()
+        # Queue work and sample BEFORE draining it: the point of the whole
+        # function is that the GPU is busy at the instant of the sample.
+        for _ in range(4):
+            step()
+        state = T.ClockState.sample()
+        if state.source != T.CLOCK_SOURCE_NVML:
+            # The reader changed under us mid-run (NVML lost the device and
+            # the fallback answered). One such sample poisons the median.
+            raise ClockUnavailable(
+                f"{label}: a sample came through {state.source!r} after the "
+                f"probe answered through NVML; {len(got)} NVML samples were "
+                "taken before it and none of them may be published as the "
+                "clock the GEMM ran at, because the set is no longer one kind "
+                "of reading.")
+        # The watts from the SAME call as the clock when NVML answered them
+        # (`ClockState.sample`), the forked reader only where it did not: a
+        # power reading taken tens of milliseconds after the clock is not the
+        # power the clock was held at.
+        powers.append(state.power_w if state.power_w > 0 else _power_draw_w())
+        torch.cuda.synchronize()
+        if state.sm_clock_mhz > 0:
+            got.append(state.sm_clock_mhz)
+            temps.append(state.temp_c)
+
+    after = T.ClockState.sample().sm_clock_mhz
+    if len(got) < 3:
+        raise ClockUnavailable(
+            f"{label}: only {len(got)} usable SM clock samples out of {samples}; "
+            "NVML returned zero or was unavailable. Nothing normalised against a "
+            "clock may be quoted from this run.")
+    spread = (max(got) - min(got)) / max(got) * 100.0
+    live = [p for p in powers if p > 0]
+    return LoadedClock(
+        label=label, samples=tuple(got), median_mhz=int(statistics.median(got)),
+        spread_pct=round(spread, 2), after_idle_mhz=after,
+        temp_c=int(statistics.median(temps)) if temps else 0,
+        power_w=round(statistics.median(live), 1) if live else 0.0,
+        source=T.CLOCK_SOURCE_NVML)
+
+
 def _load_compute():
     """Dense bf16 matmul: saturates tensor cores, high power, LOW clock."""
+    import torch
+
     a = torch.randn((8192, 8192), device="cuda", dtype=torch.bfloat16)
     out = torch.empty_like(a)
 
@@ -219,6 +693,8 @@ def _load_memory():
     settling under `_load_compute` and then measuring bandwidth measures the
     wrong plateau.
     """
+    import torch
+
     n = DEFAULT_BUFFER_BYTES // 4
     a = torch.empty(n, dtype=torch.float32, device="cuda").uniform_(0.0, 1.0)
     b = torch.empty_like(a)
@@ -259,11 +735,16 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
     """
     import time
 
+    import torch
+
+    from . import timing as T
+
     step = SETTLE_LOADS[load]   # KeyError for an unknown load, before any work
     T.require_cuda()
     step = step()
 
     history: list[int] = []
+    sources: set[str] = set()
     deadline = time.monotonic() + max_seconds
     settled = False
     while time.monotonic() < deadline:
@@ -276,29 +757,47 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
         while time.monotonic() < stop:
             step()
             torch.cuda.synchronize()
-        history.append(T.ClockState.sample().sm_clock_mhz)
+        state = T.ClockState.sample()
+        history.append(state.sm_clock_mhz)
+        sources.add(state.source)
         if clocks_settled(history, tol_pct):
             settled = True
             break
 
+    # WHICH READER the history came through, recorded because `settle.final_mhz`
+    # is the last field `roofline.reference_clock` falls back to. A settle
+    # polled through the forked fallback is a sequence of samples taken tens of
+    # milliseconds after each synchronise, and a reference read out of it is
+    # the idle artefact again; the yaml has to say so.
+    source = (T.CLOCK_SOURCE_NVML if sources == {T.CLOCK_SOURCE_NVML}
+              else "/".join(sorted(sources)) if sources else T.CLOCK_SOURCE_NONE)
     return {"settled": settled, "clock_history_mhz": history,
             "final_mhz": history[-1] if history else 0,
-            "max_seconds": max_seconds, "load": load}
+            "max_seconds": max_seconds, "load": load, "clock_source": source}
 
 
 def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
-                      iters: int = 30, trials: int = 3,
-                      l2_flush: bool = True) -> list[BandwidthResult]:
+                      iters: int = 30, trials: int = 3, l2_flush: bool = True,
+                      refusals: list[str] | None = None) -> list[BandwidthResult]:
     """STREAM-style patterns on buffers far larger than L2.
 
-    All four are measured because they genuinely differ, and a single figure
+    All of them are measured because they genuinely differ, and a single figure
     would not show that. Byte counts are the compulsory traffic each pattern
     must move:
 
-      read   1N   a full reduction; reads every element, writes one scalar
-      write  1N   a fill; writes every element, reads none
-      copy   2N   one read plus one write per element
-      triad  3N   two reads plus one write per element
+      read_stream  1N  Triton; each program stores one float, no global combine
+      read_reduce  1N  ATen; reads every element, writes `rows` floats
+      write        1N  a fill; writes every element, reads none
+      copy         2N  one read plus one write per element
+      triad        3N  two reads plus one write per element
+
+    THE TWO READS ARE NOT REDUNDANT. `read_reduce` is a reduction, so it bounds
+    the machine's read rate from BELOW; `read_stream` removes the cross-CTA
+    combine entirely and bounds it from closer. The gap between them is what the
+    reduction shape still costs, which was 1.7% the last time this file changed
+    a reduction's shape. When Triton is unavailable `read_stream` is ABSENT and
+    its reason is appended to `refusals`; it is never zero and never quietly the
+    reduction's number.
 
     The 1N write convention is PROVEN, not assumed. A read-for-ownership would
     make real traffic 2N, which on an H200 would imply 9316 GB/s, or 194% of the
@@ -311,6 +810,10 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
     read-dominated workload, and the only one whose timed window can shed
     writeback.
     """
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     n = _elems(target_bytes)
     nbytes = n * 4
@@ -347,9 +850,15 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
         # CONTIGUOUS axis instead gives `rows` independent reductions with no
         # global combine, and measures DRAM rather than ATen's reduction tree.
         # Traffic is still 1N: the output is `rows` floats against n read.
-        run("read", lambda: torch.sum(a2d, dim=1, out=sink_col), nbytes,
-            "closest analogue to streaming expert weights; reduced along the "
-            "contiguous axis so the tree does not bound it"),
+        #
+        # RENAMED 2026-09-02 from `read`. It is a reduction, so it is a lower
+        # bound on the read rate and not the read rate, and calling it `read`
+        # was what let it be described as "the closest analogue to streaming
+        # expert weights" while triad stayed the ceiling and nobody had to
+        # reconcile the two.
+        run("read_reduce", lambda: torch.sum(a2d, dim=1, out=sink_col), nbytes,
+            "ATen reduction along the contiguous axis; a LOWER BOUND on the "
+            "DRAM read rate, not the read rate"),
         run("copy", lambda: c.copy_(a), 2 * nbytes, ""),
         run("triad", lambda: torch.add(a, b, alpha=2.0, out=c), 3 * nbytes,
             "canonical STREAM metric; the default ceiling"),
@@ -363,6 +872,30 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
             "1N proven (2N would exceed the pin rate by 94%); unflushed so the "
             "timed window cannot shed writeback", flush=False),
     ]
+
+    # The probe goes LAST so a Triton compile failure costs nothing that was
+    # already measured, and so its several-second compile does not sit between
+    # the settle and the first pattern.
+    from .read_probe import ProbeUnavailable, make_stream_read
+    try:
+        call, read_bytes, write_bytes = make_stream_read(a)
+    except (ProbeUnavailable, ValueError) as exc:
+        # An absent pattern plus a recorded reason. The alternative -- falling
+        # back to the reduction under the name `read_stream` -- would put two
+        # different measurements under one label across machines, which is how
+        # a ruler stops being a ruler.
+        if refusals is not None:
+            refusals.append(f"read_stream: {exc}")
+    else:
+        # Byte count is the READ only. The per-program stores are counted and
+        # asserted small rather than assumed: at the 8 GiB default they are
+        # 0.01% of traffic, and if a future block size made them material this
+        # note is where the number would stop being credible.
+        out.insert(0, run(
+            "read_stream", call, read_bytes,
+            f"Triton, one store per program, no cross-CTA combine; stores are "
+            f"{100.0 * write_bytes / read_bytes:.3f}% of traffic and are not "
+            "counted"))
     # No `del` here: the timing lambdas close over these buffers, and unbinding
     # the names would leave those closures referring to deleted locals. They are
     # freed when this frame exits; the caller reclaims the memory.
@@ -418,13 +951,18 @@ class GemmResult:
     """Named rather than a tuple on purpose.
 
     This started as `(tflops, shape)`, grew a clock, and silently broke a caller
-    that unpacked two values — a failure that only shows up on the GPU, six
+    that unpacked two values -- a failure that only shows up on the GPU, six
     minutes into a run. A dataclass makes the next added field free.
     """
 
     tflops: float
     shape: tuple[int, int, int]
+    #: Median of the samples taken WHILE the GEMM was running. Not the post-hoc
+    #: sample: see `clock_under_load` for the 30% spread that one had.
     sm_clock_mhz: int
+    #: The full record, or None when the clock could not be established. None is
+    #: a state a caller must handle, not a zero it can divide by.
+    clock: LoadedClock | None = None
 
 
 def sustained_peak_tflops_fp8(sm_clock_mhz: float) -> float | None:
@@ -433,6 +971,8 @@ def sustained_peak_tflops_fp8(sm_clock_mhz: float) -> float | None:
     None on Ampere is the point: the A100 has no fp8 tensor cores, and a number
     here would be a peak for a format the part cannot execute.
     """
+    import torch
+
     if not torch.cuda.is_available():
         return None
     per_clk = _DENSE_FP8_FLOP_PER_SM_CLK.get(torch.cuda.get_device_capability())
@@ -443,7 +983,8 @@ def sustained_peak_tflops_fp8(sm_clock_mhz: float) -> float | None:
 
 
 def measure_fp8_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
-                     trials: int = 3) -> GemmResult | None:
+                     trials: int = 3,
+                     refusals: list[str] | None = None) -> GemmResult | None:
     """Achievable dense fp8 through cuBLAS, or None where fp8 is unavailable.
 
     `torch._scaled_mm`, not `torch.mm`: fp8 tensors carry a scale and the plain
@@ -457,6 +998,10 @@ def measure_fp8_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
     ridge_fp8 = 2 * ridge_bf16 from the datasheet ratio; this measures whether
     fp8 reaches the same fraction of its peak that bf16 reaches of its own.
     """
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     if sustained_peak_tflops_fp8(1000.0) is None:
         return None
@@ -465,46 +1010,120 @@ def measure_fp8_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
     a = (torch.randn((n, n), device="cuda") * 0.1).to(dt)
     b = (torch.randn((n, n), device="cuda") * 0.1).to(dt).t()
     one = torch.tensor(1.0, device="cuda")
+
+    def step():
+        torch._scaled_mm(a, b, one, one, out_dtype=torch.bfloat16)
+
     try:
-        res = T.time_eager(
-            lambda: torch._scaled_mm(a, b, one, one,
-                                     out_dtype=torch.bfloat16),
-            warmup=warmup, iters=iters, trials=trials, l2_flush=False)
+        res = T.time_eager(step, warmup=warmup, iters=iters, trials=trials,
+                           l2_flush=False)
     except RuntimeError as e:
         print(f"[calibrate] fp8 GEMM unavailable: {e}")
         return None
-    clk = T.ClockState.sample().sm_clock_mhz
     tflops = (2.0 * n * n * n) / (res.ms_p50 * 1e-3) / 1e12
-    return GemmResult(tflops=tflops, shape=(n, n, n), sm_clock_mhz=clk)
+    return _with_clock(step, "fp8 GEMM", tflops, n, refusals)
+
+
+def _with_clock(step, label: str, tflops: float, n: int,
+                refusals: list[str] | None) -> GemmResult:
+    """Attach the under-load clock to a finished GEMM, or record why there is none.
+
+    The TFLOP/s is already measured by the time this runs and is valid without a
+    clock: it is FLOP over seconds and nothing normalises it. Only
+    `sustained_peak_tflops` and `gemm_efficiency_pct` need the clock, and both
+    already return None when there is none. So an NVML-less box gets its
+    ceilings, loses exactly the two figures that depend on a clock, and says so
+    -- rather than losing the whole calibration to a refusal about one field.
+    """
+    try:
+        clock = clock_under_load(step, label)
+    except ClockUnavailable as exc:
+        if refusals is not None:
+            refusals.append(str(exc))
+        return GemmResult(tflops=tflops, shape=(n, n, n), sm_clock_mhz=0,
+                          clock=None)
+    return GemmResult(tflops=tflops, shape=(n, n, n),
+                      sm_clock_mhz=clock.median_mhz, clock=clock)
 
 
 def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
-                      trials: int = 3) -> GemmResult:
+                      trials: int = 3,
+                      refusals: list[str] | None = None) -> GemmResult:
     """Achievable dense BF16 through cuBLAS: the compute roof this box gives.
 
     A square GEMM at n=8192 is comfortably compute bound and is what a tuned
     library achieves, so it is the fair ceiling for a hand-written kernel.
     """
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     a = torch.randn((n, n), device="cuda", dtype=torch.bfloat16)
     b = torch.randn((n, n), device="cuda", dtype=torch.bfloat16)
     out = torch.empty((n, n), device="cuda", dtype=torch.bfloat16)
-    res = T.time_eager(lambda: torch.mm(a, b, out=out), warmup=warmup,
-                       iters=iters, trials=trials, l2_flush=False)
-    # Sample the clock DURING the measurement: it is what the result should be
-    # normalised against, and it is not the boost clock.
-    clk = T.ClockState.sample().sm_clock_mhz
+
+    def step():
+        torch.mm(a, b, out=out)
+
+    res = T.time_eager(step, warmup=warmup, iters=iters, trials=trials,
+                       l2_flush=False)
     tflops = (2.0 * n * n * n) / (res.ms_p50 * 1e-3) / 1e12
-    return GemmResult(tflops=tflops, shape=(n, n, n), sm_clock_mhz=clk)
+    # Sample the clock UNDER LOAD. The comment here used to say "DURING the
+    # measurement" while the code sampled after `time_eager` had synchronised,
+    # i.e. with the GPU idle; that field then moved 30% across eleven
+    # calibrations of one card while the achieved rate moved 12%. It costs about
+    # two seconds of extra GEMM to sample it properly.
+    return _with_clock(step, "bf16 GEMM", tflops, n, refusals)
+
+
+#: What a read pattern's note says once it has been disowned. One string, in one
+#: place, because `matched_pattern` and the ceiling guard both test for it and a
+#: typo in either would silently re-admit a figure this file rejected.
+INVALID_READ_NOTE = f"consumer-limited, not DRAM-limited; {DISOWNED}"
+
+
+def demote_invalid_reads(patterns) -> tuple[BandwidthResult, ...]:
+    """Disown any read pattern that came in below triad.
+
+    A stream that only reads cannot legitimately be slower than one that reads
+    twice and writes once, so a read below triad is measuring its CONSUMER --
+    ATen's reduction tree, or a Triton probe whose accumulator serialised the
+    loads -- and not the DRAM read rate. It stays in the file, because "this
+    formulation reaches 1744 GB/s" is a fact worth keeping (the A100's
+    `read_reduce` is exactly that), but its note says it is not a denominator
+    and `matched_pattern` will not build a ridge band out of it.
+
+    Pure, and separate from `calibrate`, so the rule can be tested on a laptop.
+    The version this replaces was inline, matched the literal name `read`, and
+    would have silently stopped firing the moment that pattern was renamed.
+    """
+    patterns = tuple(patterns)
+    triad = next((p for p in patterns if p.pattern == "triad"), None)
+    if triad is None:
+        return patterns
+    return tuple(
+        BandwidthResult(**{**p.as_dict(), "note": INVALID_READ_NOTE})
+        if p.pattern in READ_PATTERNS and p.gbps < triad.gbps else p
+        for p in patterns)
 
 
 def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
               ceiling: str = DEFAULT_CEILING, settle: bool = True,
               settle_seconds: float = 30.0) -> Calibration:
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     # Settle FIRST. Measuring from idle put this machine's first pattern at
     # 840 MHz and its last at 1980, which is a bigger effect than anything the
     # choice of pattern argues about.
+    # ONE refusal list for the whole calibration, opened before the first
+    # measurement. Anything that cannot be measured lands here with its reason
+    # and is absent from the results; nothing anywhere below substitutes a
+    # plausible value for something it did not measure.
+    refusals: list[str] = []
     settle_info = (settle_clocks(settle_seconds, load="compute") if settle
                    else {"settled": False, "skipped": True})
     before = T.ClockState.sample()
@@ -515,7 +1134,7 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # tensor cores need, so a compute roof measured after a bandwidth sweep is a
     # power-limited number, not a ceiling. The settle above is matmul work, so
     # the GPU is already in the right state for exactly this measurement.
-    gemm = measure_bf16_gemm(gemm_n)
+    gemm = measure_bf16_gemm(gemm_n, refusals=refusals)
     torch.cuda.empty_cache()
 
     # fp8 IMMEDIATELY AFTER, for the reason the comment above gives: the GPU is
@@ -527,7 +1146,13 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # whether fp8 reaches the same fraction of ITS peak that bf16 reaches of its
     # own. The bf16 figure is already 701.6 against a 989.4 headline, so the
     # datasheet ratio surviving to the achieved numbers is a claim, not a given.
-    fp8_gemm = measure_fp8_gemm(gemm_n)
+    #
+    # The fp8 GEMM's own clock block is written beside it
+    # (detail.fp8_gemm_clock); calibrate_hardware prints its DRIFT verdict and
+    # no gate scores it. On 2026-09-21 it read 1395 -> 1320 MHz at 689 W and
+    # the ceiling was published as measured. Withholding a drifted fp8 ceiling
+    # is an open decision, not a rule this writer applies.
+    fp8_gemm = measure_fp8_gemm(gemm_n, refusals=refusals)
     torch.cuda.empty_cache()
 
     # SETTLE AGAIN, UNDER A MEMORY LOAD. The settle above converged on the
@@ -546,38 +1171,28 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
                   else {"settled": False, "skipped": True})
 
     # BANDWIDTH TWICE, keep the second. The first pass finishes ramping whatever
-    # the settle did not, so pass one is warmup and pass two has all four
-    # patterns in the same state. Without this the first pattern measured is
-    # systematically different from the other three.
+    # the settle did not, so pass one is warmup and pass two has every pattern
+    # in the same state. Without this the first pattern measured is
+    # systematically different from the rest. The first pass also absorbs the
+    # Triton compile of the stream probe, which is seconds and would otherwise
+    # land inside a timed window.
     first_pass = measure_bandwidth(target_bytes)
-    patterns = measure_bandwidth(target_bytes)
+    patterns = measure_bandwidth(target_bytes, refusals=refusals)
     torch.cuda.empty_cache()
     after = T.ClockState.sample()
 
+    patterns = demote_invalid_reads(patterns)
     chosen = next((p for p in patterns if p.pattern == ceiling), None)
     if chosen is None:
         raise ValueError(
             f"unknown ceiling pattern {ceiling!r}; "
             f"measured: {[p.pattern for p in patterns]}")
-
-    # A pure-read stream cannot legitimately be slower than 2R+1W at the DRAM
-    # level. If it is, torch.sum is reporting ATen's tree-reduction rate rather
-    # than the DRAM read rate, and it is not a valid denominator.
-    read = next((p for p in patterns if p.pattern == "read"), None)
-    triad = next((p for p in patterns if p.pattern == "triad"), None)
-    if read and triad and read.gbps < triad.gbps:
-        patterns = tuple(
-            BandwidthResult(**{**p.as_dict(),
-                               "note": "reduction-limited, not DRAM-limited; "
-                                       "not a valid ceiling"})
-            if p.pattern == "read" else p for p in patterns)
-        if ceiling == "read":
-            raise ValueError(
-                f"read measured {read.gbps:.0f} GB/s, below triad's "
-                f"{triad.gbps:.0f}. A pure read cannot be slower than 2R+1W at "
-                "the DRAM level, so that figure is ATen's reduction rate, not "
-                "bandwidth. Use --ceiling triad.")
-        chosen = next(p for p in patterns if p.pattern == ceiling)
+    if DISOWNED in chosen.note:
+        raise ValueError(
+            f"{ceiling} measured {chosen.gbps:.0f} GB/s, below triad. A read "
+            "stream cannot be slower than 2R+1W at the DRAM level, so that "
+            "figure is the consumer's rate and not bandwidth. Use "
+            f"--ceiling {DEFAULT_CEILING}.")
 
     drift, throttled = T.clock_drift(before, after)
     return Calibration(
@@ -596,6 +1211,10 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
                 "drift_pct": round(drift, 2), "throttled": throttled},
         settle={**settle_info, "bandwidth_settle": settle_mem},
         warmup_pass={p.pattern: round(p.gbps, 1) for p in first_pass},
+        gemm_clock=gemm.clock.as_dict() if gemm.clock else {},
+        fp8_gemm_clock=(fp8_gemm.clock.as_dict()
+                        if fp8_gemm and fp8_gemm.clock else {}),
+        refusals=tuple(refusals),
     )
 
 
@@ -642,3 +1261,145 @@ def l2_absorbed_bytes(ms_flushed: float, ms_warm: float,
     metric, and it comes free from an axis that is already swept.
     """
     return max(0.0, ms_flushed - ms_warm) * 1e-3 * achieved_bw_bytes_s
+
+
+# --- what a calibration FILE says about itself --------------------------------
+#
+# Everything above measures a machine. Everything below is about the file that
+# measurement is written to, and specifically about telling one such file from
+# another after both have left the pod.
+
+
+@dataclass(frozen=True)
+class CalibrationStamp:
+    """The identifying half of a written calibration: which session produced it.
+
+    `scripts/calibrate_hardware.py` writes `checked_on`, `measured_commit` and
+    `measured_dirty` beside the ceilings, and until 2026-08-31 nothing read them
+    back. They matter because `moe/bench/hardware/measured_<device>.yaml` is ONE
+    FILE PER DEVICE that every new calibration overwrites, and
+    `publish_results.sh` copies whatever is in it at publish time. A sweep that
+    finishes before a recalibration and publishes after one therefore ships a
+    ruler it never used, and nothing about the copied file looks wrong.
+
+    THAT HAPPENED, and this is the file it happened to. Reconstructed from git,
+    all times UTC:
+
+        18:08-19:21  2026-08-28-...-h200-whole-layer sweeps at commit 873183a,
+                     its rows stamped 701.61 TFLOP/s and 4377.21 GB/s from the
+                     calibration then on disk (committed 04:12 as a6ee65d)
+        19:29        89f9f7a overwrites measured_nvidia_h200.yaml with a fresh
+                     calibration, 770.92 TFLOP/s and 4374.49 GB/s
+        19:35        the arm is published and copies the NEW file
+
+    The result is an arm whose measured.yaml is byte-identical to the one beside
+    a different arm, `-fp8-refixed`, whose sweep started at 19:49. Nobody noticed
+    for three days. The cost is claim C5: its target is the band 0.81-0.91
+    instead of a number, because 176.2 and 160.3 are both defensible rulers for
+    that arm and neither was measured in its session.
+
+    A stamp only means something next to rows, so the comparison lives in
+    `moe.bench.published.calibration_provenance`. This is the half that reads the
+    file, and it is here because this module is what a calibration IS.
+    """
+    #: Where it was read from, so a verdict can name the file it judged.
+    path: str
+    name: str
+    gpu_name: str
+    #: `None` when absent or unparseable. Day resolution, which is why it did
+    #: NOT catch the whole-layer swap: both sessions ran on 2026-08-28.
+    checked_on: date | None
+    #: Empty when the file records none. The A100 calibration is exactly that,
+    #: so nothing in it can be compared against the sha its rows carry.
+    measured_commit: str
+    measured_dirty: bool
+    bandwidth_gbps: float
+    peak_tflops: dict[str, float]
+    ceiling_pattern: str
+
+    def peak_for(self, dtype: str) -> float | None:
+        """TFLOP/s claimed for `dtype`, or None when the file claims none.
+
+        None rather than 0.0, because absence is real: the A100 file has no fp8
+        key at all, its silicon having no fp8 tensor cores, and a zero there
+        would read as a measured zero. Rows swept in a dtype their calibration
+        does not cover carry `achieved_peak_tflops = 0.0` for the same reason --
+        all 19,908 of `-fp8-three-kernel` do.
+        """
+        value = self.peak_tflops.get(dtype)
+        return float(value) if value else None
+
+    def ridge(self, dtype: str) -> float | None:
+        """FLOP per byte above which `dtype` can be compute bound on this ruler."""
+        return ridge_flop_per_byte(self.peak_for(dtype), self.bandwidth_gbps)
+
+
+def ridge_flop_per_byte(peak_tflops: float | None,
+                        bandwidth_gbps: float | None) -> float | None:
+    """The roofline ridge in the units the yaml and the CSV both already use.
+
+    `roofline.Hardware.ridge_point` is the same quantity in SI: FLOP/s over
+    byte/s. Both the calibration file and every published row hold TFLOP/s and
+    GB/s instead, so converting each pair to SI just to divide them introduces
+    two multiplications and a chance to drop one. The factor of 1000 is
+    1e12 / 1e9.
+
+    None when either term is missing or non-positive, so a caller that has no
+    ridge is handed nothing rather than a zero it might quote.
+    """
+    if not peak_tflops or not bandwidth_gbps:
+        return None
+    if peak_tflops <= 0 or bandwidth_gbps <= 0:
+        return None
+    return peak_tflops * 1000.0 / bandwidth_gbps
+
+
+def read_stamp(path) -> CalibrationStamp:
+    """Read the identifying fields out of a calibration yaml.
+
+    Tolerant where `recompute.load_calibration_hardware` is strict, and for the
+    opposite reason. That function is about to divide every efficiency column by
+    the bandwidth, so a missing field there is fatal. This one is about to report
+    what can and cannot be established, so a missing field is an ANSWER -- the
+    `unknown` verdict -- and raising would turn "I cannot tell" into "the file is
+    broken". The A100 calibration ships an empty `measured_commit` and is read
+    here without complaint.
+    """
+    import yaml
+
+    doc = yaml.safe_load(Path(path).read_text())
+    if not isinstance(doc, dict):
+        raise ValueError(f"{path}: not a mapping")
+    detail = doc.get("detail") or {}
+    memory = doc.get("memory") or {}
+    peaks = {}
+    for dtype, value in (doc.get("compute_dense_tflops") or {}).items():
+        if value:
+            peaks[str(dtype)] = float(value)
+    bw_tb_s = memory.get("bandwidth_tb_s") or 0.0
+    return CalibrationStamp(
+        path=str(path),
+        name=str(doc.get("name", "")),
+        gpu_name=str(detail.get("gpu_name") or doc.get("name") or ""),
+        checked_on=_as_date(doc.get("checked_on")),
+        measured_commit=str(doc.get("measured_commit") or ""),
+        measured_dirty=bool(doc.get("measured_dirty")),
+        bandwidth_gbps=float(bw_tb_s) * 1000.0,
+        peak_tflops=peaks,
+        ceiling_pattern=str(detail.get("ceiling_pattern") or ""),
+    )
+
+
+def _as_date(value) -> date | None:
+    """`checked_on` is written quoted, but a hand-edited file may not be.
+
+    PyYAML resolves an unquoted 2026-08-28 to a `datetime.date` and a quoted one
+    to a string, so both shapes reach here from files that look identical in a
+    diff.
+    """
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None

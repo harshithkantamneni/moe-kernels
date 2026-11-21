@@ -1,0 +1,555 @@
+experiment  block_m_crossing / nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_budg-ba7c80c2
+card        nvidia_h200
+model       qwen2-57b-a14b E=64 k=8  bf16 (2 bytes)
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+grid        57 rows-per-expert x 3 block sizes = 171 cells
+            r in [28, 1056], tokens step 8, T in [224, 8448]
+bandwidth   4374.3 GB/s, source=calibration: measured on this device: NVIDIA H200 (measured), 4374.3 GB/s (triad pattern)
+ridge       155.93 Op/B, source=calibration: measured on this device: NVIDIA H200 (measured), 682.1 TFLOP/s bf16 over 4374.3 GB/s (triad pattern); calibrated 2026-09-10 at c0644bea
+ridge band  145.83-158.63 Op/B, this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling
+WRITES TO   /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3/qwen2_g1-rep1/block_m_crossing/nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_budg-ba7c80c2
+            cells.csv (appended per cell), report.txt, report.json, triton-cache/
+
+TILE RESOURCE PLAN, one CTA, at sm_90
+  BLOCK_M=  32  smem     48 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+  BLOCK_M=  64  smem     64 KiB of    227 KiB  acc    16 reg/thread of 255  ok
+  BLOCK_M= 256  smem    160 KiB of    227 KiB  acc    64 reg/thread of 255  ok
+reference clock: 1470 MHz, NVIDIA H200: median of the samples taken while the calibration's dense GEMM ran
+override hook: vllm.model_executor.layers.fused_moe.override_config
+triton cache: /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3/qwen2_g1-rep1/block_m_crossing/nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_budg-ba7c80c2/triton-cache (fresh for this run)
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1650 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   224 r=    28 n=  1 waves    38.8    0.9334 ms    105.7 TFLOP/s
+  BM= 32 T=   256 r=    32 n=  1 waves    38.8    0.9558 ms    118.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1658 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.13x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   288 r=    36 n=  2 waves    77.6    1.6726 ms     75.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1575 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.07x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   448 r=    56 n=  2 waves    77.6    1.7211 ms    114.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1560 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.06x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   480 r=    60 n=  2 waves    77.6    1.7491 ms    120.9 TFLOP/s
+  BM= 32 T=   512 r=    64 n=  2 waves    77.6    1.7493 ms    128.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1710 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   544 r=    68 n=  3 waves   116.4    2.4104 ms     99.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1650 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   576 r=    72 n=  3 waves   116.4    2.4591 ms    103.2 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1590 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   736 r=    92 n=  3 waves   116.4    2.5213 ms    128.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1590 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   768 r=    96 n=  3 waves   116.4    2.5187 ms    134.3 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1702 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   800 r=   100 n=  4 waves   155.2    3.1807 ms    110.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1650 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   960 r=   120 n=  4 waves   155.2    3.2516 ms    130.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1650 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=   992 r=   124 n=  4 waves   155.2    3.2480 ms    134.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1650 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1024 r=   128 n=  4 waves   155.2    3.2455 ms    139.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1725 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1056 r=   132 n=  5 waves   193.9    3.8832 ms    119.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1710 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1088 r=   136 n=  5 waves   193.9    3.9142 ms    122.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1672 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.14x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1248 r=   156 n=  5 waves   193.9    3.9812 ms    138.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1665 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.13x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1280 r=   160 n=  5 waves   193.9    3.9961 ms    141.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1725 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1312 r=   164 n=  6 waves   232.7    4.6490 ms    124.3 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1695 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1472 r=   184 n=  6 waves   232.7    4.7110 ms    137.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1695 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1504 r=   188 n=  6 waves   232.7    4.7080 ms    140.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1695 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1536 r=   192 n=  6 waves   232.7    4.7355 ms    142.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1568 r=   196 n=  7 waves   271.5    5.3582 ms    128.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1725 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1600 r=   200 n=  7 waves   271.5    5.4020 ms    130.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1695 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1792 r=   224 n=  7 waves   271.5    5.4790 ms    144.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  1984 r=   248 n=  8 waves   310.3    6.1486 ms    142.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1725 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  2048 r=   256 n=  8 waves   310.3    6.1428 ms    146.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  2112 r=   264 n=  9 waves   349.1    6.8637 ms    135.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1725 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  2304 r=   288 n=  9 waves   349.1    6.8975 ms    147.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  2496 r=   312 n= 10 waves   387.9    7.5927 ms    144.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1732 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  2560 r=   320 n= 10 waves   387.9    7.5916 ms    148.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1770 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  2624 r=   328 n= 11 waves   426.7    8.1929 ms    141.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1755 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  2816 r=   352 n= 11 waves   426.7    8.2707 ms    149.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1792 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  3008 r=   376 n= 12 waves   465.5    8.7998 ms    150.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1770 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  3072 r=   384 n= 12 waves   465.5    8.8967 ms    152.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1808 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  3136 r=   392 n= 13 waves   504.2    9.4550 ms    146.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  3328 r=   416 n= 13 waves   504.2    9.5232 ms    153.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  3584 r=   448 n= 14 waves   543.0   10.2475 ms    154.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  3840 r=   480 n= 15 waves   581.8   10.9799 ms    154.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  4096 r=   512 n= 16 waves   620.6   11.7092 ms    154.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  4352 r=   544 n= 17 waves   659.4   12.4297 ms    154.2 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  4608 r=   576 n= 18 waves   698.2   13.0370 ms    155.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  4864 r=   608 n= 19 waves   737.0   13.7485 ms    155.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  5120 r=   640 n= 20 waves   775.8   14.4798 ms    155.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  5376 r=   672 n= 21 waves   814.5   15.1909 ms    155.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  5632 r=   704 n= 22 waves   853.3   15.9119 ms    155.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  5888 r=   736 n= 23 waves   892.1   16.6375 ms    155.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  6144 r=   768 n= 24 waves   930.9   17.3547 ms    155.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  6400 r=   800 n= 25 waves   969.7   18.0773 ms    155.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1822 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.24x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  6656 r=   832 n= 26 waves  1008.5   18.7966 ms    155.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1822 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.24x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  6912 r=   864 n= 27 waves  1047.3   19.3918 ms    157.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1838 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.25x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  7168 r=   896 n= 28 waves  1086.1   19.9313 ms    158.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1830 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.24x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  7424 r=   928 n= 29 waves  1124.8   20.8545 ms    156.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  7680 r=   960 n= 30 waves  1163.6   21.5045 ms    157.3 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1830 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.24x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  7936 r=   992 n= 31 waves  1202.4   22.4653 ms    155.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  8192 r=  1024 n= 32 waves  1241.2   23.0468 ms    156.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 32 T=  8448 r=  1056 n= 33 waves  1280.0   23.7547 ms    156.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1665 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.13x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops; DRIFT failed, dropping: under-load clock went 1800 -> 1695 MHz over 26 samples (1800, 1800, 1680, 1680, 1695, 1695, 1680, 1680, 1515, 1515, 1185, 1185, 1425, 1425, 1545, 1545, 1620, 1620, 1650, 1650, 1665, 1665, 1680, 1680, 1695, 1695); the trials were not at one operating point and the median is a blend
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 64 T=   224 r=    28 n=  1 waves    38.8    0.9567 ms    103.1 TFLOP/s
+  BM= 64 T=   256 r=    32 n=  1 waves    38.8    0.9922 ms    113.6 TFLOP/s
+  BM= 64 T=   288 r=    36 n=  1 waves    38.8    1.0184 ms    124.5 TFLOP/s
+  BM= 64 T=   448 r=    56 n=  1 waves    38.8    1.0182 ms    193.8 TFLOP/s
+  BM= 64 T=   480 r=    60 n=  1 waves    38.8    1.0233 ms    206.6 TFLOP/s
+  BM= 64 T=   512 r=    64 n=  1 waves    38.8    1.0250 ms    220.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1560 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.06x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM= 64 T=   544 r=    68 n=  2 waves    77.6    1.7998 ms    133.1 TFLOP/s
+  BM= 64 T=   576 r=    72 n=  2 waves    77.6    1.8178 ms    139.5 TFLOP/s
+  BM= 64 T=   736 r=    92 n=  2 waves    77.6    1.8386 ms    176.3 TFLOP/s
+  BM= 64 T=   768 r=    96 n=  2 waves    77.6    1.8368 ms    184.1 TFLOP/s
+  BM= 64 T=   800 r=   100 n=  2 waves    77.6    1.8270 ms    192.8 TFLOP/s
+  BM= 64 T=   960 r=   120 n=  2 waves    77.6    1.8061 ms    234.1 TFLOP/s
+  BM= 64 T=   992 r=   124 n=  2 waves    77.6    1.8130 ms    241.0 TFLOP/s
+  BM= 64 T=  1024 r=   128 n=  2 waves    77.6    1.7630 ms    255.8 TFLOP/s
+  BM= 64 T=  1056 r=   132 n=  3 waves   116.4    2.6634 ms    174.6 TFLOP/s
+  BM= 64 T=  1088 r=   136 n=  3 waves   116.4    2.6595 ms    180.2 TFLOP/s
+  BM= 64 T=  1248 r=   156 n=  3 waves   116.4    2.6840 ms    204.8 TFLOP/s
+  BM= 64 T=  1280 r=   160 n=  3 waves   116.4    2.6720 ms    211.0 TFLOP/s
+  BM= 64 T=  1312 r=   164 n=  3 waves   116.4    2.6610 ms    217.1 TFLOP/s
+  BM= 64 T=  1472 r=   184 n=  3 waves   116.4    2.6159 ms    247.8 TFLOP/s
+  BM= 64 T=  1504 r=   188 n=  3 waves   116.4    2.6158 ms    253.2 TFLOP/s
+  BM= 64 T=  1536 r=   192 n=  3 waves   116.4    2.5562 ms    264.6 TFLOP/s
+  BM= 64 T=  1568 r=   196 n=  4 waves   155.2    3.4170 ms    202.1 TFLOP/s
+  BM= 64 T=  1600 r=   200 n=  4 waves   155.2    3.4090 ms    206.7 TFLOP/s
+  BM= 64 T=  1792 r=   224 n=  4 waves   155.2    3.3907 ms    232.8 TFLOP/s
+  BM= 64 T=  1984 r=   248 n=  4 waves   155.2    3.4000 ms    257.0 TFLOP/s
+  BM= 64 T=  2048 r=   256 n=  4 waves   155.2    3.3553 ms    268.8 TFLOP/s
+  BM= 64 T=  2112 r=   264 n=  5 waves   193.9    4.2625 ms    218.2 TFLOP/s
+  BM= 64 T=  2304 r=   288 n=  5 waves   193.9    4.3035 ms    235.8 TFLOP/s
+  BM= 64 T=  2496 r=   312 n=  5 waves   193.9    4.2149 ms    260.8 TFLOP/s
+  BM= 64 T=  2560 r=   320 n=  5 waves   193.9    4.1123 ms    274.2 TFLOP/s
+  BM= 64 T=  2624 r=   328 n=  6 waves   232.7    5.0394 ms    229.3 TFLOP/s
+  BM= 64 T=  2816 r=   352 n=  6 waves   232.7    4.9718 ms    249.4 TFLOP/s
+  BM= 64 T=  3008 r=   376 n=  6 waves   232.7    4.8647 ms    272.3 TFLOP/s
+  BM= 64 T=  3072 r=   384 n=  6 waves   232.7    4.7864 ms    282.7 TFLOP/s
+  BM= 64 T=  3136 r=   392 n=  7 waves   271.5    5.7353 ms    240.8 TFLOP/s
+  BM= 64 T=  3328 r=   416 n=  7 waves   271.5    5.6888 ms    257.6 TFLOP/s
+  BM= 64 T=  3584 r=   448 n=  7 waves   271.5    5.5762 ms    283.1 TFLOP/s
+  BM= 64 T=  3840 r=   480 n=  8 waves   310.3    6.5197 ms    259.4 TFLOP/s
+  BM= 64 T=  4096 r=   512 n=  8 waves   310.3    6.3483 ms    284.2 TFLOP/s
+  BM= 64 T=  4352 r=   544 n=  9 waves   349.1    7.2166 ms    265.6 TFLOP/s
+  BM= 64 T=  4608 r=   576 n=  9 waves   349.1    7.1280 ms    284.7 TFLOP/s
+  BM= 64 T=  4864 r=   608 n= 10 waves   387.9    8.0557 ms    265.9 TFLOP/s
+  BM= 64 T=  5120 r=   640 n= 10 waves   387.9    7.9219 ms    284.6 TFLOP/s
+  BM= 64 T=  5376 r=   672 n= 11 waves   426.7    8.7473 ms    270.7 TFLOP/s
+  BM= 64 T=  5632 r=   704 n= 11 waves   426.7    8.6794 ms    285.8 TFLOP/s
+  BM= 64 T=  5888 r=   736 n= 12 waves   465.5    9.5406 ms    271.8 TFLOP/s
+  BM= 64 T=  6144 r=   768 n= 12 waves   465.5    9.4861 ms    285.2 TFLOP/s
+  BM= 64 T=  6400 r=   800 n= 13 waves   504.2   10.3267 ms    272.9 TFLOP/s
+  BM= 64 T=  6656 r=   832 n= 13 waves   504.2   10.2324 ms    286.5 TFLOP/s
+  BM= 64 T=  6912 r=   864 n= 14 waves   543.0   11.0082 ms    276.5 TFLOP/s
+  BM= 64 T=  7168 r=   896 n= 14 waves   543.0   10.9954 ms    287.1 TFLOP/s
+  BM= 64 T=  7424 r=   928 n= 15 waves   581.8   11.8672 ms    275.5 TFLOP/s
+  BM= 64 T=  7680 r=   960 n= 15 waves   581.8   11.7307 ms    288.3 TFLOP/s
+  BM= 64 T=  7936 r=   992 n= 16 waves   620.6   12.6247 ms    276.8 TFLOP/s
+  BM= 64 T=  8192 r=  1024 n= 16 waves   620.6   12.5211 ms    288.1 TFLOP/s
+  BM= 64 T=  8448 r=  1056 n= 17 waves   659.4   13.3251 ms    279.2 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1980 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.35x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   224 r=    28 n=  1 waves    38.8    2.0781 ms     47.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1980 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.35x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   256 r=    32 n=  1 waves    38.8    2.0848 ms     54.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1980 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.35x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   288 r=    36 n=  1 waves    38.8    2.0958 ms     60.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1980 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.35x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   448 r=    56 n=  1 waves    38.8    2.1514 ms     91.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1972 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.34x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   480 r=    60 n=  1 waves    38.8    2.1624 ms     97.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1980 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.35x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   512 r=    64 n=  1 waves    38.8    2.1735 ms    103.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1965 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.34x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   544 r=    68 n=  1 waves    38.8    2.2025 ms    108.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1965 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.34x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   576 r=    72 n=  1 waves    38.8    2.2110 ms    114.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1935 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.32x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   736 r=    92 n=  1 waves    38.8    2.2923 ms    141.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1935 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.32x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   768 r=    96 n=  1 waves    38.8    2.3015 ms    147.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1905 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.30x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   800 r=   100 n=  1 waves    38.8    2.3235 ms    151.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1890 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.29x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   960 r=   120 n=  1 waves    38.8    2.3832 ms    177.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1882 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.28x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=   992 r=   124 n=  1 waves    38.8    2.3930 ms    182.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1875 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.28x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1024 r=   128 n=  1 waves    38.8    2.4004 ms    187.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1875 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.28x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1056 r=   132 n=  1 waves    38.8    2.4196 ms    192.2 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1852 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.26x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1088 r=   136 n=  1 waves    38.8    2.4444 ms    196.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1248 r=   156 n=  1 waves    38.8    2.5055 ms    219.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1280 r=   160 n=  1 waves    38.8    2.5201 ms    223.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1312 r=   164 n=  1 waves    38.8    2.5195 ms    229.3 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1770 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1472 r=   184 n=  1 waves    38.8    2.5501 ms    254.2 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1770 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1504 r=   188 n=  1 waves    38.8    2.5707 ms    257.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1755 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1536 r=   192 n=  1 waves    38.8    2.5738 ms    262.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1568 r=   196 n=  1 waves    38.8    2.5598 ms    269.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1600 r=   200 n=  1 waves    38.8    2.5662 ms    274.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1710 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1792 r=   224 n=  1 waves    38.8    2.5620 ms    308.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1725 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  1984 r=   248 n=  1 waves    38.8    2.5336 ms    344.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1710 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  2048 r=   256 n=  1 waves    38.8    2.5734 ms    350.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1905 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.30x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  2112 r=   264 n=  2 waves    77.6    4.3811 ms    212.3 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1875 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.28x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  2304 r=   288 n=  2 waves    77.6    4.4296 ms    229.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1860 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.27x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  2496 r=   312 n=  2 waves    77.6    4.5647 ms    240.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1860 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.27x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  2560 r=   320 n=  2 waves    77.6    4.5820 ms    246.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1852 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.26x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  2624 r=   328 n=  2 waves    77.6    4.6206 ms    250.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  2816 r=   352 n=  2 waves    77.6    4.7596 ms    260.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1830 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.24x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  3008 r=   376 n=  2 waves    77.6    4.7836 ms    276.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1815 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.23x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  3072 r=   384 n=  2 waves    77.6    4.8208 ms    280.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1785 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.21x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  3136 r=   392 n=  2 waves    77.6    4.8706 ms    283.6 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  3328 r=   416 n=  2 waves    77.6    4.9028 ms    298.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  3584 r=   448 n=  2 waves    77.6    4.9712 ms    317.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1725 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.17x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  3840 r=   480 n=  2 waves    77.6    4.9881 ms    339.0 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  4096 r=   512 n=  2 waves    77.6    4.9588 ms    363.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1845 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.26x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  4352 r=   544 n=  3 waves   116.4    6.8356 ms    280.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1830 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.24x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  4608 r=   576 n=  3 waves   116.4    6.9764 ms    290.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  4864 r=   608 n=  3 waves   116.4    7.1628 ms    299.1 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1785 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.21x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  5120 r=   640 n=  3 waves   116.4    7.2330 ms    311.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1770 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  5376 r=   672 n=  3 waves   116.4    7.3409 ms    322.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1755 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  5632 r=   704 n=  3 waves   116.4    7.3873 ms    335.8 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1755 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  5888 r=   736 n=  3 waves   116.4    7.3177 ms    354.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1755 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  6144 r=   768 n=  3 waves   116.4    7.3292 ms    369.2 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1830 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.24x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  6400 r=   800 n=  4 waves   155.2    9.2200 ms    305.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  6656 r=   832 n=  4 waves   155.2    9.4355 ms    310.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1785 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.21x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  6912 r=   864 n=  4 waves   155.2    9.5168 ms    319.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1778 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.21x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  7168 r=   896 n=  4 waves   155.2    9.6617 ms    326.7 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1755 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  7424 r=   928 n=  4 waves   155.2    9.7616 ms    334.9 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1748 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.19x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  7680 r=   960 n=  4 waves   155.2    9.7928 ms    345.4 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  7936 r=   992 n=  4 waves   155.2    9.8051 ms    356.5 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1740 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.18x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  8192 r=  1024 n=  4 waves   155.2    9.8237 ms    367.3 TFLOP/s
+  ^ LEVEL HIGH (recorded, not an exclusion): loaded clock 1800 MHz is over the 1545 MHz edge of the band around the 1470 MHz reference; the cell ran at 1.22x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in every fit; its fraction of the fixed roof is not comparable
+  BM=256 T=  8448 r=  1056 n=  5 waves   193.9   11.7272 ms    317.3 TFLOP/s
+
+swept in 309 s
+
+PREDICTIONS, stated before the run and not adjusted after it
+  alpha 0.558 (band 0.529-0.588), bf16 at 2 bytes, ridge 155.9 Op/B, band 145.8-158.6 Op/B
+  ridge source: calibration: measured on this device: NVIDIA H200 (measured), 682.1 TFLOP/s bf16 over 4374.3 GB/s (triad pattern); calibrated 2026-09-10 at c0644bea
+  ridge band source: this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling
+  bandwidth source: 4374.3 GB/s, calibration: measured on this device: NVIDIA H200 (measured), 4374.3 GB/s (triad pattern)
+  iterations per trial: median 83 over 171 timed cells, range 17-427. Sized per cell by the instrument from --cell-budget-ms, not by --iters, which is retired as a timing knob.
+  BLOCK_M   AI cap   crossing @ridge 145.8       crossing @ridge 158.6
+       32     57.3   NO CROSSING EVER       NO CROSSING EVER    
+          BLOCK_M=32 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 57.3 Op/B sits at or below the ridge 145.8 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number
+       64    114.7   NO CROSSING EVER       NO CROSSING EVER    
+          BLOCK_M=64 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 114.7 Op/B sits at or below the ridge 145.8 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number
+      256    458.8   r=  145.8 T=    1167 n=1   r=  158.6 T=    1269 n=1
+  every AI cap above is 2*BM/(alpha*b) from a FITTED alpha and is HIGH by ai_model.lin_overstatement = 1+phi+delta (alpha_a is unmeasured anywhere in this repo and delta is taken as 0, so each range is a bracket and a lower bound): BM=32 1.02-1.51x, BM=64 1.03-2.02x, BM=256 1.12-5.07x
+  GATE 3 will test alpha > 0.33 (midpoint of 0.558 and 0.1) as an INFORMATIONAL line; the VERDICT is whether the fitted alpha's interval overlaps the band [0.529, 0.588], in both directions
+  GATE 4 will test BLOCK_M=64 against the roof in fractions of ridge x bandwidth: this run's ceiling 0.736, the retracted world's 1.000, so the gate is 0.95 (reached the roof) and 0.868 (passed its own ceiling)
+
+MEASURED  qwen2-57b-a14b bf16  164 cells, 50 of them exactly-full tile stacks
+  compute plateau 369.2 TFLOP/s useful, taken as the roof every roof fraction below is against
+  that plateau is 54.1% of ridge x bandwidth (682 TFLOP/s). Far below 100% means nothing in the sweep reached a roof and every roof fraction is relative to something that is not one.
+  per-cell timing spread, median 5.40%
+  compute reference: BLOCK_M=256 ladder, 4 treads, proportional to 1.5%: compute branch 2.4591 ms per tile, fixed cost 0.1409 ms
+    LEVEL roof fraction      0.538   gate <= 1.10 of ridge x bandwidth (a compute branch cannot beat the roof)
+    LEVEL non-vacuity        0.382   gate <  1.00 of one full weight read, scaled to the smallest block size (at or above, NO tread anywhere can be memory bound and every alpha is unidentifiable by construction)
+      floor                 0.205   of the roof, = 2 BM_min / (b x ridge): the smallest swept tile's own AI cap at alpha=1, over the ridge
+      footing            DENSE. The memory branch is compared against one full weight read at the measured pin rate, so the floor is a fraction of the dense GEMM roof. A fused layer counting only its two GEMMs' FLOPs has never exceeded 0.756 of that roof, so a floor above 0.756 cannot be met by any fused-layer reference on any card.
+    LEVEL vs smaller BM      0.785   gate <= 1.25 at matched exactly-full rows, over 4 comparison(s)
+  132 SMs (reported by the driver), one resident CTA per SM assumed for every wave count
+  up-GEMM waves run 38.8 to 1280.0 across the sweep. The smallest is the smallest tile stack, and even it is many waves deep, so no cell here is a partial-wave measurement and occupancy cannot be the thing that moved between two adjacent cells.
+
+THE LADDER: milliseconds per exactly-full tile stack, which is where gates 2, 3 and 4 are read
+  alpha is a LOWER bound (the fused layer's fixed cost sits in the denominator); alpha-hi takes that cost out, and alpha-corrected also removes activation traffic
+  alpha here is B/(A+B), which is (alpha_b+phi)/(1+phi+delta) and NOT a weight miss fraction: see moe/bench/ai_model.py and LadderFit.alpha
+  7 cell(s) excluded for a DRIFTING clock: the SM clock moved while they were timed, so each median is a blend of two operating points and the time belongs to neither.
+    Reached: the plateau, the compute reference, the noise estimate that sets the margin, and gates 1, 2, 3 and 4. 3 of them were aligned treads and are counted per ladder below.
+  114 cell(s) KEPT with LEVEL failed HIGH and 0 KEPT with LEVEL failed LOW: their SM clock under load sat steadily outside the band around the clock the roof was measured at. On a power-capped card that band is not a health check: the under-load clock is set per tile by the kernel's own power draw (H200, 700 W: BM=128/BN=64 a median 1395 MHz, BM=256 1650, memory-shaped 1950-1980, against a 1485 MHz calibration GEMM). Their milliseconds are measurements and stay in every fit; their fraction of the FIXED roof is off by the clock ratio -- OVERSTATED on the high side, UNDERSTATED on the low -- and the roof at their own clock (the driver's roof_at_cell_clock_tflops) is the one to read them against.
+    The plateau gates 1, 2 and 4 read is still the fixed-roof fraction, so on a boosted cell it is HIGH and on a sagged cell LOW: gate 4's absence claim (the null tile never reaches the roof) is biased toward FAIL by the first and toward PASS by the second. 35 high and 0 low were aligned treads and are counted per ladder below.
+  BLOCK_M  treads  memory-bound  alpha   alpha-corrected  alpha-hi  B ms/tile  C ms/tile  fit err
+       32      31            31  0.599           0.587     0.680     0.7029        n/a   0.60%   [2 excluded for a drifting clock]   [31 kept with LEVEL high; fixed-roof fraction overstated by the clock ratio]
+       64      15            15  0.766           0.738     0.892     0.7678        n/a   0.51%   [1 excluded for a drifting clock]
+      256       4             0    n/a             n/a       n/a        n/a     2.4121   0.48%   [4 kept with LEVEL high; fixed-roof fraction overstated by the clock ratio]
+           BLOCK_M=256 is the compute reference, so by the assumption that qualified it there is no memory branch here to fit
+  alpha scored by gate 3: 0.738 [0.723, 0.892]  (systematic [0.738, 0.892]: activation-corrected to fixed-cost-corrected; bootstrap [0.723, 0.761] over 400 resamples of 15 treads)
+
+GATES
+RESULT: VALIDITY override_took_effect PASS [VALIDITY/OBSERVED] override_config changed the kernel at every setting | measured fresh Triton artefacts per setting: BM=32:17, BM=64:16, BM=256:16 | gate >= 1 per setting
+GATE 0  PASS      [VALIDITY/OBSERVED] override_config changed the kernel at every setting
+          measured fresh Triton artefacts per setting: BM=32:17, BM=64:16, BM=256:16   gate >= 1 per setting
+
+RESULT: CLAIM tile_steps FAIL [CLAIM/OBSERVED] time steps at T = n x BLOCK_M x E/k | measured median step minus tread +13.41% | gate >= +5.92% (half the model's step) and > 3x noise (16.19%)
+GATE 1  FAIL      [CLAIM/OBSERVED] time steps at T = n x BLOCK_M x E/k
+          measured median step minus tread +13.41%   gate >= +5.92% (half the model's step) and > 3x noise (16.19%)
+          30 boundaries bracketed, 0 where the tread moved at least as much as the step
+          median step +13.08%, median tread -0.11%, model step +11.84%
+          waves are printed on both sides of every step so occupancy can be ruled out as the cause:
+          BM= 32 n= 3 T=   768 r=    96  tread  -0.10%  STEP +26.28%  (model +25.84%)  waves  116.4/ 155.2
+          BM= 32 n= 4 T=  1024 r=   128  tread  -0.08%  STEP +19.65%  (model +20.42%)  waves  155.2/ 193.9
+          BM= 32 n= 5 T=  1280 r=   160  tread  +0.37%  STEP +16.34%  (model +16.88%)  waves  193.9/ 232.7
+          BM= 32 n= 6 T=  1536 r=   192  tread  +0.58%  STEP +13.15%  (model +14.39%)  waves  232.7/ 271.5
+          BM= 32 n= 7 T=  1792 r=   224  tread  +1.43%  STEP +12.22%  (model +12.78%)  waves  271.5/ 310.3
+          BM= 32 n= 8 T=  2048 r=   256  tread  -0.09%  STEP +11.74%  (model +11.15%)  waves  310.3/ 349.1
+          BM= 32 n= 9 T=  2304 r=   288  tread  +0.49%  STEP +10.08%  (model +10.16%)  waves  349.1/ 387.9
+          BM= 32 n=10 T=  2560 r=   320  tread  -0.02%  STEP  +7.92%  (model  +9.08%)  waves  387.9/ 426.7
+          BM= 32 n=11 T=  2816 r=   352  tread  +0.95%  STEP  +6.40%  (model  +8.43%)  waves  426.7/ 465.5
+          BM= 32 n=12 T=  3072 r=   384  tread  +1.10%  STEP  +6.27%  (model  +7.66%)  waves  465.5/ 504.2
+          BM= 32 n=13 T=  3328 r=   416  tread  +0.72%  STEP  +7.61%  (model  +7.26%)  waves  504.2/ 543.0
+          BM= 64 n= 1 T=   512 r=    64  tread  +0.17%  STEP +75.59%  (model +54.15%)  waves   38.8/  77.6
+          BM= 64 n= 2 T=  1024 r=   128  tread  -2.76%  STEP +51.07%  (model +34.43%)  waves   77.6/ 116.4
+          BM= 64 n= 3 T=  1536 r=   192  tread  -2.28%  STEP +33.67%  (model +25.24%)  waves  116.4/ 155.2
+          BM= 64 n= 5 T=  2560 r=   320  tread  -2.43%  STEP +22.54%  (model +16.52%)  waves  193.9/ 232.7
+          BM= 64 n= 6 T=  3072 r=   384  tread  -1.61%  STEP +19.82%  (model +14.07%)  waves  232.7/ 271.5
+          BM= 64 n= 7 T=  3584 r=   448  tread  -1.98%  STEP +16.92%  (model +12.53%)  waves  271.5/ 310.3
+          BM= 64 n= 8 T=  4096 r=   512  tread  -2.63%  STEP +13.68%  (model +11.10%)  waves  310.3/ 349.1
+          BM= 64 n= 9 T=  4608 r=   576  tread  -1.23%  STEP +13.02%  (model  +9.96%)  waves  349.1/ 387.9
+          BM= 64 n=10 T=  5120 r=   640  tread  -1.66%  STEP +10.42%  (model  +9.03%)  waves  387.9/ 426.7
+          BM= 64 n=11 T=  5632 r=   704  tread  -0.78%  STEP  +9.92%  (model  +8.27%)  waves  426.7/ 465.5
+          BM= 64 n=12 T=  6144 r=   768  tread  -0.57%  STEP  +8.86%  (model  +7.62%)  waves  465.5/ 504.2
+          BM= 64 n=13 T=  6656 r=   832  tread  -0.91%  STEP  +7.58%  (model  +7.06%)  waves  504.2/ 543.0
+          BM= 64 n=14 T=  7168 r=   896  tread  -0.12%  STEP  +7.93%  (model  +6.58%)  waves  543.0/ 581.8
+          BM= 64 n=15 T=  7680 r=   960  tread  -1.15%  STEP  +7.62%  (model  +6.17%)  waves  581.8/ 620.6
+          BM= 64 n=16 T=  8192 r=  1024  tread  -0.82%  STEP  +6.42%  (model  +5.80%)  waves  620.6/ 659.4
+          BM=256 n= 1 T=  2048 r=   256  tread  +1.57%  STEP +70.25%  (model +100.00%)  waves   38.8/  77.6
+          BM=256 n= 2 T=  4096 r=   512  tread  -0.59%  STEP +37.85%  (model +50.00%)  waves   77.6/ 116.4
+          BM=256 n= 3 T=  6144 r=   768  tread  +0.16%  STEP +25.80%  (model +33.33%)  waves  116.4/ 155.2
+          BM=256 n= 4 T=  8192 r=  1024  tread  +0.19%  STEP +19.38%  (model +25.00%)  waves  155.2/ 193.9
+
+RESULT: CLAIM time_falls_with_block_m PASS [CLAIM/OBSERVED] time falls with BLOCK_M at equal rows per expert (traffic, not occupancy) | measured ms(BM=32) / ms(BM=256) = 2.346x at 1024 rows per expert | gate >= 1.50x
+GATE 2  PASS      [CLAIM/OBSERVED] time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)
+          measured ms(BM=32) / ms(BM=256) = 2.346x at 1024 rows per expert   gate >= 1.50x
+          time moves DOWN with BLOCK_M, as traffic requires
+          model at alpha=0.558: 2.870x   model at the retracted alpha=0.10: 1.000x
+          a refutation here is the interesting answer: it says the padded arithmetic or the lost occupancy outweighs 32 weight re-reads
+          rows/expert  BM=32         BM=64         BM=256         ms(lo)/ms(hi)
+                  512    11.7092 ms     6.3483 ms     4.9588 ms   2.361x
+                  768    17.3547 ms     9.4861 ms     7.3292 ms   2.368x
+                 1024    23.0468 ms    12.5211 ms     9.8237 ms   2.346x
+
+RESULT: CLAIM alpha_in_band FAIL [CLAIM/IMPORTED] the fitted alpha's interval overlaps the pre-registered band 0.529-0.588 | measured alpha 0.738 | gate interval [0.723, 0.892] against [0.529, 0.588] -- DISJOINT, ABOVE the band
+GATE 3  FAIL      [CLAIM/IMPORTED] the fitted alpha's interval overlaps the pre-registered band 0.529-0.588
+          measured alpha 0.738   gate interval [0.723, 0.892] against [0.529, 0.588] -- DISJOINT, ABOVE the band
+          measured is the FITTED alpha (0.738 [0.723, 0.892]  (systematic [0.738, 0.892]: activation-corrected to fixed-cost-corrected; bootstrap [0.723, 0.761] over 400 resamples of 15 treads)), measured at BLOCK_M=64 over 15 memory-bound treads, activation traffic subtracted. It is not a crossing ratio and no crossing was measured to produce it.
+          the interval is DISJOINT from the band and lies ABOVE it: measured 0.738 [0.723, 0.892] is ABOVE the band [0.529, 0.588]
+          INFORMATIONAL, the retired one-sided gate: alpha > 0.33 would have read PASS. It is not the verdict: it passes for everything from 0.33 to 1.0, so it cannot fail from above and every committed surface fit clears it.
+          NO ladder's fitted slopes imply a crossing exists (C > B is met nowhere; slopes missing at [256]), so nothing here is a crossing measurement and no crossing has been observed
+          the same alpha restates the model's crossing ratio as 1 + 0.738 = 1.738x, which is what the retired ratio gate printed as its 'measured' value. That number is algebra over this line, not a second observation.
+          model's crossing ratio: ridge 145.8: no crossing   ridge 158.6: no crossing
+          the retracted alpha=0.1 would put that ratio at 1.100x
+          SCORED ON AN alpha IMPORTED from BLOCK_M=64: it is not identifiable at BLOCK_M=128 on this sweep (there is no BLOCK_M=128 ladder in this sweep). ALPHA_BY_BLOCK_M records a drift of about +/-25% across block sizes, and that drift is `phi` growing with BM/BN rather than a different miss fraction, so an imported alpha is an alpha of ANOTHER TILING and the import is a bound, not a substitution.
+            BLOCK_M= 32  alpha 0.599 from 31 memory-bound treads, fit error 0.60%
+            BLOCK_M= 64  alpha 0.766 from 15 memory-bound treads, fit error 0.51%
+            BLOCK_M=256  alpha not identifiable (0 memory-bound tread(s)): BLOCK_M=256 is the compute reference, so by the assumption that qualified it there is no memory branch here to fit
+
+RESULT: CLAIM no_crossing_at_the_null_tile UNKNOWN [CLAIM/OBSERVED] BLOCK_M=64 never reaches the compute roof (ridge x bandwidth) | measured peak 0.423 of ridge x bandwidth | gate < 0.95 of ridge x bandwidth, and <= 0.868 (the midpoint of this run's ceiling 0.736 and the rival world's 1.000)
+GATE 4  UNDECIDED [CLAIM/OBSERVED] BLOCK_M=64 never reaches the compute roof (ridge x bandwidth)
+          measured peak 0.423 of ridge x bandwidth   gate < 0.95 of ridge x bandwidth, and <= 0.868 (the midpoint of this run's ceiling 0.736 and the rival world's 1.000)
+          THE SWEEP IS NOT BRACKETED, so an absence here is not evidence of absence and this gate refuses to score it.
+          measured in fractions of ridge x bandwidth (682 TFLOP/s); the refit caps this block size at cap/ridge = 114.7/155.9 = 0.736 and the retracted alpha=0.1 at 1.000
+          throughput per tread as a fraction of that roof: n=1:0.32, n=2:0.38, n=3:0.39, n=5:0.40, n=6:0.41, n=7:0.41, n=8:0.42, n=9:0.42, n=10:0.42, n=11:0.42, n=12:0.42, n=13:0.42, n=14:0.42, n=15:0.42, n=16:0.42
+          this arm's own plateau is 369.2 TFLOP/s = 54.1% of that roof. Against the plateau this block size peaks at 0.781, which is the number the retired gate scored against 0.85. It is ARM-RELATIVE and it is not the verdict.
+          per-tile slopes: memory B=0.7678 ms against compute C=0.6148 ms (scaled from the reference by C ~ BLOCK_M). C > B is the condition for a crossing to exist at all, and it is NOT met.
+          swept to 1024 rows per expert (16 M-tiles)
+          horizon 374 rows: 2x the crossing the retracted alpha=0.1 predicts for this block size
+          positive control: NOTHING reached the compute roof in this grid (best other block size 0.54 of ridge x bandwidth = 682 TFLOP/s), so the sweep never demonstrated it can detect a crossing at all
+          modelled AI at the last tread is 95.3% of the ceiling, and the last tread gained -0.1% of throughput over the one before it
+
+READING IT. Gates [1, 3, 4] did not pass. A FAIL here is a result: it falsifies the tile-corrected roofline at alpha=0.558 in a specific, named place, which is what the gate was built to do.
+
+cells    /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3/qwen2_g1-rep1/block_m_crossing/nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_budg-ba7c80c2/cells.csv
+report   /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3/qwen2_g1-rep1/block_m_crossing/nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_budg-ba7c80c2/report.txt
+json     /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3/qwen2_g1-rep1/block_m_crossing/nvidia_h200-cachefresh-g1-modelqwen2_57b_a14b-n64-ordercounterbalanced-rep1-s4-settingscell_budg-ba7c80c2/report.json
+These survive pod teardown when the results root is on the network volume, which is what the WRITES TO line above says.
+exit     1 CLAIM_FAIL: measured; VALIDITY passed; a CLAIM gate did not (a result, not a retry)
+         a claim that did not pass is a RESULT and the arm is FINISHED, not broken.
+
+--- stderr ---

@@ -1,0 +1,64 @@
+[calibrate] measuring achievable bandwidth and dense BF16 ...
+[calibrate] buffers 8 GiB, L2 flushed between iterations
+[calibrate] settling clocks under load (up to 30s) before measuring anything
+
+  device            NVIDIA H200
+  L2                60 MiB   (buffers are 137x larger)
+  power limit       700 W   (SXM)
+  memory clock      3201 MHz  -> pin rate 4814.3 GB/s
+                    (clk x 2 for DDR x 6016 bits / 8; bus width from nvml)
+
+  pattern       GB/s  of spec   of pin    p50 ms   note
+  read_stream    4612.3   96.1%   95.8%     1.862   Triton, one store per program, no cross-CTA combine; stores are 0.012% of traffic and are not counted
+  read_reduce    4467.7   93.1%   92.8%     1.923   ATen reduction along the contiguous axis; a LOWER BOUND on the DRAM read rate, not the read rate
+  copy        4300.6   89.6%   89.3%     3.995   
+  triad       4374.3   91.1%   90.9%     5.891   canonical STREAM metric; the default ceiling <-- ceiling
+  write       4679.4   97.5%   97.2%     1.836   1N proven (2N would exceed the pin rate by 94%); unflushed so the timed window cannot shed writeback
+                         ^ vs     ^ vs
+                        4800     4814  GB/s (published, derived)
+
+  achieved BW         4374.3 GB/s (pattern: triad)
+  achieved BF16        682.1 TFLOP/s (GEMM 8192^3)
+                        68.9% of the 989.5 datasheet figure
+  measured at       1470 MHz, where the silicon can do 794.8 TFLOP/s
+                        85.8% of THAT <-- efficiency at the measured clock
+                    the datasheet assumes ~1830 MHz, a boost clock this part does not hold under dense tensor load
+  clock, bf16 GEMM  1470 MHz median of [1470, 1455, 1440, 1470, 1470], spread 2.0%
+                   post-hoc idle sample 1470 MHz (what this field used to be), 692 W
+  clock, fp8 GEMM   1380 MHz median of [1395, 1380, 1380, 1380, 1335], spread 4.3%
+                   post-hoc idle sample 1335 MHz (what this field used to be), 691 W
+
+  ridge point by choice of denominator (FLOP/byte):
+    read_stream      148 <-- matched to this study's traffic
+    read_reduce      153
+    copy             159
+    triad            156 <-- used
+    write            146
+    datasheet        206
+    band          147.9 to 155.9  (5.4% wide) -- quote this, not one end, for any crossing inside it
+
+  settle compute    reached at 1485 MHz   governs the bf16 and fp8 GEMMs
+                  history [1500, 1425, 1470, 1470, 1485]
+  settle memory     reached at 1980 MHz   governs the four bandwidth patterns
+                  history [1980, 1980, 1980]
+
+  warm-up pass      discarded; largest per-pattern change 0.0%
+
+  clocks (idle pair) 1485 -> 1980 MHz, 56 -> 49 C  [retired idle-instant reading, not scored]
+  clock under load  PASS: scored DRIFT (clock_drift_ok=True) from gemm_clock.{clock_level_ok,clock_drift_ok}, LEVEL undetermined (no reference clock): first and last under-load samples 1470 -> 1470 MHz
+
+  NOTE: write is 97.2% of the derived pin rate. That is a REAL store rate, not an accounting error: a read-for-ownership would make it 2N, which would exceed the pin rate by ~94% and is impossible. Write is not the ceiling because it is the least representative pattern for a read-dominated workload.
+
+[calibrate] wrote /workspace/moe-kernels/results/calibration/nvidia_h200-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-2ea5b191/measured_nvidia_h200.yaml
+[calibrate] wrote /workspace/moe-kernels/results/calibration/nvidia_h200-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-2ea5b191/cells.csv
+  MDE: 1.99% of the measured value, at alpha 0.05 and 80% power, from sigma 1.23% over 3 trial(s) (median within-cell ms_std/ms_p50 over 76918 published rows; a LOWER bound, since between-run spread is not in that column). A difference smaller than this is not resolvable here.
+[calibrate] PUBLISHED to /workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml
+  That file is TRACKED. roofline.load_measured() reads it, so the sweep now has ceilings; until you commit it, every row measured carries git_dirty=True and cannot be reproduced from the commit it names.
+{"achieved_bw_gbps": 4374.299702465323, "ceiling_pattern": "triad", "achieved_bf16_tflops": 682.0859627227493, "ridge": 155.9, "ridge_band": [147.9, 155.9], "gemm_clock_mhz": 1470, "clock_established": true, "out": "/workspace/moe-kernels/results/calibration/nvidia_h200-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-2ea5b191/measured_nvidia_h200.yaml", "published_to": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml", "instrument": "moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed events, L2 flush between iterations); NOT timing.TIMING_BASIS"}
+
+RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+RESULT: VALIDITY ceiling_pattern_measured PASS triad = 4374.3 GB/s
+RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 4679.4 GB/s against a derived pin rate of 4814.3 GB/s
+RESULT: CLAIM write_rate_is_a_store_rate PASS write 4679.4 GB/s is 97.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+RESULT: CLAIM not_throttled PASS scored DRIFT (clock_drift_ok=True) from gemm_clock.{clock_level_ok,clock_drift_ok}, LEVEL undetermined (no reference clock): first and last under-load samples 1470 -> 1470 MHz

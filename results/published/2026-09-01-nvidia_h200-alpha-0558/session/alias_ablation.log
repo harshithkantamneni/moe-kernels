@@ -1,0 +1,209 @@
+# alpha by ablation, without the byte model   (d9190b2)
+
+output directory: /workspace/session/20260901T214218Z/alias_ablation
+Everything below is written there as report.md, beside plan.json and cells.jsonl.
+candidate values: agrees with alpha_refit.py on both rival values
+
+## the prediction, before anything runs
+
+  P1  alpha = 0.558, 90% band 0.529-0.588  (today's refit, 10,813 rows)
+      TEMPO arXiv:2608.13057 fits 0.33; this repo's retracted value is 0.10.
+      This ablation runs at GROUP_SIZE_M=1, where the refit's own split reads 0.570,
+      so that is the closer comparison and both are printed.
+
+  P2  alpha is not a scalar: at GROUP_SIZE_M=1 the reuse distance is one pass over
+      one expert's weight block, so alpha should track PER-EXPERT BYTES against L2.
+
+  PASS/FAIL below is against P1's band, and the report names which of the three
+  candidate values the measured band actually supports.
+
+## the design
+
+compute mode sum   BLOCK_M 16   tile {'BLOCK_N': 128, 'BLOCK_K': 64, 'GROUP_M': 1, 'num_warps': 8, 'num_stages': 3}   replicates 9
+
+  model                   E      K      N   MiB/expert  weight GiB  rows/expert   act frac
+  mixtral-8x7b            8   4096  28672       224.0        1.75           16     0.0006
+  mixtral-8x7b            8   4096  28672       224.0        1.75           32     0.0011
+  mixtral-8x7b            8   4096  28672       224.0        1.75           64     0.0022
+  mixtral-8x7b            8   4096  28672       224.0        1.75          128     0.0045
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19           16     0.0031
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19           32     0.0063
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19           64     0.0125
+  qwen2-57b-a14b         64   3584   5120        35.0        2.19          128     0.0250
+  deepseek-v2-lite       64   2048   2816        11.0        0.69           16     0.0057
+  deepseek-v2-lite       64   2048   2816        11.0        0.69           32     0.0114
+  deepseek-v2-lite       64   2048   2816        11.0        0.69           64     0.0227
+  deepseek-v2-lite       64   2048   2816        11.0        0.69          128     0.0455
+  deepseek-v3           256   7168   4096        56.0       14.00           16     0.0039
+  deepseek-v3           256   7168   4096        56.0       14.00           32     0.0078
+  deepseek-v3           256   7168   4096        56.0       14.00           64     0.0156
+  deepseek-v3           256   7168   4096        56.0       14.00          128     0.0312
+  control-l2-resident    32   2048   4096        16.0        0.50           16     0.0039
+  control-l2-resident    32   2048   4096        16.0        0.50           32     0.0078
+  control-l2-resident    32   2048   4096        16.0        0.50           64     0.0156
+  control-l2-resident    32   2048   4096        16.0        0.50          128     0.0312
+
+  L2 on the attached card: 60.0 MiB. P2 says alpha is near 1 above it and near 0 below.
+
+  [PASS] every rung divides exactly, so no mask and no padding
+          N % BLOCK_N, K % BLOCK_K and M-tiles % GROUP_M are all zero
+  [PASS] the ladder has at least three rungs, so D(n) can be shown affine
+          tile ladder [1, 2, 4, 8]; two rungs fit a line through two points and can never contradict the form
+  [PASS] the ladder starts at one tile, which is the only source of W
+          smallest rung is 1 tiles. D(1) is the denominator of every alpha here; without it W has to come from a byte model, which is the thing this experiment exists to avoid
+  [PASS] the activation stream is small against the weight stream
+          worst rung streams 4.55% as many activation bytes as weight bytes (limit 5%). This bounds the L2-capacity confound: the aliased variant frees L2, and what it could free it for is the activation re-stream
+  [PASS] P2 is testable: the models straddle L2
+          per-expert weight blocks run 11.0 to 224.0 MiB against an L2 of 60.0 MiB
+
+## measuring: 20 rungs to do, 0 already on disk
+[alias] mixtral-8x7b|t1|bm16                         normal    0.7802 ms  aliased    0.7216 ms  D    0.0586 ms
+[alias] mixtral-8x7b|t2|bm16                         normal    1.5109 ms  aliased    1.4256 ms  D    0.0853 ms
+[alias] mixtral-8x7b|t4|bm16                         normal    2.9488 ms  aliased    2.7855 ms  D    0.1632 ms
+[alias] mixtral-8x7b|t8|bm16                         normal    5.8056 ms  aliased    5.5032 ms  D    0.3024 ms
+[alias] qwen2-57b-a14b|t1|bm16                       normal    0.9611 ms  aliased    0.9011 ms  D    0.0601 ms
+[alias] qwen2-57b-a14b|t2|bm16                       normal    1.8267 ms  aliased    1.7395 ms  D    0.0872 ms
+[alias] qwen2-57b-a14b|t4|bm16                       normal    3.5848 ms  aliased    3.4587 ms  D    0.1262 ms
+[alias] qwen2-57b-a14b|t8|bm16                       normal    7.1366 ms  aliased    6.8955 ms  D    0.2411 ms
+[alias] deepseek-v2-lite|t1|bm16                     normal    0.3461 ms  aliased    0.2933 ms  D    0.0528 ms
+[alias] deepseek-v2-lite|t2|bm16                     normal    0.5992 ms  aliased    0.5695 ms  D    0.0297 ms
+[alias] deepseek-v2-lite|t4|bm16                     normal    1.1419 ms  aliased    1.1000 ms  D    0.0420 ms
+[alias] deepseek-v2-lite|t8|bm16                     normal    2.2507 ms  aliased    2.1852 ms  D    0.0655 ms
+[alias] deepseek-v3|t1|bm16                          normal    5.8852 ms  aliased    5.5723 ms  D    0.3129 ms
+[alias] deepseek-v3|t2|bm16                          normal   11.4874 ms  aliased   11.0285 ms  D    0.4589 ms
+[alias] deepseek-v3|t4|bm16                          normal   22.7387 ms  aliased   21.9501 ms  D    0.7886 ms
+[alias] deepseek-v3|t8|bm16                          normal   45.3440 ms  aliased   43.7844 ms  D    1.5596 ms
+[alias] control-l2-resident|t1|bm16                  normal    0.2413 ms  aliased    0.2155 ms  D    0.0259 ms
+[alias] control-l2-resident|t2|bm16                  normal    0.4632 ms  aliased    0.4185 ms  D    0.0447 ms
+[alias] control-l2-resident|t4|bm16                  normal    0.8482 ms  aliased    0.8201 ms  D    0.0281 ms
+[alias] control-l2-resident|t8|bm16                  normal    1.6510 ms  aliased    1.6031 ms  D    0.0479 ms
+
+## the measurements
+
+  model                  tiles   rows/e     normal    aliased          D    placebo
+  mixtral-8x7b               1       16     0.7802     0.7216     0.0586    -0.0004
+  mixtral-8x7b               2       32     1.5109     1.4256     0.0853     0.0005
+  mixtral-8x7b               4       64     2.9488     2.7855     0.1632     0.0000
+  mixtral-8x7b               8      128     5.8056     5.5032     0.3024     0.0003
+  qwen2-57b-a14b             1       16     0.9611     0.9011     0.0601    -0.0005
+  qwen2-57b-a14b             2       32     1.8267     1.7395     0.0872    -0.0008
+  qwen2-57b-a14b             4       64     3.5848     3.4587     0.1262     0.0042
+  qwen2-57b-a14b             8      128     7.1366     6.8955     0.2411     0.0035
+  deepseek-v2-lite           1       16     0.3461     0.2933     0.0528    -0.0009
+  deepseek-v2-lite           2       32     0.5992     0.5695     0.0297    -0.0003
+  deepseek-v2-lite           4       64     1.1419     1.1000     0.0420     0.0004
+  deepseek-v2-lite           8      128     2.2507     2.1852     0.0655     0.0006
+  deepseek-v3                1       16     5.8852     5.5723     0.3129    -0.0017
+  deepseek-v3                2       32    11.4874    11.0285     0.4589    -0.0031
+  deepseek-v3                4       64    22.7387    21.9501     0.7886    -0.0039
+  deepseek-v3                8      128    45.3440    43.7844     1.5596    -0.0134
+  control-l2-resident        1       16     0.2413     0.2155     0.0259    -0.0006
+  control-l2-resident        2       32     0.4632     0.4185     0.0447     0.0000
+  control-l2-resident        4       64     0.8482     0.8201     0.0281     0.0008
+  control-l2-resident        8      128     1.6510     1.6031     0.0479    -0.0001
+
+  D is the ablation difference and is the HBM cost of that rung's weight reads.
+  placebo is a SECOND normal launch minus the first: two identical configurations,
+  so it is the noise floor D has to beat and nothing else.
+
+## the ISA check: did the aliased kernel really issue the loads?
+
+  rung                          variant           PTX      ld.global   cp.async   global loads   mma.sync
+  mixtral-8x7b|t1|bm16          normal           7d19478c5170          6          0              6          0
+  mixtral-8x7b|t1|bm16          aliased          7d19478c5170          6          0              6          0
+  mixtral-8x7b|t1|bm16          constexpr-alias  4178041202e2          5          0              5          0
+
+  ld.global ALONE would read zero here: Triton pipelines its global-to-shared copies
+  as cp.async at num_stages > 1, so the gate is on the SUM. normal and aliased are
+  the same compiled kernel driven by three runtime scalars, so equal counts are a
+  property of the design; constexpr-alias is the naive form and is shown folding or not.
+
+## alpha, from the ablation alone, as a bracket
+
+  Two estimators, because exactly one of them is right and which one depends on how
+  L2 service and HBM service compose. DIFFERENCE subtracts the aliased ladder and is
+  exact if the two costs ADD; DIRECT fits the normal ladder with the fixed cost taken
+  from the aliased ladder's own n=0 intercept and is exact if the kernel runs at
+  max(L2, HBM). For any alpha <= 1 they BRACKET the truth, and the bracket is narrow
+  exactly when r, the aliased ladder's per-tile cost over one weight read, is small.
+
+  model                  MiB/expert    W (ms)   fixed  difference  direct       r      R^2
+  mixtral-8x7b               224.0    0.0552  0.0517       0.640   0.973  12.350   0.9988
+  qwen2-57b-a14b              35.0    0.0580  0.0337       0.443   0.965  14.782   0.9944
+  deepseek-v2-lite            11.0    0.0387  0.0250       0.082   0.885   6.971   0.4179
+  deepseek-v3                 56.0    0.2863  0.1124       0.627   0.981  19.070   0.9975
+  control-l2-resident         16.0    0.0308  0.0217       0.069   0.875   6.429   0.3421  (L2-RESIDENT CONTROL)
+
+  model                  bracket           90% interval        per-rung alphas (difference)
+  mixtral-8x7b         0.640 to 0.973       0.619 to 0.974   n=2:0.457  n=4:0.596  n=8:0.595
+  qwen2-57b-a14b       0.443 to 0.965       0.413 to 0.966   n=2:0.452  n=4:0.367  n=8:0.431
+  deepseek-v2-lite     0.082 to 0.885       0.076 to 0.887   n=2:-0.438  n=4:-0.068  n=8:0.034
+  deepseek-v3          0.627 to 0.981       0.594 to 0.982   n=2:0.466  n=4:0.507  n=8:0.569
+  control-l2-resident  0.069 to 0.875       0.058 to 0.879   n=2:0.728  n=4:0.028  n=8:0.122
+
+  W is the measured time of ONE full pass over every expert's weight block, read off
+  the n=1 rung. Both alphas are a fitted slope over that intercept, so every unit of
+  time cancels and no bandwidth, byte count or ridge enters either number.
+
+  POOLED (median over the non-control models): alpha is in 0.535 to 0.969, 90% interval 0.504 to 0.970
+  against the refit's 0.558 (0.529-0.588) pooled and 0.570 at GROUP_SIZE_M=1.
+
+## P2, reported and deliberately NOT gated
+
+  A step in four points is a pattern, not a test. This study has already retracted one
+  monotone-in-expert-count reading that was an artefact of pooling, so the ordering is
+  printed and left for a design that varies the footprint continuously.
+
+  deepseek-v2-lite         11.0 MiB/expert  below L2   alpha 0.082 to 0.885
+  qwen2-57b-a14b           35.0 MiB/expert  below L2   alpha 0.443 to 0.965
+  deepseek-v3              56.0 MiB/expert  below L2   alpha 0.627 to 0.981
+  mixtral-8x7b            224.0 MiB/expert  above L2   alpha 0.640 to 0.973
+
+## what else differs between aliased and normal
+
+  BOUNDED. L2 capacity. The aliased variant leaves L2 to the activations, whose stream
+  is 4.55% of the weight stream at the worst rung, so the most the freed
+  capacity can be worth is that fraction of D. The output write is identical in both.
+
+  BOUNDED BY MEASUREMENT. TLB, page behaviour and code path. The L2-resident control
+  ran the same ladder on a geometry whose PER-EXPERT block fits in L2, so NORMAL
+  has no HBM re-read to save. Its W is 0.0308 ms and its alpha brackets 0.069 to 0.875.
+  Whatever survives there is not weight traffic.
+
+  BOUNDED BY THE BRACKET. L2 service, and the cache-set distribution that makes it
+  worse. Both variants push n W bytes through L2, and the aliased variant pins every
+  one of them to a single BLOCK_K x BLOCK_N tile, so its loads land on a handful of L2
+  slices and are served more slowly than the aggregate L2 bandwidth would suggest.
+  Whatever that costs shows up in the ALIASED ladder's own slope, which is r above,
+  and the two estimators bracket the truth for any composition of L2 and HBM service
+  between a sum and a max. Narrowing it means spreading the aliased tile across more
+  slices, which this design does not do because a spread alias has no closed form to
+  check the output against.
+
+  ABSORBED BY CONSTRUCTION. Any cost that scales with the extra-tile count and is not a
+  weight re-read lands in alpha, because (n-1) is the regressor. That is a property of
+  the estimator and no control can remove it.
+
+## gates
+
+  [PASS] ISA: the aliased kernel issued the same global loads
+          20 rungs compared. First, mixtral-8x7b|t1|bm16: normal 6 global-load instructions (ld.global 6, cp.async 0); aliased 6 (ld.global 6, cp.async 0). Every rung's two launches are ONE compiled kernel. The constexpr-aliased kernel, the naive way to write this, issues 5 and DID fold, which is the hazard happening in front of you
+  [PASS] correctness: each variant reproduced its closed form
+          40 checks at relative RMS <= 1e-03; worst 1.54e-07
+  [PASS] placebo: two identical launches differ by far less than D
+          worst rung qwen2-57b-a14b|t4|bm16: two identical configurations differ by 0.0042 ms against a D of 0.1262 ms, 3.3% (limit 10%)
+  [FAIL] signal: the weight read is most of what the kernel does
+          weakest one-tile rung deepseek-v3|t1|bm16 has D(1) at 5.3% of its own time (limit 25%). Below that the difference is measuring something the weight-read label does not cover
+  [FAIL] form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires
+          worst R^2 0.4179 on deepseek-v2-lite (limit 0.97). Below it the functional form is wrong and slope-over-intercept is not alpha
+  [PASS] control: an L2-resident expert shows no extra-tile cost
+          the control's bracket is 0.069 to 0.875 on a W of 0.0308 ms, against a top end of 0.885 for the weakest real model. It must be consistent with zero to within 0.15: its re-reads hit L2, so anything it does show is the size of an extra-tile cost that is not weight traffic
+  [NOT TESTABLE] resolution: the interval can separate the three candidates
+          90% interval is 0.466 wide (limit 0.11). The candidates span 0.1 to 0.558, and an interval wider than half the largest gap between adjacent candidates cannot pick one. r, the aliased ladder's per-tile cost over one weight read, is 6.971 to 19.070, and r is what sets the bracket's width: the two estimators differ by roughly 2r/(1-r^2). Narrowing this needs a cheaper aliased ladder, which means spreading the aliased tile across more L2 slices rather than pinning every load to one
+  [PASS] P1: the ablation agrees with the refit, alpha = 0.558
+          measured alpha is in 0.535 to 0.969 before noise and 0.504 to 0.970 after it, against the refit's 0.529-0.588: they overlap. the interval 0.504-0.970 contains today's refit
+
+VERDICT: REFUTED or VOID. 2 gate(s) failed: signal: the weight read is most of what the kernel does; form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires
+
+[alias] report written to /workspace/session/20260901T214218Z/alias_ablation/report.md
+[alias] measurements at  /workspace/session/20260901T214218Z/alias_ablation/cells.jsonl

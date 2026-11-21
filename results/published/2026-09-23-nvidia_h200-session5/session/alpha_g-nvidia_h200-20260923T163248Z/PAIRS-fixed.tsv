@@ -1,0 +1,12 @@
+key	value	source
+model	mixtral-8x7b	report.json of 12 run(s)
+block_m	32	report.json of 12 run(s)
+r3_pinned	BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 num_warps=8 num_stages=4	report.json of 12 run(s)
+group_m	varies: 1 4 16 64	the G column; the swizzle each run pinned
+r3_treads	1 2 3 4 5 6	report.json of 12 run(s)
+r3_repeats	9	report.json of 12 run(s)
+r3_duty	0.25	report.json of 12 run(s)
+r1_pinned	BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 num_warps=8 num_stages=4 BLOCK_SIZE_M=32	report.json of 4 run(s)
+r1_duty	1.0 0.5 0.25	report.json of 4 run(s)
+r1_treads	--treads 8	the chain's command line
+r1_repeats	--repeats 13	the chain's command line

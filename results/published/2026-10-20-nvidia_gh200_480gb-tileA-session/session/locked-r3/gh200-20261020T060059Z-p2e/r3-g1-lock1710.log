@@ -1,0 +1,106 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbebb06d6d-267374ba
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=128, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 128, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 3}
+histogram   docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json (sha256 bebb06d6df189f19...), page mixtral-8x7b-128g1, 4 cells x arms = 8 timed cells, token-row shuffle seed 20261410; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       176.36 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 657.1 TFLOP/s bf16 over 3725.9 GB/s (triad pattern); calibrated 2026-10-20 at c4914bac
+experts     native declares E=8; shared declares E x n_decl = 72 at every cell
+            n_decl = 9 against n_max = 2 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 2 against the 2 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261020T060059Z-p2e-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-e128g1/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbebb06d6d-267374ba
+slips       --slip-policy cell at the 1710 MHz lock: a repeat under 1695 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 1 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=2   PT               native,shared  block-scan   e36cf7f919bfa97a
+  n=2   PW               native,shared  block-scan   41924e3fa6e3db0f
+  n=2   uniform          native,shared  block-scan   9b3a6d3b0b6482a3
+  n=2   balanced         native,shared  block-scan   74234e98afe7498f
+  rep 0 PT             native   n=  2 T=   1024    1.9451 ms
+  rep 0 PT             shared   n=  2 T=   1024    1.9610 ms
+  rep 0 PW             native   n=  2 T=   1024    1.9366 ms
+  rep 0 PW             shared   n=  2 T=   1024    1.9530 ms
+  rep 0 uniform        native   n=  2 T=   1024    1.5751 ms
+  rep 0 uniform        shared   n=  2 T=   1024    1.5822 ms
+  rep 0 balanced       native   n=  2 T=   1024    1.5749 ms
+  rep 0 balanced       shared   n=  2 T=   1024    1.5822 ms
+  LOCK SLIP rep 0 balanced       shared   n=  2 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 1 balanced       shared   n=  2 T=   1024    1.5820 ms
+  rep 1 balanced       native   n=  2 T=   1024    1.5737 ms
+  rep 1 uniform        shared   n=  2 T=   1024    1.5817 ms
+  rep 1 uniform        native   n=  2 T=   1024    1.5753 ms
+  rep 1 PW             shared   n=  2 T=   1024    1.9550 ms
+  rep 1 PW             native   n=  2 T=   1024    1.9368 ms
+  rep 1 PT             shared   n=  2 T=   1024    1.9604 ms
+  rep 1 PT             native   n=  2 T=   1024    1.9458 ms
+  rep 2 PT             native   n=  2 T=   1024    1.9456 ms
+  rep 2 PT             shared   n=  2 T=   1024    1.9614 ms
+  rep 2 PW             native   n=  2 T=   1024    1.9379 ms
+  rep 2 PW             shared   n=  2 T=   1024    1.9556 ms
+  rep 2 uniform        native   n=  2 T=   1024    1.5756 ms
+  rep 2 uniform        shared   n=  2 T=   1024    1.5821 ms
+  rep 2 balanced       native   n=  2 T=   1024    1.5740 ms
+  rep 2 balanced       shared   n=  2 T=   1024    1.5830 ms
+  rep 3 balanced       shared   n=  2 T=   1024    1.5822 ms
+  rep 3 balanced       native   n=  2 T=   1024    1.5760 ms
+  rep 3 uniform        shared   n=  2 T=   1024    1.5822 ms
+  rep 3 uniform        native   n=  2 T=   1024    1.5756 ms
+  rep 3 PW             shared   n=  2 T=   1024    1.9537 ms
+  rep 3 PW             native   n=  2 T=   1024    1.9375 ms
+  rep 3 PT             shared   n=  2 T=   1024    1.9604 ms
+  rep 3 PT             native   n=  2 T=   1024    1.9443 ms
+  rep 4 PT             native   n=  2 T=   1024    1.9449 ms
+  rep 4 PT             shared   n=  2 T=   1024    1.9611 ms
+  rep 4 PW             native   n=  2 T=   1024    1.9374 ms
+  rep 4 PW             shared   n=  2 T=   1024    1.9540 ms
+  rep 4 uniform        native   n=  2 T=   1024    1.5760 ms
+  rep 4 uniform        shared   n=  2 T=   1024    1.5816 ms
+  rep 4 balanced       native   n=  2 T=   1024    1.5760 ms
+  rep 4 balanced       shared   n=  2 T=   1024    1.5816 ms
+  rep 5 balanced       shared   n=  2 T=   1024    1.5818 ms
+  rep 5 balanced       native   n=  2 T=   1024    1.5764 ms
+  rep 5 uniform        shared   n=  2 T=   1024    1.5828 ms
+  rep 5 uniform        native   n=  2 T=   1024    1.5770 ms
+  LOCK SLIP rep 5 uniform        shared   n=  2 1650.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 5 PW             shared   n=  2 T=   1024    1.9537 ms
+  rep 5 PW             native   n=  2 T=   1024    1.9365 ms
+  rep 5 PT             shared   n=  2 T=   1024    1.9623 ms
+  rep 5 PT             native   n=  2 T=   1024    1.9451 ms
+  rep 6 PT             native   n=  2 T=   1024    1.9457 ms
+  rep 6 PT             shared   n=  2 T=   1024    1.9606 ms
+  rep 6 PW             native   n=  2 T=   1024    1.9370 ms
+  rep 6 PW             shared   n=  2 T=   1024    1.9529 ms
+  rep 6 uniform        native   n=  2 T=   1024    1.5756 ms
+  rep 6 uniform        shared   n=  2 T=   1024    1.5827 ms
+  LOCK SLIP rep 6 uniform        shared   n=  2 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 6 balanced       native   n=  2 T=   1024    1.5760 ms
+  rep 6 balanced       shared   n=  2 T=   1024    1.5820 ms
+  rep 7 balanced       shared   n=  2 T=   1024    1.5825 ms
+  rep 7 balanced       native   n=  2 T=   1024    1.5759 ms
+  rep 7 uniform        shared   n=  2 T=   1024    1.5827 ms
+  rep 7 uniform        native   n=  2 T=   1024    1.5763 ms
+  rep 7 PW             shared   n=  2 T=   1024    1.9540 ms
+  rep 7 PW             native   n=  2 T=   1024    1.9369 ms
+  rep 7 PT             shared   n=  2 T=   1024    1.9612 ms
+  rep 7 PT             native   n=  2 T=   1024    1.9455 ms
+  rep 8 PT             native   n=  2 T=   1024    1.9466 ms
+  rep 8 PT             shared   n=  2 T=   1024    1.9608 ms
+  LOCK SLIP rep 8 PT             native   n=  2 1665.0 MHz, more than 15 MHz under the 1710 MHz lock: excluded from the cell median
+  rep 8 PW             native   n=  2 T=   1024    1.9369 ms
+  rep 8 PW             shared   n=  2 T=   1024    1.9550 ms
+  rep 8 uniform        native   n=  2 T=   1024    1.5756 ms
+  rep 8 uniform        shared   n=  2 T=   1024    1.5828 ms
+  rep 8 balanced       native   n=  2 T=   1024    1.5766 ms
+  rep 8 balanced       shared   n=  2 T=   1024    1.5830 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: FAIL
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-e128g1/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbebb06d6d-267374ba/report.json
+exit     3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable

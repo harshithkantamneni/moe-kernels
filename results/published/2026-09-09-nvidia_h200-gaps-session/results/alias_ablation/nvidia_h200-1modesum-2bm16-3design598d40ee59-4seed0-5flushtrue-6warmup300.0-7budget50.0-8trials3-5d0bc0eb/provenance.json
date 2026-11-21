@@ -1,0 +1,41 @@
+{
+  "run_id": "nvidia_h200-1modesum-2bm16-3design598d40ee59-4seed0-5flushtrue-6warmup300.0-7budget50.0-8trials3-5d0bc0eb",
+  "git_sha": "1833c293079bf4d650e98a72c23924d52e5a1f64",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": "measured_nvidia_h200.yaml: 712.3 TFLOP/s bf16 over 4374.8 GB/s = 162.8 FLOP/byte",
+  "bandwidth_source": null,
+  "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "1833c293079bf4d650e98a72c23924d52e5a1f64",
+    "git_dirty": true,
+    "git_dirty_files": 3,
+    "utc": "2026-09-09T03:17:26+00:00",
+    "hostname": "be9a8c80d0d5",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": null,
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+    "ridge": 162.8109151471342,
+    "ridge_source": "measured_nvidia_h200.yaml: 712.3 TFLOP/s bf16 over 4374.8 GB/s = 162.8 FLOP/byte",
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "vllm": "package not installed",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}

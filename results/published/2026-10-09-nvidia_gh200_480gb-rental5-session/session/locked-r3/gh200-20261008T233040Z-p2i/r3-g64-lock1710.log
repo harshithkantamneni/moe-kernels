@@ -1,0 +1,114 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative-bk128-bm32-budget200.0-decl9-dtypebf16-duty0.25-g64-hist83d5f80ae5-5fc978fd
+model       olmoe-1b-7b E=64 k=8  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 64, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json (sha256 83d5f80ae595ca4a...), page bk, 9 cells x arms = 9 timed cells, token-row shuffle seed 20261007; R3's balanced ladder is NOT run (--treads ignored)
+arms        native; PRIVATE cannot run skewed
+  ridge       174.87 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 651.8 TFLOP/s bf16 over 3727.6 GB/s (triad pattern); calibrated 2026-10-08 at d4d1767e
+experts     native declares E=64; shared declares E x n_decl = 576 at every cell
+            n_decl = 9 against n_max = 9 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 9 against the 9 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261008T233040Z-p2i-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-bk128/private_weight_reference/nvidia_gh200_480gb-armsnative-bk128-bm32-budget200.0-decl9-dtypebf16-duty0.25-g64-hist83d5f80ae5-5fc978fd
+cells (n, label, arms, path, counts sha256):
+  n=1   balanced         native         block-scan   74234e98afe7498f
+  n=2   balanced         native         block-scan   74234e98afe7498f
+  n=3   balanced         native         block-scan   74234e98afe7498f
+  n=4   balanced         native         block-scan   74234e98afe7498f
+  n=5   balanced         native         block-scan   74234e98afe7498f
+  n=6   balanced         native         block-scan   74234e98afe7498f
+  n=7   balanced         native         block-scan   74234e98afe7498f
+  n=8   balanced         native         block-scan   74234e98afe7498f
+  n=9   balanced         native         block-scan   74234e98afe7498f
+  rep 0 balanced       native   n=  1 T=    256    0.2746 ms
+  rep 0 balanced       native   n=  2 T=    512    0.3828 ms
+  rep 0 balanced       native   n=  3 T=    768    0.5495 ms
+  rep 0 balanced       native   n=  4 T=   1024    0.7180 ms
+  rep 0 balanced       native   n=  5 T=   1280    0.8859 ms
+  rep 0 balanced       native   n=  6 T=   1536    1.0550 ms
+  rep 0 balanced       native   n=  7 T=   1792    1.2228 ms
+  rep 0 balanced       native   n=  8 T=   2048    1.3934 ms
+  rep 0 balanced       native   n=  9 T=   2304    1.5613 ms
+  rep 1 balanced       native   n=  9 T=   2304    1.5615 ms
+  rep 1 balanced       native   n=  8 T=   2048    1.3932 ms
+  rep 1 balanced       native   n=  7 T=   1792    1.2235 ms
+  rep 1 balanced       native   n=  6 T=   1536    1.0559 ms
+  rep 1 balanced       native   n=  5 T=   1280    0.8863 ms
+  rep 1 balanced       native   n=  4 T=   1024    0.7186 ms
+  rep 1 balanced       native   n=  3 T=    768    0.5496 ms
+  rep 1 balanced       native   n=  2 T=    512    0.3844 ms
+  rep 1 balanced       native   n=  1 T=    256    0.2761 ms
+  rep 2 balanced       native   n=  1 T=    256    0.2752 ms
+  rep 2 balanced       native   n=  2 T=    512    0.3843 ms
+  rep 2 balanced       native   n=  3 T=    768    0.5504 ms
+  rep 2 balanced       native   n=  4 T=   1024    0.7186 ms
+  rep 2 balanced       native   n=  5 T=   1280    0.8866 ms
+  rep 2 balanced       native   n=  6 T=   1536    1.0558 ms
+  rep 2 balanced       native   n=  7 T=   1792    1.2227 ms
+  rep 2 balanced       native   n=  8 T=   2048    1.3925 ms
+  rep 2 balanced       native   n=  9 T=   2304    1.5622 ms
+  rep 3 balanced       native   n=  9 T=   2304    1.5615 ms
+  rep 3 balanced       native   n=  8 T=   2048    1.3928 ms
+  rep 3 balanced       native   n=  7 T=   1792    1.2237 ms
+  rep 3 balanced       native   n=  6 T=   1536    1.0559 ms
+  rep 3 balanced       native   n=  5 T=   1280    0.8867 ms
+  rep 3 balanced       native   n=  4 T=   1024    0.7190 ms
+  rep 3 balanced       native   n=  3 T=    768    0.5506 ms
+  rep 3 balanced       native   n=  2 T=    512    0.3842 ms
+  rep 3 balanced       native   n=  1 T=    256    0.2741 ms
+  rep 4 balanced       native   n=  1 T=    256    0.2741 ms
+  rep 4 balanced       native   n=  2 T=    512    0.3839 ms
+  rep 4 balanced       native   n=  3 T=    768    0.5509 ms
+  rep 4 balanced       native   n=  4 T=   1024    0.7193 ms
+  rep 4 balanced       native   n=  5 T=   1280    0.8867 ms
+  rep 4 balanced       native   n=  6 T=   1536    1.0558 ms
+  rep 4 balanced       native   n=  7 T=   1792    1.2231 ms
+  rep 4 balanced       native   n=  8 T=   2048    1.3931 ms
+  rep 4 balanced       native   n=  9 T=   2304    1.5626 ms
+  rep 5 balanced       native   n=  9 T=   2304    1.5621 ms
+  rep 5 balanced       native   n=  8 T=   2048    1.3932 ms
+  rep 5 balanced       native   n=  7 T=   1792    1.2228 ms
+  rep 5 balanced       native   n=  6 T=   1536    1.0556 ms
+  rep 5 balanced       native   n=  5 T=   1280    0.8868 ms
+  rep 5 balanced       native   n=  4 T=   1024    0.7188 ms
+  rep 5 balanced       native   n=  3 T=    768    0.5504 ms
+  rep 5 balanced       native   n=  2 T=    512    0.3841 ms
+  rep 5 balanced       native   n=  1 T=    256    0.2762 ms
+  rep 6 balanced       native   n=  1 T=    256    0.2740 ms
+  rep 6 balanced       native   n=  2 T=    512    0.3844 ms
+  rep 6 balanced       native   n=  3 T=    768    0.5501 ms
+  rep 6 balanced       native   n=  4 T=   1024    0.7186 ms
+  rep 6 balanced       native   n=  5 T=   1280    0.8866 ms
+  rep 6 balanced       native   n=  6 T=   1536    1.0561 ms
+  rep 6 balanced       native   n=  7 T=   1792    1.2240 ms
+  rep 6 balanced       native   n=  8 T=   2048    1.3940 ms
+  rep 6 balanced       native   n=  9 T=   2304    1.5623 ms
+  rep 7 balanced       native   n=  9 T=   2304    1.5618 ms
+  rep 7 balanced       native   n=  8 T=   2048    1.3934 ms
+  rep 7 balanced       native   n=  7 T=   1792    1.2238 ms
+  rep 7 balanced       native   n=  6 T=   1536    1.0561 ms
+  rep 7 balanced       native   n=  5 T=   1280    0.8862 ms
+  rep 7 balanced       native   n=  4 T=   1024    0.7189 ms
+  rep 7 balanced       native   n=  3 T=    768    0.5507 ms
+  rep 7 balanced       native   n=  2 T=    512    0.3842 ms
+  rep 7 balanced       native   n=  1 T=    256    0.2871 ms
+  rep 8 balanced       native   n=  1 T=    256    0.2900 ms
+  rep 8 balanced       native   n=  2 T=    512    0.3841 ms
+  rep 8 balanced       native   n=  3 T=    768    0.5506 ms
+  rep 8 balanced       native   n=  4 T=   1024    0.7194 ms
+  rep 8 balanced       native   n=  5 T=   1280    0.8859 ms
+  rep 8 balanced       native   n=  6 T=   1536    1.0559 ms
+  rep 8 balanced       native   n=  7 T=   1792    1.2231 ms
+  rep 8 balanced       native   n=  8 T=   2048    1.3938 ms
+  rep 8 balanced       native   n=  9 T=   2304    1.5620 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-bk128/private_weight_reference/nvidia_gh200_480gb-armsnative-bk128-bm32-budget200.0-decl9-dtypebf16-duty0.25-g64-hist83d5f80ae5-5fc978fd/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

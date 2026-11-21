@@ -1,0 +1,22 @@
+SCORED against 2026-10-13-rental7-skew-gh200 (ALL view; CLEAN and the P20 view beside it in the JSON)
+  page mixtral-8x7b-A: counted
+  page mixtral-8x7b-B: counted
+  page mixtral-8x7b-C: counted
+  page phi-3.5-moe-A: counted
+  page phi-3.5-moe-B: counted
+  page phi-3.5-moe-C: counted
+G3: PASS; pooled EQUIVALENT CI [-0.000126, 0.000151]
+E1-SKEW: HOLDS {'cells': 84, 'rms': 0.006067, 'worst': -0.016079, 'mean': -0.002419}
+  mixtral-8x7b: HOLDS {'cells': 42, 'rms': 0.005091, 'worst': -0.012183, 'mean': -0.001737}
+  phi-3.5-moe: HOLDS {'cells': 42, 'rms': 0.006908, 'worst': -0.016079, 'mean': -0.003101}
+E1-UNI: HOLDS {'cells': 36, 'rms': 0.004553, 'worst': -0.008367, 'mean': -0.000161}
+  E1 rival v2: UNDECIDED: 0 lever cells survive, under 6
+  E1 rival LT3: EXCLUDED
+  E1 rival H8: UNDECIDED: 5 lever cells survive, under 6
+  E1 rival v3_all: UNDECIDED: 3 lever cells survive, under 6
+  E1 rival v3_noca: UNDECIDED: 0 lever cells survive, under 6
+SKEW-RATIO v3: HOLDS (48 ratios); LT3 UNDECIDED: 4 lever cells; U EXCLUDED
+certification (CLEAN): {'mixtral-8x7b': 'CERTIFIED', 'phi-3.5-moe': 'CERTIFIED'}
+P20 view (DESCRIPTIVE): E1-SKEW HOLDS; SKEW-RATIO HOLDS; G3 PASS
+  two views (ALL, CLEAN):
+    0 of 14 verdicts differ between ALL and CLEAN

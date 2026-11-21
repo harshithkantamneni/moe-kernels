@@ -16,3 +16,9 @@
 #
 # Do not add torch here; vLLM pins its own.
 vllm==0.27.1
+
+# The SM clock sampler in moe/bench/timing.py reads torch.cuda.clock_rate, which
+# is torch's NVML binding and needs nvidia-ml-py. This arrives transitively
+# today; named explicitly so a release that drops it cannot silently take every
+# clock column with it.
+nvidia-ml-py

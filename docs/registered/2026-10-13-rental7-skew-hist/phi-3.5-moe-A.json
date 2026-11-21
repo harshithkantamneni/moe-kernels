@@ -1,0 +1,354 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "phi-3.5-moe",
+ "page": "A",
+ "shuffle_seed": 20261020,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 2,
+   "counts": [
+    80,
+    79,
+    72,
+    72,
+    42,
+    82,
+    29,
+    57,
+    74,
+    82,
+    57,
+    82,
+    30,
+    30,
+    60,
+    96
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 15.0712,
+    "seed": 20263040,
+    "B": 512,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.323064,
+     "max_mean": 1.5,
+     "gini": 0.178589
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 2,
+   "counts": [
+    77,
+    56,
+    69,
+    77,
+    114,
+    68,
+    53,
+    64,
+    107,
+    38,
+    49,
+    49,
+    37,
+    45,
+    102,
+    19
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 4.32984,
+    "seed": 20263041,
+    "B": 512,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.402135,
+     "max_mean": 1.78125,
+     "gini": 0.224365
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts": [
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 4,
+   "counts": [
+    134,
+    154,
+    66,
+    136,
+    116,
+    83,
+    192,
+    121,
+    152,
+    157,
+    102,
+    132,
+    168,
+    111,
+    108,
+    116
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 17.404,
+    "seed": 20263060,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.242974,
+     "max_mean": 1.5,
+     "gini": 0.136292
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 4,
+   "counts": [
+    86,
+    82,
+    119,
+    80,
+    213,
+    104,
+    83,
+    97,
+    68,
+    245,
+    178,
+    180,
+    151,
+    81,
+    109,
+    172
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.0,
+    "seed": 20263061,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.412382,
+     "max_mean": 1.914062,
+     "gini": 0.224487
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 4,
+   "counts": [
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 4,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 12,
+   "counts": [
+    395,
+    388,
+    341,
+    388,
+    477,
+    403,
+    297,
+    397,
+    346,
+    449,
+    302,
+    464,
+    339,
+    379,
+    384,
+    395
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 31.9744,
+    "seed": 20263140,
+    "B": 3072,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.129742,
+     "max_mean": 1.242188,
+     "gini": 0.071655
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 12,
+   "counts": [
+    328,
+    459,
+    384,
+    313,
+    576,
+    395,
+    409,
+    279,
+    296,
+    751,
+    579,
+    171,
+    315,
+    297,
+    233,
+    359
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 6.7772,
+    "seed": 20263141,
+    "B": 3072,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.370591,
+     "max_mean": 1.955729,
+     "gini": 0.196981
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 12,
+   "counts": [
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 12,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "fitted Zipf/Dirichlet shapes (scripts/skew_synth.py, rental 6 draws); no trace count"
+}

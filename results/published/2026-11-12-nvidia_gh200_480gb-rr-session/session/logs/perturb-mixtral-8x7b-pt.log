@@ -1,0 +1,8 @@
+INSTRUMENTED KERNEL RR (perturb): 3 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u5-s128      page  docs/registered/2026-11-11-rr-pages/rr-128.json cells 40 tiles 128x128x64w8s3 shapes mixtral-8x7b rrs-e64-h4096-p36-k8 rrs-e64-h4096-p64-k8 rrs-e8-h4096-p100 rrs-e8-h4096-p160 rrs-e8-h4096-p20 rrs-e8-h4096-p36 rrs-e8-h4096-p48 rrs-e8-h4096-p64 rrs-e8-h4096-p80 rrs-e8-h8192-p24 rrs-e8-h8192-p40 spec stamps=ends,evict_a=none,evict_b=none
+  u7-s64       page  docs/registered/2026-11-11-rr-pages/rr-64.json cells 40 tiles 64x128x64w8s3 shapes mixtral-8x7b rrs-e64-h4096-p36-k8 rrs-e64-h4096-p64-k8 rrs-e8-h4096-p100 rrs-e8-h4096-p160 rrs-e8-h4096-p20 rrs-e8-h4096-p36 rrs-e8-h4096-p48 rrs-e8-h4096-p64 rrs-e8-h4096-p80 rrs-e8-h8192-p24 rrs-e8-h8192-p40 spec stamps=ends,evict_a=none,evict_b=none
+  u9-sr        hist  docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json cells 12 tiles 128x128x64w8s3 shapes phi-3.5-moe spec stamps=ends,evict_a=none,evict_b=none
+  gate (C3's): median |plain/copy - 1| <= 1%, worst <= 2%, CTAs per SM identical, all-off SASS equal, the upstream file, C3's SASS legs; 8 bursts of 10 calls each way on every cell of ['u5-s128', 'u7-s64', 'u9-sr']
+  u5-s128: FAIL median |r - 1| 2.11% > 1%; worst |r - 1| 6.15% > 2%
+  u7-s64: FAIL worst |r - 1| 2.90% > 2%
+  u9-sr: FAIL median |r - 1| 1.60% > 1%; worst |r - 1| 2.87% > 2%

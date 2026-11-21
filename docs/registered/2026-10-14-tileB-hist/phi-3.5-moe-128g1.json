@@ -1,0 +1,401 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "phi-3.5-moe",
+ "page": "phi-3.5-moe-128g1",
+ "shuffle_seed": 20261420,
+ "block_m": 128,
+ "group_m": 1,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 1,
+   "counts": [
+    143,
+    141,
+    106,
+    140,
+    143,
+    123,
+    114,
+    120,
+    117,
+    119,
+    125,
+    135,
+    137,
+    151,
+    122,
+    112
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 17.404,
+    "seed": 20274430,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.101375,
+     "max_mean": 1.179688,
+     "gini": 0.057556
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 1,
+   "counts": [
+    119,
+    49,
+    87,
+    64,
+    139,
+    216,
+    276,
+    134,
+    170,
+    78,
+    123,
+    109,
+    88,
+    98,
+    156,
+    142
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.0,
+    "seed": 20274431,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.43688,
+     "max_mean": 2.15625,
+     "gini": 0.234253
+    }
+   }
+  },
+  {
+   "label": "PT2",
+   "n": 1,
+   "counts": [
+    128,
+    142,
+    123,
+    50,
+    160,
+    124,
+    120,
+    108,
+    138,
+    142,
+    127,
+    140,
+    130,
+    157,
+    153,
+    106
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 17.404,
+    "seed": 20274432,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.197295,
+     "max_mean": 1.25,
+     "gini": 0.099304
+    }
+   }
+  },
+  {
+   "label": "PW2",
+   "n": 1,
+   "counts": [
+    111,
+    63,
+    225,
+    74,
+    144,
+    259,
+    187,
+    101,
+    120,
+    93,
+    83,
+    95,
+    93,
+    208,
+    64,
+    128
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.0,
+    "seed": 20274433,
+    "B": 1024,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.456338,
+     "max_mean": 2.023438,
+     "gini": 0.245972
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 1,
+   "counts": [
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 1,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 2,
+   "counts": [
+    394,
+    230,
+    235,
+    265,
+    244,
+    236,
+    239,
+    191,
+    240,
+    221,
+    261,
+    329,
+    318,
+    203,
+    265,
+    225
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 25.5453,
+    "seed": 20274440,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.194897,
+     "max_mean": 1.539062,
+     "gini": 0.099335
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 2,
+   "counts": [
+    209,
+    222,
+    161,
+    206,
+    440,
+    189,
+    424,
+    139,
+    470,
+    158,
+    240,
+    234,
+    414,
+    256,
+    103,
+    231
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 6.05764,
+    "seed": 20274441,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.437044,
+     "max_mean": 1.835938,
+     "gini": 0.234131
+    }
+   }
+  },
+  {
+   "label": "PT2",
+   "n": 2,
+   "counts": [
+    244,
+    221,
+    267,
+    305,
+    270,
+    209,
+    330,
+    227,
+    220,
+    223,
+    264,
+    296,
+    316,
+    242,
+    202,
+    260
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 25.5453,
+    "seed": 20274442,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.149353,
+     "max_mean": 1.289062,
+     "gini": 0.084412
+    }
+   }
+  },
+  {
+   "label": "PW2",
+   "n": 2,
+   "counts": [
+    202,
+    280,
+    230,
+    466,
+    208,
+    155,
+    270,
+    272,
+    286,
+    238,
+    353,
+    177,
+    115,
+    348,
+    228,
+    268
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 6.05764,
+    "seed": 20274443,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.319997,
+     "max_mean": 1.820312,
+     "gini": 0.173187
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts": [
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256,
+    256
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "fitted Zipf/Dirichlet shapes of mixtral-8x7b (Mixtral's (rental 6 owner decision 4, carried)); scripts/skew_synth_tile.py, tile stage rental B; no trace count"
+}

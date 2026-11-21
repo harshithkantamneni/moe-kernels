@@ -1,0 +1,28 @@
+SCORED against 2026-10-09-rental6-q1-gh200 (ALL view; CLEAN beside it in the JSON)
+  page mixtral-8x7b-ska: counted in ALL only (G1: R3 G1 FAIL)
+  page mixtral-8x7b-skb: counted in ALL only (G1: R3 G1 FAIL)
+  page mixtral-8x7b-skc: counted in ALL only (G1: R3 G1 FAIL)
+  page olmoe-1b-7b-ska: counted
+  page olmoe-1b-7b-skb: counted
+  page olmoe-1b-7b-skc: counted
+  page phi-3.5-moe-ska: counted in ALL only (G1: R3 G1 FAIL)
+  page phi-3.5-moe-skb: counted in ALL only (G1: R3 G1 FAIL)
+  page phi-3.5-moe-skc: counted in ALL only (G1: R3 G1 FAIL)
+  page phi-3.5-moe-q9: NOT SCORED: 0 G = 8 pages under gaps-phi-3.5-moe-q9 (no report.json is NOT SCORED)
+  page phi-3.5-moe-q15: NOT SCORED: 0 G = 8 pages under gaps-phi-3.5-moe-q15 (no report.json is NOT SCORED)
+  page qwen1.5-moe-a2.7b-q9: counted
+  page qwen1.5-moe-a2.7b-q15: NOT SCORED: 0 G = 8 pages under gaps-qwen1.5-moe-a2.7b-q15 (no report.json is NOT SCORED)
+  page jetmoe-8b-q9: NOT SCORED: 0 G = 8 pages under gaps-jetmoe-8b-q9 (no report.json is NOT SCORED)
+  page jetmoe-8b-q15: NOT SCORED: 0 G = 8 pages under gaps-jetmoe-8b-q15 (no report.json is NOT SCORED)
+Q1-H: UNDECIDED: the copies clause needs Q1 pairs at both c9 and c15 mean g -0.978204 us se 1.071699 c15-c9 None (10 pairs)
+Q1-P: DESCRIPTIVE (no verdict, as registered)
+Q1-SK: {'olmoe-1b-7b': {'skew_minus_control_us': -1.567834, 'skewed_pairs': 4, 'control_pairs': 6}, 'phi-3.5-moe': {'skew_minus_control_us': -2.527299, 'skewed_pairs': 3, 'control_pairs': 3}}
+Q1-C: NOT SCORED: the c9 or c15 pair is missing or invalid D None us positions None
+  two views (ALL, CLEAN):
+    page mixtral-8x7b-ska: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page mixtral-8x7b-skb: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page mixtral-8x7b-skc: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page phi-3.5-moe-ska: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page phi-3.5-moe-skb: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page phi-3.5-moe-skc: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    0 of 3 verdicts differ between ALL and CLEAN

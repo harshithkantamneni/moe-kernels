@@ -1,0 +1,45 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "model": "qwen2-57b-a14b",
+  "dtype": "bf16",
+  "block_m": 32,
+  "block_n": 64,
+  "num_stages": 4,
+  "group_m": 64,
+  "treads": [
+    2,
+    3,
+    4,
+    6
+  ],
+  "arms": [
+    "native"
+  ],
+  "cells": [
+    [
+      "native",
+      2
+    ],
+    [
+      "native",
+      3
+    ],
+    [
+      "native",
+      4
+    ],
+    [
+      "native",
+      6
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "the ladder's id count 2048..18432 does not cross 1024: one kernel throughout",
+  "calls_per_cell": 2,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.profiles/g64.floor.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.profiles/g64.floor.triton-cache"
+}

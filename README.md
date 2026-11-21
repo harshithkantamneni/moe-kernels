@@ -1,12 +1,8 @@
 # moe-kernels
 
-> **Current work is on branch [`gh200-analysis-2026-09-27`](https://github.com/harshithkantamneni/moe-kernels/tree/gh200-analysis-2026-09-27).**
-> This `main` branch stops at Aug 28, 2026. The project became a measurement study on H200 and
-> GH200, and no kernels were written. Results are in
-> [`docs/FINDINGS.md`](https://github.com/harshithkantamneni/moe-kernels/blob/gh200-analysis-2026-09-27/docs/FINDINGS.md).
-
-MoE grouped-GEMM measurement work on an NVIDIA H200 NVL: a stage-span benchmark
-harness and roofline analysis.
+MoE grouped-GEMM measurement work on NVIDIA H200 NVL and GH200: a stage-span
+benchmark harness, parametric routing distributions, roofline analysis and timing
+models. No kernels were written.
 
 ## What this is for
 
@@ -16,7 +12,11 @@ implementations handle the ragged shape by padding each expert's group up to a
 whole tile of a single global `BLOCK_M`. That is where the open problems are.
 
 This repository exists to find a specific weakness by measurement, then attack
-it. The measurements later ended the premise, so no kernels were written.
+it. The measurement half is built and has run: 100,144 rows on an H200 and an
+A100, plus 26 ladder reports from three further arms. It killed the original premise, so this is a measurement study and
+`moe/kernels/` stays empty unless a result argues for filling it. What it found
+is in [docs/FINDINGS.md](docs/FINDINGS.md); the working state, including what
+was retracted and why, is in [docs/STUDY.md](docs/STUDY.md).
 
 **What this is aimed at.** Every MoE grouped-GEMM implementation I looked at
 selects its tile height from the *mean* tokens per expert: Inductor gates on
@@ -26,23 +26,37 @@ batch size with a single global `BLOCK_M`. Under balanced routing the mean is
 the right statistic, since every expert is the mean.
 
 Under skewed routing it stops being. Arithmetic intensity works out to
-rows-per-expert, so on this H200 an expert crosses the roofline ridge somewhere
-between 160 and 176 rows, and a skewed launch contains experts on both sides of
-it at once: at
+rows-per-expert, so on this H200 an expert crosses the roofline ridge at about
+151 rows (151.4 FLOP/byte on the card's 2026-09-21 calibration), and a skewed
+launch contains experts on both sides of it at once: at
 `zipf:1.2` and 4096 tokens, 35 experts are compute-bound and hold 73% of the
 rows while 221 are memory-bound. That is one draw, and a typical one: over 40
 resamples of the same distribution the split runs 31-36 compute-bound experts
 holding 70.5-73.5% of the rows. Under uniform routing the mix never occurs at
 any batch size measured.
 
-The ridge is a range rather than a value because its compute term is. Two
-calibrations of this same H200 gave 4377.2 and 4374.5 GB/s of bandwidth, 0.06%
-apart, but 701.6 and 770.9 TFLOP/s of dense bf16, 9.9% apart, because the GEMM
-runs at whatever clock the thermal state allows. An earlier draft of this
-paragraph said ~166 rows, which was one measurement quoted as though it were
-the number.
+The ridge is quoted per calibration because its compute term does not
+reproduce. Calibrations of this same H200 gave 4374.5 to 4377.2 GB/s of
+bandwidth, 0.06% apart, but 701.6 to 770.9 TFLOP/s of dense bf16, 9.9% apart,
+and not because of clock: the run at the highest clock reached the lowest
+fraction of its own peak. An earlier draft of this paragraph said ~166 rows,
+and a later one quoted a band of 160 to 176 rows as if it were the card's
+uncertainty about its own ridge (retracted 2026-09-02: that band is two
+sessions' compute ceilings failing to reproduce, no card's own ridge, and every
+published ladder report scored against it has been rescored to the attached
+card's own calibration, H200 162.8 and A100 145.8 FLOP/byte). The H200's own
+ridge has since moved again, to 155.9 on the 2026-09-10 calibration, because
+that session sampled the dense GEMM's clock while it ran rather than after it,
+and to 151.4 on the 2026-09-21 one. Four calibrations of one card adopted on
+this branch read 162.8, 152.8, 155.9 and 151.4 (a fifth, 152.9 on 2026-09-14,
+sits unadopted on `pod-h200-session3`, and sessions 5 and 6 read 152.9 and
+148.5 and are published without being adopted), which is the
+same non-reproducing compute term the paragraph above describes and is why the
+band was withdrawn rather than widened. The number to quote is the ridge of the
+calibration a row was measured against, and
+`results/published/CALIBRATION_PROVENANCE.md` says which that is for every arm.
 
-So: measure on real routing, on the hardware, and see where it actually breaks.
+So: measure under skewed routing, on the hardware, and see where it actually breaks.
 
 ## Architecture
 
@@ -81,9 +95,18 @@ moe/
   kernels/         YOUR kernels (see kernels/TEMPLATE.md)
   baselines/       vLLM, SGLang, torch
   routing/         parametric skew, imbalance metrics, trace capture and replay
-  bench/           cost model, schema, timing, driver, roofline, profiles, CLI
+  bench/           cost model, schema, driver, roofline, profiles, CLI, and the
+                   four apparatus modules: timing (the one instrument),
+                   exit_codes (the one table), provenance (the one block),
+                   ai_model (the byte model and what a fit returns). Read
+                   docs/APPARATUS.md before any of them.
   runner/          cross-virtualenv execution
-scripts/           setup_runpod.sh, run_all.sh, capture_traces.py, plot.py
+  instrumented/    vLLM 0.27.1's fused_moe kernel copied with timestamps and eviction
+                   hints, off by default, for gated instrumented units only (rental 4;
+                   rental 5's sampled stamp level); not a kernel of the study's
+scripts/           setup_runpod.sh, run_all.sh (the sweep), h200_gaps_session.sh
+                   (the session driver for every open experiment),
+                   capture_traces.py, plot.py, and one script per arm
 tests/             CPU tests; GPU tests behind a `gpu` marker
 traces/            committed expert-count histograms (kilobytes, never weights)
 ```
@@ -98,7 +121,7 @@ runs kernels.
 Things this harness records rather than assumes, because most published MoE
 numbers omit them and are therefore not comparable to each other:
 
-- **L2 residency.** H200 has 50 MiB of L2. Whether expert weights are resident
+- **L2 residency.** H200 has 60 MiB of L2 (the harness records `l2_bytes = 62914560`; an earlier draft of this line said 50). Whether expert weights are resident
   changes small-batch results by more than most kernel optimisations do, so the
   flush state is a swept axis and a recorded column. The flush reads rather than
   writes, so it leaves no dirty lines to be written back inside the next timed
@@ -117,8 +140,43 @@ numbers omit them and are therefore not comparable to each other:
 - **Compulsory traffic is labelled as such.** `arith_intensity_compulsory` is an
   upper bound on true intensity and `compulsory_gbps` is not achieved HBM
   bandwidth. Named so nobody reads them as measurements.
-- **Clock and thermal drift.** Sampled around every cell and flagged, so a hot
-  rented box cannot masquerade as a kernel regression.
+- **Clock under load, flagged on LEVEL and DRIFT.** `moe/bench/timing.py`
+  polls the SM clock from a background thread WHILE the trials run and sets
+  two verdicts per cell: LEVEL, the loaded clock is inside a 0.95 to 1.05 band
+  around the clock the roof was measured at, with the side named on a failure,
+  and DRIFT, the first and last under-load samples agree within 5% in either
+  direction. **DRIFT is the only exclusion.** A clock that moved across a
+  cell's own trials makes its median a blend of two operating points and the
+  time belongs to neither, which no rescaling repairs. NEITHER LEVEL SIDE
+  EXCLUDES ANYTHING: under a 700 W cap the clock is set per tile by the
+  kernel's own draw, so a LOW cell is a hungry tile at its steady state and a
+  HIGH one a memory-shaped cell boosting. Both are kept, the side is recorded
+  on the row, every compute-bound gate reads the fixed roof, and
+  `pct_of_roof_at_cell_clock`, the roof rescaled to the cell's own clock, is
+  printed beside it as issue efficiency and is never a gate input. Until
+  2026-09-09 a LOW cell was excluded, which made the study's two primary tiles
+  unmeasurable on the H200: BLOCK_M=128 at BN=64 holds 1395 MHz against a
+  calibration GEMM at 1485. An earlier version
+  of this line said the clock was "sampled around every cell and flagged"
+  (retracted 2026-09-02:
+  that flag compared two idle-instant samples and fired on a drop, so it
+  detected whether the first sample had caught the idle boost, not
+  throttling; on the alpha-0558 arm it flagged 91% of vLLM rows above T=4096
+  while flagged and unflagged replicates timed at ratio 0.998). Every
+  `merged.csv` under `results/published/` predates the LEVEL flag.
+- **Reproduction is checked to stated tolerances, labels exact (since
+  2026-11-17).** The committed scorer and reader outputs were produced on a
+  laptop running macOS 26.6.2, with numpy 2.5.3 on uv's cpython 3.12.13 linking
+  Apple's Accelerate for BLAS and LAPACK. Under that OS they re-read byte for
+  byte. macOS 27.2.1 (installed 2026-11-16) replaced Accelerate, and the
+  outputs that pass through a least-squares fit now differ in the last digits
+  of some floats, with no verdict, band, status or gate changed. Since
+  2026-11-17 the reproduction tests that re-run such a fit hold each output to
+  its committed file with `tests/_reproduce.py`: every string, label, key, list
+  length and integer exact, floats within 1e-12 relative (decode DS 1e-6, its
+  W1RATE fit's conditioning; cal3's theta fields not compared, its fit being
+  ill-conditioned, docs/FINDINGS.md, C3-R1 defect of record). Reproduction
+  tests whose outputs still match byte for byte keep the byte check.
 
 ## Routing traces
 
@@ -145,15 +203,41 @@ share memory (141 GB, 4.8 TB/s) but not compute (835.5 versus 989.5 dense BF16).
 
 ## Running it
 
-Free, on a laptop:
+Free, on a laptop, in this order:
 
 ```bash
-uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -e ".[dev]"
+uv pip install --python .venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
 .venv/bin/python -m pytest tests/ -q
 bash scripts/run_all.sh --dry-run --profile standard
 ```
 
-On the GPU box, see [docs/RUNPOD.md](docs/RUNPOD.md).
+The third line is not optional. The `dev` extra deliberately ships no torch
+(`requirements/base.txt` says why: on the pod the base venv inherits the
+CUDA-matched torch from the image, and guessing a CUDA wheel tag from a
+laptop is how a build stops matching the driver), but `tests/conftest.py` and
+`moe/bench/timing.py` both import torch at module level. Without the CPU
+wheel, `pytest` fails while loading `conftest.py` with zero tests collected and
+`run_all.sh --dry-run` exits 1 from `timing.py`. Any current CPU wheel will
+do for the laptop, which runs no kernel; the pod pins 2.13.0 and
+`requirements/resolved-base.txt` records it. `tests/test_docs.py` is part of
+the suite and fails if any number on this page or under `docs/` has drifted
+from the tree.
+
+On a laptop with only the base venv, the last command prints
+`[run_all] REFUSE: profile 'standard' spans sglang,vllm, and this box will run
+only base` and exits 0. That is the plan refusing to pretend it can sweep
+frameworks this box does not have; it used to sweep torch alone and print a
+summary, which is how a 45-minute pod session once produced no vLLM rows.
+
+On the GPU box, see [docs/RUNPOD.md](docs/RUNPOD.md) for the environment and
+[docs/POD_RUNBOOK.md](docs/POD_RUNBOOK.md) for the session driver,
+`scripts/h200_gaps_session.sh`. On a Lambda VM (root, launched without a
+network filesystem), the counter run's setup is
+[docs/LAMBDA.md](docs/LAMBDA.md) and `scripts/setup_vm.sh`. What the
+instrument is, and what every gate's exit code means, is one page:
+[docs/APPARATUS.md](docs/APPARATUS.md).
 
 ## Writing a kernel
 
@@ -164,6 +248,313 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-This describes `main` as of Aug 28, 2026: harness complete and tested on CPU, no
-performance numbers here. For results, see the
-[`gh200-analysis-2026-09-27`](https://github.com/harshithkantamneni/moe-kernels/tree/gh200-analysis-2026-09-27) branch.
+**Current state (2026-11-21).** The final model is v10 (`scripts/r3_timing_model_v10.py`): the cell model v7 made to
+price real vLLM calls (v8), with its fitted prefill intercept replaced by the measured non-GEMM kernels on both
+prefill tiles (v9, v10). It has been scored in vLLM serving on eight MoE models with every predictor frozen before
+each run, beside Frontier and a roofline: decode 1.27% to 4.04% MAPE, below every Frontier arm on every model; prefill
+5.46% to 6.73% on its three blind models, where Frontier with its simulator's features reads 1.07% to 2.84%. The
+write-up is `docs/paper-v2/paper-v2.md`; the study record is `docs/FINDINGS.md` ("Serving checks v8, v9 and v10"); the
+serving kit is `scripts/prod/`.
+
+Harness complete; 8236 tests collected off-GPU (`pytest --collect-only -q`;
+`tests/test_docs.py` fails when this line goes stale). 14 published arms in
+`results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
+them current (the rest superseded and kept for provenance), and 3 are ladder
+arms carrying 26 `*.report.json` files and no CSV. Forty-two further directories
+there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
+run, the Lambda H100 session and thirty-five Lambda GH200 sessions, 2026-09-25, the
+unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
+Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
+and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
+JetMoE-8B and Granite-3.0-3B-A800M, and two floor-only sessions of
+2026-09-30 for JetMoE-8B and Mixtral 8x7B, and rental 1 of 2026-10-01: the
+Mixtral 8x7B TP=8 floor capture, the A-tile and L2-survival byte pages and the
+launch floor, 14 units on one GH200, and rental 2 of 2026-10-02: the TP-shard floor
+captures at unseen treads and 1005 MHz, the num_stages / BLOCK_K / slot-pad knob pages and
+the two-process launch-floor rerun, 24 units on one GH200, and rental 3 of 2026-10-06: the
+Qwen2-57B TP=8 end-to-end test, the floor at four clocks with a same-clock replicate, the stage /
+BLOCK_K pages and the flush ladder, 24 units on one GH200, and rental 4 of 2026-10-07: the dead-CTA
+cost at 9 and 15 declared copies on Qwen2-57B TP=8 and OLMoE, the OLMoE BLOCK_K / num_stages
+counter pages, the hardware rulers and RRZE's gpu-benches, and the instrumented copy's perturbation
+gate, which failed, 25 units on one GH200, and rental 5 of 2026-10-09: model v2 under synthetic
+skewed routing on OLMoE and Qwen1.5 (Mixtral's pages stopped at a clock slip), token order, the
+dead-CTA cost at 15 copies under skew, BLOCK_K 128 and second-K pages, and sampled stamps that
+failed their gate again, 22 units on one GH200, and rental 6 of 2026-10-13: model v3 under
+synthetic skew on Mixtral 8x7B, OLMoE and Phi-3.5, its byte legs, the S - N gap pages (five of six
+lost to a driver tag defect, since fixed) and second K on Mixtral TP=4, 21 units on one GH200,
+and rental 7 of 2026-10-14: model v3 under fresh synthetic skew draws on Mixtral 8x7B and
+Phi-3.5 scored under a rebuilt drift rule, all six S - N gap pages, and one OLMoE w1 byte page,
+15 units on one GH200, and tile rental A of 2026-10-20: the tile census, the wgmma floor's counter
+pages at 128x128 and 64x128, the A-key byte pages, the E1-CAL timed pages, a replicate and the
+dead-CTA pair on vLLM-sized tiles, 21 units on one GH200, and tile rental A2 of 2026-10-20/21: the
+lock-hold probe at 1710 and 1410 MHz under a 900 W limit, then rental A's pages again at the 1410
+lock it selected, with the CONV-L anchor pages at 1410 and 1710, 32 units on one GH200, and settle rental S1
+of 2026-10-21: a power proof, kernel against application replay, the OLMoE wgmma counter page at 1410, 1305
+and 1005 MHz, Mixtral byte and PRIVATE-arm pages and stall-metric pages, 14 units on one GH200 at 700 W, and
+calibration rental C2 of 2026-10-21: Mixtral-8x22B's 128x128 G 1 timed and byte pages as a fourth held-out CAL
+model, the sag estimator's two f128 pages and Mixtral-8x7B's 128 G 1 timed and byte pages, 10 units on one GH200
+at 700 W, and calibration rental C3 of 2026-10-27: the sag estimator's two f128 pages, the instrumented copy's
+regcheck and perturbation gate, and per-CTA start and end stamps on Mixtral-8x7B and Qwen2-57B at 128x128 G 1,
+8 units on one GH200 at 700 W, and calibration rental C4 of 2026-10-27: the sag estimator's two f128 pages and
+Mixtral-8x7B-tp2's 128x128 G 1 timed and byte pages as a fifth held-out CAL model, 8 units on one GH200 at 700 W,
+and the decode stage's CAL rental of 2026-10-29: vLLM's own decode call at T 1 to 128 on OLMoE-1B-7B and Mixtral-8x7B,
+its graph-replayed main pages, control, E240, DECL and replicate pages and two decode counter pages, 13 units on one
+GH200 at 700 W and the 1710 MHz lock, and the decode CAL2 rental of 2026-11-03: the same 13 units under the third
+addendum, then the settling units M1 to M4 (tile and wide counter pages, OLMoE's gap pages, Mixtral's label page at pad
+0 and 52), 21 units on one GH200 at 700 W, and the decode blind rental of 2026-11-04: GRR main pages on Phi-3.5-MoE,
+Qwen1.5-MoE-A2.7B, JetMoE-8B, deepseek-v2-lite and Granite-3.0-3B-A800M and GR1 control pages on Qwen1.5 and Granite,
+9 units on one GH200 at 700 W, and the decode settling rental DS of 2026-11-04: DS's own tile census and one wide decode
+counter page at the 1710 MHz lock on each of six seen models, JetMoE-8B, Phi-3.5-MoE, Mixtral-8x7B,
+Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B and OLMoE-1B-7B, 9 units on one GH200 at 700 W, and tile rental B3 of
+2026-11-05/06: the compile-only census of the four blind models, the four sag pages and their gates, the eight blind
+timed pages of Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and deepseek-v2-lite at 128x128 and 64x128, the OLMoE
+repeat and three byte pages, 23 units on one GH200 at 700 W and the 1410 MHz lock, and rental PC of 2026-11-06:
+per-CTA start and end stamps on synthetic decode shapes, Mixtral-8x7B and its tp shards and JetMoE-8B at the 1710
+and 1410 MHz locks, Phi-3.5-MoE's w1 stamps at 128x128 and 64x128, the two f128 sag pages and G-BAND, three Phi byte pages and
+one Mixtral decode counter page, 20 units on one GH200 at 700 W, one of them refused, and rental PC2 of 2026-11-10:
+per-CTA start and end stamps at the 1710 MHz lock on the 16x64x128 decode tile at s4 and s3, short slabs on 64x128x64,
+single waves of 165 to 528 CTAs on the two 4-per-SM tiles and naive-path cells of six seen models, 10 units on one
+GH200 at 700 W, and rental RR of 2026-11-12: per-CTA start and end stamps and the plain kernel's counted w1 DRAM bytes
+on the same 40 cells per tile at 128x128x64 and 64x128x64 (synthetic shapes, Mixtral-8x7B's as an anchor) at the
+1410 MHz lock, and Phi-3.5-MoE's 128g1 replicate stamps, 10 units on one GH200 at 700 W, one of them refused, and model
+v7's decode blind rental of 2026-11-18: GRR main pages on Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M and GR1
+control pages on Qwen2-57B and Granite-1B, 7 units on one GH200 at 700 W and the 1710 MHz lock, and model v7's decode
+domain map rental of 2026-11-18: one GRR main page on each of 14 synthetic decode shapes, 16 units on one GH200 at 700 W
+and the 1710 MHz lock),
+kept so every verdict they printed can be
+re-derived and marked with a `KIND` file so the provenance census reads them as
+sessions rather than arms. The 35 GH200 sessions ran on twenty-seven distinct boards (counted by
+board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
+decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
+it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new; RR's board 73996e is new; the v7 decode blind's board e165c7 is new; the v7 domain map's board 1e520d is new; the v7 prefill blind's board 8d8469 is new). Of the GH200 call-time results, three
+were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
+(1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
+Rental 3) failed. (Note 2026-11-12: that count dates from rental 3. Rental 6's and rental 7's skew tests
+below also price time from predicted bytes and HOLD, but on seen models' shapes under synthetic skew on R3's tile, where
+the byte term carries at most 0.06% of ln T: they test the timing model, so 8x22B stays the only unseen-model test from
+predicted bytes to time that held; the blind tests on vLLM's tiles, B3 and the
+decode blind, FAIL. Also, "every verdict they printed can be re-derived" above holds through
+`scripts/scoring/rescore.py` only from tile rental A onward; rentals 1 to 7 and the sessions before them are
+re-derived by running their own scorers under `scripts/scoring/` by hand, last recorded byte for byte for rentals 3
+to 5 on 2026-10-14, docs/FINDINGS.md, Provenance note.) (Note 2026-11-12: `rescore.py cal2`, `cal4` and `tileB3`
+also need `~/code/moe-kernels-work`, which is not in this repository: their readers import the frozen model chains
+from it and refuse without them; docs/FINDINGS.md, Provenance note.) Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
+and Qwen1.5 in its ALL view and is NOT SCORED as registered (docs/FINDINGS.md, Rental 5).
+Rental 6's skew test of model v3 from predicted bytes HOLDS as registered: 0.55% rms over 122
+Mixtral, OLMoE and Phi cells (ALL), 0.54% over OLMoE's 42 (CLEAN), on R3's tile, not vLLM's
+(docs/FINDINGS.md, Rental 6). Rental 7's repeats it on fresh Mixtral and Phi draws and HOLDS
+in both views with every page in CLEAN: 0.61% rms over 84 cells, each model certified (Mixtral
+0.51%, Phi 0.69%), again on R3's tile; its S - N gap test (Q1-H) FAILS on the 15-copy pages
+(docs/FINDINGS.md, Rental 7). (Note 2026-11-12: only rental 7's 48 skewed cells are fresh blind draws; the other 36
+of the 84 are uniform cells that replicate SEEN counts, and Mixtral's skewed draws are BLIND-CALMODEL. Rental 6 registered
+no certification rule, so OLMoE HOLDS in CLEAN and is not certified.) Tile rental A STOPPED the tile stage: the 128x128 wgmma counter
+pages ran NATIVE and SHARED at 1599 to 1640 MHz under the 1710 MHz lock, below the counter clock
+band, so the floor calibration is NOT SCORED, model v4 has no wgmma constants and rental B does not
+run (docs/FINDINGS.md, Tile rental A). Tile rental A2 STOPPED it again, at the 1410 MHz lock its
+probe selected: the floor calibrated (c_128 691.6 +- 9.9 cycles) and CONV-L HOLDS, but E1-CAL FAILS
+(4.23% rms over 42 cells, class means +3.57%, -4.96% and -1.38% against 0.75%), so rental B2 does
+not run (docs/FINDINGS.md, Tile rental A2). Settle rental S1 (descriptive, no verdict) found that
+`nvidia-smi -pl 900 -sc 0` leaves the enforced GPU limit at 700 W on its board, so A2 most likely ran at
+700 W, not 900; it read the per-kernel clock sag on the 128x128 wgmma page gone at 1005 MHz (0.7 us) and
+present at 1305 (37.7 us against 47.3 at 1410), and v4's w1 bytes on Mixtral 128 G 1 exact (+0.10%)
+(docs/FINDINGS.md, Settle rental S1). Calibration rental C2 (no verdict) read REGIME: under model v5'', frozen
+before the page, Mixtral-8x22B's held-out 128 G 1 time is over-predicted by 4.57% (six cells, +4.08 to +5.26%),
+beside Mixtral-8x7B's +3.13% (+3.37% on C2's board), so the blind test B3 is not registered with v5'' and the
+registered next step is a four-model refit (docs/FINDINGS.md, Calibration rental C2). Calibration rental C3
+(descriptive, no verdict; its stamp pages PERTURBED, the instrumented copy failing its 1%/2% timing gate at 2.03%
+and 1.46% median while its hard legs passed) read C5's launch-spread constant OUT (Mixtral-8x7B w2 theta_L 0.351
+against the fitted 0.25 to 0.30, so it stays SEEN-FITTED; QUALIFIED 2026-11-17: that OUT is the committed output
+of an ill-conditioned fit and is not supported, since well-conditioned (wave-centered stamps), theta_L 0.349 and theta
+(1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead;
+docs/FINDINGS.md, Calibration rental C3, defect of record), 0.901 of Mixtral w2's same-wave slab re-reads launching
+with their partner (LAUNCH-TOGETHER, against M4's staggered picture), and the Mixtral-8x7B w1 miss NOT REPRODUCED on
+its board (+0.94% under K1) (docs/FINDINGS.md, Calibration rental C3). Calibration rental C4 (no verdict) read
+LOW-FAR and BEYOND-M4: the round-4 model, frozen before the page, under-predicts Mixtral-8x7B-tp2's held-out 128 G 1
+time by 4.44% (six cells, -2.56 to -5.70%; w1 at P 112, Phi-3.5's regime). Its byte law W2 prices tp2's w1 reads
+21.0% under the counters and M4 7.5% under (BEYOND-M4: neither law fits w1 there), and its w2 reads 5.2% under;
+with the counted bytes on both GEMMs in place of W2's, the rest of the frozen model reads +0.12% (descriptive). The
+five-model pass estimate A is 0.021; the owner's next step is one final declared model round, and iteration stops
+if it fails the gate (docs/FINDINGS.md, Calibration rental C4). That final round (round 5, offline) failed
+the gate. Its held-out 128 G 1 means were OLMoE +0.45%, Qwen2-57B -1.46%, Mixtral-8x7B +1.77% (+2.01% on C2's board),
+Mixtral-8x22B +0.24% and tp2 +2.39%, with P(A) 0.124. On 2026-10-28 the owner narrowed scope, so B3 was not
+registered then (it was registered on 2026-11-04 and failed, below). The only certified timing model is still v3 on R3's tile. On vLLM's
+tiles the work stands as MEASURED or HELD-OUT, not blind. A 1% held-out claim holds only for OLMoE-like and
+Mixtral-8x22B-like 128 G 1 shapes. The knee conflict and the large-P w1 byte law are open (docs/FINDINGS.md, Tile
+stage: scope decision). The decode stage's CAL rental (2026-10-29) STOPPED the decode stage, so its blind rental
+does not run. Board valid at 700 W; 11 second-tile cells were left out as registered. Model v4d, fitted on the 92
+remaining CAL cells, misses its own in-sample bar: 4.75% rms against 3%, worst -22.7% (one OLMoE naive-path cell),
+mean +1.67%. By path, the block-scan cells read 1.02% rms, the small-batch cells (78 of 92) 4.11% with v4d pricing
+them 1.95% slow on average (Mixtral +4.11%, OLMoE -0.69%), and the naive cells 9.14%. The label test is NOT
+EQUIVALENT: on Mixtral the same expert counts run 1.6 to 2.0 us faster on experts 0 and 1 than on experts 2 and 5, so
+time is not shown to be a function of counts alone. The replicate's page noise is 0.19%. The owner's next step is an
+offline diagnosis (docs/FINDINGS.md, Decode CAL rental). From that diagnosis the third decode addendum registered
+model v4d' (v4d plus a follower rule for the naive path and the counter-measured w1 rate, no constant added) and made
+the label test descriptive, before any CAL2 page. Decode is now calibrated, not blind-certified. The CAL2 rental
+(2026-11-03) reads GO: on the 91 kept cells v4d' reads 2.29% rms in sample, worst -6.35%, mean +0.17% (v4d on the same
+pages 4.87%), with 0.16% page noise; the label test is again NOT EQUIVALENT on Mixtral (about -2.3 us), now
+descriptive. The blind predictions were finalised mechanically before any blind page. The blind rental (2026-11-04)
+FAILS: over five models no decode page had timed, v4d' reads 11.4% rms on 220 cells, worst +39.2%, mean +6.0% (it
+prices the calls slow), and no model is certified: deepseek-v2-lite 2.35% rms (0.91% at T <= 16, descriptive),
+Qwen1.5 5.3%, Phi-3.5 9.5%, Granite 13.4%, JetMoE 19.5%. The miss concentrates at T <= 16 on Qwen1.5, Phi-3.5 and
+Granite; deepseek-v2-lite misses at T >= 32 and JetMoE at every T. Every rival is excluded. Why the miss grows on these calls is under diagnosis (docs/FINDINGS.md, Decode
+CAL2 and blind rentals). The fourth decode addendum registered a measurement rental only, with no model form: the
+settling rental DS (2026-11-04) read every registered reading on six seen models, all DESCRIPTIVE (its census SAME as
+CAL2's over 48 entries, 0 rows refused): per decode tile w1's counter rate (3787 to 3898 GB/s), the per-CTA rate of
+few-CTA GEMMs inside one wave (24 to 54 GB/s) and the drain past a wave boundary (46 to 103 GB/s), each call kernel
+per model, and the align kernel at 0.53 us per loop iteration. The decode model form is chosen next from DS's and
+CAL2's pages and frozen before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M (docs/FINDINGS.md,
+Decode settling rental DS). Tile rental B3 (2026-11-05/06), registered on 2026-11-04 after the
+owner chose to go blind at the working-model bar (rms 3%, worst cell 8%, |mean| 1.5%), FAILS: round 5's frozen
+large-tile model reads 2.41% rms over B2's 84 blind NATIVE cells (mean +0.29%, worst -8.22%), Phi-3.5-MoE fails its
+own bar (3.50% rms; 128 G 1 mean +3.4%, 64x128 G 1 mean -3.2%), and no model is certified. Qwen1.5, JetMoE and
+deepseek-v2-lite meet the bar on their own cells (1.18%, 2.05%, 0.65% rms), descriptive only (docs/FINDINGS.md, Tile
+rental B3). Every
+other held-out model was timed from its own counted bytes, which tests
+the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue). Rental PC (2026-11-06) is a
+measurement and certifies nothing. On synthetic decode shapes at the 1710 MHz lock a CTA alone on its SM streams its
+weight slab at about 36 GB/s, falling to 23 GB/s at 128 live CTAs and to about 8.6 GB/s once the GPU saturates at
+3612 GB/s; H1 (rate = loads in flight over latency) reads NOT IDENTIFIED because two inputs were not read
+(docs/FINDINGS.md, Rental PC). Rental PC2 (2026-11-10) is a measurement too and certifies nothing. On the 16x64x128
+decode tile it reads X_sat 3782 GB/s and kappa at 8 single-wave rungs, but c0 at G 128 and so the L table read NOT
+IDENTIFIED; c0 reads at G 8 only (2.40 us on 64x128x64); v6d's big-single-wave assumption DOES NOT HOLD on both
+4-per-SM tiles (G 528 saturates, kappa falls 7% to 8% from G 396); a naive cell with no follower costs what its
+aligned twin costs within 7%, where both read (10 of 22 GEMMs). 81 of 220 cell GEMMs are NOT READ on the per-call spread, mostly short slabs (and 1 more on the stamp-overhead
+bound alone: 82 NOT READ and 138 READ in all, corrected 2026-11-12), so v6d
+cannot be completed from PC2's readings alone (docs/FINDINGS.md, Rental PC2). The sixth and last decode addendum (2026-11-10) registers v6d, design-D6's per-CTA law
+with PC2's READ values and the empty slots filled on PC, PC2, DS and CAL2 only, frozen before its gate ran (Note
+2026-11-12: that order rests only on FROZEN.txt's and the registration's own timestamps; all three first appear in
+git together in 019ace6a, after the gate ran; docs/FINDINGS.md, Decode closes after v6d). The gate
+reads NO-GO: CAL2 GO at 1.81% rms, but the seen decode blind re-scores at 4.52% pooled against 4.0%, a miss carried by
+13 naive cells that keep v4d''s price under a rho form (fixed) chosen by a CAL2 fit the law-priced cells dominate,
+where every earlier decode CAL fit chose scaled: a defect recorded and not fixed. Under the owner's stopping rule decode
+closes as calibrated, not certified; no decode model is certified, the new blind is registered and NOT RUN, and
+Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M remain untimed at decode (docs/FINDINGS.md, Decode closes after
+v6d). Rental RR (2026-11-12) is a measurement and certifies nothing, and under the owner's stopping rule (2026-11-11)
+prefill closes after it with no blind; no model is tested. On 40 cells at each of vLLM's two prefill tiles it
+counts the w1 re-read miss fraction (70 of 80 READ) and reads design-P1's four per-pair hit forms against it
+from stamps on the same cells and board: rms 0.030 (F1, the 42.5 MiB step between starts), 0.024 (F2, the 45 MiB step
+between mid-lives), 0.052 and 0.060 over 56 fresh cells, a DESCRIPTIVE replication of constants found post hoc on seen
+pages (0.048 and 0.043 there, joining one board's stamps to every board's counts, so not like for like with RR's
+same-board join). The Phi-3.5 replicate is NOT IDENTIFIED: its counted-bytes unit refused on a defect in
+RR's registered plan line (arms native on a page that asks native and shared) (docs/FINDINGS.md, Rental RR). (Note
+2026-11-17: both stopping rules above are superseded. The owner reopened decode and prefill on 2026-11-17 for one
+unified model, v7, an owner decision and not a registration, disclosed as a forking path: offline design and build, a
+gate registered before it is scored on published pages in all three regimes, and only on GO one blind GH200 rental,
+after which the stage stops either way. At this note nothing is built, scored, gated or rented; docs/FINDINGS.md,
+Decode closes after v6d, NOTE 2026-11-17.)
+Model v7's gate (registration `2026-11-17-v7-gate-gh200`, public 2026-11-18T01:10Z, run once after it at 6ed4c57d,
+output committed as `scripts/scoring/v7/gate_v7.out.txt`) reads R3 GO (300 of 300 bit for bit), DECODE GO (CAL2
+1.60% rms; the SEEN decode blind re-scored 3.19% pooled, not evidence under D6FIX, the D6-24 fix chosen on seen
+pages) and PREFILL NO-GO: REFUSED (`No module named 'refit4'`, a loader defect of record: round 5's `r7._rc` re-imports
+a module `round5_chain` had removed). Every clause value but G2 was known before the registration. A DESCRIPTIVE
+post-registration re-run with that one fix (`prefill_rerun_v7.py`, not a verdict) reads G1 FAILS (four of six
+held-out means outside 1.0%) and G2 P(A) 0.2067 against 0.5, so prefill gets no blind either way; decode may go to
+one blind, registered next (docs/FINDINGS.md, Model v7 gate).
+Model v7's decode blind (registration `2026-11-17-v7-decode-blind-gh200`, public at the push of e58c1531, run
+2026-11-18 on one GH200, board e165c7, about 68 min and $2.93) FAILS and certifies no model: E1-DEC pooled 4.17% rms
+over 125 cells (worst +17.20%, mean +1.61%) against the owner's bars (rms 3%, worst 8%, |mean| 1.5%, per model and
+pooled). v7 priced the two large reserved models inside their own bars blind, Mixtral-8x22B 1.79% and
+Qwen2-57B-A14B 2.05%, and Granite-3.0-1B-A400M failed at 6.74% (worst +17.20%), the failure design-v7 had named as
+likely; a model certifies only when its own bar and the pooled bar hold, so none does. DESCRIPTIVE: 13 Granite-1B
+cells (the 16x64x128 tile at 8 to 16 of 32 experts active, T 2 to 16) carry 75% of its squared error, priced about
++9.8% slow on average. This was the one blind of the 2026-11-17 reopening; its registered verdict stands (FAIL, none
+certified) and the blind is spent. v7's status: R3 CERTIFIED (v3, unchanged, Mixtral-8x7B and Phi-3.5), prefill NO-GO
+at the gate (REFUSED; the DESCRIPTIVE re-run fails G1 and G2), decode registered FAIL at the blind. Owner decision
+2026-11-18, after the score, disclosed as a forking path: decode is reopened a second time to certify a validity
+domain for v7 rather than refit it, motivated by a POST-HOC DESCRIPTIVE reading (every out-of-sample cell over 8% is a
+short call on an aligned path; v7 over-prices the small-batch and block-scan fixed step by about 2 to 4.6 us; naive
+twins read within 0.33 us). Plan: Phase 0 offline diagnosis (done), Phase 1 one DESCRIPTIVE mapping rental with a
+mechanical per-path threshold rule registered before its pages, Phase 2 one domain blind on models with no decode page
+(DeepSeek-V3, -tp4, -tp8, Qwen2-57B-tp8); v7 unchanged; then the stage stops. At this commit no map or domain
+registration exists and nothing is rented for it (docs/FINDINGS.md, Model v7 decode blind).
+Model v7's decode domain map (registration `2026-11-18-v7-domain-map-gh200`, REGISTERED, DESCRIPTIVE, public at the
+push of 556029e1; run 2026-11-18 on one GH200, board 1e520d, about 48 min and $2.05) reads D EMPTY by its registered
+rule: on 14 synthetic shapes, 130 of 130 cells valid, no decode path has an X_p (naive and small-batch fail the
+replicate-bounded 6% cap at every counted candidate, block-scan the 1.0% |mean| cap, its mean error +1.09% to +2.12%
+past 70.5 us), and the slab guard is not triggered. As registered, an empty D means no domain blind runs:
+`register_v7d_blind.py --write --final` refuses the committed readout (`REFUSED: D is EMPTY: no path has an X_p`), the
+domain blind's registration stays an unregistered DRAFT, and by the stop rule the second reopening of decode ends with
+no blind. Decode stays registered FAIL at the v7 blind, with no validity domain certified; R3 CERTIFIED (v3) and
+prefill NO-GO at the gate stand. DESCRIPTIVE beside it, read after D was known: v7 reads 4.61% rms on the map (worst
+-19.39%, a short naive call priced fast), over-prices the aligned step by a median 1.7 to 4.2 us by E, and Phase 0's
+"naive twins within 0.33 us" holds only on some of the new shapes (docs/FINDINGS.md, Model v7 decode domain map).
+
+Model v7's prefill blind (registration `2026-11-18-v7-prefill-blind-gh200`, public at the push of 43a8802b; run
+2026-11-18 on one GH200, board 8d8469, about 86 min and $3.70) certifies no model: the pooled bar FAILS, rms 3.13% over 24
+cells (worst -4.72%, mean -2.99%; every scored cell under-priced), against the working-model bar (rms 3%, worst 8%, |mean|
+1.5%, per model and pooled, a model certified when its own bar and the pooled bar hold with at least 10 cells in
+CLEAN), on 54 cells at 128x128x64 w8 s3, G 1 and G 16, of three models no prefill-tile page had timed:
+Granite-3.0-1B-A400M (6 cells scored, rms 4.25%, FAILS, below the minimum), Granite-3.0-3B-A800M (6, 3.07%, FAILS,
+below the minimum) and Qwen2-57B-A14B-tp8 (12, 2.43%, mean -2.37%, FAILS); the registered host-bound rule dropped the other 30 cells.
+It was the third reopening of prefill, registered by the owner against the v7 gate's PREFILL NO-GO with the gate's
+own pass estimate beside it (P(A) 0.2067 at B2's bar), a forking path disclosed in the registration; it reverses no
+earlier verdict. Its registered verdict stands and the blind is spent; by the registration, prefill stops here. v7's
+status: R3 CERTIFIED (v3), decode registered FAIL (no validity domain: the map read D EMPTY), prefill registered FAIL
+at this blind (docs/FINDINGS.md, Model v7 prefill blind).
+
+**What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
+clocked cells. Three results need no fitted model: the cost of one extra M-tile
+is 0.68 to 1.37 complete streams of the layer's expert weights across 23
+ladders; at `BLOCK_M=16` and `GROUP_SIZE_M=1`, 95.4% of the kernel's wall clock
+is accounted for by one full weight re-read per tile (89.158 ms measured
+against 85.054 ms of streaming); and `BLOCK_M=16` peaks at 0.099 of the card's
+dense compute roof at every batch size reachable, against 0.537 for a
+`BLOCK_M=256` control on the same layer.
+
+**Where the model failed, and it is not where the residual test said.** The
+three-term traffic model has exactly one term that depends on `BLOCK_SIZE_N`,
+and that term is proportional to `BLOCK_M`, so the measured width dependence
+must double when the height doubles. It does not move: the ratios are 1.115,
+1.203 and 0.923 where the model requires 2.000, at z of -303, -121 and -89,
+measured on the slope alone with no fitted intercept anywhere in the path. The
+mechanism the model was written to express survives; that particular
+parameterisation of it does not. The replacement the data supports is a cost
+going as `1/BLOCK_SIZE_N` and *not* with `BLOCK_M`, which fits 3.1x better at
+equal parameter count, but whether it is traffic or time this grid cannot say.
+
+**The re-read is a property of the schedule.** `GROUP_SIZE_M` from 1 to 16
+moves the per-tile cost by 24% while compiling byte-identical shared memory, an
+identical PTX instruction census and identical occupancy. The model has no slot
+for a schedule. (CORRECTED 2026-11-17: the session measured none of the three. The
+shared memory is the residency model's 49152 B at every setting; the compiled
+shared memory was not read by the session (`occupancy` V9 UNKNOWN); its published
+Triton cache (occupancy_vs_swizzle arm, fused_moe_kernel.json "shared") records
+49152 B for all four s3w8g{1,8,16,64}-bm64 kernels, equal across G; no PTX census of these
+settings is in the session (their PTX is in the occupancy_vs_swizzle arm's Triton
+cache; no census was taken) or in docs/FINDINGS.md, and the occupancy is the
+modelled residency. The G=1 settings also ran at 1374 MHz
+against 1454-1471 for G > 1, worth roughly a fifth of the effect. docs/FINDINGS.md,
+"GROUP_SIZE_M moves the per-M-tile cost 24% at an identical geometry", states both
+caveats.)
+
+**Two results that stand on their own.** Of 56 power-of-two tiles, the 17 whose
+arithmetic-intensity ceiling clears this card's ridge all need an accumulator of
+at least the entire 65,536-register per-block file, on every NVIDIA
+architecture from sm_70 to sm_100: the register file runs out exactly where the
+arithmetic would have become sufficient, so no positive control exists at
+vLLM's shipped `BLOCK_SIZE_N`. And under a 700 W cap held to within 2% across
+2,328 cells, the achieved SM clock spans 1,275 to 1,935 MHz as a function of
+the tile alone, so any tile comparison scored against a roof measured at one
+clock is comparing two machines.
+
+**Claims.** C1 and C2 established, C3 established and rescoped three times, C4
+confirmed and closed, C5 not established and now shown unresolvable: the
+cross-card difference is +0.0117 against a detection limit of 0.0908, and
+changing one compiler scheduling flag on a single card moves the same quantity
+by +0.0101.
+
+**Do not quote these.** `alpha_b = 0.9794 +/- 0.0113` is not a measurement: it
+comes from a fit whose partner parameter is -0.8143, a value `moe/bench/ai_model.py`
+refuses as impossible, its honest interval is nearer +/-0.048, and a quarter of
+the bootstrap draws fall outside `[0, 1]` entirely. The 207% contradiction of
+TEMPO compares a bound with a number. The `cap/ridge = 0.080` headline is
+computed from an alpha the same module refuses to invert. For `BLOCK_M <= 64`
+the ceiling binds under every value this study has ever held; at
+`BLOCK_M = 128`, the tile vLLM actually ships, the verdict flips across the
+candidate range (0.81 of the ridge at 0.9794 against 1.31 at 0.5977) and is
+therefore not established either way.
+
+Kernels not written, and the padding-tax premise that motivated them is dead.
+Read FINDINGS before quoting any number from this repository: several published
+figures have been retracted, and that file says which, when, and where the
+corrected number lives.

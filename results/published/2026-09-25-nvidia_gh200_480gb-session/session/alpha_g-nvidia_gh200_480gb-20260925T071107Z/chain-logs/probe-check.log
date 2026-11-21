@@ -1,0 +1,7 @@
+PROBE CHECK: V8's alignment probe instrument on this card, alone (mixtral-8x7b, BLOCK_M=32); nothing else is measured and nothing is written
+RESULT: VALIDITY P1 PASS [VALIDITY] vLLM's moe_align_block_size captures under a CUDA graph and a 16-call replay is GPU time: not host-bound, per call under the eager p50 | measured graph 5.22 us per call over 16 calls per replay (replay p50 83.49 us), host-bound False; eager p50 45.63 us per call | gate graph_calls == 16, host-bound False, graph per-call ms < eager p50
+P1  VALIDITY PASS     vLLM's moe_align_block_size captures under a CUDA graph and a 16-call replay is GPU time: not host-bound, per call under the eager p50
+             measured graph 5.22 us per call over 16 calls per replay (replay p50 83.49 us), host-bound False; eager p50 45.63 us per call   gate graph_calls == 16, host-bound False, graph per-call ms < eager p50
+             if this FAILS: R3's alignment probe cannot time this op as GPU time on this build, so V8 can read UNKNOWN and latch the page INVALID after the whole ladder is paid for; this check exists to find that out before the pilot and not after it
+             mixtral-8x7b BLOCK_M=32, tread 1: 128 tokens, 256 ids, 8 experts declared (NATIVE's declaration), the op alone
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

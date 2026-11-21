@@ -1,0 +1,645 @@
+{
+ "schema": 1,
+ "utc_start": "2026-10-20T22:47:12Z",
+ "utc_end": "2026-10-20T22:56:23Z",
+ "session_tag": "gh200-20261020T224556Z-p2",
+ "locks_asked": [
+  1710
+ ],
+ "groups": [
+  16
+ ],
+ "r3_args": [
+  "--model",
+  "mixtral-8x7b",
+  "--block-m",
+  "128",
+  "--repeats",
+  "9",
+  "--duty",
+  "0.25",
+  "--seed",
+  "0",
+  "--declared-copies",
+  "9",
+  "--histogram",
+  "docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json",
+  "--arms",
+  "native,shared",
+  "--num-stages",
+  "3",
+  "--block-k",
+  "64",
+  "--block-n",
+  "128",
+  "--num-warps",
+  "8"
+ ],
+ "python": "/home/ubuntu/moe/venvs/vllm/bin/python",
+ "results_dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-lp1710m",
+ "card": "NVIDIA GH200 480GB, GPU-1a7710b2-11b6-5750-db3b-1265475ab3e3, Enabled, 900.00 W, 1980 MHz",
+ "attempts": [
+  {
+   "lock": 1710,
+   "G": 16,
+   "tag": "gh200-20261020T224556Z-p2-lock1710",
+   "state": "held-with-slips",
+   "rc": 3,
+   "cells": 144,
+   "worst_mhz": 1605.0,
+   "slip_mhz": null,
+   "over_mhz": null,
+   "dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-lp1710m/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-86e4983d",
+   "why": "25 slipped rows, lowest 1605 MHz, recorded and kept out of their cell medians by R3",
+   "utc_start": "2026-10-20T22:47:12Z",
+   "seconds": 550.7,
+   "log": "/home/ubuntu/moe/session/locked-r3/gh200-20261020T224556Z-p2/r3-g16-lock1710.log",
+   "argv": [
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "scripts/r3_tile.py",
+    "--model",
+    "mixtral-8x7b",
+    "--block-m",
+    "128",
+    "--repeats",
+    "9",
+    "--duty",
+    "0.25",
+    "--seed",
+    "0",
+    "--declared-copies",
+    "9",
+    "--histogram",
+    "docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json",
+    "--arms",
+    "native,shared",
+    "--num-stages",
+    "3",
+    "--block-k",
+    "64",
+    "--block-n",
+    "128",
+    "--num-warps",
+    "8",
+    "--slip-policy",
+    "cell",
+    "--lock-mhz",
+    "1710",
+    "--min-clean-repeats",
+    "0",
+    "--group-m",
+    "16",
+    "--session-tag",
+    "gh200-20261020T224556Z-p2-lock1710"
+   ],
+   "slipped_cells": [
+    {
+     "row": 12,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "0",
+     "label": "uniform",
+     "mhz": 1665.0
+    },
+    {
+     "row": 14,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "0",
+     "label": "balanced",
+     "mhz": 1650.0
+    },
+    {
+     "row": 16,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "1",
+     "label": "balanced",
+     "mhz": 1635.0
+    },
+    {
+     "row": 17,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "1",
+     "label": "balanced",
+     "mhz": 1665.0
+    },
+    {
+     "row": 18,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "1",
+     "label": "uniform",
+     "mhz": 1620.0
+    },
+    {
+     "row": 24,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "balanced",
+     "mhz": 1665.0
+    },
+    {
+     "row": 26,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "uniform",
+     "mhz": 1605.0
+    },
+    {
+     "row": 27,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "uniform",
+     "mhz": 1665.0
+    },
+    {
+     "row": 29,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "PW",
+     "mhz": 1650.0
+    },
+    {
+     "row": 37,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "2",
+     "label": "uniform",
+     "mhz": 1650.0
+    },
+    {
+     "row": 45,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "2",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 50,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "3",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 55,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "3",
+     "label": "PT",
+     "mhz": 1650.0
+    },
+    {
+     "row": 63,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "3",
+     "label": "PT",
+     "mhz": 1665.0
+    },
+    {
+     "row": 72,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "4",
+     "label": "PT",
+     "mhz": 1650.0
+    },
+    {
+     "row": 90,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "5",
+     "label": "uniform",
+     "mhz": 1650.0
+    },
+    {
+     "row": 94,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "5",
+     "label": "PT",
+     "mhz": 1635.0
+    },
+    {
+     "row": 95,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "5",
+     "label": "PT",
+     "mhz": 1635.0
+    },
+    {
+     "row": 107,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "PW",
+     "mhz": 1665.0
+    },
+    {
+     "row": 108,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 109,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 110,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "balanced",
+     "mhz": 1635.0
+    },
+    {
+     "row": 111,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "balanced",
+     "mhz": 1620.0
+    },
+    {
+     "row": 133,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "8",
+     "label": "uniform",
+     "mhz": 1620.0
+    },
+    {
+     "row": 142,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "8",
+     "label": "balanced",
+     "mhz": 1635.0
+    }
+   ]
+  }
+ ],
+ "lock": 1710,
+ "pages": [
+  {
+   "lock": 1710,
+   "G": 16,
+   "tag": "gh200-20261020T224556Z-p2-lock1710",
+   "state": "held-with-slips",
+   "rc": 3,
+   "cells": 144,
+   "worst_mhz": 1605.0,
+   "slip_mhz": null,
+   "over_mhz": null,
+   "dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-lp1710m/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-86e4983d",
+   "why": "25 slipped rows, lowest 1605 MHz, recorded and kept out of their cell medians by R3",
+   "utc_start": "2026-10-20T22:47:12Z",
+   "seconds": 550.7,
+   "log": "/home/ubuntu/moe/session/locked-r3/gh200-20261020T224556Z-p2/r3-g16-lock1710.log",
+   "argv": [
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "scripts/r3_tile.py",
+    "--model",
+    "mixtral-8x7b",
+    "--block-m",
+    "128",
+    "--repeats",
+    "9",
+    "--duty",
+    "0.25",
+    "--seed",
+    "0",
+    "--declared-copies",
+    "9",
+    "--histogram",
+    "docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json",
+    "--arms",
+    "native,shared",
+    "--num-stages",
+    "3",
+    "--block-k",
+    "64",
+    "--block-n",
+    "128",
+    "--num-warps",
+    "8",
+    "--slip-policy",
+    "cell",
+    "--lock-mhz",
+    "1710",
+    "--min-clean-repeats",
+    "0",
+    "--group-m",
+    "16",
+    "--session-tag",
+    "gh200-20261020T224556Z-p2-lock1710"
+   ],
+   "slipped_cells": [
+    {
+     "row": 12,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "0",
+     "label": "uniform",
+     "mhz": 1665.0
+    },
+    {
+     "row": 14,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "0",
+     "label": "balanced",
+     "mhz": 1650.0
+    },
+    {
+     "row": 16,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "1",
+     "label": "balanced",
+     "mhz": 1635.0
+    },
+    {
+     "row": 17,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "1",
+     "label": "balanced",
+     "mhz": 1665.0
+    },
+    {
+     "row": 18,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "1",
+     "label": "uniform",
+     "mhz": 1620.0
+    },
+    {
+     "row": 24,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "balanced",
+     "mhz": 1665.0
+    },
+    {
+     "row": 26,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "uniform",
+     "mhz": 1605.0
+    },
+    {
+     "row": 27,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "uniform",
+     "mhz": 1665.0
+    },
+    {
+     "row": 29,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "1",
+     "label": "PW",
+     "mhz": 1650.0
+    },
+    {
+     "row": 37,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "2",
+     "label": "uniform",
+     "mhz": 1650.0
+    },
+    {
+     "row": 45,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "2",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 50,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "3",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 55,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "3",
+     "label": "PT",
+     "mhz": 1650.0
+    },
+    {
+     "row": 63,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "3",
+     "label": "PT",
+     "mhz": 1665.0
+    },
+    {
+     "row": 72,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "4",
+     "label": "PT",
+     "mhz": 1650.0
+    },
+    {
+     "row": 90,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "5",
+     "label": "uniform",
+     "mhz": 1650.0
+    },
+    {
+     "row": 94,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "5",
+     "label": "PT",
+     "mhz": 1635.0
+    },
+    {
+     "row": 95,
+     "arm": "native",
+     "tiles": "3",
+     "repeat": "5",
+     "label": "PT",
+     "mhz": 1635.0
+    },
+    {
+     "row": 107,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "PW",
+     "mhz": 1665.0
+    },
+    {
+     "row": 108,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 109,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "uniform",
+     "mhz": 1635.0
+    },
+    {
+     "row": 110,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "balanced",
+     "mhz": 1635.0
+    },
+    {
+     "row": 111,
+     "arm": "shared",
+     "tiles": "8",
+     "repeat": "6",
+     "label": "balanced",
+     "mhz": 1620.0
+    },
+    {
+     "row": 133,
+     "arm": "shared",
+     "tiles": "3",
+     "repeat": "8",
+     "label": "uniform",
+     "mhz": 1620.0
+    },
+    {
+     "row": 142,
+     "arm": "native",
+     "tiles": "8",
+     "repeat": "8",
+     "label": "balanced",
+     "mhz": 1635.0
+    }
+   ]
+  }
+ ],
+ "outcome": {
+  "held": 1710,
+  "all_slipped": false,
+  "stopped": "",
+  "refused": ""
+ },
+ "stopped_by": "",
+ "gates": [
+  {
+   "kind": "VALIDITY",
+   "number": "1",
+   "claim": "every attempt read only the run directory its own R3 named",
+   "verdict": "PASS",
+   "measured": "1 of 1 attempts",
+   "threshold": "the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag",
+   "invalidates": "the lock search: an attempt scored another run's cells, or R3 would have resumed one"
+  },
+  {
+   "kind": "VALIDITY",
+   "number": "2",
+   "claim": "the lock search reached a verdict",
+   "verdict": "PASS",
+   "measured": "lock 1710 MHz held at every G",
+   "threshold": "a lock held at every G, or every lock on the ladder slipped",
+   "invalidates": "the verdict: the ladder stopped for a reason a lower lock would not fix"
+  },
+  {
+   "kind": "CLAIM",
+   "number": "1",
+   "claim": "a lock on the ladder held at every G",
+   "verdict": "PASS",
+   "measured": "1710 MHz held at G = 16, 25 slipped rows recorded (--slip-policy cell)",
+   "threshold": "no timed cell more than 15 MHz under the lock at any G (under --slip-policy cell a slipped repeat is R3's to exclude, not a stop)",
+   "invalidates": ""
+  }
+ ],
+ "exit": 0,
+ "reset": {
+  "command": "sudo -n nvidia-smi -rgc",
+  "rc": 0,
+  "output": "All done.",
+  "held": 1710
+ },
+ "smi_log": [
+  {
+   "utc": "2026-10-20T22:47:12Z",
+   "command": "nvidia-smi --query-gpu=name,uuid,persistence_mode,power.limit,clocks.max.sm --format=csv,noheader",
+   "rc": 0,
+   "output": "NVIDIA GH200 480GB, GPU-1a7710b2-11b6-5750-db3b-1265475ab3e3, Enabled, 900.00 W, 1980 MHz"
+  },
+  {
+   "utc": "2026-10-20T22:47:12Z",
+   "command": "nvidia-smi -q -d SUPPORTED_CLOCKS",
+   "rc": 0,
+   "output": "phics                      : 450 MHz\n            Graphics                      : 435 MHz\n            Graphics                      : 420 MHz\n            Graphics                      : 405 MHz\n            Graphics                      : 390 MHz\n            Graphics                      : 375 MHz\n            Graphics                      : 360 MHz\n            Graphics                      : 345 MHz"
+  },
+  {
+   "utc": "2026-10-20T22:47:12Z",
+   "command": "nvidia-smi --query-compute-apps=pid --format=csv,noheader",
+   "rc": 0,
+   "output": ""
+  },
+  {
+   "utc": "2026-10-20T22:47:12Z",
+   "command": "sudo -n nvidia-smi -lgc 1710,1710",
+   "rc": 0,
+   "output": "GPU clocks set to \"(gpuClkMin 1710, gpuClkMax 1710)\" for GPU 00000000:DD:00.0\nAll done."
+  },
+  {
+   "utc": "2026-10-20T22:47:12Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "1980 MHz, 1980 MHz, 0x0000000000000000, 141.80 W, 900.00 W"
+  },
+  {
+   "utc": "2026-10-20T22:56:23Z",
+   "command": "sudo -n nvidia-smi -rgc",
+   "rc": 0,
+   "output": "All done."
+  },
+  {
+   "utc": "2026-10-20T22:56:23Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "1830 MHz, 1980 MHz, 0x0000000000000000, 134.19 W, 900.00 W"
+  }
+ ]
+}

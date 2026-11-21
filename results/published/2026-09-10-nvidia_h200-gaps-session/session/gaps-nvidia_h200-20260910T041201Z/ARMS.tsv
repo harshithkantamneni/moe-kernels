@@ -1,0 +1,21 @@
+arm	state	rc	seconds	dirty	log	note
+calibrate	DONE	0	29	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/calibrate.log	log agrees: RESULT lines imply 0
+pin_probe-n64-g1	DONE	0	29	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/pin_probe-n64-g1.log	log agrees: RESULT lines imply 0
+pin_probe-n256-g16	DONE	0	25	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/pin_probe-n256-g16.log	log agrees: RESULT lines imply 0
+roofline-n64-g1	INVALID	3	24	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/roofline-n64-g1.log	log agrees: RESULT lines imply 3
+roofline-n256-g16	REFUSED	2	4	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/roofline-n256-g16.log	
+roofline-n256-g32	REFUSED	2	4	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/roofline-n256-g32.log	
+bm128_depth	CLAIM_FAIL	1	71	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/bm128_depth.log	log agrees: RESULT lines imply 1
+alias_ablation	INVALID	3	321	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/alias_ablation.log	log agrees: RESULT lines imply 3
+noise_floor	INVALID	3	3769	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/noise_floor.log	log agrees: RESULT lines imply 3
+bn_g16	CLAIM_FAIL	1	2390	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/bn_g16.log	log agrees: RESULT lines imply 1
+anchor_measure	CLAIM_FAIL	1	249	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/anchor_measure.log	log agrees: RESULT lines imply 1
+anchor_rescore	CLAIM_FAIL	1	8	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/anchor_rescore.log	log agrees: RESULT lines imply 1
+occupancy	INVALID	3	1545	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/occupancy.log	log agrees: RESULT lines imply 3
+mma_switch	DONE	0	67	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/mma_switch.log	log agrees: RESULT lines imply 0
+ruler	CLAIM_FAIL	1	30	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/ruler.log	log agrees: RESULT lines imply 1
+cap_test	DONE	0	325	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/cap_test.log	log agrees: RESULT lines imply 0
+dtype	REFUSED	2	47	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/dtype.log	
+span_dense	REFUSED	2	55	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/span_dense.log	
+span	REFUSED	2	12	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/span.log	
+counter_plan	DONE	0	10	1	/workspace/session/gaps-nvidia_h200-20260910T041201Z/logs/counter_plan.log	log agrees: RESULT lines imply 0

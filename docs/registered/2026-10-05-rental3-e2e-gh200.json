@@ -1,0 +1,1204 @@
+{
+ "registered": "2026-10-05, before any rental-3 page",
+ "name": "2026-10-05-rental3-e2e-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE: no rental-3 page exists when this is committed",
+ "design": "scratchpad design-r3/DESIGN.md section 2 with design-r3-review/REVIEW.md sections 1, 5 and 6 (E); the review wins where they differ",
+ "tool": "scripts/cross_model_predict.py --gemm-const at this commit (the numbers below); scorer scripts/scoring/rental3/score_e2e.py",
+ "target": "qwen2-57b-a14b-tp8",
+ "scope": "a blind test of an UNSEEN SHAPE INSIDE THE 64-EXPERT, TOP-8 FAMILY on which every post-2026-09-28 term was chosen: the 64-expert analogue of the 8x22B test. It is NOT a test of transfer across expert counts (FINDINGS' rule: such a claim needs a model none of the terms has seen), and E1's label says so",
+ "parent_inputs": {
+  "routing and declaration": "E 64, top 8, 9 copies, 576 slots (vLLM's 1024 bound passed), the alignment and sort over 576 slots at the same id counts, moe_sum at H 3584: the parent's exactly",
+  "w2 grid": "N = H = 3584, npn 56, so 558 dead M-rows x 56 = 31,248 dead CTAs a SHARED or PRIVATE call: the parent's w2 count exactly (its counted SHARED - NATIVE w2 time is SEEN, E6's FIXED rival)",
+  "w1 per-CTA unit": "K 3584, S 56, u = 19,790 cycles: the parent's w1 (the full model's w1 read 353.3 to 353.7 cycles per k-step at this S, FINDINGS 2026-09-28); only its grid width (npn 10 against 80) is new",
+  "per-CTA fixed cost": "c 344.1, F_w1 520, F_w2 979 (CTA_FIXED_KSTEPS) were measured on four CAL models' counter pages, the parent's among them",
+  "per-GEMM constant (M+Z only)": "the AFF coefficients are fitted on CAL floor captures, the parent's base and 1710 among them",
+  "dead-CTA term": "DEAD_CTA_NS is measured on 8x7B's 2026-09-27 counter pages; it was ADOPTED to repair the parent's 2.71% miss (2.71 to 1.42% rms): selected on the parent",
+  "LATER_MISS": "the capacity form was written for the parent's w2 SHARED (wave_split_bytes, 2026-09-29)",
+  "what is not the parent's": "w2's K 320 (S 5, F = 36% of u = 2,700 cycles, the shortest CTA ever timed), w1's npn 10, and their combination's exposure; the dead term's hiding window shrinks from about 4.3 occ us to 0.8 occ us, so the term is extrapolated there (E6 tests it)"
+ },
+ "source": {
+  "model": "mixtral-8x7b",
+  "board": "board 9b6d01",
+  "clock_mhz": 1710.0,
+  "pages": [
+   "04d9320b",
+   "e20972ef",
+   "8ab16728",
+   "848523de",
+   "2085264b"
+  ],
+  "timing_params": {
+   "T0": 0.044241,
+   "c": 202.547644,
+   "bw": 3597.800853,
+   "s_small": 0.011976,
+   "s_block": -0.00808
+  },
+  "p_knee": 14.0,
+  "k_w": 0.5,
+  "byte_view": "mix",
+  "label": "CAL: 8x7B's 2026-09-27 fit held, nothing fitted on the target"
+ },
+ "design_of_target": {
+  "experts": 64,
+  "copies_declared": 9,
+  "declared": {
+   "native": 64,
+   "shared": 576,
+   "private": 576
+  },
+  "native_path": {
+   "1": "block-scan",
+   "2": "block-scan",
+   "3": "block-scan",
+   "4": "block-scan",
+   "5": "block-scan",
+   "6": "block-scan",
+   "7": "block-scan",
+   "8": "block-scan",
+   "9": "block-scan"
+  },
+  "source_experts": 8
+ },
+ "shapes": {
+  "w1": {
+   "K": 3584,
+   "npn": 10,
+   "W_bytes": 293601280
+  },
+  "w2": {
+   "K": 320,
+   "npn": 56,
+   "W_bytes": 146800640
+  }
+ },
+ "models": {
+  "M": "the model at this commit (primary): F, the dead-CTA term, LATER_MISS, CORES; the JSON's ms",
+  "M0": "the 0f77622 model of the 09-29 registrations: differs from M only through CORES, inactive at every scored cell (2.9 or more waves): predicted differences under 0.3%; M vs M0 does not separate, stated not tested",
+  "M+Z": "M plus the per-GEMM constant's cycle form (r3_timing_model --gemm-const) with T0 refit on 8x7B (timing_params_MZ); a near-uniform shift of about -9.6 us a call"
+ },
+ "timing_params_MZ": {
+  "T0": 0.028563,
+  "c": 202.547644,
+  "bw": 3597.800853,
+  "s_small": 0.011976,
+  "s_block": -0.00808
+ },
+ "gemm_const": {
+  "cycles": 2850.0,
+  "per_u": 0.2081,
+  "c_cycles_per_kstep": 344.1
+ },
+ "host_rule": {
+  "rule": "a cell is scored when T_M + F240 >= 0.40 ms (T_M the JSON's prediction, never the measurement)",
+  "F240_ms": 0.067551,
+  "host_ms": 0.4,
+  "basis": "0.40 ms is the top of the measured eager host time on four models (0.33 to 0.36 ms, SEEN) plus a margin; F240 = 251.7 MB over the 3.7261 TB/s ruler"
+ },
+ "population": {
+  "core": [
+   {
+    "arm": "shared",
+    "G": 8,
+    "n": 3,
+    "T_M": 0.404817,
+    "T_MZ": 0.395249,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 8,
+    "n": 4,
+    "T_M": 0.51165,
+    "T_MZ": 0.502081,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 8,
+    "n": 5,
+    "T_M": 0.618485,
+    "T_MZ": 0.608917,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 8,
+    "n": 6,
+    "T_M": 0.725321,
+    "T_MZ": 0.715753,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 8,
+    "n": 2,
+    "T_M": 0.360965,
+    "T_MZ": 0.351397,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 8,
+    "n": 3,
+    "T_M": 0.499952,
+    "T_MZ": 0.490383,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 8,
+    "n": 4,
+    "T_M": 0.638946,
+    "T_MZ": 0.629378,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 8,
+    "n": 5,
+    "T_M": 0.777944,
+    "T_MZ": 0.768376,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 8,
+    "n": 6,
+    "T_M": 0.916944,
+    "T_MZ": 0.907376,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 32,
+    "n": 3,
+    "T_M": 0.404818,
+    "T_MZ": 0.39525,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 32,
+    "n": 4,
+    "T_M": 0.51165,
+    "T_MZ": 0.502082,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 32,
+    "n": 5,
+    "T_M": 0.618485,
+    "T_MZ": 0.608917,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 32,
+    "n": 6,
+    "T_M": 0.725321,
+    "T_MZ": 0.715753,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 32,
+    "n": 2,
+    "T_M": 0.362695,
+    "T_MZ": 0.353127,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 32,
+    "n": 3,
+    "T_M": 0.503389,
+    "T_MZ": 0.493821,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 32,
+    "n": 4,
+    "T_M": 0.644096,
+    "T_MZ": 0.634528,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 32,
+    "n": 5,
+    "T_M": 0.784809,
+    "T_MZ": 0.775241,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 32,
+    "n": 6,
+    "T_M": 0.925524,
+    "T_MZ": 0.915956,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 3,
+    "n": 3,
+    "T_M": 0.404816,
+    "T_MZ": 0.395248,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 3,
+    "n": 4,
+    "T_M": 0.51165,
+    "T_MZ": 0.502082,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 3,
+    "n": 5,
+    "T_M": 0.618485,
+    "T_MZ": 0.608917,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 3,
+    "n": 6,
+    "T_M": 0.725321,
+    "T_MZ": 0.715753,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 3,
+    "n": 7,
+    "T_M": 0.822098,
+    "T_MZ": 0.812529,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 3,
+    "n": 8,
+    "T_M": 0.928934,
+    "T_MZ": 0.919365,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 3,
+    "n": 2,
+    "T_M": 0.360709,
+    "T_MZ": 0.351141,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 3,
+    "n": 3,
+    "T_M": 0.499443,
+    "T_MZ": 0.489875,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 3,
+    "n": 4,
+    "T_M": 0.638182,
+    "T_MZ": 0.628614,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 3,
+    "n": 5,
+    "T_M": 0.776926,
+    "T_MZ": 0.767358,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 3,
+    "n": 6,
+    "T_M": 0.915672,
+    "T_MZ": 0.906104,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 3,
+    "n": 7,
+    "T_M": 1.054955,
+    "T_MZ": 1.045387,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 3,
+    "n": 8,
+    "T_M": 1.193695,
+    "T_MZ": 1.184127,
+    "host_rule": true
+   }
+  ],
+  "deep": [
+   {
+    "arm": "shared",
+    "G": 4,
+    "n": 3,
+    "T_M": 0.404817,
+    "T_MZ": 0.395249,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 4,
+    "n": 4,
+    "T_M": 0.51165,
+    "T_MZ": 0.502081,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 4,
+    "n": 5,
+    "T_M": 0.618485,
+    "T_MZ": 0.608917,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 4,
+    "n": 6,
+    "T_M": 0.725321,
+    "T_MZ": 0.715753,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 4,
+    "n": 7,
+    "T_M": 0.822098,
+    "T_MZ": 0.812529,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 4,
+    "n": 8,
+    "T_M": 0.928934,
+    "T_MZ": 0.919365,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 4,
+    "n": 9,
+    "T_M": 1.035769,
+    "T_MZ": 1.026201,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 2,
+    "T_M": 0.360755,
+    "T_MZ": 0.351187,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 3,
+    "T_M": 0.499534,
+    "T_MZ": 0.489965,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 4,
+    "T_M": 0.638319,
+    "T_MZ": 0.628751,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 5,
+    "T_M": 0.777108,
+    "T_MZ": 0.76754,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 6,
+    "T_M": 0.915899,
+    "T_MZ": 0.906331,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 7,
+    "T_M": 1.055228,
+    "T_MZ": 1.04566,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 8,
+    "T_M": 1.194014,
+    "T_MZ": 1.184446,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 4,
+    "n": 9,
+    "T_M": 1.332801,
+    "T_MZ": 1.323233,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 2,
+    "n": 3,
+    "T_M": 0.404817,
+    "T_MZ": 0.395249,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 2,
+    "n": 4,
+    "T_M": 0.51165,
+    "T_MZ": 0.502081,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 2,
+    "n": 5,
+    "T_M": 0.618485,
+    "T_MZ": 0.608917,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 2,
+    "n": 6,
+    "T_M": 0.725321,
+    "T_MZ": 0.715753,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 2,
+    "n": 7,
+    "T_M": 0.822098,
+    "T_MZ": 0.812529,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 2,
+    "n": 8,
+    "T_M": 0.928934,
+    "T_MZ": 0.919365,
+    "host_rule": true
+   },
+   {
+    "arm": "shared",
+    "G": 2,
+    "n": 9,
+    "T_M": 1.035769,
+    "T_MZ": 1.026201,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 2,
+    "T_M": 0.360669,
+    "T_MZ": 0.351101,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 3,
+    "T_M": 0.49936,
+    "T_MZ": 0.489792,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 4,
+    "T_M": 0.638059,
+    "T_MZ": 0.628491,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 5,
+    "T_M": 0.776762,
+    "T_MZ": 0.767194,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 6,
+    "T_M": 0.915465,
+    "T_MZ": 0.905897,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 7,
+    "T_M": 1.054708,
+    "T_MZ": 1.045139,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 8,
+    "T_M": 1.193406,
+    "T_MZ": 1.183838,
+    "host_rule": true
+   },
+   {
+    "arm": "private",
+    "G": 2,
+    "n": 9,
+    "T_M": 1.332107,
+    "T_MZ": 1.322539,
+    "host_rule": true
+   }
+  ],
+  "core_cells": 31,
+  "deep_cells": 30,
+  "excluded_by_host_rule": [
+   "shared G=8 n=1",
+   "shared G=8 n=2",
+   "private G=8 n=1",
+   "shared G=32 n=1",
+   "shared G=32 n=2",
+   "private G=32 n=1",
+   "shared G=3 n=1",
+   "shared G=3 n=2",
+   "private G=3 n=1",
+   "shared G=4 n=1",
+   "shared G=4 n=2",
+   "private G=4 n=1",
+   "shared G=2 n=1",
+   "shared G=2 n=2",
+   "private G=2 n=1"
+  ],
+  "rule": "the registered verdict population is the core cells (timed step: G = 3 n <= 8, G = 8 and 32 n <= 6) that pass the host rule, fixed here; the deep pages' cells (G = 4, 2 to n = 9) get their own printed verdict by the same rule and never change the registered one; a population with under 75% of its cells present (24 of 31) is NOT SCORED"
+ },
+ "E1": {
+  "what": "time from PREDICTED bytes: (T_meas - T_M) / T_M per scored cell",
+  "label": "BLIND (scope above: unseen shape, seen family)",
+  "rule": "HOLDS when rms <= 2% and no cell beyond 5%; FALSIFIED otherwise",
+  "rms_max": 0.02,
+  "max_abs": 0.05,
+  "unresolved": "beside the registered verdict, the label UNRESOLVED when |rms - 2%| or |max - 5%| is under the resolution sqrt(sigma_page^2 + sigma_board^2) (the replicate registration); the verdict stands"
+ },
+ "E2": {
+  "what": "time from COUNTED bytes: scripts/cross_model_score.py score() at this commit on the target's timed and counter pages (the byte G's 3, 8, 32)",
+  "cells": "the E1 population restricted to G with a byte page (3, 8, 32): every core cell",
+  "rule": "the same as E1",
+  "label": "BLIND"
+ },
+ "E3": {
+  "what": "PRIVATE weight-set reads q (dram_counter_route.r3_q) against the JSON's q",
+  "cells": "every G in (3, 8, 32), n = 1..9 (bytes are not host-bound), w1 and w2: 54 cells",
+  "rule": "HOLDS when the rms of q_meas / q_pred - 1 is <= 3% and at most 10% of cells lie beyond 5%; FALSIFIED otherwise",
+  "rms_max": 0.03,
+  "beyond": 0.05,
+  "beyond_share_max": 0.1,
+  "label": "BLIND"
+ },
+ "E3s": {
+  "what": "SHARED q (an expert fits in L2: q 1.00 to 1.04 predicted)",
+  "rule": "E3's rule, SECONDARY (Qwen2 w2 SHARED missed by +97%, SEEN)",
+  "label": "BLIND"
+ },
+ "q_pred": {
+  "shared G=3 n=1": {
+   "w1": 1.0,
+   "w2": 1.000044
+  },
+  "shared G=3 n=2": {
+   "w1": 1.007125,
+   "w2": 1.010241
+  },
+  "shared G=3 n=3": {
+   "w1": 1.000604,
+   "w2": 1.010153
+  },
+  "shared G=3 n=4": {
+   "w1": 1.012453,
+   "w2": 1.013372
+  },
+  "shared G=3 n=5": {
+   "w1": 1.013078,
+   "w2": 1.014786
+  },
+  "shared G=3 n=6": {
+   "w1": 1.008198,
+   "w2": 1.014036
+  },
+  "shared G=3 n=7": {
+   "w1": 1.013415,
+   "w2": 1.014883
+  },
+  "shared G=3 n=8": {
+   "w1": 1.013286,
+   "w2": 1.014776
+  },
+  "shared G=3 n=9": {
+   "w1": 1.010068,
+   "w2": 1.014765
+  },
+  "shared G=8 n=1": {
+   "w1": 1.0,
+   "w2": 1.000191
+  },
+  "shared G=8 n=2": {
+   "w1": 1.001737,
+   "w2": 1.007795
+  },
+  "shared G=8 n=3": {
+   "w1": 1.015842,
+   "w2": 1.018153
+  },
+  "shared G=8 n=4": {
+   "w1": 1.002201,
+   "w2": 1.011661
+  },
+  "shared G=8 n=5": {
+   "w1": 1.0189,
+   "w2": 1.020461
+  },
+  "shared G=8 n=6": {
+   "w1": 1.015747,
+   "w2": 1.018863
+  },
+  "shared G=8 n=7": {
+   "w1": 1.019462,
+   "w2": 1.020559
+  },
+  "shared G=8 n=8": {
+   "w1": 1.002144,
+   "w2": 1.013725
+  },
+  "shared G=8 n=9": {
+   "w1": 1.01897,
+   "w2": 1.021943
+  },
+  "shared G=32 n=1": {
+   "w1": 1.0,
+   "w2": 1.001481
+  },
+  "shared G=32 n=2": {
+   "w1": 1.010282,
+   "w2": 1.009331
+  },
+  "shared G=32 n=3": {
+   "w1": 1.037547,
+   "w2": 1.024655
+  },
+  "shared G=32 n=4": {
+   "w1": 1.012951,
+   "w2": 1.013746
+  },
+  "shared G=32 n=5": {
+   "w1": 1.038701,
+   "w2": 1.028243
+  },
+  "shared G=32 n=6": {
+   "w1": 1.033517,
+   "w2": 1.026253
+  },
+  "shared G=32 n=7": {
+   "w1": 1.039759,
+   "w2": 1.029683
+  },
+  "shared G=32 n=8": {
+   "w1": 1.012591,
+   "w2": 1.016969
+  },
+  "shared G=32 n=9": {
+   "w1": 1.039334,
+   "w2": 1.030466
+  },
+  "private G=3 n=1": {
+   "w1": 1.0,
+   "w2": 1.000089
+  },
+  "private G=3 n=2": {
+   "w1": 2.001178,
+   "w2": 2.000194
+  },
+  "private G=3 n=3": {
+   "w1": 3.002425,
+   "w2": 3.000301
+  },
+  "private G=3 n=4": {
+   "w1": 4.003643,
+   "w2": 4.000405
+  },
+  "private G=3 n=5": {
+   "w1": 5.004875,
+   "w2": 5.00051
+  },
+  "private G=3 n=6": {
+   "w1": 6.006123,
+   "w2": 6.000617
+  },
+  "private G=3 n=7": {
+   "w1": 7.007341,
+   "w2": 7.000721
+  },
+  "private G=3 n=8": {
+   "w1": 8.008572,
+   "w2": 8.000826
+  },
+  "private G=3 n=9": {
+   "w1": 9.00982,
+   "w2": 9.000933
+  },
+  "private G=8 n=1": {
+   "w1": 1.0,
+   "w2": 1.000312
+  },
+  "private G=8 n=2": {
+   "w1": 2.00417,
+   "w2": 2.000677
+  },
+  "private G=8 n=3": {
+   "w1": 3.008437,
+   "w2": 3.001042
+  },
+  "private G=8 n=4": {
+   "w1": 4.012705,
+   "w2": 4.001407
+  },
+  "private G=8 n=5": {
+   "w1": 5.016975,
+   "w2": 5.001771
+  },
+  "private G=8 n=6": {
+   "w1": 6.021244,
+   "w2": 6.002136
+  },
+  "private G=8 n=7": {
+   "w1": 7.025514,
+   "w2": 7.002501
+  },
+  "private G=8 n=8": {
+   "w1": 8.029785,
+   "w2": 8.002866
+  },
+  "private G=8 n=9": {
+   "w1": 9.034055,
+   "w2": 9.003231
+  },
+  "private G=32 n=1": {
+   "w1": 1.0,
+   "w2": 1.001811
+  },
+  "private G=32 n=2": {
+   "w1": 2.024397,
+   "w2": 2.003919
+  },
+  "private G=32 n=3": {
+   "w1": 3.049041,
+   "w2": 3.006027
+  },
+  "private G=32 n=4": {
+   "w1": 4.073747,
+   "w2": 4.008136
+  },
+  "private G=32 n=5": {
+   "w1": 5.09848,
+   "w2": 5.010244
+  },
+  "private G=32 n=6": {
+   "w1": 6.123225,
+   "w2": 6.012352
+  },
+  "private G=32 n=7": {
+   "w1": 7.147977,
+   "w2": 7.01446
+  },
+  "private G=32 n=8": {
+   "w1": 8.172734,
+   "w2": 8.016568
+  },
+  "private G=32 n=9": {
+   "w1": 9.197494,
+   "w2": 9.018676
+  }
+ },
+ "q_status": {
+  "shared G=3 n=1": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=2": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=3": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=4": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=5": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=6": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=7": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=8": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=3 n=9": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=1": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=2": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=3": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=4": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=5": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=6": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=7": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=8": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=8 n=9": {
+   "w1": null,
+   "w2": null
+  },
+  "shared G=32 n=1": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=2": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=3": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=4": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=5": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=6": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=7": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=8": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "shared G=32 n=9": {
+   "w1": null,
+   "w2": "OUT-OF-DOMAIN"
+  },
+  "private G=3 n=1": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=2": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=3": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=4": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=5": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=6": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=7": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=8": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=3 n=9": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=1": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=2": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=3": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=4": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=5": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=6": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=7": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=8": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=8 n=9": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=1": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=2": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=3": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=4": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=5": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=6": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=7": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=8": {
+   "w1": null,
+   "w2": null
+  },
+  "private G=32 n=9": {
+   "w1": null,
+   "w2": null
+  }
+ },
+ "E4": {
+  "what": "the floor's per-CTA unit u = S c + F on w2 (S 5, F 979: 36% of u), from the 1005 capture's DUR ruler",
+  "gemm": "w2 only: w1's unit (S 56) is the parent's, a SEEN replicate, printed",
+  "fit": "floor_estimator.joint_theta(DUR / u, q, frac), DUR = gpu__time_duration x 1005 MHz / 1e3, over the registered floor-bound w2 cells of the 1005 capture",
+  "cells_w2": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   8,
+   10,
+   12,
+   13,
+   14,
+   16
+  ],
+  "cells_w1_printed": [
+   3,
+   4,
+   5,
+   6,
+   8,
+   10,
+   12,
+   13,
+   14,
+   16
+  ],
+  "u_w2": 2699.5,
+  "M_band": [
+   0.98,
+   1.02
+  ],
+  "F0_rival_b": 0.63734,
+  "F0_band": [
+   0.59734,
+   0.67734
+  ],
+  "rule": "M HOLDS when b lies in [0.98, 1.02] (F0 FALSIFIED unless inside its own band); F0 HOLDS when b lies in [b_F0 - 0.04, b_F0 + 0.04]; else NEITHER. w1 printed with its q-only slope (ceil reads 1 / mean waves share, fluid 1.000)",
+  "label": "BLIND"
+ },
+ "E5": {
+  "what": "M against M+Z on E1's cells: rms(M), rms(M+Z), their difference",
+  "status": "PRINTED, NOT A TEST (the review, section 6 E-6): M+Z - M is a near-uniform -9.6 us a call, which a board-level T0 offset reproduces; part A carries the form question",
+  "illustrative_rel_shift_on_population": {
+   "min": -0.026526,
+   "max": -0.008015
+  },
+  "sigma": "printed with sigma_rms = sqrt(2 sigma_page^2 / N + sigma_board^2)",
+  "M+Z_refit": "T0 0.04424 -> 0.02856 ms; c, bw, s_small, s_block unchanged"
+ },
+ "E6": {
+  "what": "the dead-CTA term in isolation: counted SHARED - NATIVE in-kernel time per GEMM on the target's byte pages, sum over the GEMM of recorded sm__cycles_elapsed.avg (SHARED) - (NATIVE) over the 1710 MHz lock, per (G, n)",
+  "cells": "G in (3, 8, 32), n = 2..9, each byte page whose V-gates pass (CLEAN) or every page (ALL)",
+  "statistic": "per GEMM, the median over cells",
+  "predicted": {
+   "w1": {
+    "dead_ctas_shared": 5580,
+    "dead_ctas_native": 620,
+    "hidden_us": 29.1223,
+    "shared_us": 0.0,
+    "native_us": 0.0,
+    "pred_us": 0.0
+   },
+   "w2": {
+    "dead_ctas_shared": 31248,
+    "dead_ctas_native": 3472,
+    "hidden_us": 3.178378,
+    "shared_us": 38.475206,
+    "native_us": 1.449798,
+    "pred_us": 37.025408
+   }
+  },
+  "hypotheses": {
+   "DEAD": "M's term: dead x DEAD_CTA_NS less one effective lifetime k_w occ_g S'_g c, so w2 at S' 7.85 hides 3.2 us of 41.7",
+   "FIXED": "the exposure does not shrink with the CTA's length: w2 reads the parent's counted SHARED - NATIVE w2 time at the same 31,248 dead CTAs (SEEN)"
+  },
+  "parent_counted_SEEN_us": {
+   "w1": 24.148031,
+   "w2": 21.540533
+  },
+  "bands_w2": {
+   "DEAD": [
+    29.620326,
+    44.43049
+   ],
+   "FIXED": [
+    17.232426,
+    25.84864
+   ]
+  },
+  "band_basis": "+-20%: DEAD_CTA_NS's own se (0.58 of 8.74 us, 6.6%) and the term's miss on the parent (25.1 printed against 21.5 counted, 14%), SEEN",
+  "rule": "on w2 (the primary): a hypothesis HOLDS when the median lies in its band and FALSIFIED outside it; DEAD is SELECTED when it holds and FIXED is falsified, and the reverse; else INCONCLUSIVE. w1 (5,580 against 620 dead CTAs, all hidden: predicted 0) is printed",
+  "label": "BLIND (the parent's counted value is SEEN)"
+ },
+ "gates": {
+  "timed": "every VALIDITY gate except V5 gates CLEAN (V5 reads the declaration's machinery from slopes a host-bound n = 1 bends; Granite-3B lost every timed page to it); V1 makes a page unusable in both views; a V8 that reads UNKNOWN on the eager fallback latches the page INVALID: CLEAN drops it and ALL keeps it (fixed now, the review section 5)",
+  "bytes": "every V-gate gates CLEAN for E3, E3s and E6, V10 (lock_gate.check_lock) included; V1 unusable in both. DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): an earlier draft exempted V10; that is withdrawn: E6 converts cycles to microseconds at 1710 MHz, so it needs the clock gate, and the stored V10 FAILs on published pages are a stale fit (all 101 published lock pages pass when lock_gate re-gates them on the nvidia-smi bracket, and five rental-2 TP-shard byte pages passed V10 as stored)",
+  "floor": "the floorlaw registration's lock-in-force check (E4 reads the 1005 capture)",
+  "views": "every verdict on ALL and CLEAN, rental 2's rule 3"
+ },
+ "ambiguities_resolved": {
+  "E-1 ALL vs CLEAN": "a cell's T is the median of ms_p50 over the pages the view counts; ALL counts every page of the unit's directory with V1 passing, CLEAN every page with no failing VALIDITY gate but V5",
+  "E-2 rep8": "rep8's page is in its own directory (gaps-<card>-qwen2-57b-a14b-tp8-rep8) and is never read by E1 to E6; it is R's input only",
+  "E-3 population": "31 core cells, fixed above; deep cells printed with their own verdict",
+  "E-4 E3": "54 cells, rms <= 3% and at most 10% beyond 5%; n = 1..9",
+  "E-5 E4": "w2 only, the joint fit (identifiable: corr(q, frac) 0.007 on the w2 cells); w1 printed",
+  "E-6 E5": "printed only",
+  "E-7 UNRESOLVED": "either margin (rms to 2%, max to 5%) under the resolution",
+  "E-8 above-lock": "timed cells are not dropped by clock: R3's own clock gates decide a page (CLEAN), and each cell's sm_clock_load_mhz is printed",
+  "E-9 M+Z": "the source pages and the refit numbers are in source.pages and timing_params_MZ",
+  "E-10 E6": "added, with the FIXED rival from the parent's counted value"
+ },
+ "seen_data": [
+  "every published page is SEEN, rental 2's and the parent Qwen2-57B's (2026-09-28) included; the target has no cell on any of them",
+  "the timing fit is 8x7B's 2026-09-27 pages alone (CAL); the byte model's registered view is fitted on the same board's 8x7B counter pages (CAL)",
+  "the terms added after 2026-09-28 (DEAD_CTA_NS, LATER_MISS's capacity form, CORES) were chosen on SEEN pages, two of them on this family (the review, section 1)"
+ ],
+ "code_pins": {
+  "scripts/cross_model_score.py": "d770e8ba1c4178add7c7180921d434aca8c4ee115068809cb5f0227dad22ef07",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "scripts/r3_timing_model.py": "dca04983ad613ee1b42ba726e3281ebbfb3277d4f730d770928362e119b2e316",
+  "scripts/wave_split_bytes.py": "4f40e5b2f11f8ba1cd0d6092d3899b5923618d11b5ee6e6e49f156b83fa3bd4a",
+  "scripts/floor_estimator.py": "40c785ea144740ae663ed11f5692b0978f2436fa836bf682fd5cc71201989cda",
+  "scripts/l2_survival.py": "cd85277d931ec7d09d27a02acfdf5c887142571b2456825b1bf809ae6a56e09b",
+  "scripts/scoring/rental3/r3common.py": "5dfdb3e2d8fa85634e0577df389e514659f9ff337d03ce7c3a28f105c669f305"
+ }
+}

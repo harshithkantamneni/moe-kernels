@@ -1,0 +1,26 @@
+RENTAL 3 PART A (the per-GEMM constant's form), 2026-10-05-rental3-zform-gh200
+  qwen2-57b-a14b-tp8 w2 (scored): NOT SCORED: the half-fits' intercepts disagree (curvature)
+    base: Z 6900 +- 158 at 1384.8745769944896 MHz
+    lock1710: Z 8056 +- 187 at 1669.1681544234705 MHz
+    lock1005: Z 7136 +- 158 at 1004.4366676029706 MHz
+  granite-3.0-1b-a400m w2 (scored): RECORD
+    base: Z 2981 +- 186 at 1381.9593860364032 MHz
+    lock1710: Z 3540 +- 186 at 1672.6089900563966 MHz
+    lock1005: Z 2871 +- 186 at 1002.5340314558842 MHz
+    A2 base/1710 r 0.842 +- 0.063 (MIX 0.858); MID False
+  granite-3.0-1b-a400m w1 (scored): RECORD
+    base: Z 3535 +- 186 at 1373.9323779632934 MHz
+    lock1710: Z 3719 +- 186 at 1658.7640431301652 MHz
+    lock1005: Z 3397 +- 186 at 1003.5129742974101 MHz
+    A2 base/1710 r 0.951 +- 0.067 (MIX 0.874); MID False
+  qwen2-57b-a14b-tp8 w1 (printed): RECORD
+    base: Z 5853 +- 292 at 1379.294152040583 MHz
+    lock1710: Z 6281 +- 292 at 1666.0164152998223 MHz
+    lock1005: Z 5859 +- 292 at 1004.6332966700359 MHz
+    A2 base/1710 r 0.932 +- 0.061 (MIX 0.922); MID False
+  PROP: FALSIFIED (fails on ['granite-3.0-1b-a400m w2', 'granite-3.0-1b-a400m w1'])
+  AFF: not falsified (fails on ['granite-3.0-1b-a400m w2'])
+  MIX: no failure (fails on [])
+  verdict: INCONCLUSIVE
+  two views (ALL, CLEAN):
+    0 of 5 verdicts differ between ALL and CLEAN

@@ -1,0 +1,2 @@
+== 2026-10-20T22:46:31Z step gate: gate calibrate: scripts/tileA2_gate.py calibrate at the 1710 lock; FAIL ends the rental (tileA2-gates)
+2026-10-20T22:46:32Z gate calibrate at 1710 MHz: RESULT: GATE calibrate PASS (exit 0)

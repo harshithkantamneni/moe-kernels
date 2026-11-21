@@ -1,0 +1,1375 @@
+{
+ "registration": "2026-10-05-rental3-zform-gh200",
+ "gemms": {
+  "qwen2-57b-a14b-tp8 w2": {
+   "Z": {
+    "base": {
+     "Z": 6900.001577423672,
+     "slope": 2653.408550071471,
+     "se_realised": 138.5908949992305,
+     "sigma": 157.72739,
+     "mhz": 1384.8745769944896,
+     "cells": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      13,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 7120.858030613917,
+      "Z_hi": 6216.946328770199,
+      "limit": 1105.8748508105054
+     },
+     "curvature_ok": true
+    },
+    "lock1710": {
+     "Z": 8056.121140232601,
+     "slope": 2653.3928258095225,
+     "se_realised": 186.5454717451698,
+     "sigma": 186.5454717451698,
+     "mhz": 1669.1681544234705,
+     "cells": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      13,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 8379.631031416273,
+      "Z_hi": 7020.53055267914,
+      "limit": 1105.8748508105054
+     },
+     "curvature_ok": false
+    },
+    "lock1005": {
+     "Z": 7136.4672802818595,
+     "slope": 2654.9858129947047,
+     "se_realised": 113.5079210751347,
+     "sigma": 157.72739,
+     "mhz": 1004.4366676029706,
+     "cells": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      13,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 7459.263030449631,
+      "Z_hi": 6606.875918156664,
+      "limit": 1105.8748508105054
+     },
+     "curvature_ok": true
+    }
+   },
+   "role": "scored",
+   "u": 2699.5,
+   "verdict": "NOT SCORED: the half-fits' intercepts disagree (curvature)"
+  },
+  "granite-3.0-1b-a400m w2": {
+   "Z": {
+    "base": {
+     "Z": 2980.8805195092777,
+     "slope": 3692.1087785781374,
+     "se_realised": 100.96985920418425,
+     "sigma": 185.900037,
+     "mhz": 1381.9593860364032,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 3275.9394404313352,
+      "Z_hi": 2744.315520496544,
+      "limit": 1206.961805000255
+     },
+     "curvature_ok": true
+    },
+    "lock1710": {
+     "Z": 3539.81338389815,
+     "slope": 3689.098600224938,
+     "se_realised": 158.71579611909627,
+     "sigma": 185.900037,
+     "mhz": 1672.6089900563966,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 3704.2006686510827,
+      "Z_hi": 3393.975514528701,
+      "limit": 1268.0200410716911
+     },
+     "curvature_ok": true
+    },
+    "lock1005": {
+     "Z": 2870.608911647912,
+     "slope": 3695.2071211751277,
+     "se_realised": 65.15008413453035,
+     "sigma": 185.900037,
+     "mhz": 1002.5340314558842,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 2957.6947008914954,
+      "Z_hi": 2754.391520277384,
+      "limit": 1206.961805000255
+     },
+     "curvature_ok": true
+    }
+   },
+   "role": "scored",
+   "u": 3731.8,
+   "A1": {
+    "PROP": {
+     "centre": 1254.2878344,
+     "band": [
+      110.50669492164457,
+      2398.068973878356
+     ],
+     "inside": false,
+     "scored": true
+    },
+    "AFF": {
+     "centre": 3626.5502578,
+     "band": [
+      2482.769118321645,
+      4770.331397278355
+     ],
+     "inside": true,
+     "scored": true
+    },
+    "MIX": {
+     "centre": 4078.122860396832,
+     "band": [
+      2934.3417209184763,
+      5221.903999875188
+     ],
+     "inside": true,
+     "scored": true
+    },
+    "MIX3": {
+     "centre": 4356.505842033577,
+     "band": [
+      3212.7247025552215,
+      5500.286981511933
+     ],
+     "inside": true,
+     "scored": false
+    }
+   },
+   "A2": {
+    "r": 0.8421010364751607,
+    "sigma_r": 0.06254294235990124,
+    "r_MIX": 0.8580483518016013,
+    "AFF_PROP_fail": true,
+    "MIX_fail": false,
+    "MID": false
+   },
+   "A2_second_printed": {
+    "r": 0.8109492225510234,
+    "sigma_r": 0.06022929350035473,
+    "r_MIX": 0.6727391213535818,
+    "MID": true,
+    "label": "SM and L2 moved together (printed)"
+   },
+   "sigma_tot": 571.8905697391777,
+   "verdict": "RECORD"
+  },
+  "granite-3.0-1b-a400m w1": {
+   "Z": {
+    "base": {
+     "Z": 3535.2071932362824,
+     "slope": 6144.122030393331,
+     "se_realised": 77.21632074501156,
+     "sigma": 185.900037,
+     "mhz": 1373.9323779632934,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 3650.8890518996072,
+      "Z_hi": 3465.217536130821,
+      "limit": 1206.961805000255
+     },
+     "curvature_ok": true
+    },
+    "lock1710": {
+     "Z": 3719.2027419487713,
+     "slope": 6149.757349098044,
+     "se_realised": 70.27942724774461,
+     "sigma": 185.900037,
+     "mhz": 1658.7640431301652,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 3932.8128297804483,
+      "Z_hi": 3454.8865413846725,
+      "limit": 1206.961805000255
+     },
+     "curvature_ok": true
+    },
+    "lock1005": {
+     "Z": 3396.8168407937897,
+     "slope": 6147.424123204418,
+     "se_realised": 103.70596177510915,
+     "sigma": 185.900037,
+     "mhz": 1003.5129742974101,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 3220.047269770735,
+      "Z_hi": 3612.448550740707,
+      "limit": 1206.961805000255
+     },
+     "curvature_ok": true
+    }
+   },
+   "role": "scored",
+   "u": 6025.6,
+   "A1": {
+    "PROP": {
+     "centre": 2025.2523648000001,
+     "band": [
+      881.4712253216446,
+      3169.0335042783554
+     ],
+     "inside": false,
+     "scored": true
+    },
+    "AFF": {
+     "centre": 4103.8579246,
+     "band": [
+      2960.076785121644,
+      5247.639064078356
+     ],
+     "inside": true,
+     "scored": false
+    },
+    "MIX": {
+     "centre": 4509.536809683565,
+     "band": [
+      3365.755670205209,
+      5653.31794916192
+     ],
+     "inside": true,
+     "scored": true
+    },
+    "MIX3": {
+     "centre": 4763.3545014734,
+     "band": [
+      3619.5733619950443,
+      5907.135640951756
+     ],
+     "inside": true,
+     "scored": false
+    }
+   },
+   "A2": {
+    "r": 0.9505282283653943,
+    "sigma_r": 0.06719077332204075,
+    "r_MIX": 0.8741980589911309,
+    "AFF_PROP_fail": false,
+    "MIX_fail": false,
+    "MID": false
+   },
+   "A2_second_printed": {
+    "r": 0.913318546063972,
+    "sigma_r": 0.06456050180112077,
+    "r_MIX": 0.7105944795182689,
+    "MID": false,
+    "label": "SM and L2 moved together (printed)"
+   },
+   "sigma_tot": 571.8905697391777,
+   "verdict": "RECORD"
+  },
+  "qwen2-57b-a14b-tp8 w1": {
+   "Z": {
+    "base": {
+     "Z": 5852.620398090387,
+     "slope": 19778.940118961735,
+     "se_realised": 78.52474790658704,
+     "sigma": 291.672431,
+     "mhz": 1379.294152040583,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      13,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 5965.298916283848,
+      "Z_hi": 5840.267243434818,
+      "limit": 1909.484331883705
+     },
+     "curvature_ok": true
+    },
+    "lock1710": {
+     "Z": 6280.8430941571,
+     "slope": 19793.750360404152,
+     "se_realised": 117.60342081101443,
+     "sigma": 291.672431,
+     "mhz": 1666.0164152998223,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      13,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 6649.821609496298,
+      "Z_hi": 5853.524129429941,
+      "limit": 1909.484331883705
+     },
+     "curvature_ok": true
+    },
+    "lock1005": {
+     "Z": 5858.573133268248,
+     "slope": 19786.258486917945,
+     "se_realised": 62.30335631784966,
+     "sigma": 291.672431,
+     "mhz": 1004.6332966700359,
+     "cells": [
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      13,
+      14,
+      16
+     ],
+     "curvature": {
+      "Z_lo": 5928.0816242735655,
+      "Z_hi": 5739.318530699471,
+      "limit": 1909.484331883705
+     },
+     "curvature_ok": true
+    }
+   },
+   "role": "printed",
+   "u": 19789.6,
+   "A1": {
+    "PROP": {
+     "centre": 6651.4428768,
+     "band": [
+      5422.503810767107,
+      7880.3819428328925
+     ],
+     "inside": true,
+     "scored": true
+    },
+    "AFF": {
+     "centre": 6967.9536286,
+     "band": [
+      5739.0145625671075,
+      8196.892694632894
+     ],
+     "inside": true,
+     "scored": true
+    },
+    "MIX": {
+     "centre": 7278.157995014759,
+     "band": [
+      6049.218928981866,
+      8507.097061047652
+     ],
+     "inside": true,
+     "scored": true
+    },
+    "MIX3": {
+     "centre": 7562.473101789894,
+     "band": [
+      6333.534035757001,
+      8791.412167822788
+     ],
+     "inside": false,
+     "scored": false
+    }
+   },
+   "A2": {
+    "r": 0.9318208257001236,
+    "sigma_r": 0.06119625526649596,
+    "r_MIX": 0.9215359092561914,
+    "AFF_PROP_fail": false,
+    "MIX_fail": false,
+    "MID": false
+   },
+   "A2_second_printed": {
+    "r": 0.9327685862298203,
+    "sigma_r": 0.0612584983433914,
+    "r_MIX": 0.8190066427116962,
+    "MID": false,
+    "label": "SM and L2 moved together (printed)"
+   },
+   "sigma_tot": 614.4695330164465,
+   "verdict": "RECORD"
+  }
+ },
+ "forms": {
+  "PROP": {
+   "scored_on": [
+    "granite-3.0-1b-a400m w2",
+    "granite-3.0-1b-a400m w1"
+   ],
+   "fails_on": [
+    "granite-3.0-1b-a400m w2",
+    "granite-3.0-1b-a400m w1"
+   ],
+   "status": "FALSIFIED"
+  },
+  "AFF": {
+   "scored_on": [
+    "granite-3.0-1b-a400m w2",
+    "granite-3.0-1b-a400m w1"
+   ],
+   "fails_on": [
+    "granite-3.0-1b-a400m w2"
+   ],
+   "status": "not falsified"
+  },
+  "MIX": {
+   "scored_on": [
+    "granite-3.0-1b-a400m w2",
+    "granite-3.0-1b-a400m w1"
+   ],
+   "fails_on": [],
+   "status": "no failure"
+  }
+ },
+ "verdict": "INCONCLUSIVE",
+ "MID_on": [],
+ "MID_1005_printed": {
+  "on": [
+   "granite-3.0-1b-a400m w2"
+  ],
+  "reads_MID": false
+ },
+ "K3_tp4_printed": {
+  "w1": {
+   "r": 0.9235334837720268,
+   "AFF": 1.0,
+   "MIX": 0.8290479334852753,
+   "MIX3": 0.6730392691147533
+  },
+  "w2": {
+   "r": 0.9362478400609126,
+   "AFF": 1.0,
+   "MIX": 0.8208541050838054,
+   "MIX3": 0.6571255914141344
+  }
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-floor-r3-counters/r3f-g64.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-floor-r3-counters/r3f-g64-lock1710.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1679.5885791366904,
+      "l2_mhz": 1697.0038492214862,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1679.6 MHz (-1.78% of 1710: True); L2 clock 1697.0 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1679.5885791366904,
+      "l2_mhz": 1697.0038492214862,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1679.6 MHz (-1.78% of 1710: True); L2 clock 1697.0 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-floor1005-r3-counters/r3f-g64-lock1005.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 989.2904243119266,
+      "l2_mhz": 1125.1426791133108,
+      "smi": [
+       1005.0,
+       1005.0
+      ],
+      "why": "null kernel 989.3 MHz (-1.56% of 1005: True); L2 clock 1125.1 MHz (printed: the L2 follows a low SM lock, so it gates only at 1710); nvidia-smi before 1005.0, after 1005.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 989.2904243119266,
+      "l2_mhz": 1125.1426791133108,
+      "smi": [
+       1005.0,
+       1005.0
+      ],
+      "why": "null kernel 989.3 MHz (-1.56% of 1005: True); L2 clock 1125.1 MHz (printed: the L2 follows a low SM lock, so it gates only at 1710); nvidia-smi before 1005.0, after 1005.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1686.2658514492753,
+      "l2_mhz": null,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1686.3 MHz (-1.39% of 1710: True); L2 clock not read: fewer than 3 cells of duration >= 0.5 ms (printed, not gated; the null kernel and nvidia-smi gate); nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1686.2658514492753,
+      "l2_mhz": null,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1686.3 MHz (-1.39% of 1710: True); L2 clock not read: fewer than 3 cells of duration >= 0.5 ms (printed, not gated; the null kernel and nvidia-smi gate); nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor1005-r3-counters/r3f-g64-lock1005.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 988.5685483870969,
+      "l2_mhz": null,
+      "smi": [
+       1005.0,
+       1005.0
+      ],
+      "why": "null kernel 988.6 MHz (-1.63% of 1005: True); L2 clock None MHz (printed: the L2 follows a low SM lock, so it gates only at 1710); nvidia-smi before 1005.0, after 1005.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 988.5685483870969,
+      "l2_mhz": null,
+      "smi": [
+       1005.0,
+       1005.0
+      ],
+      "why": "null kernel 988.6 MHz (-1.63% of 1005: True); L2 clock None MHz (printed: the L2 follows a low SM lock, so it gates only at 1710); nvidia-smi before 1005.0, after 1005.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1685.4343971631206,
+      "l2_mhz": 1697.7927613687423,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1685.4 MHz (-1.44% of 1710: True); L2 clock 1697.8 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1685.4343971631206,
+      "l2_mhz": 1697.7927613687423,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1685.4 MHz (-1.44% of 1710: True); L2 clock 1697.8 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor1005-r3-counters/r3f-g64-lock1005.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 989.4125,
+      "l2_mhz": 1125.097864599358,
+      "smi": [
+       1005.0,
+       1005.0
+      ],
+      "why": "null kernel 989.4 MHz (-1.55% of 1005: True); L2 clock 1125.1 MHz (printed: the L2 follows a low SM lock, so it gates only at 1710); nvidia-smi before 1005.0, after 1005.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 989.4125,
+      "l2_mhz": 1125.097864599358,
+      "smi": [
+       1005.0,
+       1005.0
+      ],
+      "why": "null kernel 989.4 MHz (-1.55% of 1005: True); L2 clock 1125.1 MHz (printed: the L2 follows a low SM lock, so it gates only at 1710); nvidia-smi before 1005.0, after 1005.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "gemms / qwen2-57b-a14b-tp8 w2 / verdict",
+    "ALL": "NOT SCORED: the half-fits' intercepts disagree (curvature)",
+    "CLEAN": "NOT SCORED: the half-fits' intercepts disagree (curvature)",
+    "registered": "NOT SCORED: the half-fits' intercepts disagree (curvature)"
+   },
+   {
+    "path": "gemms / granite-3.0-1b-a400m w2 / verdict",
+    "ALL": "RECORD",
+    "CLEAN": "RECORD",
+    "registered": "RECORD"
+   },
+   {
+    "path": "gemms / granite-3.0-1b-a400m w1 / verdict",
+    "ALL": "RECORD",
+    "CLEAN": "RECORD",
+    "registered": "RECORD"
+   },
+   {
+    "path": "gemms / qwen2-57b-a14b-tp8 w1 / verdict",
+    "ALL": "RECORD",
+    "CLEAN": "RECORD",
+    "registered": "RECORD"
+   },
+   {
+    "path": "verdict",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-05-rental3-zform-gh200",
+   "gemms": {
+    "qwen2-57b-a14b-tp8 w2": {
+     "Z": {
+      "base": {
+       "Z": 6900.001577423672,
+       "slope": 2653.408550071471,
+       "se_realised": 138.5908949992305,
+       "sigma": 157.72739,
+       "mhz": 1384.8745769944896,
+       "cells": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        13,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 7120.858030613917,
+        "Z_hi": 6216.946328770199,
+        "limit": 1105.8748508105054
+       },
+       "curvature_ok": true
+      },
+      "lock1710": {
+       "Z": 8056.121140232601,
+       "slope": 2653.3928258095225,
+       "se_realised": 186.5454717451698,
+       "sigma": 186.5454717451698,
+       "mhz": 1669.1681544234705,
+       "cells": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        13,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 8379.631031416273,
+        "Z_hi": 7020.53055267914,
+        "limit": 1105.8748508105054
+       },
+       "curvature_ok": false
+      },
+      "lock1005": {
+       "Z": 7136.4672802818595,
+       "slope": 2654.9858129947047,
+       "se_realised": 113.5079210751347,
+       "sigma": 157.72739,
+       "mhz": 1004.4366676029706,
+       "cells": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        13,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 7459.263030449631,
+        "Z_hi": 6606.875918156664,
+        "limit": 1105.8748508105054
+       },
+       "curvature_ok": true
+      }
+     },
+     "role": "scored",
+     "u": 2699.5,
+     "verdict": "NOT SCORED: the half-fits' intercepts disagree (curvature)"
+    },
+    "granite-3.0-1b-a400m w2": {
+     "Z": {
+      "base": {
+       "Z": 2980.8805195092777,
+       "slope": 3692.1087785781374,
+       "se_realised": 100.96985920418425,
+       "sigma": 185.900037,
+       "mhz": 1381.9593860364032,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 3275.9394404313352,
+        "Z_hi": 2744.315520496544,
+        "limit": 1206.961805000255
+       },
+       "curvature_ok": true
+      },
+      "lock1710": {
+       "Z": 3539.81338389815,
+       "slope": 3689.098600224938,
+       "se_realised": 158.71579611909627,
+       "sigma": 185.900037,
+       "mhz": 1672.6089900563966,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 3704.2006686510827,
+        "Z_hi": 3393.975514528701,
+        "limit": 1268.0200410716911
+       },
+       "curvature_ok": true
+      },
+      "lock1005": {
+       "Z": 2870.608911647912,
+       "slope": 3695.2071211751277,
+       "se_realised": 65.15008413453035,
+       "sigma": 185.900037,
+       "mhz": 1002.5340314558842,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 2957.6947008914954,
+        "Z_hi": 2754.391520277384,
+        "limit": 1206.961805000255
+       },
+       "curvature_ok": true
+      }
+     },
+     "role": "scored",
+     "u": 3731.8,
+     "A1": {
+      "PROP": {
+       "centre": 1254.2878344,
+       "band": [
+        110.50669492164457,
+        2398.068973878356
+       ],
+       "inside": false,
+       "scored": true
+      },
+      "AFF": {
+       "centre": 3626.5502578,
+       "band": [
+        2482.769118321645,
+        4770.331397278355
+       ],
+       "inside": true,
+       "scored": true
+      },
+      "MIX": {
+       "centre": 4078.122860396832,
+       "band": [
+        2934.3417209184763,
+        5221.903999875188
+       ],
+       "inside": true,
+       "scored": true
+      },
+      "MIX3": {
+       "centre": 4356.505842033577,
+       "band": [
+        3212.7247025552215,
+        5500.286981511933
+       ],
+       "inside": true,
+       "scored": false
+      }
+     },
+     "A2": {
+      "r": 0.8421010364751607,
+      "sigma_r": 0.06254294235990124,
+      "r_MIX": 0.8580483518016013,
+      "AFF_PROP_fail": true,
+      "MIX_fail": false,
+      "MID": false
+     },
+     "A2_second_printed": {
+      "r": 0.8109492225510234,
+      "sigma_r": 0.06022929350035473,
+      "r_MIX": 0.6727391213535818,
+      "MID": true,
+      "label": "SM and L2 moved together (printed)"
+     },
+     "sigma_tot": 571.8905697391777,
+     "verdict": "RECORD"
+    },
+    "granite-3.0-1b-a400m w1": {
+     "Z": {
+      "base": {
+       "Z": 3535.2071932362824,
+       "slope": 6144.122030393331,
+       "se_realised": 77.21632074501156,
+       "sigma": 185.900037,
+       "mhz": 1373.9323779632934,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 3650.8890518996072,
+        "Z_hi": 3465.217536130821,
+        "limit": 1206.961805000255
+       },
+       "curvature_ok": true
+      },
+      "lock1710": {
+       "Z": 3719.2027419487713,
+       "slope": 6149.757349098044,
+       "se_realised": 70.27942724774461,
+       "sigma": 185.900037,
+       "mhz": 1658.7640431301652,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 3932.8128297804483,
+        "Z_hi": 3454.8865413846725,
+        "limit": 1206.961805000255
+       },
+       "curvature_ok": true
+      },
+      "lock1005": {
+       "Z": 3396.8168407937897,
+       "slope": 6147.424123204418,
+       "se_realised": 103.70596177510915,
+       "sigma": 185.900037,
+       "mhz": 1003.5129742974101,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 3220.047269770735,
+        "Z_hi": 3612.448550740707,
+        "limit": 1206.961805000255
+       },
+       "curvature_ok": true
+      }
+     },
+     "role": "scored",
+     "u": 6025.6,
+     "A1": {
+      "PROP": {
+       "centre": 2025.2523648000001,
+       "band": [
+        881.4712253216446,
+        3169.0335042783554
+       ],
+       "inside": false,
+       "scored": true
+      },
+      "AFF": {
+       "centre": 4103.8579246,
+       "band": [
+        2960.076785121644,
+        5247.639064078356
+       ],
+       "inside": true,
+       "scored": false
+      },
+      "MIX": {
+       "centre": 4509.536809683565,
+       "band": [
+        3365.755670205209,
+        5653.31794916192
+       ],
+       "inside": true,
+       "scored": true
+      },
+      "MIX3": {
+       "centre": 4763.3545014734,
+       "band": [
+        3619.5733619950443,
+        5907.135640951756
+       ],
+       "inside": true,
+       "scored": false
+      }
+     },
+     "A2": {
+      "r": 0.9505282283653943,
+      "sigma_r": 0.06719077332204075,
+      "r_MIX": 0.8741980589911309,
+      "AFF_PROP_fail": false,
+      "MIX_fail": false,
+      "MID": false
+     },
+     "A2_second_printed": {
+      "r": 0.913318546063972,
+      "sigma_r": 0.06456050180112077,
+      "r_MIX": 0.7105944795182689,
+      "MID": false,
+      "label": "SM and L2 moved together (printed)"
+     },
+     "sigma_tot": 571.8905697391777,
+     "verdict": "RECORD"
+    },
+    "qwen2-57b-a14b-tp8 w1": {
+     "Z": {
+      "base": {
+       "Z": 5852.620398090387,
+       "slope": 19778.940118961735,
+       "se_realised": 78.52474790658704,
+       "sigma": 291.672431,
+       "mhz": 1379.294152040583,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        13,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 5965.298916283848,
+        "Z_hi": 5840.267243434818,
+        "limit": 1909.484331883705
+       },
+       "curvature_ok": true
+      },
+      "lock1710": {
+       "Z": 6280.8430941571,
+       "slope": 19793.750360404152,
+       "se_realised": 117.60342081101443,
+       "sigma": 291.672431,
+       "mhz": 1666.0164152998223,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        13,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 6649.821609496298,
+        "Z_hi": 5853.524129429941,
+        "limit": 1909.484331883705
+       },
+       "curvature_ok": true
+      },
+      "lock1005": {
+       "Z": 5858.573133268248,
+       "slope": 19786.258486917945,
+       "se_realised": 62.30335631784966,
+       "sigma": 291.672431,
+       "mhz": 1004.6332966700359,
+       "cells": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        13,
+        14,
+        16
+       ],
+       "curvature": {
+        "Z_lo": 5928.0816242735655,
+        "Z_hi": 5739.318530699471,
+        "limit": 1909.484331883705
+       },
+       "curvature_ok": true
+      }
+     },
+     "role": "printed",
+     "u": 19789.6,
+     "A1": {
+      "PROP": {
+       "centre": 6651.4428768,
+       "band": [
+        5422.503810767107,
+        7880.3819428328925
+       ],
+       "inside": true,
+       "scored": true
+      },
+      "AFF": {
+       "centre": 6967.9536286,
+       "band": [
+        5739.0145625671075,
+        8196.892694632894
+       ],
+       "inside": true,
+       "scored": true
+      },
+      "MIX": {
+       "centre": 7278.157995014759,
+       "band": [
+        6049.218928981866,
+        8507.097061047652
+       ],
+       "inside": true,
+       "scored": true
+      },
+      "MIX3": {
+       "centre": 7562.473101789894,
+       "band": [
+        6333.534035757001,
+        8791.412167822788
+       ],
+       "inside": false,
+       "scored": false
+      }
+     },
+     "A2": {
+      "r": 0.9318208257001236,
+      "sigma_r": 0.06119625526649596,
+      "r_MIX": 0.9215359092561914,
+      "AFF_PROP_fail": false,
+      "MIX_fail": false,
+      "MID": false
+     },
+     "A2_second_printed": {
+      "r": 0.9327685862298203,
+      "sigma_r": 0.0612584983433914,
+      "r_MIX": 0.8190066427116962,
+      "MID": false,
+      "label": "SM and L2 moved together (printed)"
+     },
+     "sigma_tot": 614.4695330164465,
+     "verdict": "RECORD"
+    }
+   },
+   "forms": {
+    "PROP": {
+     "scored_on": [
+      "granite-3.0-1b-a400m w2",
+      "granite-3.0-1b-a400m w1"
+     ],
+     "fails_on": [
+      "granite-3.0-1b-a400m w2",
+      "granite-3.0-1b-a400m w1"
+     ],
+     "status": "FALSIFIED"
+    },
+    "AFF": {
+     "scored_on": [
+      "granite-3.0-1b-a400m w2",
+      "granite-3.0-1b-a400m w1"
+     ],
+     "fails_on": [
+      "granite-3.0-1b-a400m w2"
+     ],
+     "status": "not falsified"
+    },
+    "MIX": {
+     "scored_on": [
+      "granite-3.0-1b-a400m w2",
+      "granite-3.0-1b-a400m w1"
+     ],
+     "fails_on": [],
+     "status": "no failure"
+    }
+   },
+   "verdict": "INCONCLUSIVE",
+   "MID_on": [],
+   "MID_1005_printed": {
+    "on": [
+     "granite-3.0-1b-a400m w2"
+    ],
+    "reads_MID": false
+   },
+   "K3_tp4_printed": {
+    "w1": {
+     "r": 0.9235334837720268,
+     "AFF": 1.0,
+     "MIX": 0.8290479334852753,
+     "MIX3": 0.6730392691147533
+    },
+    "w2": {
+     "r": 0.9362478400609126,
+     "AFF": 1.0,
+     "MIX": 0.8208541050838054,
+     "MIX3": 0.6571255914141344
+    }
+   }
+  }
+ }
+}

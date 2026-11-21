@@ -1,0 +1,21 @@
+{
+ "what": "the two functions of vLLM v0.27.1 vllm/model_executor/layers/fused_moe/fused_moe.py that the instrumented copy reproduces, byte for byte, joined by two blank lines",
+ "source_url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.27.1/vllm/model_executor/layers/fused_moe/fused_moe.py",
+ "tag": "v0.27.1",
+ "licence": "Apache-2.0 (SPDX header of the upstream file: Copyright contributors to the vLLM project)",
+ "file_sha256": "d5955a3460746b66740b024f470aeca79bbebd10872c327f765f2d7fcb805f28",
+ "file_lines": 1853,
+ "functions": {
+  "write_zeros_to_output": [
+   44,
+   61
+  ],
+  "fused_moe_kernel": [
+   298,
+   611
+  ]
+ },
+ "excerpt_sha256": "becf0caadaed1be31578b685649260fcb91757face2eb39d26fe837d5dd19a41",
+ "fetched": "2026-10-06 by the design-r4 session (scratchpad design-r4/upstream/, SHA256SUMS); the VM's installed copy is checked against file_sha256 by the perturb unit before any instrumented launch",
+ "functions_note": "1-based line ranges, inclusive, from the @triton.jit decorator to the function's last line"
+}

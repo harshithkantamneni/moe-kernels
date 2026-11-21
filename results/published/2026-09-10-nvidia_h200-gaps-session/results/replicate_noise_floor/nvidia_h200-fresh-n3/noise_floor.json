@@ -1,0 +1,673 @@
+{
+  "schema": "moe-kernels/noise-floor/2",
+  "written_utc": "2026-09-10T05:23:22Z",
+  "git": {
+    "commit": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "dirty": true,
+    "dirty_paths": [
+      "moe/bench/hardware/measured_nvidia_h200.yaml"
+    ]
+  },
+  "sign": "every delta is alpha(second arm) - alpha(first arm)",
+  "primary_field": "alpha_corrected",
+  "effects_registered": [
+    {
+      "name": "swizzle swing",
+      "size": 0.3855,
+      "source": "s4 arm, mixtral BLOCK_M=32: alpha-corrected 1.0073 at GROUP_SIZE_M=1 vs 0.6218 at 16",
+      "model": "mixtral-8x7b"
+    },
+    {
+      "name": "swizzle swing",
+      "size": 0.0226,
+      "source": "H200 s4 and s3, qwen2 G=1 -> G=16 in alpha-corrected: -0.0217 and -0.0226 (s4, BLOCK_M 32 and 64), -0.0061 and -0.0175 (s3). The A100 s3 arm gives +0.0813 at BLOCK_M=32 and -0.0914 at 64, i.e. OPPOSITE SIGNS at matched cells of one arm",
+      "model": "qwen2-57b-a14b"
+    },
+    {
+      "name": "footprint spread at G=1",
+      "size": 0.411,
+      "source": "s4 arm, all seven GROUP_SIZE_M=1 fits: 1.0073 (mixtral BN=64 BM=32) down to 0.5963 (deepseek-v2-lite BM=32)",
+      "model": ""
+    },
+    {
+      "name": "cross-card L2",
+      "size": 0.0117,
+      "source": "A100 s3 minus H200 s3, 11 matched cells, paired mean of alpha-corrected",
+      "model": ""
+    }
+  ],
+  "prior_sd": 0.022862534415054224,
+  "prior_sd_source": "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8",
+  "prior_sd_by_model": {
+    "per_model": {
+      "mixtral-8x7b": {
+        "n": 4,
+        "mean": 0.02433480395083018,
+        "sd": 0.04864685743499899,
+        "max_abs": 0.08883574005537831
+      },
+      "qwen2-57b-a14b": {
+        "n": 7,
+        "mean": 0.001966342619245268,
+        "sd": 0.01862232590686091,
+        "max_abs": 0.03875523613379295
+      }
+    },
+    "ratio": 2.612286868906978,
+    "homogeneity_ratio": 3.0
+  },
+  "scope": {
+    "session": "ONE card, ONE session. Nothing here bounds cross-pod, cross-day or cross-card noise; replicates that span sessions would be a different measurement and this is not it",
+    "gpu_name": "NVIDIA H200",
+    "models": [
+      "mixtral-8x7b",
+      "qwen2-57b-a14b"
+    ],
+    "single_model_floor_allowed": false,
+    "arms": [
+      {
+        "name": "mixtral_g1",
+        "model": "mixtral-8x7b",
+        "group_m": 1,
+        "block_n": 64,
+        "num_stages": 4,
+        "dtype": "bf16",
+        "seed": 0,
+        "warmup_ms": 300.0,
+        "trials": 3,
+        "l2_flush": true
+      },
+      {
+        "name": "mixtral_g16",
+        "model": "mixtral-8x7b",
+        "group_m": 16,
+        "block_n": 64,
+        "num_stages": 4,
+        "dtype": "bf16",
+        "seed": 0,
+        "warmup_ms": 300.0,
+        "trials": 3,
+        "l2_flush": true
+      },
+      {
+        "name": "qwen2_g1",
+        "model": "qwen2-57b-a14b",
+        "group_m": 1,
+        "block_n": 64,
+        "num_stages": 4,
+        "dtype": "bf16",
+        "seed": 0,
+        "warmup_ms": 300.0,
+        "trials": 3,
+        "l2_flush": true
+      },
+      {
+        "name": "qwen2_g16",
+        "model": "qwen2-57b-a14b",
+        "group_m": 16,
+        "block_n": 64,
+        "num_stages": 4,
+        "dtype": "bf16",
+        "seed": 0,
+        "warmup_ms": 300.0,
+        "trials": 3,
+        "l2_flush": true
+      }
+    ],
+    "block_n": [
+      64
+    ],
+    "num_stages": [
+      4
+    ],
+    "dtype": [
+      "bf16"
+    ],
+    "seed_held_fixed": [
+      0
+    ],
+    "n_replicates": 3,
+    "cache_mode": "fresh",
+    "order": "counterbalanced",
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "excludes": [
+      "data-generation variance: the seed is held fixed across replicates, so this floor may not score a comparison that re-rolled its inputs",
+      "any BLOCK_SIZE_N, num_stages, dtype or model not listed above",
+      "anything timed by an instrument other than the one named above"
+    ]
+  },
+  "stages_control": {
+    "alpha": {
+      "first": "2026-09-01-nvidia_h200-alpha-surface-s4",
+      "second": "2026-09-01-nvidia_h200-cross-card-s3",
+      "sign": "delta = alpha(2026-09-01-nvidia_h200-cross-card-s3) - alpha(2026-09-01-nvidia_h200-alpha-surface-s4)",
+      "n_cells": 11,
+      "mean": 0.01033761857135438,
+      "sd": 0.03284055972827598,
+      "mde": 0.03076684419395452,
+      "resolved": false,
+      "varied": [
+        "num_stages"
+      ],
+      "same_machine": true
+    },
+    "alpha_corrected": {
+      "first": "2026-09-01-nvidia_h200-alpha-surface-s4",
+      "second": "2026-09-01-nvidia_h200-cross-card-s3",
+      "sign": "delta = alpha(2026-09-01-nvidia_h200-cross-card-s3) - alpha(2026-09-01-nvidia_h200-alpha-surface-s4)",
+      "n_cells": 11,
+      "mean": 0.010100328558003418,
+      "sd": 0.03233250623999132,
+      "mde": 0.03029087171828473,
+      "resolved": false,
+      "varied": [
+        "num_stages"
+      ],
+      "same_machine": true
+    },
+    "alpha_upper": {
+      "first": "2026-09-01-nvidia_h200-alpha-surface-s4",
+      "second": "2026-09-01-nvidia_h200-cross-card-s3",
+      "sign": "delta = alpha(2026-09-01-nvidia_h200-cross-card-s3) - alpha(2026-09-01-nvidia_h200-alpha-surface-s4)",
+      "n_cells": 11,
+      "mean": 0.15534490321084357,
+      "sd": 0.17441012961050248,
+      "mde": 0.16339701052517483,
+      "resolved": false,
+      "varied": [
+        "num_stages"
+      ],
+      "same_machine": true
+    }
+  },
+  "stages_control_instrument": "the two committed arms were timed by the RETIRED per-iteration loop (block_m_crossing_sweep.time_call), not by moe.bench.timing.time_kernel: they carry no instrument field at all. Part (b) is arithmetic over those numbers and inherits their instrument",
+  "cross_card": {
+    "alpha": {
+      "first": "2026-09-01-nvidia_h200-cross-card-s3",
+      "second": "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+      "sign": "delta = alpha(2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3) - alpha(2026-09-01-nvidia_h200-cross-card-s3)",
+      "n_cells": 11,
+      "mean": 0.015161634063298441,
+      "sd": 0.0480002216434044,
+      "mde": 0.044969250000521675,
+      "resolved": false,
+      "varied": [
+        "gpu"
+      ],
+      "same_machine": false
+    },
+    "alpha_corrected": {
+      "first": "2026-09-01-nvidia_h200-cross-card-s3",
+      "second": "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+      "sign": "delta = alpha(2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3) - alpha(2026-09-01-nvidia_h200-cross-card-s3)",
+      "n_cells": 11,
+      "mean": 0.011743121983295907,
+      "sd": 0.04798382867102405,
+      "mde": 0.04495389216157876,
+      "resolved": false,
+      "varied": [
+        "gpu"
+      ],
+      "same_machine": false
+    },
+    "alpha_upper": {
+      "first": "2026-09-01-nvidia_h200-cross-card-s3",
+      "second": "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+      "sign": "delta = alpha(2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3) - alpha(2026-09-01-nvidia_h200-cross-card-s3)",
+      "n_cells": 11,
+      "mean": -0.33254328735743627,
+      "sd": 0.17471477653939071,
+      "mde": 0.1636824205386711,
+      "resolved": true,
+      "varied": [
+        "gpu"
+      ],
+      "same_machine": false
+    }
+  },
+  "replicate_floor": {
+    "n_replicates": 3,
+    "cache_mode": "fresh",
+    "gpu_name": "NVIDIA H200",
+    "provenance": "4 arm(s) x 3 replicates on NVIDIA H200, cache fresh, order counterbalanced, 3749 s wall, under /workspace/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-n3",
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "scope": {
+      "session": "ONE card, ONE session. Nothing here bounds cross-pod, cross-day or cross-card noise; replicates that span sessions would be a different measurement and this is not it",
+      "gpu_name": "NVIDIA H200",
+      "models": [
+        "mixtral-8x7b",
+        "qwen2-57b-a14b"
+      ],
+      "single_model_floor_allowed": false,
+      "arms": [
+        {
+          "name": "mixtral_g1",
+          "model": "mixtral-8x7b",
+          "group_m": 1,
+          "block_n": 64,
+          "num_stages": 4,
+          "dtype": "bf16",
+          "seed": 0,
+          "warmup_ms": 300.0,
+          "trials": 3,
+          "l2_flush": true
+        },
+        {
+          "name": "mixtral_g16",
+          "model": "mixtral-8x7b",
+          "group_m": 16,
+          "block_n": 64,
+          "num_stages": 4,
+          "dtype": "bf16",
+          "seed": 0,
+          "warmup_ms": 300.0,
+          "trials": 3,
+          "l2_flush": true
+        },
+        {
+          "name": "qwen2_g1",
+          "model": "qwen2-57b-a14b",
+          "group_m": 1,
+          "block_n": 64,
+          "num_stages": 4,
+          "dtype": "bf16",
+          "seed": 0,
+          "warmup_ms": 300.0,
+          "trials": 3,
+          "l2_flush": true
+        },
+        {
+          "name": "qwen2_g16",
+          "model": "qwen2-57b-a14b",
+          "group_m": 16,
+          "block_n": 64,
+          "num_stages": 4,
+          "dtype": "bf16",
+          "seed": 0,
+          "warmup_ms": 300.0,
+          "trials": 3,
+          "l2_flush": true
+        }
+      ],
+      "block_n": [
+        64
+      ],
+      "num_stages": [
+        4
+      ],
+      "dtype": [
+        "bf16"
+      ],
+      "seed_held_fixed": [
+        0
+      ],
+      "n_replicates": 3,
+      "cache_mode": "fresh",
+      "order": "counterbalanced",
+      "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+      "excludes": [
+        "data-generation variance: the seed is held fixed across replicates, so this floor may not score a comparison that re-rolled its inputs",
+        "any BLOCK_SIZE_N, num_stages, dtype or model not listed above",
+        "anything timed by an instrument other than the one named above"
+      ]
+    },
+    "synthetic": false,
+    "per_field": {
+      "alpha": {
+        "sd": 0.023339067038923012,
+        "df": 2,
+        "upper95": 0.14667984440311782,
+        "pooled": false,
+        "reason": "spreads disagree by 11.28x (> 3), so the cells were NOT pooled; the widest cell (qwen2_g1 BM=32) is the published floor",
+        "cells": 8,
+        "per_cell": [
+          {
+            "arm": "mixtral_g1",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.9438463276319139,
+            "sd": 0.01613562432028082,
+            "values": [
+              0.9277850602463525,
+              0.943698627773025,
+              0.9600552948763642
+            ]
+          },
+          {
+            "arm": "mixtral_g1",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.9913527377925281,
+            "sd": 0.002069829569773724,
+            "values": [
+              0.9889651032626979,
+              0.99245384334361,
+              0.9926392667712762
+            ]
+          },
+          {
+            "arm": "mixtral_g16",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.7084972189930109,
+            "sd": 0.010280279227011748,
+            "values": [
+              0.7045517353446868,
+              0.7007741364545447,
+              0.7201657851798011
+            ]
+          },
+          {
+            "arm": "mixtral_g16",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.7351178345153703,
+            "sd": 0.01679534667214916,
+            "values": [
+              0.7542519629997266,
+              0.7228126111843556,
+              0.7282889293620285
+            ]
+          },
+          {
+            "arm": "qwen2_g1",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.6209079872053901,
+            "sd": 0.023339067038923012,
+            "values": [
+              0.5987673096190079,
+              0.6452845218208005,
+              0.6186721301763617
+            ]
+          },
+          {
+            "arm": "qwen2_g1",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.7572970161689275,
+            "sd": 0.008542275972475748,
+            "values": [
+              0.766171933037143,
+              0.7565874749450906,
+              0.7491316405245488
+            ]
+          },
+          {
+            "arm": "qwen2_g16",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.7011801801095418,
+            "sd": 0.005126766002124235,
+            "values": [
+              0.695390803865976,
+              0.7030043208604141,
+              0.7051454156022353
+            ]
+          },
+          {
+            "arm": "qwen2_g16",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.710731737023062,
+            "sd": 0.013785068707818817,
+            "values": [
+              0.7098952883446868,
+              0.7249159841896903,
+              0.6973839385348088
+            ]
+          }
+        ]
+      },
+      "alpha_corrected": {
+        "sd": 0.022919955627467705,
+        "df": 2,
+        "upper95": 0.1440458403738517,
+        "pooled": false,
+        "reason": "spreads disagree by 11.18x (> 3), so the cells were NOT pooled; the widest cell (qwen2_g1 BM=32) is the published floor",
+        "cells": 8,
+        "per_cell": [
+          {
+            "arm": "mixtral_g1",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.9359446829122264,
+            "sd": 0.016003077177205238,
+            "values": [
+              0.9200143880350997,
+              0.9358000980503111,
+              0.9520195626512686
+            ]
+          },
+          {
+            "arm": "mixtral_g1",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.9758243953249325,
+            "sd": 0.00205063710363617,
+            "values": [
+              0.9734583403318421,
+              0.9769271087002808,
+              0.9770877369426744
+            ]
+          },
+          {
+            "arm": "mixtral_g16",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.7008738010148147,
+            "sd": 0.010181861628627309,
+            "values": [
+              0.6969590810091364,
+              0.6932303000311398,
+              0.7124320220041681
+            ]
+          },
+          {
+            "arm": "mixtral_g16",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.7203236001068358,
+            "sd": 0.01649557472260732,
+            "values": [
+              0.7391168881384859,
+              0.7082412105429922,
+              0.7136127016390296
+            ]
+          },
+          {
+            "arm": "qwen2_g1",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.6086723384117386,
+            "sd": 0.022919955627467705,
+            "values": [
+              0.5869244924522203,
+              0.6326075692531128,
+              0.6064849535298826
+            ]
+          },
+          {
+            "arm": "qwen2_g1",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.729856476775303,
+            "sd": 0.008249370809828365,
+            "values": [
+              0.7384236263060703,
+              0.7291791577476826,
+              0.7219666462721557
+            ]
+          },
+          {
+            "arm": "qwen2_g16",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.6870810856015526,
+            "sd": 0.0050308869207313514,
+            "values": [
+              0.6813994090281459,
+              0.6888737174698497,
+              0.6909701303066619
+            ]
+          },
+          {
+            "arm": "qwen2_g16",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.6840528234532419,
+            "sd": 0.013317142337225382,
+            "values": [
+              0.6832116048193574,
+              0.6977706333566771,
+              0.6711762321836915
+            ]
+          }
+        ]
+      },
+      "alpha_upper": {
+        "sd": 0.06702589851591963,
+        "df": 2,
+        "upper95": 0.42123998996610823,
+        "pooled": false,
+        "reason": "spreads disagree by 4.65x (> 3), so the cells were NOT pooled; the widest cell (mixtral_g16 BM=64) is the published floor",
+        "cells": 8,
+        "per_cell": [
+          {
+            "arm": "mixtral_g1",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.9953846030541239,
+            "sd": 0.030325582174451762,
+            "values": [
+              1.0129837410532065,
+              1.0128022743839225,
+              0.9603677937252428
+            ]
+          },
+          {
+            "arm": "mixtral_g1",
+            "block_m": 64,
+            "n": 3,
+            "mean": 1.0454359756804372,
+            "sd": 0.046131115627219395,
+            "values": [
+              1.0795613681147855,
+              1.0637946433897578,
+              0.9929519155367684
+            ]
+          },
+          {
+            "arm": "mixtral_g16",
+            "block_m": 32,
+            "n": 3,
+            "mean": 1.0611858532674585,
+            "sd": 0.02464648431451231,
+            "values": [
+              1.088959835686003,
+              1.0419226538659483,
+              1.0526750702504244
+            ]
+          },
+          {
+            "arm": "mixtral_g16",
+            "block_m": 64,
+            "n": 3,
+            "mean": 1.086913754697588,
+            "sd": 0.06702589851591963,
+            "values": [
+              1.1636765223580554,
+              1.0570810080508573,
+              1.039983733683851
+            ]
+          },
+          {
+            "arm": "qwen2_g1",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.7075683068478625,
+            "sd": 0.03114475198808774,
+            "values": [
+              0.6804339723535078,
+              0.7415754226042913,
+              0.7006955255857887
+            ]
+          },
+          {
+            "arm": "qwen2_g1",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.877728617820662,
+            "sd": 0.015143073848357167,
+            "values": [
+              0.8915279718401384,
+              0.8801292664536456,
+              0.861528615168202
+            ]
+          },
+          {
+            "arm": "qwen2_g16",
+            "block_m": 32,
+            "n": 3,
+            "mean": 0.9718198947561106,
+            "sd": 0.014406225267093488,
+            "values": [
+              0.9598558390352755,
+              0.9677926591831979,
+              0.9878111860498587
+            ]
+          },
+          {
+            "arm": "qwen2_g16",
+            "block_m": 64,
+            "n": 3,
+            "mean": 0.9648061121220506,
+            "sd": 0.017641830009658223,
+            "values": [
+              0.9628759810325261,
+              0.9833336408076314,
+              0.948208714525994
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-10T05:23:22+00:00",
+    "hostname": "eec145fd46b6",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": 300.0,
+    "iters": null,
+    "target_ms": 400.0,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "supplied as None",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed"
+    }
+  }
+}

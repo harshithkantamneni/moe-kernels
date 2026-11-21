@@ -1,0 +1,180 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      3
+    ],
+    [
+      "native",
+      4
+    ],
+    [
+      "native",
+      5
+    ],
+    [
+      "native",
+      6
+    ],
+    [
+      "native",
+      8
+    ],
+    [
+      "native",
+      10
+    ],
+    [
+      "native",
+      12
+    ],
+    [
+      "native",
+      14
+    ],
+    [
+      "native",
+      16
+    ]
+  ],
+  "calls_per_cell": 2,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 54,
+  "launch_count": 54,
+  "tokens": {
+    "3": 384,
+    "4": 512,
+    "5": 640,
+    "6": 768,
+    "8": 1024,
+    "10": 1280,
+    "12": 1536,
+    "14": 1792,
+    "16": 2048
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 32,
+    "shared": 288,
+    "private": 288
+  },
+  "ids_sha256": {
+    "native/3": "4c4217d93cd78d986e178458f739efcf2f165514323979f852fc9f72d981aa0c",
+    "native/4": "6c35e884a8333893e06acfd43db5acdac95a1d25e8c1cf44e94581d2aeed2b82",
+    "native/5": "8a1260fd5872f1ec28f0f568d1653a36e5f7e17bf1abf5c6f8abba7ce982f032",
+    "native/6": "69a5cc77eba49218649081dba9628e1d0e253786ca24c6f1f70f362da80e03f8",
+    "native/8": "d23b88f9c514660b5af99abdd4057f47b2134e66872b92fb0d2fc0d28b14b899",
+    "native/10": "9f919fe8990d27c9e005ea546013b0fd039c02d82ea902587a20a6b3ecaa05d6",
+    "native/12": "e50ce6a1fa0da36ff0c33dccca8f320db4eaab1be4d5a1160e026a1be9de6bda",
+    "native/14": "ccd13ca61f1bd08ee91744de136615dc4afec96df5b5ed8316f5587ef1c782dc",
+    "native/16": "6303e8aa159d5efe684f47a978c58794078bf233c96fc9dd67dfe6d7fd6a6823"
+  },
+  "sorted_ids_len": {
+    "native/3": 4064,
+    "native/4": 5088,
+    "native/5": 6112,
+    "native/6": 7136,
+    "native/8": 9184,
+    "native/10": 11232,
+    "native/12": 13280,
+    "native/14": 15328,
+    "native/16": 17376
+  },
+  "grids": {
+    "native/3": {
+      "w1": 2032,
+      "w2": 2032
+    },
+    "native/4": {
+      "w1": 2544,
+      "w2": 2544
+    },
+    "native/5": {
+      "w1": 3056,
+      "w2": 3056
+    },
+    "native/6": {
+      "w1": 3568,
+      "w2": 3568
+    },
+    "native/8": {
+      "w1": 4592,
+      "w2": 4592
+    },
+    "native/10": {
+      "w1": 5616,
+      "w2": 5616
+    },
+    "native/12": {
+      "w1": 6640,
+      "w2": 6640
+    },
+    "native/14": {
+      "w1": 7664,
+      "w2": 7664
+    },
+    "native/16": {
+      "w1": 8688,
+      "w2": 8688
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g64/n3",
+    "r3/native/g64/n3",
+    "r3/native/g64/n4",
+    "r3/native/g64/n4",
+    "r3/native/g64/n5",
+    "r3/native/g64/n5",
+    "r3/native/g64/n6",
+    "r3/native/g64/n6",
+    "r3/native/g64/n8",
+    "r3/native/g64/n8",
+    "r3/native/g64/n10",
+    "r3/native/g64/n10",
+    "r3/native/g64/n12",
+    "r3/native/g64/n12",
+    "r3/native/g64/n14",
+    "r3/native/g64/n14",
+    "r3/native/g64/n16",
+    "r3/native/g64/n16"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 64,
+    "num_warps": 8,
+    "num_stages": 4,
+    "BLOCK_SIZE_M": 32
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 100663296,
+    "weight_bytes": 905969664,
+    "activation_bytes": 92274688,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 1182793728,
+    "device_free_bytes": 100720312320,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 1
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "00827a0f-81e7-0fe3-caef-3114182a12bc"
+  },
+  "null_kernel": true,
+  "null_kernel_name": "spin_kernel",
+  "null_kernel_cycles": 1000
+}

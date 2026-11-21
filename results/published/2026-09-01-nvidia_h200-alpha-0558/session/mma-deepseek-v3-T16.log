@@ -1,0 +1,31 @@
+[mma] dumping Triton IR and PTX to /workspace/session/20260901T214218Z/ptx/deepseek-v3-T16
+/workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=vllm 0.27.1 gpu=NVIDIA H200
+WARNING 09-01 22:26:04 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=256,N=2048,device_name=NVIDIA_H200.json
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+[driver] wrote 2 rows -> /workspace/results-ptx/run_980a7e2f0d33_vllm.csv
+[cli] run_id=980a7e2f0d33 elapsed=3.2s
+{"csv": "/workspace/results-ptx/run_980a7e2f0d33_vllm.csv", "manifest": "/workspace/results-ptx/run_980a7e2f0d33_vllm.manifest.jsonl", "run_id": "980a7e2f0d33"}
+
+=== which config vLLM resolved (quote this, do not derive it) ===
+WARNING 09-01 22:26:04 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=256,N=2048,device_name=NVIDIA_H200.json
+[mma] found 2 PTX file(s)
+
+=== tensor core instructions, by kernel ===
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=16     ld.global=9
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=16     ld.global=5
+
+=== exact instruction shapes seen ===
+     32 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+
+=== verdict ===
+  kernels containing wgmma   : 0
+  kernels containing mma.sync: 2
+  -> C3 CONFIRMED: no warpgroup MMA. The decode path is on the
+     Ampere-era instruction, on Hopper silicon.
+
+  PTX kept at /workspace/session/20260901T214218Z/ptx/deepseek-v3-T16, run log at /workspace/session/20260901T214218Z/ptx/deepseek-v3-T16/run.log.
+  Both are transient pod output until they are committed; FINDINGS lists
+  that as the reason C1 and C3 cannot be checked without a GPU.

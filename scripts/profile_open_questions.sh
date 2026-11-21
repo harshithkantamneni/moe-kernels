@@ -10,7 +10,9 @@
 #
 # WHICH TOOL ANSWERS WHICH. Nsight Compute reads hardware performance counters
 # and needs NVreg_RestrictProfilingToAdminUsers=0, a host kernel-module flag a
-# container tenant cannot set: on RunPod it fails with ERR_NVGPUCTRPERM.
+# container tenant cannot set, or a capability the provider grants: the two
+# rented H200s that tried were refused with ERR_NVGPUCTRPERM (2026-08-25, this
+# script's own Q2 run, and 2026-09-15), and the probe below asks each pod.
 # Nsight Systems TRACES instead of reading counters, so it works there. That
 # splits the two questions:
 #
