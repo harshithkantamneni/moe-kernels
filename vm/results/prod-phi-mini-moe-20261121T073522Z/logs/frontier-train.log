@@ -45,3 +45,16 @@ INFO 12:00:12 moe_trainer.py:504] --- Training moe_grouped_gemm ---
 INFO 12:00:12 moe_trainer.py:505] Features: ['total_routed_tokens', 'num_experts_per_device', 'hidden_dim', 'expert_hidden_dim', 'router_topk', 'model_expansion_ratio', 'tokens_per_expert_avg', 'tokens_to_experts_ratio', 'expert_utilization', 'min_load_ratio', 'load_imbalance_cv', 'max_load_ratio', 'load_entropy', 'load_gini_coefficient']
 INFO 12:00:12 moe_trainer.py:506] Target: time_stats.moe_grouped_gemm.median
 INFO 12:00:12 base_trainer.py:421] Training model moe_grouped_gemm with 1161 samples
+INFO 12:00:31 base_trainer.py:439] Trained model moe_grouped_gemm with MAPE 0.84%
+INFO 12:00:31 base_trainer.py:389] Saved model to /home/ubuntu/moe/results/prod-phi-mini-moe-20261121T073522Z/frontier/models/moe_grouped_gemm_04973919.pkl
+INFO 12:00:31 moe_trainer.py:515] 
+INFO 12:00:31 moe_trainer.py:515] Training complete! Trained 1 models
+INFO 12:00:31 moe_trainer.py:516] Models saved to /home/ubuntu/moe/results/prod-phi-mini-moe-20261121T073522Z/frontier/models
+INFO 12:00:31 cli.py:526] 
+INFO 12:00:31 cli.py:526] ================================================================================
+INFO 12:00:31 cli.py:527] Training completed successfully!
+INFO 12:00:31 cli.py:528] ================================================================================
+INFO 12:00:31 cli.py:529] Trained models: ['moe_grouped_gemm']
+INFO 12:00:31 cli.py:530] Models saved to: /home/ubuntu/moe/results/prod-phi-mini-moe-20261121T073522Z/frontier/models
+PASS frontier train (cli): exit 0
+PASS frontier train (cli): exit 0

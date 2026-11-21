@@ -1,0 +1,76 @@
+{
+ "schema": "moe-kernels/prod-frontier-predictions/1",
+ "model": "phi-mini-moe",
+ "runs": {
+  "A1710": {
+   "g": "A1710.g.npy",
+   "n": 501792
+  },
+  "A1410": {
+   "g": "A1410.g.npy",
+   "n": 501792
+  }
+ },
+ "arms": {
+  "cli": {
+   "model_file": "moe_grouped_gemm_04973919.pkl",
+   "features": [
+    "total_routed_tokens",
+    "num_experts_per_device",
+    "hidden_dim",
+    "expert_hidden_dim",
+    "router_topk",
+    "model_expansion_ratio",
+    "tokens_per_expert_avg",
+    "tokens_to_experts_ratio",
+    "expert_utilization",
+    "min_load_ratio",
+    "load_imbalance_cv",
+    "max_load_ratio",
+    "load_entropy",
+    "load_gini_coefficient"
+   ],
+   "distinct": 314138,
+   "files": {
+    "A1710": "cli.A1710.npy",
+    "A1410": "cli.A1410.npy"
+   }
+  },
+  "simpath": {
+   "model_file": "moe_grouped_gemm_a8929929.pkl",
+   "features": [
+    "total_routed_tokens",
+    "num_tokens_post_padded"
+   ],
+   "distinct": 314138,
+   "files": {
+    "A1710": "simpath.A1710.npy",
+    "A1410": "simpath.A1410.npy"
+   }
+  },
+  "cli-fills": {
+   "model_file": "moe_grouped_gemm_04973919.pkl",
+   "features": [
+    "total_routed_tokens",
+    "num_experts_per_device",
+    "hidden_dim",
+    "expert_hidden_dim",
+    "router_topk",
+    "model_expansion_ratio",
+    "tokens_per_expert_avg",
+    "tokens_to_experts_ratio",
+    "expert_utilization",
+    "min_load_ratio",
+    "load_imbalance_cv",
+    "max_load_ratio",
+    "load_entropy",
+    "load_gini_coefficient"
+   ],
+   "distinct": 314138,
+   "files": {
+    "A1710": "cli-fills.A1710.npy",
+    "A1410": "cli-fills.A1410.npy"
+   }
+  }
+ }
+}
