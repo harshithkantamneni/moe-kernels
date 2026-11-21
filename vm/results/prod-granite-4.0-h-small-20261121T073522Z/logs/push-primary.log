@@ -1,1 +1,2 @@
 PASS trace-manifest: 14 file(s), 6.47 GB under /home/ubuntu/moe/traces/prod-granite-4.0-h-small-20261121T073522Z -> /home/ubuntu/moe/results/prod-granite-4.0-h-small-20261121T073522Z/traces.sha256.json
+[push] pushed 8f8fd8d to run-gh200-blind-granite-4-0-h-small-20261121t073522z: prod blind granite-4.0-h-small: A1710, A1410 and Frontier's timers

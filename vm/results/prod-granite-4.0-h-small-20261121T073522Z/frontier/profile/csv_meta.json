@@ -1,0 +1,15 @@
+{
+ "schema": "moe-kernels/prod-frontier-csv-meta/1",
+ "model": "granite-4.0-h-small",
+ "truth": "kernel_sum",
+ "routing": "uniform",
+ "samples_per_point": 3,
+ "arm_kind": "complete",
+ "partial_needed": false,
+ "complete": true,
+ "grid_points": 387,
+ "measured_points": 387,
+ "missing_points": [],
+ "missing_samples": {},
+ "rows": 1161
+}

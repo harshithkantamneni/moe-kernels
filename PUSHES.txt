@@ -14,3 +14,4 @@
 2026-11-21T12:17:43Z prod blind phi-mini-moe: measured, Frontier predicted, scored on the VM (v8, v9, v10, Frontier)
 2026-11-21T12:19:35Z main.sh exit 0: final push
 2026-11-21T12:26:58Z prod blind granite-4.0-h-small: A1710, A1410 and Frontier's timers
+2026-11-21T13:06:15Z prod blind granite-4.0-h-small: measured, Frontier predicted, scored on the VM (v8, v9, v10, Frontier)

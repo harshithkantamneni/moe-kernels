@@ -1,0 +1,5 @@
+PASS expected-outputs (0s)
+PASS score (2172s)
+==== offline.sh summary (/home/ubuntu/moe/results/prod-granite-4.0-h-small-20261121T073522Z/offline-logs)
+PASS expected-outputs (0s)
+PASS score (2172s)
