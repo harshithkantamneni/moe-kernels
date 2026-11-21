@@ -1,0 +1,2 @@
+{"8": {"ms": 0.25783119974738145, "tile": "16x64x128w4s4", "regime": "decode", "why": ""}, "1024": {"ms": 0.8416140432071061, "tile": "128x128x64w8s3", "regime": "prefill", "why": ""}}
+PASS price-check granite-4.0-h-small: decode T 8 0.2578 ms (16x64x128w4s4), prefill T 1024 0.8416 ms (128x128x64w8s3)
