@@ -1,0 +1,36 @@
+PRODUCTION CHECK (DESCRIPTIVE: no bars, no verdicts) model ernie-4.5-21b-a3b
+
+NOTE v8_refpar_ms is DESCRIPTIVE: v8 with no on-board calibration (the registered reference pars' median for sag128); v8_ms at the board's par is the model's number
+NOTE truths: kernel_sum_ms is PRIMARY; span_ms is SECONDARY (calls with T > 512 run without CUDA graphs and their span includes host launch gaps: the smoke's 128x128 span was ~2x kernel-sum; span / kernel-sum per cudagraph mode under each run)
+NOTE EXTRAS (scripts/prod/extras.sh, DESCRIPTIVE): ; X4 long-context run LC1410
+== LC1410: lock 1410  EXTRAS X4: long-context prefill (ERNIE; prompts of concatenated unrelated turns, 4096..16000 tokens; 1410 lock): scored on its own (offline.sh score-lc1410)
+   calls: 20196
+   scored: 2052
+   off_lock_dropped: 0
+   v8_refused_share_of_moe_time: 0.010454740897518432
+   intruder_calls: 0
+   span / kernel-sum, cudagraph NONE     n=2052    median 1.00
+   v8_ms vs kernel_sum_ms [primary]                     n=2025    MAPE   0.62% [0.56, 0.69]  wMAPE   0.57%  p50  0.52%  p95   1.51%  bias  +0.31%
+      128x128x64w8s3         n=675     MAPE   0.76%  wMAPE   0.68%  bias  +0.58%
+      128x128x64w8s3 g16     n=1350    MAPE   0.55%  wMAPE   0.54%  bias  +0.18%
+      per-step total        n=75      MAPE   0.40%  bias  +0.31%
+   v8_ms vs span_ms [secondary]                         n=2025    MAPE   0.73% [0.51, 1.11]  wMAPE   0.57%  p50  0.44%  p95   1.41%  bias  -0.19%
+      128x128x64w8s3         n=675     MAPE   1.16%  wMAPE   0.85%  bias  -0.52%
+      128x128x64w8s3 g16     n=1350    MAPE   0.51%  wMAPE   0.50%  bias  -0.03%
+      per-step total        n=75      MAPE   0.47%  bias  -0.21%
+   v8_refpar_ms vs kernel_sum_ms [primary]              n=2025    MAPE   0.55% [0.49, 0.61]  wMAPE   0.51%  p50  0.41%  p95   1.48%  bias  -0.08%
+      128x128x64w8s3         n=675     MAPE   0.64%  wMAPE   0.57%  bias  +0.11%
+      128x128x64w8s3 g16     n=1350    MAPE   0.50%  wMAPE   0.49%  bias  -0.17%
+      per-step total        n=75      MAPE   0.32%  bias  -0.08%
+   v8_refpar_ms vs span_ms [secondary]                  n=2025    MAPE   0.78% [0.56, 1.17]  wMAPE   0.62%  p50  0.45%  p95   1.70%  bias  -0.58%
+      128x128x64w8s3         n=675     MAPE   1.25%  wMAPE   0.93%  bias  -0.98%
+      128x128x64w8s3 g16     n=1350    MAPE   0.55%  wMAPE   0.54%  bias  -0.37%
+      per-step total        n=75      MAPE   0.64%  bias  -0.60%
+   roof_ms vs kernel_sum_ms [primary]                   n=2052    MAPE  85.78% [83.23, 87.73]  wMAPE  88.49%  p50 88.47%  p95  92.35%  bias -85.78%
+      128x128x64w8s3         n=702     MAPE  77.39%  wMAPE  80.80%  bias -77.39%
+      128x128x64w8s3 g16     n=1350    MAPE  90.14%  wMAPE  90.48%  bias -90.14%
+      per-step total        n=76      MAPE  85.78%  bias -85.78%
+   roof_ms vs span_ms [secondary]                       n=2052    MAPE  85.97% [83.70, 87.78]  wMAPE  88.53%  p50 88.50%  p95  92.36%  bias -85.97%
+      128x128x64w8s3         n=702     MAPE  77.93%  wMAPE  80.92%  bias -77.93%
+      128x128x64w8s3 g16     n=1350    MAPE  90.16%  wMAPE  90.50%  bias -90.16%
+      per-step total        n=76      MAPE  85.98%  bias -85.98%
