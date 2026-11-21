@@ -4954,6 +4954,61 @@ and tests/test_v7_decode_blind.py holds the live scan to the registered one plus
 `register_v7p_blind.py --check`, `register_v7d_blind.py --check` and `register_v7_domain.py --check` read same (their
 censuses run over the sessions they record).
 
+## Serving checks v8, v9 and v10 (2026-11-19 to 2026-11-21): DESCRIPTIVE, no bars; the final model is v10, its decode below every Frontier arm on all eight serving models, its prefill blind on three models above Frontier's simulator-feature arm
+
+These three checks move the study from cells to vLLM serving. They are DESCRIPTIVE by design (owner 2026-11-19: no
+verdicts against our own bars; predictors side by side): every predictor frozen before the run, every MoE call of the
+run scored against its traced kernel sum, at the 1710 MHz lock for the decode tiles and 1410 MHz for the prefill tiles.
+The write-up is paper-v2 (`docs/paper-v2/paper-v2.md`, sections 6 to 9); the kit is `scripts/prod/` (its README).
+Truth: the per-call kernel sum (alignment through `moe_sum`, router excluded) from nsys node tracing inside CUDA graphs,
+real token counts and per-expert counts from the router's top-k ids. Predictors: our model, the registered roofline,
+and Frontier (arXiv:2605.21312, pinned db5a85b) profiled and trained per model on the same board in three arms (cli,
+cli-fills, simpath). MAPE / p95 of |e|, e = predicted / measured - 1; 95% intervals resample whole serving steps (400
+reps, seed 20261119).
+
+**v8 (frozen 9c81a9d2, 2026-11-19): v7 extended to real calls.** Run `run-gh200-prodmain-20261120t0349`, scores
+committed there at baf26ad7 (`vm/results/prod-main-20261120T035826Z/score/`). ERNIE-4.5-21B-A3B and Qwen3-30B-A3B, no
+registration commit. Decode 1.27% (ERNIE) and 2.61% (Qwen3) against Frontier's lowest arm 3.48% and 4.36% and the
+roofline 14.97% and 22.95%; prefill 2.89% and 8.23% against simpath 1.32% and 3.32%. Most of v8's prefill error is
+the 64x128x64 tile, over-predicted on every call (+4.75%, +8.72%): the fitted intercept T0 + s, from the 2026-09-27
+Mixtral-8x7B fit, which absorbed a GEMM under-price there (paper-v2 7.1).
+
+**v9 (frozen dc8b3f73, 2026-11-20 15:30Z): on 64x128x64 only, T0 + s replaced by the measured non-GEMM kernels**
+(`scripts/v9_nongemm_fit.py`, launch-floor cell pages; no serving time). Runs
+`run-gh200-blind-ling-mini-2.0-20261120t175642z` and `run-gh200-blind-glm-4-7-flash-trinity-mini-20261120t195848z`,
+scored on each board. GLM-4.7-Flash, Trinity-Mini, Ling-mini-2.0 (in no page of the study, not in Frontier's paper).
+Prefill v9 2.55%, 1.40%, 6.33% against v8 5.56%, 5.78%, 11.42% and simpath 1.51%, 1.40%, 4.70%; decode (v8's) 2.20%,
+2.40%, 4.04% against Frontier's lowest arm 2.60%, 3.84%, 6.68%. Split by kernel (Table 12, `docs/paper-v2/split/`),
+the 128x128x64 tile carries the same intercept, +3.0% to +4.1% of a call above the measured non-GEMM kernels.
+
+**v10 (frozen f1a0c0c4, 2026-11-21 06:03Z, pushed 06:39Z with `scripts/prod/REGISTRATION-v10.md`, before the 07:35Z
+launch): v9 plus, on 128x128x64 only, T0 + s + b replaced by the same measured term; no new constant.** Run
+`run-gh200-blind-granite-4-0-h-small-20261121t073522z` (08c6087, verified on the board file by file before the
+terminate), one board for all three models (no second GH200), scored on the board
+(`vm/results/prod-<model>-20261121T073522Z/score/prod.score.{json,txt}`). LFM2-8B-A1B, granite-4.0-h-small,
+Phi-mini-MoE-instruct at pinned HF commits.
+
+| model | decode: v10 / Frontier lowest / roofline | prefill: v10 / v9 / v8 / simpath / cli / cli-fills / roofline |
+|---|---|---|
+| LFM2-8B-A1B | 2.52% / 3.40% / 22.82% | 6.73% / 3.39% / 2.93% / 2.84% / 10.44% / 9.92% / 39.75% |
+| Phi-mini-MoE | 3.06% / 5.33% / 36.02% | 6.15% / 8.28% / 12.61% / 1.60% / 4.29% / 4.27% / 43.82% |
+| granite-4.0-h-small | 1.34% / 2.16% / 12.60% | 5.46% / 5.43% / 1.39% / 1.07% / 3.75% / 3.57% / 22.37% |
+
+Every changed prefill tile reads LOW on these three models (bias -1.8% to -7.9% at G 1). Split by kernel (paper-v2
+Table 18, `docs/paper-v2/split/split10/`): v10's non-GEMM term lands within -1.2% to +1.8% of a call of the measured
+non-GEMM kernels on all six tiles; the GEMM terms read low on 11 of 12 GEMMs (-0.6% to -9.6% of a call per tile), so
+the intercept had been offsetting a GEMM under-price that changes sign across models (-3.3% to +6.2% on the five
+earlier ones). v8, frozen beside v10, reads lower than v10 on LFM2 and granite and higher on Phi. The remaining prefill
+error is in the GEMM terms (v7's prefill terms, unchanged since test C).
+
+**Repairs during the v10 run, none touching a predictor or the scorer** (paper-v2 8.5; the kit fixes are in
+`scripts/prod/README.md`, "v10 blind run fixes"): granite's prefill coverage check found no G 16 steps and the run was
+resumed past it with no recapture (granite's prefill has no G 16 calls); LFM2's sag ran in granite's session
+directory, its gate passed and its byte diagnostics did not, its par kept (moves v10's prices by at most 0.64%);
+LFM2's Frontier setup found granite's venv and blanked its interpreter path, restored and rerun from the grid check;
+the run's push exceeded GitHub's 2 GiB pack limit and was pushed as smaller commits with the same tree. Sag par drift
+on the one board: A 65.82, 67.67, 70.26 us over about three hours.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

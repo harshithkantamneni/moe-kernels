@@ -1,0 +1,31 @@
+14:38:10 lfm2-8b-a1b 64x128x64w8s3 -> lfm2-8b-a1b-64.jsonl
+310178 calls, 31218 on 64x128x64w8s3 at 1410, not warmup
+patched ['v5price', 'd5', 'bw', 'kneefit', 'r3_timing_model_v8']
+done
+          2601811968  maximum resident set size
+14:39:11 lfm2-8b-a1b 128x128x64w8s3 -> lfm2-8b-a1b-128.jsonl
+310178 calls, 41272 on 128x128x64w8s3 at 1410, not warmup
+patched ['v5price', 'd5', 'bw', 'kneefit', 'r3_timing_model_v8']
+done
+          2610839552  maximum resident set size
+14:40:12 phi-mini-moe 64x128x64w8s3 -> phi-mini-moe-64.jsonl
+501792 calls, 52384 on 64x128x64w8s3 at 1410, not warmup
+patched ['v5price', 'd5', 'bw', 'kneefit', 'r3_timing_model_v8']
+done
+          3260399616  maximum resident set size
+14:41:13 phi-mini-moe 128x128x64w8s3 -> phi-mini-moe-128.jsonl
+501792 calls, 61472 on 128x128x64w8s3 at 1410, not warmup
+patched ['v5price', 'd5', 'bw', 'kneefit', 'r3_timing_model_v8']
+done
+          3266494464  maximum resident set size
+14:42:17 granite-4.0-h-small 64x128x64w8s3 -> granite-4.0-h-small-64.jsonl
+753120 calls, 310520 on 64x128x64w8s3 at 1410, not warmup
+patched ['v5price', 'd5', 'bw', 'kneefit', 'r3_timing_model_v8']
+done
+          4154916864  maximum resident set size
+14:43:28 granite-4.0-h-small 128x128x64w8s3 -> granite-4.0-h-small-128.jsonl
+753120 calls, 31360 on 128x128x64w8s3 at 1410, not warmup
+patched ['v5price', 'd5', 'bw', 'kneefit', 'r3_timing_model_v8']
+done
+          4752408576  maximum resident set size
+ALL-DONE

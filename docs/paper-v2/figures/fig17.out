@@ -1,0 +1,40 @@
+Sources (repo-relative, root /Users/harshithkantamneni/code/moe-kernels/.claude/worktrees/agent-a675b7a42302380f5):
+  A: scripts/scoring/rental7/skew.score.json (per-cell e rebuilt by scripts/scoring/rental7/score_skew.py on results/published/2026-10-14-nvidia_gh200_480gb-rental7-session)
+  B: scripts/scoring/tileB3/tileB3.score.json
+  C: scripts/scoring/v7pblind/prefill_blind.score.json
+  D: scripts/scoring/decode/blind.score.json
+  E: scripts/scoring/v7blind/blind.score.json
+
+**Table 3. Blind accuracy on GH200 (recomputed).**
+
+| test | cells | MAPE | rms | mean (bias) | worst cell | within 5% | within 10% |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| *vLLM's prefill tiles* | | | | | | | |
+| B. prefill, first (round 5) | 84 | 1.71% | 2.41% | +0.29% | 8.22% | 78 / 84 | 84 / 84 |
+| C. prefill, second (v7) | 24 | 2.99% | 3.13% | -2.99% | 4.72% | 24 / 24 | 24 / 24 |
+| *vLLM's decode tiles* | | | | | | | |
+| D. decode, first (v4d') | 220 | 6.70% | 11.40% | +5.99% | 39.24% | 144 / 220 | 173 / 220 |
+| E. decode, second (v7) | 125 | 2.90% | 4.17% | +1.61% | 17.20% | 104 / 125 | 118 / 125 |
+| *controlled check (not a serving tile)* | | | | | | | |
+| A. test tile (v3, trunk only) | 84 | 0.45% | 0.61% | -0.24% | 1.61% | 84 / 84 | 84 / 84 |
+
+**Table 4. Registered baselines on the same decode cells, MAPE (recomputed).**
+
+| predictor | score-file key | D (220 cells) | E (125 cells) |
+|---|---|---:|---:|
+| our model (v4d' in D, v7 in E) | pred_v4 | 6.70% | 2.90% |
+| roofline: T0 + weight bytes / bandwidth | roofline | 8.22% | 24.67% |
+| ridge regression on weight bytes, waves, dead CTAs and path | OLS | 9.77% | 11.80% |
+| linear in tokens x k | line | 293.8% | 301.2% |
+
+**Table 5, this work's rows (recomputed): MAPE; p50 / p95 of |e|.**
+
+| test | MAPE | p50 | p95 |
+|---|---:|---:|---:|
+| B | 1.71% | 1.14% | 5.70% |
+| C | 2.99% | 2.96% | 4.43% |
+| D | 6.70% | 2.39% | 25.73% |
+| E | 2.90% | 1.95% | 10.19% |
+
+OK: all 55 printed values match the paper (Table 3: 35, Table 4: 8, Table 5 this-work rows: 12).
+Wrote /Users/harshithkantamneni/code/moe-kernels-work/2026-11-21/fig17/fig17_side_by_side.svg

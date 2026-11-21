@@ -248,7 +248,15 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 8231 tests collected off-GPU (`pytest --collect-only -q`;
+**Current state (2026-11-21).** The final model is v10 (`scripts/r3_timing_model_v10.py`): the cell model v7 made to
+price real vLLM calls (v8), with its fitted prefill intercept replaced by the measured non-GEMM kernels on both
+prefill tiles (v9, v10). It has been scored in vLLM serving on eight MoE models with every predictor frozen before
+each run, beside Frontier and a roofline: decode 1.27% to 4.04% MAPE, below every Frontier arm on every model; prefill
+5.46% to 6.73% on its three blind models, where Frontier with its simulator's features reads 1.07% to 2.84%. The
+write-up is `docs/paper-v2/paper-v2.md`; the study record is `docs/FINDINGS.md` ("Serving checks v8, v9 and v10"); the
+serving kit is `scripts/prod/`.
+
+Harness complete; 8236 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
