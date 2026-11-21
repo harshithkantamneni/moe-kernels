@@ -1,0 +1,2 @@
+{"8": {"ms": 0.09131429967083432, "tile": "16x64x128w4s4", "regime": "decode", "why": ""}, "1024": {"ms": 0.2265045568303645, "tile": "128x128x64w8s3", "regime": "prefill", "why": ""}}
+PASS price-check phi-mini-moe: decode T 8 0.0913 ms (16x64x128w4s4), prefill T 1024 0.2265 ms (128x128x64w8s3)

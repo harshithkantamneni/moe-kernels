@@ -1,15 +1,15 @@
 
 ==============NVSMI LOG==============
 
-Timestamp                                 : Sat Nov 21 09:08:54 2026
+Timestamp                                 : Sat Nov 21 11:16:04 2026
 Driver Version                            : 580.105.08
 CUDA Version                              : 13.0
 
 Attached GPUs                             : 1
 GPU 00000000:DD:00.0
     GPU Power Readings
-        Average Power Draw                : 90.61 W
-        Instantaneous Power Draw          : 90.97 W
+        Average Power Draw                : 90.49 W
+        Instantaneous Power Draw          : 89.72 W
         Current Power Limit               : 700.00 W
         Requested Power Limit             : 700.00 W
         Default Power Limit               : 900.00 W
@@ -18,15 +18,15 @@ GPU 00000000:DD:00.0
     Power Samples
         Duration                          : 2.36 sec
         Number of Samples                 : 119
-        Max                               : 96.17 W
-        Min                               : 88.13 W
-        Avg                               : 90.39 W
+        Max                               : 94.58 W
+        Min                               : 86.45 W
+        Avg                               : 90.58 W
     GPU Memory Power Readings 
-        Average Power Draw                : 23.57 W
+        Average Power Draw                : 23.65 W
         Instantaneous Power Draw          : N/A
     Module Power Readings
-        Average Power Draw                : 172.08 W
-        Instantaneous Power Draw          : 185.30 W
+        Average Power Draw                : 175.87 W
+        Instantaneous Power Draw          : 187.27 W
         Current Power Limit               : 1000.00 W
         Requested Power Limit             : 1000.00 W
         Default Power Limit               : 1000.00 W

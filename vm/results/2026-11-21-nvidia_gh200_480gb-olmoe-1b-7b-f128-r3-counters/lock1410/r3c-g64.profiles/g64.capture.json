@@ -56,7 +56,7 @@
   "lock_mhz": 1410.0,
   "probe_clock_control": "none",
   "smi_before": {
-    "utc": "2026-11-21T09:09:06Z",
+    "utc": "2026-11-21T11:16:15Z",
     "argv": [
       "nvidia-smi",
       "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
@@ -67,7 +67,7 @@
       {
         "uuid": "GPU-3056afc2-e954-9163-35bd-858dbcaecc57",
         "clocks.sm": "1410",
-        "power.draw": "115.26",
+        "power.draw": "114.39",
         "power.limit": "700.00",
         "clocks_event_reasons.active": "0x0000000000000000",
         "persistence_mode": "Enabled"
@@ -76,7 +76,7 @@
     "error": ""
   },
   "smi_after": {
-    "utc": "2026-11-21T09:11:44Z",
+    "utc": "2026-11-21T11:18:53Z",
     "argv": [
       "nvidia-smi",
       "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
@@ -87,7 +87,7 @@
       {
         "uuid": "GPU-3056afc2-e954-9163-35bd-858dbcaecc57",
         "clocks.sm": "1410",
-        "power.draw": "110.93",
+        "power.draw": "111.39",
         "power.limit": "700.00",
         "clocks_event_reasons.active": "0x0000000000000000",
         "persistence_mode": "Enabled"

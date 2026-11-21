@@ -1,0 +1,14 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+PASS P1 git: clean at f1a0c0c4a13df3daa2eae47289eea26e0b391620 (expected, from /home/ubuntu/moe/env.sh)
+PASS P2 idle: no compute process on the GPU
+PASS P3 power: enforced power limit 700 W
+PASS P4 locks: 1710 MHz set; 1410 MHz set; restored to default clocks
+PASS P5 tmpdir: /home/ubuntu/moe/tmp writable
+PASS P6 tools: ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda-13.0/bin/nsys, ncu /usr/local/cuda-13.0/bin/ncu
+PASS P7 nsys: nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp
+PASS P8 hf-rev: microsoft/Phi-mini-MoE-instruct resolves to the pin f620b32c0d3e8f7e76f57ccdaa88e0df8bc8bfcd
+PASS P9 frontier: /home/ubuntu/moe/frontier/src holds db5a85b
+PASS P10 disk: 4101 GB free under /home/ubuntu/moe
+PASS P11 setup: /home/ubuntu/moe/session/PREFLIGHT.txt: verdict READY (exit 0: 0 DONE: measured; every VALIDITY and CLAIM gate PASSED)
+PASS P12 hf-rate: measured 193 MB/s (1007 MB in 5.2 s); the weights (15.3 GB) would take ~79 s
+PASS env-preflight

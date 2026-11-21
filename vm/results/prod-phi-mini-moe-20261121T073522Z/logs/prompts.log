@@ -1,0 +1,4 @@
+PASS fetch sharegpt: /home/ubuntu/moe/results/prod-phi-mini-moe-20261121T073522Z/data/ShareGPT_V3_unfiltered_cleaned_split.json sha256 35f0e213ce091ed9b9af2a1f0755e9d39f9ccec34ab281cd4ca60d70f6479ba4
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (4684 > 4096). Running this sequence through the model will result in indexing errors
+PASS build: /home/ubuntu/moe/results/prod-phi-mini-moe-20261121T073522Z/prompts.jsonl n=4096 input 766860 output 1489511 tokens, body sha256 56a6114d8afe28d4

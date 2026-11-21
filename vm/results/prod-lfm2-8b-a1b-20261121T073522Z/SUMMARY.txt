@@ -59,3 +59,5 @@ PASS frontier-train-fills (25s)
 PASS frontier-predict (37s)
 FAIL (soft, dropped) push-primary: exit 143: [push] push attempt 2 of 3 failed (exit 1): error: failed to push some refs to 'github.com:harshithkantamneni/moe-kernels.git' Terminated 
 PASS score (601s)
+FAIL (soft, dropped) push-final: exit 1: [push] push attempt 3 of 3 failed (exit 1): error: failed to push some refs to 'github.com:harshithkantamneni/moe-kernels.git' [push] NOT PUSHED (committed here; the next push carries it): prod blind lfm2-8b-a1b: measured, Frontier predicted, scored on the VM (v8, v9, v10, Frontier) 
+PASS held-back-check (0s)

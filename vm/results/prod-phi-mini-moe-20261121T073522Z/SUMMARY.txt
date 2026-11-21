@@ -1,0 +1,5 @@
+PASS env-preflight (7s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (1s)
+PASS revision-pinned (0s)

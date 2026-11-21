@@ -7,3 +7,5 @@
 2026-11-21T09:55:22Z main.sh exit 4: final push
 2026-11-21T10:29:07Z prod blind lfm2-8b-a1b: A1710, A1410 and Frontier's timers
 2026-11-21T10:57:29Z prod blind lfm2-8b-a1b: measured, Frontier predicted, scored on the VM (v8, v9, v10, Frontier)
+2026-11-21T11:15:48Z main.sh exit 0: final push
+2026-11-21T11:20:09Z bytes: G=64 page exit 3
