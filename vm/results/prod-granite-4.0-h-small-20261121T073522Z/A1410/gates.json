@@ -1,0 +1,43 @@
+{
+  "G-REV": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-CFG": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-BACKEND": {
+    "verdict": "PASS",
+    "backends": [
+      "TRITON"
+    ],
+    "experts_cls": [
+      "TritonExperts"
+    ],
+    "why": ""
+  },
+  "G-VARIANTS-END": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-COV": {
+    "verdict": "FAIL",
+    "minimum": 30,
+    "floor": 10,
+    "per_tile": {
+      "64x128x64w8s3": 7763,
+      "128x128x64w8s3": 784,
+      "128x128x64w8s3 g16": 0
+    },
+    "short": {
+      "128x128x64w8s3 g16": 0
+    },
+    "why": "tiles under the floor of 10 steps: {'128x128x64w8s3 g16': 0}",
+    "branch": "prefill"
+  },
+  "G-DUMMY": {
+    "verdict": "PASS",
+    "why": ""
+  }
+}

@@ -419,7 +419,7 @@
     "flush_bytes": 0,
     "flush_source": "the counter child times nothing, so no flush buffer",
     "predicted_peak_bytes": 28198305792,
-    "device_free_bytes": 100724834304,
+    "device_free_bytes": 100729356288,
     "device_source": "free on the attached device, asked of the driver",
     "headroom": 0.66,
     "copies_read": 9

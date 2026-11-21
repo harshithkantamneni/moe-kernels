@@ -1,3 +1,8 @@
 2026-11-21T07:41:47Z the branch's first commit: the VM can push
 2026-11-21T07:47:58Z bytes: G=64 page exit 3
 2026-11-21T07:55:13Z bytes: G=64 page exit 3
+2026-11-21T08:36:20Z main.sh exit 3: final push
+2026-11-21T09:12:36Z bytes: G=64 page exit 3
+2026-11-21T09:34:31Z bytes: G=64 page exit 3
+2026-11-21T09:55:22Z main.sh exit 4: final push
+2026-11-21T10:29:07Z prod blind lfm2-8b-a1b: A1710, A1410 and Frontier's timers

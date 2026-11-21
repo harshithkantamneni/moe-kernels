@@ -1,0 +1,311 @@
+{
+  "cudagraph_capture_sizes": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    24,
+    32,
+    40,
+    48,
+    56,
+    64,
+    72,
+    80,
+    88,
+    96,
+    104,
+    112,
+    120,
+    128,
+    136,
+    144,
+    152,
+    160,
+    168,
+    176,
+    184,
+    192,
+    200,
+    208,
+    216,
+    224,
+    232,
+    240,
+    248,
+    256,
+    272,
+    288,
+    304,
+    320,
+    336,
+    352,
+    368,
+    384,
+    400,
+    416,
+    432,
+    448,
+    464,
+    480,
+    496,
+    512
+  ],
+  "cudagraph_mode": "FULL_AND_PIECEWISE",
+  "kernel_variants": 2,
+  "kernel_variants_expected": 2,
+  "step_kernel_variants": 1,
+  "reset_monotonic_ns": 2322269080777,
+  "kernel_variants_end": 2,
+  "step_kernel_variants_end": 1,
+  "bound_layers": [
+    {
+      "layer": 0,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 1,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 2,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 3,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 4,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 5,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 6,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 7,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 8,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 9,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 10,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 11,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 12,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 13,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 14,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 15,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 16,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 17,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 18,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 19,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 20,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 21,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 22,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 23,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 24,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 25,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 26,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 27,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 28,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 29,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 30,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 31,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 32,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 33,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 34,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 35,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 36,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 37,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 38,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    },
+    {
+      "layer": 39,
+      "backend": "TRITON",
+      "experts_cls": "TritonExperts",
+      "quant_method": "UnquantizedFusedMoEMethod"
+    }
+  ],
+  "shards": 77,
+  "total_records": 753120,
+  "top_k": 10,
+  "n_moe_layers": 40,
+  "ids_cap": 67108864,
+  "rec_cap": 1048576,
+  "marker_kernel": "_moe_prod_capture_kernel"
+}
