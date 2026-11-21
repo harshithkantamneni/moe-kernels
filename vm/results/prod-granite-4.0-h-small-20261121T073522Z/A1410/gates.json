@@ -1,43 +1,49 @@
 {
-  "G-REV": {
+  "G-REC": {
     "verdict": "PASS",
-    "why": ""
-  },
-  "G-CFG": {
-    "verdict": "PASS",
-    "why": ""
-  },
-  "G-BACKEND": {
-    "verdict": "PASS",
-    "backends": [
-      "TRITON"
-    ],
-    "experts_cls": [
-      "TritonExperts"
-    ],
-    "why": ""
-  },
-  "G-VARIANTS-END": {
-    "verdict": "PASS",
-    "why": ""
-  },
-  "G-COV": {
-    "verdict": "FAIL",
-    "minimum": 30,
-    "floor": 10,
-    "per_tile": {
-      "64x128x64w8s3": 7763,
-      "128x128x64w8s3": 784,
-      "128x128x64w8s3 g16": 0
+    "records": 753120,
+    "markers": 753120,
+    "marker_streams": {
+      "7": 753120
     },
-    "short": {
-      "128x128x64w8s3 g16": 0
-    },
-    "why": "tiles under the floor of 10 steps: {'128x128x64w8s3 g16': 0}",
-    "branch": "prefill"
-  },
-  "G-DUMMY": {
-    "verdict": "PASS",
     "why": ""
+  },
+  "G-GEMM": {
+    "verdict": "PASS",
+    "gemms": 1506240,
+    "why": ""
+  },
+  "G-STEP": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-PAIR": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0,
+    "paired": 753120
+  },
+  "G-STEPMARK": {
+    "verdict": "PASS",
+    "why": "",
+    "step_markers": 18828,
+    "steps": 18828,
+    "misplaced_calls": 0
+  },
+  "G-IDS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-GRID": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-CLASS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
   }
 }

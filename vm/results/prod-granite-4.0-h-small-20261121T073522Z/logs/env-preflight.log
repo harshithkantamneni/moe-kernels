@@ -1,4 +1,3 @@
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 PASS P1 git: clean at f1a0c0c4a13df3daa2eae47289eea26e0b391620 (expected, from /home/ubuntu/moe/env.sh)
 PASS P2 idle: no compute process on the GPU
 PASS P3 power: enforced power limit 700 W
@@ -7,8 +6,8 @@ PASS P5 tmpdir: /home/ubuntu/moe/tmp writable
 PASS P6 tools: ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda-13.0/bin/nsys, ncu /usr/local/cuda-13.0/bin/ncu
 PASS P7 nsys: nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp
 PASS P8 hf-rev: ibm-granite/granite-4.0-h-small resolves to the pin b8c0982bab7fde4eb48110f5a069527c008fab39
-PASS P9 frontier: https://github.com/NetX-lab/Frontier reachable at db5a85b
-PASS P10 disk: 4214 GB free under /home/ubuntu/moe
+PASS P9 frontier: /home/ubuntu/moe/frontier/src holds db5a85b
+PASS P10 disk: 4072 GB free under /home/ubuntu/moe
 PASS P11 setup: /home/ubuntu/moe/session/PREFLIGHT.txt: verdict READY (exit 0: 0 DONE: measured; every VALIDITY and CLAIM gate PASSED)
-PASS P12 hf-rate: measured 375 MB/s (1007 MB in 2.7 s); the weights (64.4 GB) would take ~172 s
+PASS P12 hf-rate: measured 499 MB/s (1007 MB in 2.0 s); the weights (64.4 GB) would take ~129 s
 PASS env-preflight

@@ -1,0 +1,79 @@
+{
+ "schema": "moe-kernels/prod-call-shards/1",
+ "n": 753120,
+ "max_bytes": 64000000,
+ "calls": [
+  {
+   "file": "calls.00000.jsonl",
+   "rows": 85119,
+   "sha256": "171f15ebb25a3d8b029f1dd917e67eee61785f6ad0782c6ca212ec377b1bd61b"
+  },
+  {
+   "file": "calls.00001.jsonl",
+   "rows": 81254,
+   "sha256": "99f2f2bd1a8f236b263a63f24f7532e45c70cb6b1e2abe5a875a22ee1d2e8975"
+  },
+  {
+   "file": "calls.00002.jsonl",
+   "rows": 79306,
+   "sha256": "2305360e4b3327fc4a58ffa4fd673a70ee01ad53f0944447e3b18314405b54d8"
+  },
+  {
+   "file": "calls.00003.jsonl",
+   "rows": 78900,
+   "sha256": "8d686687448a528910203e4b2cf5d0c03ef51eb8de9c502afc742405a9d63884"
+  },
+  {
+   "file": "calls.00004.jsonl",
+   "rows": 77741,
+   "sha256": "79a27172e85654537c8d1fce1de8a176bde8989de731d7adf52c8486734d724e"
+  },
+  {
+   "file": "calls.00005.jsonl",
+   "rows": 77165,
+   "sha256": "df753260bf27e1bcfbbfe678a3c9323042cb2596bb46e515e6e116e6b8093882"
+  },
+  {
+   "file": "calls.00006.jsonl",
+   "rows": 77553,
+   "sha256": "81f151ff2b8bb1e2886fcce136093393a651004ede5cae56e094ef2d8375c226"
+  },
+  {
+   "file": "calls.00007.jsonl",
+   "rows": 77589,
+   "sha256": "7e78815dad4b0c772ef0c408278e06fc7809496db63ca40cd1d6d3a530fc2a98"
+  },
+  {
+   "file": "calls.00008.jsonl",
+   "rows": 77063,
+   "sha256": "6ec7b88ff70790d1490007c76ad3741134b1d6c0c5f83c5dd8543a937c56af41"
+  },
+  {
+   "file": "calls.00009.jsonl",
+   "rows": 41430,
+   "sha256": "b62076ea77b99f485ab5a2a993b604719e4f13202662df8bf17746bd91a4fb84"
+  }
+ ],
+ "counts": [
+  {
+   "file": "counts.00000.npy",
+   "rows": 222218,
+   "sha256": "1f261c650c1ccff01143db6abd0d83a110f647b25cc3db1cffd01f49a3137e15"
+  },
+  {
+   "file": "counts.00001.npy",
+   "rows": 222218,
+   "sha256": "aea15b881c9b5aaaa16ddbb7b09d7094a5e9e88e92f2c0d32d9be946c1f6dfff"
+  },
+  {
+   "file": "counts.00002.npy",
+   "rows": 222218,
+   "sha256": "68cc82ab7931ee80c5ddc871f9b8db975c820d843c1d37366366848ecc703579"
+  },
+  {
+   "file": "counts.00003.npy",
+   "rows": 86466,
+   "sha256": "99afa62c11654e64663d1f6005809cfdd3a6d69bb04dcaccc5bca5a1c7983528"
+  }
+ ]
+}

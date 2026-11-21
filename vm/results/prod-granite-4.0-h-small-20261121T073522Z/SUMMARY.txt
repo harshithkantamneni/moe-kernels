@@ -22,3 +22,38 @@ PASS A1710-capture (939s)
 PASS A1710-unlock-after (0s)
 PASS A1410-lock (0s)
 FAIL A1410-capture: exit 3: FAIL  G-COV: tiles under the floor of 10 steps: {'128x128x64w8s3 g16': 0} 
+RESUME from A1410-unlock-after at 2026-11-21T12:20:00Z in /home/ubuntu/moe/results/prod-granite-4.0-h-small-20261121T073522Z
+PASS env-preflight (4s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned (0s)
+SKIPPED-RESUME price-check
+SKIPPED-RESUME price-check-v9
+SKIPPED-RESUME price-check-v10
+SKIPPED-RESUME model-prefetch
+SKIPPED-RESUME prompts
+SKIPPED-RESUME frontier-setup
+SKIPPED-RESUME sag1410
+PASS unlock-after-sag (0s)
+SKIPPED-RESUME serve-plan
+SKIPPED-RESUME gate60-capture
+SKIPPED-RESUME gate60-extract
+SKIPPED-RESUME gate60-sequences
+SKIPPED-RESUME frontier-grid-check
+SKIPPED-RESUME frontier-timer-probe
+PASS A1710-lock (1s)
+SKIPPED-RESUME A1710-capture
+PASS A1710-unlock-after (0s)
+SKIPPED-RESUME A1710-extract
+PASS A1410-lock (0s)
+SKIPPED-RESUME A1410-capture
+PASS A1410-unlock-after (0s)
+PASS frontier-timer-lock-decode (0s)
+PASS frontier-timer-decode (10s)
+PASS frontier-timer-export-decode (0s)
+PASS frontier-timer-lock-prefill (0s)
+PASS frontier-timer-prefill (69s)
+PASS frontier-timer-export-prefill (0s)
+PASS frontier-timer-unlock (0s)
+PASS A1410-extract (310s)
