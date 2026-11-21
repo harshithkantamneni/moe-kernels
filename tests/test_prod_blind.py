@@ -113,15 +113,16 @@ def test_blind_profile_runs_only_the_lean_plan_with_overlap(tmp_path):
     # dropped: the secondary runs, replay C, the replay offsets, the extras, the partial / hold-out Frontier arms
     for n in names:
         assert not re.match(r"(Adefault|Aon|Beager|replay|graphmode|X\d|frontier-holdout|frontier-.*partial)", n), n
-    for want in ("price-check", "price-check-v9", "model-prefetch", "prompts", "frontier-setup", "sag1410",
+    for want in ("price-check", "price-check-v9", "price-check-v10", "model-prefetch", "prompts", "frontier-setup", "sag1410",
                  "gate60-capture", "frontier-timer-probe", "A1710-capture", "A1410-capture", "A1710-extract",
                  "A1410-extract", "frontier-timer-decode", "frontier-timer-prefill", "frontier-points", "frontier-csv",
                  "frontier-train", "frontier-simpath", "frontier-csv-fills", "frontier-train-fills", "frontier-predict",
                  "score", "push-final", "held-back-check"):
         assert want in names, want
     assert "--pricer r3_timing_model_v9" in by["price-check-v9"] and "--pricer r3_timing_model_v8" in by["price-check"]
+    assert "--pricer r3_timing_model_v10" in by["price-check-v10"]
     bg = {n for n, s in by.items() if " bg " in s}
-    assert bg == {"price-check", "price-check-v9", "model-prefetch", "prompts", "frontier-setup", "A1710-extract",
+    assert bg == {"price-check", "price-check-v9", "price-check-v10", "model-prefetch", "prompts", "frontier-setup", "A1710-extract",
                   "A1410-extract", "push-primary", "frontier-train", "frontier-simpath", "frontier-train-fills"}
     # GPU-timed steps are foreground and never inside a background window of another GPU step
     gpu = ("sag1410", "gate60-capture", "frontier-timer-probe", "A1710-capture", "A1410-capture",
@@ -149,6 +150,7 @@ def test_blind_profile_runs_only_the_lean_plan_with_overlap(tmp_path):
     # scored on the VM: v8 and v9 side by side, nproc workers, the scorer's python
     sc = by["score"]
     assert "offline.sh" in sc and "--also-price v9=r3_timing_model_v9" in sc and "PY_SCORE=" in sc
+    assert "--also-price v10=r3_timing_model_v10" in sc
     assert re.search(r"--workers \d+ ", sc) and int(re.search(r"--workers (\d+) ", sc).group(1)) <= 32
     assert not _soft_of(by["held-back-check"]) and _soft_of(by["score"])
     assert not (tmp_path / "home").exists() and not (tmp_path / "moe").exists()

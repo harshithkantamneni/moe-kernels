@@ -5,7 +5,7 @@
 #
 # WHAT RUNS (2026-11-20; everything main.sh's full profile adds beyond this is dropped: Adefault, Aon, Beager, replay
 # C, the replay offsets, the extras):
-#   B0  in the BACKGROUND (kitlib.sh `step --bg` / `step_join`): price-check through v8 AND v9 (CPU), the model's
+#   B0  in the BACKGROUND (kitlib.sh `step --bg` / `step_join`): price-check through v8, v9 AND v10 (CPU), the model's
 #       files at its pin (prodlib.py prefetch), the prompts (pinned ShareGPT, the model's tokenizer at its pin) and
 #       Frontier's venv (frontier_setup.sh), all while
 #   B1  sag1410 (GPU) measures the board's 128x128 par; then every B0 step is joined (a hard FAIL stops the run)
@@ -15,7 +15,7 @@
 #       capture in the foreground; each run's nsys export + extract in the BACKGROUND during the next GPU step
 #   B5  Frontier's timers (GPU, both branches at their clocks), then fpoints, the CSVs, and the three trainers (cli,
 #       simpath, cli-fills) IN PARALLEL in the background (CPU), then Frontier's predictions on both runs
-#   B6  the score ON THE VM: offline.sh (v8_ms, v9_ms beside it, the roofline, Frontier's three arms; no replays),
+#   B6  the score ON THE VM: offline.sh (v8_ms, v9_ms and v10_ms beside it, the roofline, Frontier's three arms; no replays),
 #       nproc workers (cap 32); pushes after the captures (background) and at the end; held-back-check last.
 # GPU-timed steps (sag1410, gate60, the probe, the captures, the Frontier timers) never overlap one another; only CPU
 # and network work runs beside them.
@@ -43,12 +43,13 @@ export R TR MODEL TOK SC PY NSYS FR_ROUTING CSVREL PROBE_POINTS
 # B0 + B1
 step price-check --bg --cap 900 -- "$PY" "$SC/prodlib.py" price-check --model "$MODEL" --pricer "$PRICER"
 step price-check-v9 --bg --cap 900 -- "$PY" "$SC/prodlib.py" price-check --model "$MODEL" --pricer r3_timing_model_v9
+step price-check-v10 --bg --cap 900 -- "$PY" "$SC/prodlib.py" price-check --model "$MODEL" --pricer r3_timing_model_v10
 step model-prefetch --bg --cap 3600 -- "$PY" "$SC/prodlib.py" prefetch --model "$MODEL"
 step prompts --bg --cap 3600 --out "$R/prompts.jsonl" -- prompts_all
 step frontier-setup --bg --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
 step sag1410 --cap 5400 --out "$R/sag/par.json" -- bash "$SC/sag1410.sh" --out "$R/sag"
 step unlock-after-sag --always --cap 60 -- kit_unlock
-for s in price-check price-check-v9 model-prefetch prompts; do step_join "$s"; done
+for s in price-check price-check-v9 price-check-v10 model-prefetch prompts; do step_join "$s"; done
 step serve-plan --cap 300 --needs prompts -- "${SERVE[@]}" --mode graphs --out "$R/A1710" --dry-run
 
 # B2: the 60 s gate (the weights are already in the HF cache: model-prefetch)
@@ -107,7 +108,7 @@ step_join push-primary
 
 # B6: the score on the VM (offline.sh: expected-outputs reads kit-profile.json: blind), then the pushes
 step score --soft --cap 7200 --out "$R/score/prod.score.json" -- env PY_SCORE="$PY" bash "$SC/offline.sh" --results "$R" \
-  --model "$MODEL" --pricer "$PRICER" --also-price v9=r3_timing_model_v9 --workers "$NW"
-step push-final --soft --cap 3600 -- kit_push "prod blind $MODEL: measured, Frontier predicted, scored on the VM (v8, v9, Frontier)"
+  --model "$MODEL" --pricer "$PRICER" --also-price v9=r3_timing_model_v9 --also-price v10=r3_timing_model_v10 --workers "$NW"
+step push-final --soft --cap 3600 -- kit_push "prod blind $MODEL: measured, Frontier predicted, scored on the VM (v8, v9, v10, Frontier)"
 step held-back-check --cap 120 -- "$PY" "$SC/prodlib.py" held-back-check \
   --held "${MOE_PUSH_HOME:-$HOME/moe}/push/HELD-BACK.txt" --results "$R"

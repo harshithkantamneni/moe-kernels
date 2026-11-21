@@ -127,6 +127,27 @@ BLIND_SPECS: dict = {
     "ling-mini-2.0": {"hf_repo": "inclusionAI/Ling-mini-2.0", "hidden_size": 2048, "moe_intermediate_size": 512,
                       "num_experts": 256, "top_k": 8, "num_layers": 20, "first_moe_layer": 1, "shared_experts": 1,
                       "gate_fn": "sigmoid", "norm_topk_prob": True, "levels": "1,8,24,48,80,112,256"},
+    # 2026-11-20, v10's blind run (prefill blind for v10; decode is v8's): three models no predictor has seen, through
+    # vLLM 0.27.1's Triton fused_moe in bf16. Each reaches the G16 tile inside the 16384-token step (G16 at T >= 129 E:
+    # 4128, 9288, 2064), so each runs the 1024x3 bursts. granite's and Phi's shared/dense MLPs are outside the call.
+    # Phi's routing is vLLM's sparsemixer (custom_routing_function); gate_fn is the closest of the two MoEConfig names.
+    "lfm2-8b-a1b": {"hf_repo": "LiquidAI/LFM2-8B-A1B", "hidden_size": 2048, "moe_intermediate_size": 1792,
+                    "num_experts": 32, "top_k": 4, "num_layers": 24, "first_moe_layer": 2,
+                    "gate_fn": "sigmoid", "norm_topk_prob": True, "hf_literals": {"num_dense_layers": 2},
+                    "levels": "1,8,24,48,80,112,256,1024x3"},
+    "granite-4.0-h-small": {"hf_repo": "ibm-granite/granite-4.0-h-small", "hidden_size": 4096,
+                            "moe_intermediate_size": 768, "num_experts": 72, "top_k": 10, "num_layers": 40,
+                            "gate_fn": "softmax", "norm_topk_prob": True,
+                            "hf_keys": {"hidden_size": "hidden_size", "intermediate_size": "intermediate_size",
+                                        "num_local_experts": "num_experts", "num_experts_per_tok": "top_k",
+                                        "num_hidden_layers": "num_layers"},
+                            "levels": "1,8,24,48,80,112,256,1024x3"},
+    "phi-mini-moe": {"hf_repo": "microsoft/Phi-mini-MoE-instruct", "hidden_size": 4096, "moe_intermediate_size": 960,
+                     "num_experts": 16, "top_k": 2, "num_layers": 32, "gate_fn": "softmax", "norm_topk_prob": False,
+                     "hf_keys": {"hidden_size": "hidden_size", "intermediate_size": "intermediate_size",
+                                 "num_local_experts": "num_experts", "num_experts_per_tok": "top_k",
+                                 "num_hidden_layers": "num_layers"},
+                     "levels": "1,8,24,48,80,112,256,1024x3"},
 }
 
 #: PLACEHOLDER: {model key: the HF commit sha of the model's repo}, to be FILLED by a separate step from
@@ -136,6 +157,10 @@ BLIND_REVISIONS_PENDING: dict = {   # HF main commits read from /api/models on 2
     "glm-4.7-flash": "7dd20894a642a0aa287e9827cb1a1f7f91386b67",
     "trinity-mini": "e7fa016763d03089ab547c9ee19044980073669b",
     "ling-mini-2.0": "a810f6416bc4e1e29c9d7f271dd2fa7e56e71eab",
+    # HF main commits read from /api/models on 2026-11-20, for v10's blind run
+    "lfm2-8b-a1b": "7ed1404fdf502a5446c1b67d4fe1533158d6f2ad",
+    "granite-4.0-h-small": "b8c0982bab7fde4eb48110f5a069527c008fab39",
+    "phi-mini-moe": "f620b32c0d3e8f7e76f57ccdaa88e0df8bc8bfcd",
 }
 
 _SPEC_REQUIRED = ("hf_repo", "hidden_size", "moe_intermediate_size", "num_experts", "top_k", "num_layers")
