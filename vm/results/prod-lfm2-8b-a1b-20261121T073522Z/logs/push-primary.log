@@ -1,1 +1,4 @@
 PASS trace-manifest: 14 file(s), 2.64 GB under /home/ubuntu/moe/traces/prod-lfm2-8b-a1b-20261121T073522Z -> /home/ubuntu/moe/results/prod-lfm2-8b-a1b-20261121T073522Z/traces.sha256.json
+[push] push attempt 1 of 3 failed (exit 1): error: failed to push some refs to 'github.com:harshithkantamneni/moe-kernels.git'
+[push] push attempt 2 of 3 failed (exit 1): error: failed to push some refs to 'github.com:harshithkantamneni/moe-kernels.git'
+Terminated

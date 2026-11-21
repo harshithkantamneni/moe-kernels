@@ -1,0 +1,15 @@
+{
+ "schema": "moe-kernels/prod-frontier-csv-meta/1",
+ "model": "lfm2-8b-a1b",
+ "truth": "with_fills",
+ "routing": "uniform",
+ "samples_per_point": 3,
+ "arm_kind": "complete",
+ "partial_needed": false,
+ "complete": true,
+ "grid_points": 387,
+ "measured_points": 387,
+ "missing_points": [],
+ "missing_samples": {},
+ "rows": 1161
+}
