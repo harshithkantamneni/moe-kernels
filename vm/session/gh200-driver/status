@@ -27,3 +27,53 @@
 2026-11-21T07:48:08Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
 2026-11-21T07:48:08Z bytes: the registered list G = 64 (mixtral-8x7b, f128): no tail drop, no re-price, no base-clock control
 2026-11-21T07:54:57Z bytes: G=64 page exit 3 after 406 s
+2026-11-21T07:55:15Z bytes: lock block exit 0 (G=64 exit 3 07:54:57 406 s;)
+2026-11-21T07:55:20Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-21T07:55:22Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/summary.json)
+2026-11-21T07:55:22Z bytes END: exit 0 after 7 min [unit 3/4 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-11-21T07:55:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-21T07:55:22Z gate START: gate b3sag: scripts/tileB3_gate.py sag at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 4/4 - gsag gate=b3sag] (estimate 1 min, cap 5 min, 56 min left)
+2026-11-21T07:55:23Z gate b3sag at 1410 MHz: RESULT: GATE b3sag PASS par A 65.8200 us tau 587.5 us ratio 1.4239 olmoe 50.76/500 rms 6.38 sha 075418dde429 mixtral 80.88/675 rms 15.26 sha 60e7392b882c (exit 0)
+2026-11-21T07:55:23Z gate END: exit 0 after 0 min [unit 4/4 - gsag gate=b3sag]
+2026-11-21T07:55:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-21T07:55:23Z driver end: exit 0
+2026-11-21T09:08:54Z driver start: commit f1a0c0c4a13df3daa2eae47289eea26e0b391620, steps of the plan scripts/prod/sag1410.plan, deadline 2026-11-21T10:23:54Z (67 min of work left)
+2026-11-21T09:08:54Z plan: /home/ubuntu/moe/repo/scripts/prod/sag1410.plan (sha256 8ac3556b3f58f3847a6b488833fc9eda57a9d4559f69f3d32883a47424196d69), 4 units
+2026-11-21T09:08:54Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/4 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 67 min left)
+2026-11-21T09:08:54Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-11-21T09:08:54Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-11-21T09:08:54Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-11-21T09:08:55Z prelude: power.max_limit 900.00 W, at or over the registered 700 W
+2026-11-21T09:08:55Z prelude: the power limit read back after 0 s: enforced.power.limit 700.00 W, -q -d POWER GPU scope Current 700.00 W (Requested 700.00 W), power.limit 700.00 W (S1 read-back)
+2026-11-21T09:08:57Z lock probe: the session lock 1410 MHz held (C2)
+2026-11-21T09:08:57Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261121T074429Z, session lock 1410 MHz
+2026-11-21T09:08:57Z prelude END: exit 0 after 0 min [unit 1/4 - lock-mhz=1410 power-limit-w=700]
+2026-11-21T09:08:58Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-21T09:08:58Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 2/4 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 66 min left)
+2026-11-21T09:08:58Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-21T09:08:58Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-11-21T09:08:58Z bytes: the registered list G = 64 (olmoe-1b-7b, f128): no tail drop, no re-price, no base-clock control
+2026-11-21T09:11:45Z bytes: G=64 page exit 3 after 165 s
+2026-11-21T09:26:45Z push of 'bytes: G=64 page exit 3' exited 124 (results stay on the VM; the next push carries them)
+2026-11-21T09:26:46Z bytes: lock block exit 0 (G=64 exit 3 07:47:42 166 s;G=64 exit 3 09:11:45 165 s;)
+2026-11-21T09:26:51Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-21T09:26:51Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-21T09:26:52Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-21-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/summary.json)
+2026-11-21T09:26:52Z bytes END: exit 0 after 18 min [unit 2/4 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-11-21T09:26:53Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-21T09:26:53Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 3/4 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 7 min, cap 25 min, 49 min left)
+2026-11-21T09:26:53Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-21T09:26:53Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-11-21T09:26:53Z bytes: the registered list G = 64 (mixtral-8x7b, f128): no tail drop, no re-price, no base-clock control
+2026-11-21T09:33:40Z bytes: G=64 page exit 3 after 404 s
+2026-11-21T09:48:40Z push of 'bytes: G=64 page exit 3' exited 124 (results stay on the VM; the next push carries them)
+2026-11-21T09:48:41Z bytes: lock block exit 0 (G=64 exit 3 07:54:57 406 s;G=64 exit 3 09:33:40 404 s;)
+2026-11-21T09:48:46Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-21T09:48:47Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/summary.json)
+2026-11-21T09:48:47Z bytes END: exit 0 after 22 min [unit 3/4 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-11-21T09:48:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-21T09:48:48Z gate START: gate b3sag: scripts/tileB3_gate.py sag at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 4/4 - gsag gate=b3sag] (estimate 1 min, cap 5 min, 27 min left)
+2026-11-21T09:48:48Z gate b3sag at 1410 MHz: RESULT: GATE b3sag PASS par A 67.6650 us tau 662.5 us ratio 1.3856 olmoe 58.33/700 rms 6.5 sha a9a755398097 mixtral 77.0/625 rms 13.85 sha 5c8f37156b32 (exit 0)
+2026-11-21T09:48:48Z gate END: exit 0 after 0 min [unit 4/4 - gsag gate=b3sag]
+2026-11-21T09:48:49Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-21T09:48:49Z driver end: exit 0

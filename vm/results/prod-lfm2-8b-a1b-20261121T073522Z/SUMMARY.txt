@@ -1,0 +1,52 @@
+PASS env-preflight (6s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned (0s)
+PASS sag1410 (2476s)
+PASS unlock-after-sag (0s)
+PASS price-check (2476s)
+PASS price-check-v9 (2476s)
+PASS price-check-v10 (2476s)
+PASS model-prefetch (2476s)
+PASS prompts (2476s)
+PASS serve-plan (1s)
+PASS gate60-capture (181s)
+PASS gate60-extract (74s)
+PASS gate60-sequences (2s)
+FAIL frontier-setup: exit 4: FAIL frontier primary venv: install exited 2 
+RESUME from frontier-grid-check at 2026-11-21T10:15:58Z in /home/ubuntu/moe/results/prod-lfm2-8b-a1b-20261121T073522Z
+PASS env-preflight (5s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned (0s)
+SKIPPED-RESUME price-check
+SKIPPED-RESUME price-check-v9
+SKIPPED-RESUME price-check-v10
+SKIPPED-RESUME model-prefetch
+SKIPPED-RESUME prompts
+SKIPPED-RESUME frontier-setup
+SKIPPED-RESUME sag1410
+PASS unlock-after-sag (0s)
+SKIPPED-RESUME serve-plan
+SKIPPED-RESUME gate60-capture
+SKIPPED-RESUME gate60-extract
+SKIPPED-RESUME gate60-sequences
+PASS frontier-grid-check (1s)
+PASS frontier-timer-probe (21s)
+PASS A1710-lock (1s)
+PASS A1710-capture (290s)
+PASS A1710-unlock-after (0s)
+PASS A1410-lock (0s)
+PASS A1410-capture (293s)
+PASS A1410-unlock-after (0s)
+PASS A1710-extract (293s)
+PASS frontier-timer-lock-decode (0s)
+PASS frontier-timer-decode (9s)
+PASS frontier-timer-export-decode (0s)
+PASS frontier-timer-lock-prefill (0s)
+PASS frontier-timer-prefill (42s)
+PASS frontier-timer-export-prefill (0s)
+PASS frontier-timer-unlock (1s)
+PASS A1410-extract (100s)

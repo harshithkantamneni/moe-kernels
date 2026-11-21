@@ -1,0 +1,2 @@
+{"8": {"ms": 0.15907868236112516, "tile": "16x64x128w4s4", "regime": "decode", "why": ""}, "1024": {"ms": 0.3308109844062538, "tile": "128x128x64w8s3", "regime": "prefill", "why": ""}}
+PASS price-check lfm2-8b-a1b: decode T 8 0.1591 ms (16x64x128w4s4), prefill T 1024 0.3308 ms (128x128x64w8s3)

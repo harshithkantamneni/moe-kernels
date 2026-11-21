@@ -1,0 +1,10 @@
+serve_capture: lfm2-8b-a1b (LiquidAI/LFM2-8B-A1B) mode=graphs shared-stream=off levels=[1, 8, 24, 48, 80, 112, 256, 1024, 1024, 1024] N/level=8 out=/home/ubuntu/moe/results/prod-lfm2-8b-a1b-20261121T073522Z/A1710
+expected steps 14085; per tile (padded T):
+  16x64x128w4s4             8045
+  32x64x128w4s3             1225
+  32x128x64w4s3              872
+  64x128x64w4s3              596
+  64x128x64w8s3             1410
+  128x128x64w8s3            1884
+  128x128x64w8s3 g16          53
+DRY RUN: nothing launched
