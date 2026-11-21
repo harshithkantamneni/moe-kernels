@@ -1,0 +1,135 @@
+{
+ "schema": "moe-kernels/prod-frontier-timer/1",
+ "model": "phi-mini-moe",
+ "branch": "decode",
+ "lock_mhz": 1710,
+ "routing": "uniform",
+ "samples": 3,
+ "max_tokens": 16384,
+ "probe_points": [
+  64,
+  1024,
+  8192
+ ],
+ "warmup": 2,
+ "repeats": 20,
+ "seed": 0,
+ "weights_build_s": 0.2896347189998778,
+ "sink_index": 65534,
+ "method": "Frontier's profile_fused_moe_kernel loop (eager, warm weights, warm-up then timed calls each synchronized); time = the kit's kernel-sum per timed call from the nsys trace",
+ "call": "vllm.model_executor.layers.fused_moe.fused_experts (functional), as replay C calls it",
+ "points": [
+  {
+   "idx": 0,
+   "label": "f64s0",
+   "T": 64,
+   "tile": "32x64x128w4s3",
+   "branch": "decode",
+   "counts": [
+    7,
+    6,
+    10,
+    14,
+    4,
+    16,
+    4,
+    6,
+    9,
+    6,
+    8,
+    12,
+    5,
+    7,
+    3,
+    11
+   ],
+   "ids_digest": "3fa901877b801930",
+   "frontier": {
+    "num_tokens": 64,
+    "load_distribution": "uniform",
+    "seed": 0
+   },
+   "sm_mhz": [
+    1710,
+    1710
+   ],
+   "off_lock": null
+  },
+  {
+   "idx": 1,
+   "label": "f64s1",
+   "T": 64,
+   "tile": "32x64x128w4s3",
+   "branch": "decode",
+   "counts": [
+    12,
+    8,
+    8,
+    9,
+    6,
+    13,
+    5,
+    8,
+    6,
+    6,
+    11,
+    10,
+    4,
+    7,
+    11,
+    4
+   ],
+   "ids_digest": "4cd3aee1618b652b",
+   "frontier": {
+    "num_tokens": 64,
+    "load_distribution": "uniform",
+    "seed": 1
+   },
+   "sm_mhz": [
+    1710,
+    1710
+   ],
+   "off_lock": null
+  },
+  {
+   "idx": 2,
+   "label": "f64s2",
+   "T": 64,
+   "tile": "32x64x128w4s3",
+   "branch": "decode",
+   "counts": [
+    8,
+    8,
+    8,
+    8,
+    8,
+    10,
+    9,
+    9,
+    6,
+    8,
+    9,
+    9,
+    9,
+    5,
+    8,
+    6
+   ],
+   "ids_digest": "560c482f465e69e1",
+   "frontier": {
+    "num_tokens": 64,
+    "load_distribution": "uniform",
+    "seed": 2
+   },
+   "sm_mhz": [
+    1710,
+    1710
+   ],
+   "off_lock": null
+  }
+ ],
+ "verdict": "PASS",
+ "lock_readback_mhz": 1710,
+ "wall_s": 0.8482300590003433,
+ "off_lock_points": 0
+}

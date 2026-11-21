@@ -1,0 +1,243 @@
+{
+ "schema": "moe-kernels/prod-frontier-timer/1",
+ "model": "phi-mini-moe",
+ "branch": "prefill",
+ "lock_mhz": 1410,
+ "routing": "uniform",
+ "samples": 3,
+ "max_tokens": 16384,
+ "probe_points": [
+  64,
+  1024,
+  8192
+ ],
+ "warmup": 2,
+ "repeats": 20,
+ "seed": 0,
+ "weights_build_s": 0.3094666680008231,
+ "sink_index": 65534,
+ "method": "Frontier's profile_fused_moe_kernel loop (eager, warm weights, warm-up then timed calls each synchronized); time = the kit's kernel-sum per timed call from the nsys trace",
+ "call": "vllm.model_executor.layers.fused_moe.fused_experts (functional), as replay C calls it",
+ "points": [
+  {
+   "idx": 0,
+   "label": "f1024s0",
+   "T": 1024,
+   "tile": "128x128x64w8s3",
+   "branch": "prefill",
+   "counts": [
+    100,
+    128,
+    140,
+    128,
+    116,
+    161,
+    128,
+    130,
+    129,
+    122,
+    140,
+    133,
+    143,
+    112,
+    122,
+    116
+   ],
+   "ids_digest": "00f383ace25c9591",
+   "frontier": {
+    "num_tokens": 1024,
+    "load_distribution": "uniform",
+    "seed": 0
+   },
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "idx": 1,
+   "label": "f1024s1",
+   "T": 1024,
+   "tile": "128x128x64w8s3",
+   "branch": "prefill",
+   "counts": [
+    139,
+    114,
+    119,
+    115,
+    134,
+    127,
+    97,
+    129,
+    140,
+    147,
+    133,
+    145,
+    129,
+    112,
+    142,
+    126
+   ],
+   "ids_digest": "33e6df9c228f284e",
+   "frontier": {
+    "num_tokens": 1024,
+    "load_distribution": "uniform",
+    "seed": 1
+   },
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "idx": 2,
+   "label": "f1024s2",
+   "T": 1024,
+   "tile": "128x128x64w8s3",
+   "branch": "prefill",
+   "counts": [
+    125,
+    143,
+    115,
+    137,
+    135,
+    119,
+    134,
+    125,
+    115,
+    132,
+    148,
+    137,
+    110,
+    124,
+    132,
+    117
+   ],
+   "ids_digest": "6ea80c80d17414c6",
+   "frontier": {
+    "num_tokens": 1024,
+    "load_distribution": "uniform",
+    "seed": 2
+   },
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "idx": 3,
+   "label": "f8192s0",
+   "T": 8192,
+   "tile": "128x128x64w8s3 g16",
+   "branch": "prefill",
+   "counts": [
+    996,
+    1008,
+    977,
+    1027,
+    1034,
+    1052,
+    1043,
+    1043,
+    1002,
+    1047,
+    1019,
+    1038,
+    1059,
+    995,
+    1051,
+    993
+   ],
+   "ids_digest": "a32b52018c6924e9",
+   "frontier": {
+    "num_tokens": 8192,
+    "load_distribution": "uniform",
+    "seed": 0
+   },
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "idx": 4,
+   "label": "f8192s1",
+   "T": 8192,
+   "tile": "128x128x64w8s3 g16",
+   "branch": "prefill",
+   "counts": [
+    1012,
+    1020,
+    1006,
+    962,
+    1005,
+    1027,
+    1035,
+    1035,
+    998,
+    1048,
+    1022,
+    1050,
+    1046,
+    1012,
+    1072,
+    1034
+   ],
+   "ids_digest": "640176352b13060f",
+   "frontier": {
+    "num_tokens": 8192,
+    "load_distribution": "uniform",
+    "seed": 1
+   },
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "idx": 5,
+   "label": "f8192s2",
+   "T": 8192,
+   "tile": "128x128x64w8s3 g16",
+   "branch": "prefill",
+   "counts": [
+    1024,
+    1042,
+    997,
+    1030,
+    1052,
+    1048,
+    1019,
+    1009,
+    1010,
+    1021,
+    1013,
+    1027,
+    1003,
+    995,
+    1058,
+    1036
+   ],
+   "ids_digest": "cc4478b13151c609",
+   "frontier": {
+    "num_tokens": 8192,
+    "load_distribution": "uniform",
+    "seed": 2
+   },
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  }
+ ],
+ "verdict": "PASS",
+ "lock_readback_mhz": 1410,
+ "wall_s": 1.2235493200005294,
+ "off_lock_points": 0
+}

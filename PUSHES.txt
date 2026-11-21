@@ -10,3 +10,4 @@
 2026-11-21T11:15:48Z main.sh exit 0: final push
 2026-11-21T11:20:09Z bytes: G=64 page exit 3
 2026-11-21T11:28:40Z bytes: G=64 page exit 3
+2026-11-21T12:01:45Z prod blind phi-mini-moe: A1710, A1410 and Frontier's timers

@@ -1,1 +1,1 @@
-RESULT: GATE b3sag PASS par A 67.6650 us tau 662.5 us ratio 1.3856 olmoe 58.33/700 rms 6.5 sha a9a755398097 mixtral 77.0/625 rms 13.85 sha 5c8f37156b32
+RESULT: GATE b3sag PASS par A 70.2600 us tau 675 us ratio 1.3772 olmoe 58.01/650 rms 7.29 sha 1c512a894f7a mixtral 82.51/700 rms 16.25 sha ae045e59d442

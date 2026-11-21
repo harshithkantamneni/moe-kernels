@@ -1,0 +1,539 @@
+{
+ "schema": "moe-kernels/prod-frontier-points/3",
+ "model": "phi-mini-moe",
+ "max_tokens": 16384,
+ "routing": "uniform",
+ "samples_per_point": 3,
+ "grid_points": 3,
+ "measured_points": 3,
+ "missing_points": [],
+ "missing_samples": {},
+ "complete": true,
+ "passes": [
+  {
+   "dir": "/home/ubuntu/moe/results/prod-phi-mini-moe-20261121T073522Z/frontier-probe/timer-decode",
+   "branch": "decode",
+   "lock_mhz": 1710,
+   "planned": 3,
+   "measured": 3,
+   "warmup": 2,
+   "repeats": 20,
+   "routing": "uniform",
+   "samples": 3
+  },
+  {
+   "dir": "/home/ubuntu/moe/results/prod-phi-mini-moe-20261121T073522Z/frontier-probe/timer-prefill",
+   "branch": "prefill",
+   "lock_mhz": 1410,
+   "planned": 6,
+   "measured": 6,
+   "warmup": 2,
+   "repeats": 20,
+   "routing": "uniform",
+   "samples": 3
+  }
+ ],
+ "problems": [],
+ "off_lock_points": 0,
+ "block_size_m_ranges": [
+  [
+   1,
+   32,
+   16
+  ],
+  [
+   33,
+   96,
+   32
+  ],
+  [
+   97,
+   512,
+   64
+  ],
+  [
+   513,
+   16384,
+   128
+  ]
+ ],
+ "points": [
+  {
+   "label": "f64s0",
+   "pass": "decode",
+   "num_tokens": 64,
+   "counts": [
+    7,
+    6,
+    10,
+    14,
+    4,
+    16,
+    4,
+    6,
+    9,
+    6,
+    8,
+    12,
+    5,
+    7,
+    3,
+    11
+   ],
+   "load_distribution": "uniform",
+   "seed": 0,
+   "block_size_m": 32,
+   "num_tokens_post_padded": 512,
+   "tile": "32x64x128w4s3",
+   "kernel_sum_ms": {
+    "median": 0.127712,
+    "mean": 0.1277968,
+    "min": 0.125664,
+    "max": 0.129248,
+    "std": 0.0008660287293156038
+   },
+   "with_fills_ms": {
+    "median": 0.127712,
+    "mean": 0.1277968,
+    "min": 0.125664,
+    "max": 0.129248,
+    "std": 0.0008660287293156038
+   },
+   "n": 20,
+   "kernel_count": 5,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1710,
+   "sm_mhz": [
+    1710,
+    1710
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f64s1",
+   "pass": "decode",
+   "num_tokens": 64,
+   "counts": [
+    12,
+    8,
+    8,
+    9,
+    6,
+    13,
+    5,
+    8,
+    6,
+    6,
+    11,
+    10,
+    4,
+    7,
+    11,
+    4
+   ],
+   "load_distribution": "uniform",
+   "seed": 1,
+   "block_size_m": 32,
+   "num_tokens_post_padded": 512,
+   "tile": "32x64x128w4s3",
+   "kernel_sum_ms": {
+    "median": 0.127728,
+    "mean": 0.12784,
+    "min": 0.126272,
+    "max": 0.12944,
+    "std": 0.0009025475056749086
+   },
+   "with_fills_ms": {
+    "median": 0.127728,
+    "mean": 0.12784,
+    "min": 0.126272,
+    "max": 0.12944,
+    "std": 0.0009025475056749086
+   },
+   "n": 20,
+   "kernel_count": 5,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1710,
+   "sm_mhz": [
+    1710,
+    1710
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f64s2",
+   "pass": "decode",
+   "num_tokens": 64,
+   "counts": [
+    8,
+    8,
+    8,
+    8,
+    8,
+    10,
+    9,
+    9,
+    6,
+    8,
+    9,
+    9,
+    9,
+    5,
+    8,
+    6
+   ],
+   "load_distribution": "uniform",
+   "seed": 2,
+   "block_size_m": 32,
+   "num_tokens_post_padded": 512,
+   "tile": "32x64x128w4s3",
+   "kernel_sum_ms": {
+    "median": 0.12768,
+    "mean": 0.12748959999999995,
+    "min": 0.125632,
+    "max": 0.129088,
+    "std": 0.001050432596600087
+   },
+   "with_fills_ms": {
+    "median": 0.12768,
+    "mean": 0.12748959999999995,
+    "min": 0.125632,
+    "max": 0.129088,
+    "std": 0.001050432596600087
+   },
+   "n": 20,
+   "kernel_count": 5,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1710,
+   "sm_mhz": [
+    1710,
+    1710
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f1024s0",
+   "pass": "prefill",
+   "num_tokens": 1024,
+   "counts": [
+    100,
+    128,
+    140,
+    128,
+    116,
+    161,
+    128,
+    130,
+    129,
+    122,
+    140,
+    133,
+    143,
+    112,
+    122,
+    116
+   ],
+   "load_distribution": "uniform",
+   "seed": 0,
+   "block_size_m": 128,
+   "num_tokens_post_padded": 2944,
+   "tile": "128x128x64w8s3",
+   "kernel_sum_ms": {
+    "median": 0.207712,
+    "mean": 0.20757599999999998,
+    "min": 0.205696,
+    "max": 0.20928,
+    "std": 0.0008858207493618557
+   },
+   "with_fills_ms": {
+    "median": 0.207712,
+    "mean": 0.20757599999999998,
+    "min": 0.205696,
+    "max": 0.20928,
+    "std": 0.0008858207493618557
+   },
+   "n": 20,
+   "kernel_count": 6,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1410,
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f1024s1",
+   "pass": "prefill",
+   "num_tokens": 1024,
+   "counts": [
+    139,
+    114,
+    119,
+    115,
+    134,
+    127,
+    97,
+    129,
+    140,
+    147,
+    133,
+    145,
+    129,
+    112,
+    142,
+    126
+   ],
+   "load_distribution": "uniform",
+   "seed": 1,
+   "block_size_m": 128,
+   "num_tokens_post_padded": 3200,
+   "tile": "128x128x64w8s3",
+   "kernel_sum_ms": {
+    "median": 0.240336,
+    "mean": 0.23151360000000004,
+    "min": 0.216288,
+    "max": 0.242432,
+    "std": 0.011990573791107748
+   },
+   "with_fills_ms": {
+    "median": 0.240336,
+    "mean": 0.23151360000000004,
+    "min": 0.216288,
+    "max": 0.242432,
+    "std": 0.011990573791107748
+   },
+   "n": 20,
+   "kernel_count": 6,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1410,
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f1024s2",
+   "pass": "prefill",
+   "num_tokens": 1024,
+   "counts": [
+    125,
+    143,
+    115,
+    137,
+    135,
+    119,
+    134,
+    125,
+    115,
+    132,
+    148,
+    137,
+    110,
+    124,
+    132,
+    117
+   ],
+   "load_distribution": "uniform",
+   "seed": 2,
+   "block_size_m": 128,
+   "num_tokens_post_padded": 3072,
+   "tile": "128x128x64w8s3",
+   "kernel_sum_ms": {
+    "median": 0.208704,
+    "mean": 0.20850719999999998,
+    "min": 0.206912,
+    "max": 0.209344,
+    "std": 0.0006550451587486151
+   },
+   "with_fills_ms": {
+    "median": 0.208704,
+    "mean": 0.20850719999999998,
+    "min": 0.206912,
+    "max": 0.209344,
+    "std": 0.0006550451587486151
+   },
+   "n": 20,
+   "kernel_count": 6,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1410,
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f8192s0",
+   "pass": "prefill",
+   "num_tokens": 8192,
+   "counts": [
+    996,
+    1008,
+    977,
+    1027,
+    1034,
+    1052,
+    1043,
+    1043,
+    1002,
+    1047,
+    1019,
+    1038,
+    1059,
+    995,
+    1051,
+    993
+   ],
+   "load_distribution": "uniform",
+   "seed": 0,
+   "block_size_m": 128,
+   "num_tokens_post_padded": 17536,
+   "tile": "128x128x64w8s3",
+   "kernel_sum_ms": {
+    "median": 1.029376,
+    "mean": 1.0294192,
+    "min": 1.0248,
+    "max": 1.035392,
+    "std": 0.0027339552593267096
+   },
+   "with_fills_ms": {
+    "median": 1.029376,
+    "mean": 1.0294192,
+    "min": 1.0248,
+    "max": 1.035392,
+    "std": 0.0027339552593267096
+   },
+   "n": 20,
+   "kernel_count": 6,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1410,
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f8192s1",
+   "pass": "prefill",
+   "num_tokens": 8192,
+   "counts": [
+    1012,
+    1020,
+    1006,
+    962,
+    1005,
+    1027,
+    1035,
+    1035,
+    998,
+    1048,
+    1022,
+    1050,
+    1046,
+    1012,
+    1072,
+    1034
+   ],
+   "load_distribution": "uniform",
+   "seed": 1,
+   "block_size_m": 128,
+   "num_tokens_post_padded": 17408,
+   "tile": "128x128x64w8s3",
+   "kernel_sum_ms": {
+    "median": 1.027504,
+    "mean": 1.02706885,
+    "min": 1.022944,
+    "max": 1.0304,
+    "std": 0.0020526360923212605
+   },
+   "with_fills_ms": {
+    "median": 1.027504,
+    "mean": 1.02706885,
+    "min": 1.022944,
+    "max": 1.0304,
+    "std": 0.0020526360923212605
+   },
+   "n": 20,
+   "kernel_count": 6,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1410,
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  },
+  {
+   "label": "f8192s2",
+   "pass": "prefill",
+   "num_tokens": 8192,
+   "counts": [
+    1024,
+    1042,
+    997,
+    1030,
+    1052,
+    1048,
+    1019,
+    1009,
+    1010,
+    1021,
+    1013,
+    1027,
+    1003,
+    995,
+    1058,
+    1036
+   ],
+   "load_distribution": "uniform",
+   "seed": 2,
+   "block_size_m": 128,
+   "num_tokens_post_padded": 17280,
+   "tile": "128x128x64w8s3",
+   "kernel_sum_ms": {
+    "median": 1.028368,
+    "mean": 1.0279648,
+    "min": 1.018016,
+    "max": 1.0336,
+    "std": 0.003623368068524081
+   },
+   "with_fills_ms": {
+    "median": 1.028368,
+    "mean": 1.0279648,
+    "min": 1.018016,
+    "max": 1.0336,
+    "std": 0.003623368068524081
+   },
+   "n": 20,
+   "kernel_count": 6,
+   "fills_n": 0.0,
+   "fills_ms": 0.0,
+   "source": "eager",
+   "lock_mhz": 1410,
+   "sm_mhz": [
+    1410,
+    1410
+   ],
+   "off_lock": null
+  }
+ ]
+}

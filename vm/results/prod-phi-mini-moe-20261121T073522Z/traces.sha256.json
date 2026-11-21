@@ -1,0 +1,78 @@
+{
+ "schema": "moe-kernels/prod-traces/1",
+ "traces_root": "/home/ubuntu/moe/traces/prod-phi-mini-moe-20261121T073522Z",
+ "run": "prod-phi-mini-moe-20261121T073522Z",
+ "files": {
+  "A1410/serve.nsys-rep": {
+   "bytes": 815335187,
+   "mtime_ns": 1795262004470469440,
+   "sha256": "04fbf022eba58f74187df10be61214be7602e93ac056f159abf81367d444889c"
+  },
+  "A1410/serve.sqlite": {
+   "bytes": 2304516096,
+   "mtime_ns": 1795262077538986612,
+   "sha256": "e904e175ed4702799e6634f286a51f432d08f225242c23b10f77cf401b1a70d0"
+  },
+  "A1710/serve.nsys-rep": {
+   "bytes": 814448990,
+   "mtime_ns": 1795261519071033804,
+   "sha256": "444ad90211154b998434bb323e926541629204cd4c26d06eee9061b35b3fd00b"
+  },
+  "A1710/serve.sqlite": {
+   "bytes": 2304499712,
+   "mtime_ns": 1795261592488553452,
+   "sha256": "eca34019f0556903ac7654b4552976c2e36b049cfa19963e840f9aee1641170c"
+  },
+  "frontier/timer-decode/timer.nsys-rep": {
+   "bytes": 571166,
+   "mtime_ns": 1795262014069537381,
+   "sha256": "68a42a22643cd5264e4a9c074d825498cd6ad9b256b524c4da8b841c2680ac3c"
+  },
+  "frontier/timer-decode/timer.sqlite": {
+   "bytes": 1511424,
+   "mtime_ns": 1795262014148537940,
+   "sha256": "e18ca7ed49201ae148dacbbe0e8bd14371e294ec06092deeb33a8f6581c702c2"
+  },
+  "frontier/timer-prefill/timer.nsys-rep": {
+   "bytes": 10750101,
+   "mtime_ns": 1795262044202750661,
+   "sha256": "dbc4a5a247d5040f1851842d21bec301463670a5d172cd5b87c1cf7aef40fc23"
+  },
+  "frontier/timer-prefill/timer.sqlite": {
+   "bytes": 26537984,
+   "mtime_ns": 1795262044997756288,
+   "sha256": "13dd9a052db9898f686a8d3458dafdbe03336233fb7a88ff9d15d7bc06398704"
+  },
+  "frontier-probe/timer-decode/timer.nsys-rep": {
+   "bytes": 117759,
+   "mtime_ns": 1795261028451566034,
+   "sha256": "645001fa50f387d324f00524bd9e95d1ba96d842b0dd9a98e4220db4f4deff0d"
+  },
+  "frontier-probe/timer-decode/timer.sqlite": {
+   "bytes": 417792,
+   "mtime_ns": 1795261028557566783,
+   "sha256": "08fcaa41064d99e35b78cbf4ef505eda004f866f0828e8834dd9ec6e60c8b285"
+  },
+  "frontier-probe/timer-prefill/timer.nsys-rep": {
+   "bytes": 150766,
+   "mtime_ns": 1795261037091627102,
+   "sha256": "cb906cc118447d8215812e07d0aefeda74377782169e4cef4e37b55aab54f861"
+  },
+  "frontier-probe/timer-prefill/timer.sqlite": {
+   "bytes": 495616,
+   "mtime_ns": 1795261037189627794,
+   "sha256": "023f74633ed0fb6f2821f7f1876d03043e9ddfb9ce806f647af6ffc88b0aa246"
+  },
+  "gate60/serve.nsys-rep": {
+   "bytes": 398899587,
+   "mtime_ns": 1795260805163983338,
+   "sha256": "3ba4ffbc9c472dd5fc87a67b541b4ee6963c2e07c94df083817ae0fdcb025113"
+  },
+  "gate60/serve.sqlite": {
+   "bytes": 1147097088,
+   "mtime_ns": 1795260841978244395,
+   "sha256": "df281e0bca86f45d06a5959bcba03fa128803b79c72e04aae48e821bebd6b28a"
+  }
+ },
+ "total_bytes": 7825349268
+}
