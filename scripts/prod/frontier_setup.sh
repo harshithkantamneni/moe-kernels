@@ -78,13 +78,28 @@ if [[ ",$ARMS," == *",primary,"* ]]; then
     pyver="3.12"; tver="2.13.0+cu130"
   fi
   tag="${tver#*+}"; tbase="${tver%%+*}"
+  # REUSE (v10 blind run 2026-11-21: a second model on the same board found venv-primary, `uv venv` refused to
+  # overwrite it, and frontier.env was written with no interpreter): a venv-primary that already imports vLLM 0.27.1
+  # at the study's torch and Frontier's kernel module is reused as is; any other is rebuilt with `uv venv --clear`.
+  reuse=0
+  if [[ $DRY -eq 0 && -x "$V/bin/python" ]]; then
+    have="$("$V/bin/python" -c 'import vllm, torch; print(vllm.__version__, torch.__version__)' 2>/dev/null | tail -1 || true)"
+    if [[ "$have" == "0.27.1 $tver" ]] && (cd "$SRC" && PYTHONPATH="$SRC" "$V/bin/python" -c \
+        'import frontier.profiling.moe.moe_vllm_kernel' >/dev/null 2>&1); then
+      say "reusing $V: vLLM/torch $have, Frontier's kernel module imports"
+      reuse=1
+    else
+      say "rebuilding $V: it imports '$have', not '0.27.1 $tver' with Frontier's kernel module"
+    fi
+  fi
   # the freeze carries `-e file:///workspace/moe-kernels` (setup_runpod.sh sanitised_resolved drops it the same way)
   RES="$DEST/.resolved-vllm.txt"
-  if [[ $DRY -eq 0 ]]; then grep -v '^-e ' "$REPO/requirements/resolved-vllm.txt" > "$RES"; fi
+  if [[ $DRY -eq 0 && $reuse -eq 0 ]]; then grep -v '^-e ' "$REPO/requirements/resolved-vllm.txt" > "$RES"; fi
   set +e
   (
     set -e
-    run uv venv --python "$pyver" "$V"
+    [[ $reuse -eq 1 ]] && exit 0
+    run uv venv --clear --python "$pyver" "$V"
     run uv pip install --python "$V/bin/python" --index-url "https://download.pytorch.org/whl/$tag" "torch==$tbase"
     run uv pip install --python "$V/bin/python" -r "$RES"
     run uv pip install --python "$V/bin/python" -c "$RES" "${deps[@]}"
@@ -113,7 +128,7 @@ if [[ ",$ARMS," == *",fidelity,"* ]]; then
   set +e
   (
     set -e
-    run uv venv --python 3.10 "$V"
+    run uv venv --clear --python 3.10 "$V"
     run uv pip install --python "$V/bin/python" --index-url https://download.pytorch.org/whl/cu128 "torch==2.8.0"
     run uv pip install --python "$V/bin/python" "vllm==0.10.2" "flashinfer-python>=0.3,<0.4" "triton>=3,<4" "torch==2.8.0" "${deps[@]}"
     run uv pip install --python "$V/bin/python" --no-deps -e "$SRC"

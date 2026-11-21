@@ -312,6 +312,9 @@ kit_dry_plan() {   # a tool's own --dry-run exits 2 (REFUSED: "nothing measured"
 # TRACES (review m6): with KIT_TRACES (the run's raw traces, outside the pushed tree) and KIT_RESULTS set, each push
 # first records the traces' sha256 in $KIT_RESULTS/traces.sha256.json (prodlib.py trace-manifest; soft: a failed
 # manifest is reported and the push goes on)
+# CHUNKS (v10 blind run 2026-11-21): when the pinned script leaves its commit unpushed because GitHub refused a pack
+# over 2 GiB, the same tree is pushed in commits under the cap (scripts/prod/push_chunks.sh; KIT_CHUNK_SCRIPT
+# overrides it in the tests), and kit_push returns that script's exit
 kit_push() {
   local p="${KIT_PUSH_SCRIPT:-$REPO/scripts/vm_results_push.sh}"
   [[ -f "$p" ]] || { echo "FAIL push: no $p"; return 3; }
@@ -319,7 +322,15 @@ kit_push() {
     "${PY_VLLM:-python3}" "$REPO/scripts/prod/prodlib.py" trace-manifest --traces "$KIT_TRACES" \
       --out "$KIT_RESULTS/traces.sha256.json" || echo "WARN push: the trace manifest failed (the push goes on)"
   fi
-  bash "$p" push --message "$@"
+  local rc=0
+  bash "$p" push --message "$@" || rc=$?
+  local err="${MOE_PUSH_HOME:-$HOME/moe}/push/.git/push-error.txt"
+  if [[ $rc -eq 1 && -f "$err" ]] && grep -q "pack exceeds maximum allowed size" "$err"; then
+    echo "push: GitHub refused a pack over 2 GiB: pushing the same tree in parts (push_chunks.sh)"
+    rc=0
+    bash "${KIT_CHUNK_SCRIPT:-$REPO/scripts/prod/push_chunks.sh}" || rc=$?
+  fi
+  return "$rc"
 }
 
 # whatever stops the sequence, the card is left unlocked (review 1, MAJOR 5) and, with --push (main.sh), the

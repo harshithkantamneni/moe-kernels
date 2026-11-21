@@ -45,6 +45,24 @@ fi
 : "${RESULTS_ROOT:?FAIL sag1410: RESULTS_ROOT unset (source ~/moe/env.sh)}"
 : "${SESSION_ROOT:?FAIL sag1410: SESSION_ROOT unset (source ~/moe/env.sh)}"
 census_check "$SESSION_ROOT" || exit 3
+# ONE SAG PER RUN (v10 blind run 2026-11-21): blind.sh chains models on one board, and the driver keys its f128 pages
+# by date and model (<date>-<card>-<model>-f128-r3-counters, remembered in $SESSION_ROOT/counters-dir-<model>-f128.txt),
+# so a second sag on the board wrote into the first one's page directory and the finaliser's glob read both. Before
+# the driver runs, an earlier sag's pages, pointers and gate record are MOVED ASIDE (renamed with .aside-<UTC>, never
+# deleted; the earlier run's par.json keeps each page's sha256), so this run measures into fresh directories.
+aside="aside-$(date -u +%Y%m%dT%H%M%SZ)"
+for f in "$SESSION_ROOT"/counters-dir-*-f128.txt; do
+  [[ -f "$f" ]] || continue
+  d="$(cat "$f")"
+  if [[ -n "$d" && -d "$d" ]]; then mv "$d" "$d.$aside"; echo "sag1410: moved an earlier sag's pages aside: $d.$aside"; fi
+  mv "$f" "$f.$aside"
+done
+for d in "$RESULTS_ROOT"/*-f128-r3-counters; do
+  [[ -d "$d" ]] || continue
+  mv "$d" "$d.$aside"; echo "sag1410: moved an earlier sag's pages aside: $d.$aside"
+done
+rec="$SESSION_ROOT/gh200-driver/gate-b3sag-1410.json"
+if [[ -e "$rec" ]]; then mv "$rec" "$rec.$aside"; echo "sag1410: moved an earlier sag gate record aside: $rec.$aside"; fi
 started=$(date +%s)
 deadline=$(( started + 60 * ${SAG_DEADLINE_MIN:-75} ))
 rc=0

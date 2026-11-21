@@ -16,7 +16,7 @@ PROD = REPO / "scripts" / "prod"
 
 
 @pytest.mark.parametrize("name", ["smoke.sh", "main.sh", "kitlib.sh", "frontier_setup.sh", "sag1410.sh", "offline.sh",
-                                  "pull_traces.sh"])
+                                  "pull_traces.sh", "push_chunks.sh"])
 def test_shell_syntax(name):
     assert subprocess.run(["bash", "-n", str(PROD / name)]).returncode == 0
 
@@ -684,3 +684,158 @@ def test_pull_traces_plans_an_rsync_with_the_runs_known_hosts_and_refuses_an_unk
     p = subprocess.run(["bash", str(PROD / "pull_traces.sh"), "10.0.0.7"], capture_output=True, text=True, env=env,
                        timeout=60)
     assert p.returncode == 2
+
+
+# ---- v10 blind run (2026-11-21): the three kit faults it hit -----------------------------------------------------
+
+def _git(cwd, *args, **kw):
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t")
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True, env=env, **kw)
+
+
+def _push_home(tmp_path, branch="run-x"):
+    """A bare 'GitHub', and a push home as vm_results_push.sh init leaves it: push.env and the clone at push/."""
+    bare = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    home = tmp_path / "pushhome"
+    work = home / "push"
+    work.mkdir(parents=True)
+    _git(work, "init", "-q")
+    _git(work, "checkout", "-q", "--orphan", branch)
+    _git(work, "remote", "add", "origin", str(bare))
+    (work / "README.md").write_text("run\n")
+    (work / "old.txt").write_text("to be deleted\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "first")
+    _git(work, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+    (home / "push.env").write_text(f"BRANCH={branch}\nRUN_ID=blind-x\nREMOTE={bare}\n")
+    return bare, home, work
+
+
+def test_push_chunks_pushes_the_same_tree_in_parts_under_the_limit_on_the_runs_branch(tmp_path):
+    """GitHub refused the v10 run's 2.4 GiB pack. push_chunks.sh pushes HEAD's tree as a chain of fast-forward commits
+    on the run's own branch, each adding at most LIMIT bytes, deletions and HEAD's message in the last; the local
+    branch then points at the last part (same tree)."""
+    bare, home, work = _push_home(tmp_path)
+    for i in range(5):
+        (work / "vm" / f"page{i}.bin").parent.mkdir(exist_ok=True)
+        (work / "vm" / f"page{i}.bin").write_bytes(bytes([i]) * 1000)
+    (work / "old.txt").unlink()
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "blind-x: the big push")
+    tree = _git(work, "rev-parse", "HEAD^{tree}").stdout.strip()
+    env = dict(os.environ, MOE_PUSH_HOME=str(home))
+    p = subprocess.run(["bash", str(PROD / "push_chunks.sh"), "--limit", "2500"], capture_output=True, text=True,
+                       env=env, timeout=120)
+    assert p.returncode == 0, p.stdout + p.stderr
+    tip = _git(bare, "rev-parse", "refs/heads/run-x").stdout.strip()
+    assert _git(bare, "rev-parse", f"{tip}^{{tree}}").stdout.strip() == tree
+    assert _git(work, "rev-parse", "HEAD").stdout.strip() == tip            # the local branch follows (soft)
+    assert _git(work, "status", "--porcelain").stdout == ""
+    log = _git(bare, "log", "--format=%s", "refs/heads/run-x").stdout.splitlines()
+    assert log[0] == "blind-x: the big push" and log[-1] == "first" and len(log) == 4   # 2 + 2 + 1 pages
+    for c in _git(bare, "rev-list", "refs/heads/run-x~3..refs/heads/run-x").stdout.split():
+        added = _git(bare, "diff-tree", "-r", "--no-commit-id", "--diff-filter=AM", "-z", "--name-only", c).stdout
+        assert sum(1000 for f in added.split("\0") if f) <= 2500
+    assert "old.txt" not in _git(bare, "ls-tree", "-r", "--name-only", tip).stdout
+    # nothing left: a second run pushes nothing
+    p = subprocess.run(["bash", str(PROD / "push_chunks.sh")], capture_output=True, text=True, env=env, timeout=60)
+    assert p.returncode == 0 and "nothing to push" in p.stdout
+    # no config: refused
+    p = subprocess.run(["bash", str(PROD / "push_chunks.sh")], capture_output=True, text=True, timeout=60,
+                       env=dict(os.environ, MOE_PUSH_HOME=str(tmp_path / "none")))
+    assert p.returncode == 2
+
+
+def test_kit_push_falls_back_to_parts_only_on_githubs_pack_limit(tmp_path):
+    home = tmp_path / "pushhome"
+    (home / "push" / ".git").mkdir(parents=True)
+    err = home / "push" / ".git" / "push-error.txt"
+    stub = tmp_path / "push_stub.sh"
+    stub.write_text("exit 1\n")
+    chunks = tmp_path / "chunks_stub.sh"
+    chunks.write_text(f'echo called > {tmp_path / "chunked"}\n')
+    env = dict(KIT_PUSH_SCRIPT=str(stub), KIT_CHUNK_SCRIPT=str(chunks), MOE_PUSH_HOME=str(home), REPO=str(REPO))
+    err.write_text("remote: fatal: pack exceeds maximum allowed size (2.00 GiB)\n")
+    p, summ = _kit(tmp_path / "a", "step push-x --soft --cap 30 -- kit_push 'msg'", **env)
+    assert summ[0].startswith("PASS push-x") and (tmp_path / "chunked").exists(), (summ, p.stdout, p.stderr)
+    (tmp_path / "chunked").unlink()
+    err.write_text("ssh: connect to host github.com port 22: Connection timed out\n")   # any other failure: no parts
+    p, summ = _kit(tmp_path / "b", "step push-x --soft --cap 30 -- kit_push 'msg'", **env)
+    assert summ[0].startswith("FAIL (soft, dropped) push-x") and not (tmp_path / "chunked").exists(), summ
+
+
+def test_frontier_setup_reuses_a_primary_venv_that_imports_the_study_stack_and_never_blanks_the_interpreter(tmp_path):
+    """v10 blind run: a second model on the board found venv-primary, `uv venv` refused it, and frontier.env was
+    written with FR_PY_PRIMARY="". A venv that imports vLLM 0.27.1 at the study's torch and Frontier's kernel module
+    is reused (no uv call); any other is rebuilt with --clear."""
+    src = tmp_path / "fr" / "src"
+    head = _git_repo(src)
+    kit = tmp_path / "kit" / "scripts" / "prod"
+    kit.mkdir(parents=True)
+    text = (PROD / "frontier_setup.sh").read_text()
+    (kit / "frontier_setup.sh").write_text(text.replace('COMMIT="db5a85b"', f'COMMIT="{head[:7]}"'))
+    (tmp_path / "kit" / "requirements").mkdir()
+    (tmp_path / "kit" / "requirements" / "resolved-vllm.txt").write_text("vllm==0.27.1\n")
+    fake = ("#!/usr/bin/env bash\n"
+            'case "$*" in\n'
+            '  *sys.version_info*) echo 3.12 ;;\n'
+            '  *"vllm, torch"*) echo "0.27.1 2.13.0+cu130" ;;\n'
+            '  *moe_vllm_kernel*) echo v1 ;;\n'
+            '  *torch.__version__*) echo 2.13.0+cu130 ;;\n'
+            "esac\n")
+    vpy = tmp_path / "fr" / "venv-primary" / "bin" / "python"
+    vpy.parent.mkdir(parents=True)
+    vpy.write_text(fake)
+    vpy.chmod(0o755)
+    study = tmp_path / "study_python"
+    study.write_text(fake)
+    study.chmod(0o755)
+    uvlog = tmp_path / "uv.log"
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "uv").write_text(f'#!/usr/bin/env bash\necho "uv $*" >> {uvlog}\nexit 1\n')
+    (bin_ / "uv").chmod(0o755)
+    env = dict(os.environ, PY_VLLM=str(study), PATH=f"{bin_}:{os.environ['PATH']}")
+    p = subprocess.run(["bash", str(kit / "frontier_setup.sh"), "--dest", str(tmp_path / "fr"), "--arms", "primary"],
+                       capture_output=True, text=True, env=env, timeout=120)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "reusing" in p.stdout and not uvlog.exists()
+    assert f'FR_PY_PRIMARY="{vpy}"' in (tmp_path / "fr" / "frontier.env").read_text()
+    # a venv at another stack is rebuilt with --clear (the stub uv fails here, so the arm FAILs and says so)
+    vpy.write_text(fake.replace("0.27.1", "0.10.2"))
+    p = subprocess.run(["bash", str(kit / "frontier_setup.sh"), "--dest", str(tmp_path / "fr"), "--arms", "primary"],
+                       capture_output=True, text=True, env=env, timeout=120)
+    assert p.returncode == 4 and "rebuilding" in p.stdout
+    assert "uv venv --clear --python 3.12" in uvlog.read_text()
+
+
+def test_sag1410_moves_an_earlier_sags_pages_pointers_and_gate_record_aside(tmp_path):
+    """v10 blind run: LFM2's sag ran after granite's on one board and its pages landed in granite's page directory.
+    Before the driver runs, an earlier sag's pages, pointer files and gate record are renamed .aside-<UTC>."""
+    kit = tmp_path / "kit"
+    (kit / "scripts" / "prod").mkdir(parents=True)
+    (kit / "scripts" / "prod" / "sag1410.sh").write_text((PROD / "sag1410.sh").read_text())
+    (kit / "scripts" / "gh200_v7p_session.sh").write_text(
+        'ls "$RESULTS_ROOT" > "$RESULTS_ROOT/../seen-by-driver.txt"\n')
+    (kit / "scripts" / "prod" / "sag_par.py").write_text("import sys\n")
+    S, R = tmp_path / "session", tmp_path / "results"
+    (S / "gh200-driver").mkdir(parents=True)
+    (S / "census.json").write_text("{}")
+    old = R / "2026-11-21-gh200-olmoe-1b-7b-f128-r3-counters"
+    (old / "lock1410").mkdir(parents=True)
+    (S / "counters-dir-olmoe-1b-7b-f128.txt").write_text(str(old) + "\n")
+    (R / "2026-11-20-gh200-mixtral-8x7b-f128-r3-counters").mkdir()
+    (S / "gh200-driver" / "gate-b3sag-1410.json").write_text("{}")
+    (R / "prod-other-run").mkdir()
+    env = dict(os.environ, SESSION_ROOT=str(S), RESULTS_ROOT=str(R), PY_BASE=sys.executable)
+    p = subprocess.run(["bash", str(kit / "scripts" / "prod" / "sag1410.sh"), "--out", str(tmp_path / "sag")],
+                       capture_output=True, text=True, env=env, timeout=60)
+    assert p.returncode == 0, p.stdout + p.stderr
+    seen = (tmp_path / "seen-by-driver.txt").read_text().split()
+    assert not [d for d in seen if d.endswith("-f128-r3-counters")] and "prod-other-run" in seen
+    assert len([d for d in seen if ".aside-" in d]) == 2
+    assert not (S / "counters-dir-olmoe-1b-7b-f128.txt").exists()
+    assert not (S / "gh200-driver" / "gate-b3sag-1410.json").exists()
+    assert len(list((S / "gh200-driver").glob("gate-b3sag-1410.json.aside-*"))) == 1

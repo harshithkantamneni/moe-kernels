@@ -30,6 +30,7 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
 | `extras_lib.py` *(extra)* | extras.sh's checks (main finished, the commit switch, the budget, each block's inputs), the offline expected-outputs check, and the noise-floor matching the scorer reads. |
 | `ncu_bytes.py` *(extra)* | X2: the study's counter route (`scripts/dram_counter_route.py`, imported, in the manner of `dram_counter_route_rr.py`) on a stratified subsample of main's replay C sample, real ids, branch clock: counted w1 / w2 DRAM read bytes per call. |
 | `blind.sh` *(extra)* | Sourced by `main.sh --profile blind`: ONE new blind model per 1x GH200, lean. See "The blind profile". |
+| `push_chunks.sh` *(extra)* | Called by `kit_push` only when GitHub refuses a pack over 2 GiB: pushes the push clone's tree to the run's branch as fast-forward commits under 1.2 GB of new files each. See "v10 blind run fixes". |
 | `tests/prod_fakes.py`, `tests/test_prod_*.py` | CPU tests on synthetic inputs. |
 
 ## The blind profile (2026-11-20): one new model per 1x GH200
@@ -59,6 +60,24 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
   only, the 1410 runs on the prefill tiles only (the 2026-11-20 A1710 stop on the prefill G16 tile).
 - **Frontier**: `train` / `simpath` clear `*.pkl` and `versions.json` in their output dir first (the 2026-11-20 X3
   predict stop: 3 pkl, want 1).
+
+## v10 blind run fixes (2026-11-21)
+
+The v10 blind run chained three models on one board (no second GH200) and hit three kit faults. Each was repaired by
+hand during the run (paper-v2 8.5); these are the fixes, none touching a predictor, the scorer or a pinned file.
+
+- **A push over 2 GiB** (`kit_push`, `push_chunks.sh`). GitHub refused the run's push ("pack exceeds maximum allowed
+  size (2.00 GiB)"), and every later push carried the same pack. `scripts/vm_results_push.sh` is registered and pinned,
+  so it is not edited: `kit_push` reads its push error, and on that refusal only pushes the same tree as a chain of
+  fast-forward commits on the run's own branch (GitHub counts only the destination ref's history as present, so a
+  temporary ref does not help), then points the local branch at the last one.
+- **Frontier's venv on a second model** (`frontier_setup.sh`). `uv venv` refused the existing `venv-primary`, the
+  arm failed, and `frontier.env` was written with an empty interpreter. A `venv-primary` that imports vLLM 0.27.1 at
+  the study venv's torch and Frontier's kernel module is now reused; any other is rebuilt with `uv venv --clear`.
+- **A second sag on the board** (`sag1410.sh`). The driver keys its f128 pages by date and model and remembers the
+  directory in the session, so the second model's sag wrote into the first one's pages and the byte diagnostics read
+  both. Before the driver runs, an earlier sag's page directories, pointer files and gate record are renamed
+  `.aside-<UTC>` (never deleted).
 
 ## How each KIT-SPEC item is met
 
