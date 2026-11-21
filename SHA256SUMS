@@ -755,7 +755,7 @@ f311abf6e9c924887309925af396c25d19e04752759fd28e61084208a6f719b3  vm/results/pro
 2bebae2b811b7e2566230d106a67fba3e059796583ee38d814cb257680d239b9  vm/results/prod-phi-mini-moe-20261121T073522Z/A1710/ring/shard_00061.npz
 e8fb22a903d9eaee3f9cd91a624c4fafb94977a16ab777f5e48fc4c76da393b3  vm/results/prod-phi-mini-moe-20261121T073522Z/A1710/sequences.json
 6bef298b7ab74d60ef6529225a5713f16406bc375a8f3aade314d98a5dc55a95  vm/results/prod-phi-mini-moe-20261121T073522Z/A1710/steps.jsonl
-0344928b7fea49d7c27b60a05c97ed095392f3da975d6a2547f9414c198b209d  vm/results/prod-phi-mini-moe-20261121T073522Z/SUMMARY.txt
+1485f62189afbafb4c6b8336e5443a2df4d6b22188bb41b57136afc5cd2c78c6  vm/results/prod-phi-mini-moe-20261121T073522Z/SUMMARY.txt
 8bf5e8550c39e7c00113cb60e45fd169bc297c05cfa58826a93bc5dba9c20bef  vm/results/prod-phi-mini-moe-20261121T073522Z/env-preflight.json
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/results/prod-phi-mini-moe-20261121T073522Z/frontier-probe/models/75da30e6_model_lock.file
 69c90af0678d19fa05a4729f31fb5599bd3cf61efd0f1c29aa44fa40e28016b4  vm/results/prod-phi-mini-moe-20261121T073522Z/frontier-probe/models/moe_grouped_gemm_75da30e6.pkl
@@ -852,6 +852,7 @@ d0a4004046480e13ca0bb0cbeae1bcd215a5c89e7401adbb4cfc897af9490ca2  vm/results/pro
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/A1710-unlock-after.log
 95625a40c251699fbdb927f16b1dea6c7eb7385f7fb38a260cbac3f301049606  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/env-preflight.log
 1f148460d334150c0050664d4f66eece354321aab61157085819af8ebeb2246d  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/env.log
+1761b9955872956dd7d41c4af19fe7ffab288aa813311b7e6e0cc76fa8e8ddb7  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/final-push.log
 ba89cec64c25721ba605a3d01ad6c18f45299d8d8faef1a55a4017a0b12f1455  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/frontier-csv-fills.log
 c789a2827fa73a115ed5e39e349dcc8b75e81578f813e2d869866c033a15503e  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/frontier-csv.log
 577da7bf0e9d4900eb6a52c594db0e0f7b0d55c61eb9a558988e8c860c49aecc  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/frontier-grid-check.log
@@ -872,13 +873,14 @@ c53dfd7e11ced20c39436f547d5fbbf0fb1a3761a6290ef9be29dd3d2b3df8a3  vm/results/pro
 5bbb4a16da0c692634b493ce5dcb37915b25ec61693185762367b910dde36724  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/gate60-capture.log
 30caa71996cae8ff98790da0df95891a6ac2f2018cc64a0a8013cf4eca89f533  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/gate60-extract.log
 098f1476fbf8ac0edea235a4d3d934f8c54e77be20f36ad51bae0d35663bd77f  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/gate60-sequences.log
+77c4c9f3a3b87dc68d6bfae4644cdc22517c865d5326a9c3139c297df7c6f137  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/held-back-check.log
 adeab306c0bc12e5c7baa54549b6d86449d716b1e45620269ac7df92484c38a3  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/model-prefetch.log
 5f86d0fc4c5794ab3636be45aaeac26012c6752270a2c21c50fc7ef318b14a58  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/power-readback.log
 9d7151bd61ae59a134252e730022c9f1fa336abe762ec7bece856aae9e8f8561  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/price-check-v10.log
 e2bf43d217e0e8a4f48482cb4f0c0c7094aad5dfc57be270004b900155be21ae  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/price-check-v9.log
 e2bf43d217e0e8a4f48482cb4f0c0c7094aad5dfc57be270004b900155be21ae  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/price-check.log
 4b34f4837b59f335968efd519ed2620ddaf18983ee884aefa9ec4f028fcb4579  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/prompts.log
-1761b9955872956dd7d41c4af19fe7ffab288aa813311b7e6e0cc76fa8e8ddb7  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/push-final.log
+be312125343fdf9111745ffa362861ddeb9ab12f584c09d3a51527fc03bbae44  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/push-final.log
 8972ef8e2781439b0571b4b69bf4bc7797d81c9f4cb62cf290c032b9cb7dc36d  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/push-primary.log
 b0eedcf9fe0b2c81104d33614f5655059bd76e7494cc81edd760121a1a89cc10  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/revision-pinned.log
 53de06e912a5ac5bd287d70e80095c4f8c52c0bb7ed25e06c5a6c34c414dcea0  vm/results/prod-phi-mini-moe-20261121T073522Z/logs/sag1410.log
