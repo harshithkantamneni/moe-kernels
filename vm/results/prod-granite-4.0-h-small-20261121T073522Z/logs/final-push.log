@@ -3,3 +3,4 @@ PASS trace-manifest: 9 file(s), 4.40 GB under /home/ubuntu/moe/traces/prod-grani
 [push] push attempt 2 of 3 failed (exit 1): error: failed to push some refs to 'github.com:harshithkantamneni/moe-kernels.git'
 [push] push attempt 3 of 3 failed (exit 1): error: failed to push some refs to 'github.com:harshithkantamneni/moe-kernels.git'
 [push] NOT PUSHED (committed here; the next push carries it): main.sh exit 3: final push
+PASS trace-manifest: 14 file(s), 6.47 GB under /home/ubuntu/moe/traces/prod-granite-4.0-h-small-20261121T073522Z -> /home/ubuntu/moe/results/prod-granite-4.0-h-small-20261121T073522Z/traces.sha256.json

@@ -247,7 +247,7 @@ bd5cb8cdd6616d40efb81f9903b7a35241e228ef76a46fe3d5b26459affebdab  vm/results/pro
 3be8520a9e48c22b82be245c13d83d0d5054d1b08f64e29543efef9f468c0eb2  vm/results/prod-granite-4.0-h-small-20261121T073522Z/A1710/ring/shard_00076.npz
 e688a83d40a5e8310c5f42699c514b8880e91ea5820da00ab43157f935ccb65f  vm/results/prod-granite-4.0-h-small-20261121T073522Z/A1710/sequences.json
 abaccf25713dc7e42fce7929d1109176133bc3901e3d6d5d90b4a4c51d9fa7a7  vm/results/prod-granite-4.0-h-small-20261121T073522Z/A1710/steps.jsonl
-d660933fc6c609f1196357bdacb6dcd0d6a46883b77104686f5a59f69e93da54  vm/results/prod-granite-4.0-h-small-20261121T073522Z/SUMMARY.txt
+2164f9a2ab0851a3fa6483ac85b75f6005dd208a6b63e9eb1ab562791365187d  vm/results/prod-granite-4.0-h-small-20261121T073522Z/SUMMARY.txt
 d00a8bbb7033a9754e0ef997bc0cb9df5b872a1c929b0b9eb004802407c3cded  vm/results/prod-granite-4.0-h-small-20261121T073522Z/env-preflight.json
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/results/prod-granite-4.0-h-small-20261121T073522Z/frontier-probe/models/4682ecb7_model_lock.file
 5df44b4ad18fc88912b82e8d2b1e9c7303998b33112bd6b21a915f5a20ca5e94  vm/results/prod-granite-4.0-h-small-20261121T073522Z/frontier-probe/models/moe_grouped_gemm_4682ecb7.pkl
@@ -332,7 +332,7 @@ d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/pro
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/A1710-unlock-after.log
 b83480ed387b0d08dde5d0abaca445b0b833ddf615bf50e14c90f7ca8fe329fd  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/env-preflight.log
 1f148460d334150c0050664d4f66eece354321aab61157085819af8ebeb2246d  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/env.log
-d8049a7e324eba403e950582d5bbf6cd0576e680401d6adeb6809a033f974a19  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/final-push.log
+39c614be81dcf83ce7c850aa98e05486a99df6e77c270075a8bd5e6c4e05870e  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/final-push.log
 489613d42380067c34d6da5ea5a12612d5a37e29e770e782fbd4ab7be1dd07c8  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/frontier-csv-fills.log
 8637e99fde72b67bb412e270c33790d75a447f46e2d710c030cf9f4589349ee7  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/frontier-csv.log
 65e8ce0a5ea82a7fc1cc7e33f505333e71bd031b9cce352faa2b405c70c32389  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/frontier-grid-check.log
@@ -353,13 +353,14 @@ d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/pro
 35b721234ae1df51a5cd240261a877cff7c4fd9f078fd80ae046b6d1f74a7fda  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/gate60-capture.log
 debd422711cbe92dbb7441b42173f8904bed4f9ce052d170198f5fa4b19311e4  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/gate60-extract.log
 8e6b51312532ec229900205db144eeace3ed63c0d372396ab4695b0cd368db35  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/gate60-sequences.log
+c56b5284e04a34c258a6aeac2905aca41d5a22b2fcda18b8f2002df970746921  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/held-back-check.log
 af15712978e0410dcae8ee5dfd355988d16c23477a1f7bf68f2742f868e4fd44  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/model-prefetch.log
 5f86d0fc4c5794ab3636be45aaeac26012c6752270a2c21c50fc7ef318b14a58  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/power-readback.log
 e8221494a43564a94e487b64c3dda1de5476fa8236e8e53868f446e83b9b6793  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/price-check-v10.log
 f5a859769e48e387d7178131bcae30604afa0de90a3b97d874b7c8929ec762d8  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/price-check-v9.log
 f5a859769e48e387d7178131bcae30604afa0de90a3b97d874b7c8929ec762d8  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/price-check.log
 956cd60424cc34e869d14a54de290a7f827c713e80192ca741cdd8580b35b7e4  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/prompts.log
-357fb6a517da37d1ea3958f0b6e16b2a57db7d3dbf7da53ce4ea9d96938c84ba  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/push-final.log
+330b31bbe053ee1d6acd3ba8fb8a0bb49d082664969ba1c0ce2b46835400ce64  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/push-final.log
 b7d3e15ba4826680abad19d98c958356020233aaa63e161f1fc3b56624cd3f00  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/push-primary.log
 a5456adaa476354ff04c7b28467559666c9ba7786cafd1df739234d5eed6d680  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/revision-pinned.log
 6a8529e0ec813539827691b273a038a916230a42f29dd5d6987a89e46a67117e  vm/results/prod-granite-4.0-h-small-20261121T073522Z/logs/sag1410.log
